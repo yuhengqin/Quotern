@@ -212,8 +212,11 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
-    if (loading || refreshing) return;
     publishSnapshot({
+      data,
+      filters: { rangeDays: DASHBOARD_RANGE_DAYS[range], selectedDate, selectedSources: selectedTools },
+      loading: loading || refreshing || range !== dataRange,
+      error,
       details: {
         sources: selectedTools.length > 0
           ? selectedTools
@@ -228,6 +231,10 @@ export function DashboardPage() {
       toolLabel: shareToolLabel,
     });
   }, [
+    data,
+    dataRange,
+    range,
+    error,
     loading,
     publishSnapshot,
     refreshing,

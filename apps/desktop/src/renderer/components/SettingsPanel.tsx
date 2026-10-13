@@ -112,7 +112,7 @@ function SubscriptionChannelSettings() {
       <div className="flex flex-col gap-1.5">
         <p className="text-sm font-medium text-foreground">订阅额度卡片</p>
         <Description>
-          控制用量页展示哪些订阅渠道。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。
+          控制用量页展示哪些订阅额度卡片。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。
         </Description>
       </div>
 

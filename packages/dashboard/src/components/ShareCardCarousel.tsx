@@ -137,6 +137,7 @@ export function getShareCardVariant(index: number) {
 }
 
 export function ShareCardCarousel({
+  reservedHeight = 128,
   activeIndex,
   avatarUrl,
   details,
@@ -146,6 +147,7 @@ export function ShareCardCarousel({
   toolLabel,
   userName,
 }: {
+  reservedHeight?: number;
   activeIndex: number;
   avatarUrl?: string;
   details?: SharePosterDetails;
@@ -225,8 +227,8 @@ export function ShareCardCarousel({
 
         <div
           className="relative aspect-2/3 w-full min-w-0 justify-self-center"
-          // Reserve vertical space for dialog padding and the export actions.
-          style={{ maxWidth: 'min(360px, calc((90dvh - 128px) * 2 / 3))' }}
+          // Reserve vertical space for dialog controls and export actions.
+          style={{ maxWidth: `min(360px, calc((90dvh - ${reservedHeight}px) * 2 / 3))` }}
         >
           {SHARE_CARD_VARIANTS.map((variant, cardIndex) => {
             const relativeIndex = (

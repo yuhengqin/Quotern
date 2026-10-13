@@ -61,6 +61,7 @@ const ACTION_LABELS: Record<ShareAction, Record<ShareActionState, string>> = {
 };
 
 export function ShareCardActions({
+  disabled = false,
   details,
   avatarUrl,
   color,
@@ -69,6 +70,7 @@ export function ShareCardActions({
   toolLabel,
   userName,
 }: {
+  disabled?: boolean;
   details?: SharePosterDetails;
   avatarUrl?: string;
   color: string;
@@ -154,7 +156,7 @@ export function ShareCardActions({
   };
 
   const handleDownload = async () => {
-    if (activeAction) return;
+    if (disabled || activeAction) return;
     setActiveAction('download');
     setResult(null);
     try {
@@ -173,7 +175,7 @@ export function ShareCardActions({
   };
 
   const handleCopy = async () => {
-    if (activeAction) return;
+    if (disabled || activeAction) return;
     setActiveAction('copy');
     setResult(null);
     try {
@@ -201,7 +203,7 @@ export function ShareCardActions({
     <>
       <Toast.Provider placement="top end" queue={toastQueue} />
       <Button
-        isDisabled={activeAction === 'copy'}
+        isDisabled={disabled || activeAction === 'copy'}
         isPending={activeAction === 'download'}
         onPress={() => void handleDownload()}
         variant="primary"
@@ -210,7 +212,7 @@ export function ShareCardActions({
         {getLabel('download')}
       </Button>
       <Button
-        isDisabled={activeAction === 'download'}
+        isDisabled={disabled || activeAction === 'download'}
         isPending={activeAction === 'copy'}
         onPress={() => void handleCopy()}
         variant="outline"

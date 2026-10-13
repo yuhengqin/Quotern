@@ -76,7 +76,7 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
           >
             {chart.rows.length === 0 ? (
               <p className="mt-4 flex min-h-40 items-center justify-center px-4 text-center text-sm text-muted">
-                当前渠道暂无用量
+                当前筛选暂无用量
               </p>
             ) : (
               <>

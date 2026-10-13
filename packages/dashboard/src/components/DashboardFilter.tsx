@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import {
   Button,
@@ -150,11 +150,13 @@ function RangeSelect({
 
 /** The dashboard's single, compact multi-select entry point for tools. */
 export function ToolChannelSelect({
+  ariaLabel = '筛选 Agent',
   tools,
   selectedTools,
   onChange,
 }: {
-  tools: DashboardToolUsageRow[];
+  ariaLabel?: string;
+  tools: Pick<DashboardToolUsageRow, 'source'>[];
   selectedTools: string[];
   onChange: (sources: string[]) => void;
 }) {
@@ -164,11 +166,12 @@ export function ToolChannelSelect({
   );
   const value = selectedTools.filter((source) => availableSources.has(source));
   const hasSelection = value.length > 0;
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <ButtonGroup className="shrink-0">
       <Select
-        aria-label="筛选渠道"
+        aria-label={ariaLabel}
         className="w-fit max-w-52 text-xs"
         selectionMode="multiple"
         value={value}
@@ -182,8 +185,9 @@ export function ToolChannelSelect({
           onChange(next.filter((source) => availableSources.has(source)));
         }}
       >
-        <Label className="sr-only">渠道</Label>
+        <Label className="sr-only">Agent</Label>
         <Select.Trigger
+          ref={triggerRef}
           className={`!h-8 !min-h-8 !w-fit max-w-52 ps-3 pe-8 !text-xs font-normal ${
             hasSelection ? '!rounded-r-none' : '!rounded-full'
           }`}
@@ -192,9 +196,9 @@ export function ToolChannelSelect({
             {({ state }) => {
               const selected = state.selectedItems
                 .map((item) => tools.find((tool) => tool.source === item.key))
-                .filter((tool): tool is DashboardToolUsageRow => Boolean(tool));
-              if (selected.length === 0) return '全部渠道';
-              if (selected.length > 1) return `已选 ${selected.length} 个渠道`;
+                .filter((tool): tool is Pick<DashboardToolUsageRow, 'source'> => Boolean(tool));
+              if (selected.length === 0) return '全部 Agent';
+              if (selected.length > 1) return `已选 ${selected.length} 个 Agent`;
 
               const [tool] = selected;
               return tool ? (
@@ -202,7 +206,7 @@ export function ToolChannelSelect({
                   <ProviderIcon provider={tool.source} size={18} />
                   <span className="truncate">{sourceLabel(tool.source)}</span>
                 </span>
-              ) : '全部渠道';
+              ) : '全部 Agent';
             }}
           </Select.Value>
           <Select.Indicator className="size-3.5 text-muted" />
@@ -211,7 +215,7 @@ export function ToolChannelSelect({
           className="w-50 rounded-xl bg-surface shadow-md"
           placement="bottom start"
         >
-          <ListBox aria-label="渠道列表" selectionMode="multiple">
+          <ListBox aria-label="Agent 列表" selectionMode="multiple">
             {tools.map((tool) => (
               <ListBox.Item
                 className="py-1 rounded-lg px-1.5 text-xs gap-2!"
@@ -233,11 +237,15 @@ export function ToolChannelSelect({
       </Select>
       {hasSelection ? (
         <Button
-          aria-label="清空渠道筛选"
+          aria-label="清空 Agent 筛选"
           className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0"
           size="sm"
+          isIconOnly
           variant="tertiary"
-          onPress={() => onChange([])}
+          onPress={() => {
+            onChange([]);
+            triggerRef.current?.focus();
+          }}
         >
           <ButtonGroup.Separator />
           <Xmark className="size-3.5" />

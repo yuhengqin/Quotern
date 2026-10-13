@@ -8,8 +8,13 @@ import {
 } from 'react';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
 import type { SharePosterDetails } from '../components/SharePosterArtwork';
+import type { ShareDashboardData, ShareFilters } from '../lib/share-snapshot';
 
 export interface ShareSnapshot {
+  data: ShareDashboardData;
+  filters: ShareFilters;
+  loading: boolean;
+  error: string | null;
   details?: SharePosterDetails;
   rangeLabel: string;
   summary: DashboardUsageSummary;

@@ -9,12 +9,12 @@
   → 主进程 reader：发现、读取、超时、校验、缓存
   → shared mapper：转换字段、百分比、时间和套餐名称
   → preload：专用 IPC 方法
-  → renderer：卡片、刷新状态与渠道开关
+  → renderer：订阅额度卡片、刷新状态与订阅卡片开关
 ```
 
-各渠道使用自己的 IPC channel、preload 方法和 shared 类型，当前没有统一的运行时 `getSubscription` 接口。新增渠道时同时核对 [main](../apps/desktop/src/main)、[shared](../apps/desktop/src/shared)、[preload](../apps/desktop/src/preload/index.ts) 与对应 renderer 卡片。
+各订阅来源使用自己的 IPC channel、preload 方法和 shared 类型，当前没有统一的运行时 `getSubscription` 接口。新增订阅来源时同时核对 [main](../apps/desktop/src/main)、[shared](../apps/desktop/src/shared)、[preload](../apps/desktop/src/preload/index.ts) 与对应 renderer 卡片。
 
-当前显示渠道以 [subscription-channels.ts](../apps/desktop/src/shared/subscription-channels.ts) 为准，包括 Codex、Claude、Cursor、Copilot、Grok、Kimi、ZCode、Antigravity、Qoder、MiniMax、OpenCode、DeepSeek。Trae 和 WorkBuddy 的适配器文件不代表它们已经进入当前界面。
+当前显示的订阅来源以 [subscription-channels.ts](../apps/desktop/src/shared/subscription-channels.ts) 为准，包括 Codex、Claude、Cursor、Copilot、Grok、Kimi、ZCode、Antigravity、Qoder、MiniMax、OpenCode、DeepSeek。Trae 和 WorkBuddy 的适配器文件不代表它们已经进入当前界面。
 
 ## 读取方式
 
@@ -30,9 +30,9 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 
 ## 实际响应字段
 
-协议以各渠道 shared TypeScript 类型为准。下列差异会影响渲染和校验，不能把所有快照强制套进同一种结构。
+协议以各订阅来源的 shared TypeScript 类型为准。下列差异会影响渲染和校验，不能把所有快照强制套进同一种结构。
 
-| 渠道 | 关键字段 | 语义 |
+| 订阅来源 | 关键字段 | 语义 |
 | --- | --- | --- |
 | [Codex](../apps/desktop/src/shared/codex-subscription.ts) | `hasAccount`、`fiveHour`、`weekly` | 窗口包含 `usedPercent`；窗口可为空 |
 | [Claude](../apps/desktop/src/shared/claude-subscription.ts) | `hasAccount`、`fiveHour`、`sevenDay` | 长周期字段名与 Codex 不同 |
@@ -43,7 +43,7 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 
 当前 shared 快照均含 `status`、`planLabel`、`message`、`fetchedAt` 和 `stale`；具体状态枚举、空值与附加字段由各类型定义。`fetchedAt` 与 `resetsAt` 使用 Unix 秒：前者表示获取时间，后者表示窗口刷新或到期时间，不能混用。
 
-[subscription-snapshot.schema.json](./schemas/subscription-snapshot.schema.json) 是供应商无关的结构示例，未覆盖上述所有字段差异，不能直接校验全部运行时 IPC 响应。修改实际协议时以 shared 类型、mapper 和对应测试为依据；需要统一运行时 Schema 时，应先补齐所有渠道并验证真实结构。
+[subscription-snapshot.schema.json](./schemas/subscription-snapshot.schema.json) 是供应商无关的结构示例，未覆盖上述所有字段差异，不能直接校验全部运行时 IPC 响应。修改实际协议时以 shared 类型、mapper 和对应测试为依据；需要统一运行时 Schema 时，应先补齐所有订阅来源的字段并验证真实结构。
 
 例如一个虚构的 Codex 就绪快照为：
 
@@ -62,9 +62,9 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 
 ## 比例、余额与套餐
 
-`usedPercent` 的剩余比例由对应 renderer 或辅助函数按 `100 - usedPercent` 计算；Copilot 的 `remainingPercent` 直接表示剩余。未知、零额度、耗尽与无限额是不同状态。余额渠道还保留金额信息，缺分母时不能制造百分比。
+`usedPercent` 的剩余比例由对应 renderer 或辅助函数按 `100 - usedPercent` 计算；Copilot 的 `remainingPercent` 直接表示剩余。未知、零额度、耗尽与无限额是不同状态。余额型订阅来源还保留金额信息，缺分母时不能制造百分比。
 
-各 mapper 按自身协议识别秒、毫秒或 ISO 时间；不要把某个渠道的转换规则推广为所有入口都接受同样格式。套餐名使用上游名称与有限归一化映射，不能据名称推断限额或刷新周期。
+各 mapper 按自身协议识别秒、毫秒或 ISO 时间；不要把某个订阅来源的转换规则推广为所有入口都接受同样格式。套餐名使用上游名称与有限归一化映射，不能据名称推断限额或刷新周期。
 
 Kimi 桌面版与 Code 是独立来源，卡片选择有效读数，不拼接不同来源的套餐和额度、不把共享池相加。Code 只登录时无需启动桌面版。路径与账号要求见 [Desktop README](../apps/desktop/README.md#kimi-桌面版与-kimi-code)。
 
@@ -84,7 +84,7 @@ Kimi 桌面版与 Code 是独立来源，卡片选择有效读数，不拼接不
 
 - 凭据读取与请求拼装留在主进程；IPC 只传递界面需要的字段，不传令牌、Cookie、认证文件内容或完整上游响应。
 - 识别自定义端点和账号区域，不把不匹配的凭据发送到默认主机。网络 reader 使用受限目的地、超时及明确错误映射。
-- 本应用直接读取认证文件时保持只读；调用工具 CLI 的渠道另外考虑该工具自身的行为。
+- 本应用直接读取认证文件时保持只读；调用工具 CLI 的订阅来源另外考虑该工具自身的行为。
 - 用户可见错误只说明安装、登录、权限、兼容性或网络状态，避免展示包含凭据的底层响应。
 - 本地日志或缓存降级只读取必要目录和大小范围；示例与测试使用虚构数据。
 
@@ -92,6 +92,6 @@ Kimi 桌面版与 Code 是独立来源，卡片选择有效读数，不拼接不
 
 ## 展示与验证
 
-订阅卡位于主面板概览卡下方，macOS 托盘复用相同卡片。设置中的渠道开关默认开启，保存在 `localStorage` 的 `tud.subscriptionChannelVisibility`；关闭后不挂载对应卡片。开启渠道后，是否显示仍由各卡片的账号与数据状态决定，读取失败并不总是隐藏。
+订阅额度卡片位于主面板概览卡下方，macOS 托盘复用相同卡片。设置中的订阅卡片开关默认开启，保存在 `localStorage` 的 `tud.subscriptionChannelVisibility`；关闭后不挂载对应卡片。开启卡片后，是否显示仍由各卡片的账号与数据状态决定，读取失败并不总是隐藏。
 
 修改时覆盖以下场景：未安装、未登录、过期、读取失败、未知套餐、缺失窗口、无限额、账号切换、并发返回、强制刷新及暂存旧读数。以各 reader 和 shared mapper 的 `*.test.ts` 为入口，运行方式见 [Desktop 测试说明](../apps/desktop/README.md#测试)。

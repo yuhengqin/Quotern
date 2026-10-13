@@ -78,7 +78,7 @@ apps/desktop/
 
 ### Copilot 套餐额度
 
-主面板和托盘的订阅区显示 Copilot 套餐剩余额度、内联建议及重置时间，设置中的「订阅渠道」可控制显示。套餐额度独立于 Core 采集的 Copilot Token 用量。
+主面板和托盘的订阅区显示 Copilot 套餐剩余额度、内联建议及重置时间，设置中的「订阅额度卡片」可控制显示。套餐额度独立于 Core 采集的 Copilot Token 用量。
 
 主进程读取 Copilot 官方客户端保存的 `github-copilot/apps.json` / `hosts.json` 中的 OAuth 登录信息；macOS / Linux 默认位于 `~/.config/`，Windows 位于 `%USERPROFILE%\AppData\Local\`，也支持绝对路径 `XDG_CONFIG_HOME`。显式设置的 `GH_COPILOT_TOKEN` / `GITHUB_COPILOT_TOKEN` 优先。凭证仅在主进程使用，IPC 只返回套餐和额度。
 
@@ -173,7 +173,7 @@ pnpm dev:desktop
 
 - Codex 从 `CODEX_HOME/auth.json`（默认 `~/.codex/auth.json`）只读获取 ChatGPT 登录凭据，请求 `/backend-api/wham/usage`，无需安装或启动 Codex CLI。不会刷新令牌或改写登录文件；令牌失效时提示重新登录。
 - Claude 使用本机 Claude Code 的 `-p /usage --output-format json`；在临时目录运行，关闭工具、MCP、用户/项目 settings 和会话保存，应用不读取 Keychain 或调用 Anthropic OAuth usage 接口。官方账户校验仍排除自定义 provider。
-- 两个渠道共享主窗口与托盘的一分钟内存缓存、合并并发请求；账号改变或认证失效时不沿用旧额度。临时失败可显示同账号上次额度和旧数据标记。
-- 有登录记录但读取失败时保留卡片并展示原因；没有登录记录的渠道隐藏。
+- 这两个订阅来源的读数由主窗口与托盘共享，使用一分钟内存缓存并合并并发请求；账号改变或认证失效时不沿用旧额度。临时失败可显示同账号上次额度和旧数据标记。
+- 有登录记录但读取失败时保留卡片并展示原因；没有登录记录时隐藏对应的订阅额度卡片。
 
-上面的身份缓存规则针对 Codex / Claude。其他渠道的字段、缓存和失败处理存在差异，详见[订阅数据说明](../../docs/subscription-plan-design.md)。
+上面的身份缓存规则针对 Codex / Claude。其他订阅来源的字段、缓存和失败处理存在差异，详见[订阅数据说明](../../docs/subscription-plan-design.md)。

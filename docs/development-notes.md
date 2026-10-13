@@ -79,3 +79,7 @@ pnpm --filter quotern-desktop test
 统计仍保存在 `~/.ai-usage/`。设备身份路径的回退规则见[架构注意事项](./architecture-notes.md)。桌面启动会复用已有旧 userData，以保留主题、托盘设置、浏览器存储及更新恢复标记；新安装使用新名称。旧标识仅用于升级兼容及历史发布记录。
 
 源码、下载与发布目标统一为 `yuhengqin/Quotern`。桌面更新读取随安装包生成的 GitHub 配置及 Release 附件；源码不维护静态更新清单。私有仓库更新凭据由客户端环境提供，说明见 [Desktop 自动更新发布](../apps/desktop/README.md#自动更新发布)。
+
+## 界面与文档用词
+
+用量筛选统一称为「Agent」，表示 Codex、Claude 等工具的用量来源类型，计数不代表运行中的 Agent 实例数。订阅功能按语义使用「订阅来源」（服务或读取来源）、「订阅额度卡片」（展示）和「订阅卡片开关」（显示配置）。技术描述中的 `source`、IPC channel、接口字段和存储键按实际代码名称引用。

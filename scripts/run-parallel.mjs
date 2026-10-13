@@ -12,6 +12,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const scripts = process.argv.slice(2);
+// Lifecycle scripts receive pnpm's JS entry. Launch it with Node so Windows
+// does not need to execute the pnpm.cmd shim (which spawn cannot run directly).
+const pnpmEntry = process.env.npm_execpath;
+const command = pnpmEntry ? process.execPath : 'pnpm';
+const commandArgs = pnpmEntry ? [pnpmEntry, '-w', 'run'] : ['-w', 'run'];
 
 if (scripts.length === 0) {
   console.error('usage: node scripts/run-parallel.mjs <script> [script...]');
@@ -19,7 +24,7 @@ if (scripts.length === 0) {
 }
 
 const children = scripts.map((name) =>
-  spawn('pnpm', ['-w', 'run', name], {
+  spawn(command, [...commandArgs, name], {
     cwd: ROOT,
     stdio: 'inherit',
     env: process.env,
@@ -39,13 +44,18 @@ function shutdown(signal = 'SIGINT') {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-for (const child of children) {
+for (const [index, child] of children.entries()) {
+  child.on('error', (err) => {
+    console.error(`Failed to start ${scripts[index]}: ${err.message}`);
+    shutdown('SIGTERM');
+    process.exitCode = 1;
+  });
   child.on('exit', (code, signal) => {
     if (shuttingDown) return;
     if (signal) return;
     if (code !== 0) {
       shutdown('SIGTERM');
-      process.exit(code ?? 1);
+      process.exitCode = code ?? 1;
     }
   });
 }

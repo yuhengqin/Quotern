@@ -215,6 +215,9 @@ export function DashboardPage() {
     if (loading || refreshing) return;
     publishSnapshot({
       details: {
+        sources: selectedTools.length > 0
+          ? selectedTools
+          : view.toolModelUsage.filter((row) => row.tokens > 0).map((row) => row.source),
         days: visibleTrendRows.dailyRows
           .filter((row) => !isHourly || row.date === (selectedDate ?? localDateNow()))
           .map((row) => ({ date: row.date, tokens: isHourly ? visibleSummary.totalTokens : row.totalTokens })),
@@ -233,6 +236,7 @@ export function DashboardPage() {
     visibleSummary,
     visibleTrendRows.dailyRows,
     view.modelRows,
+    view.toolModelUsage,
     selectedTools,
     selectedDate,
     isHourly,

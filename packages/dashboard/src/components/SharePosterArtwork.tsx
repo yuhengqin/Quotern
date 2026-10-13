@@ -4,10 +4,13 @@ import quoternQrLogoUrl from '../assets/quotern-qr-logo.svg?url&inline';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
 import { formatTokens, formatUsd } from '../lib/format';
 import { SHARE_CARD_FONT_FAMILY, SHARE_CARD_MONO_FONT_FAMILY } from '../lib/share-card-image';
+import { sourceLabel } from '../lib/tokens';
+import { ProviderIcon } from './ProviderIcon';
 
 export interface SharePosterDetails {
   days: { date: string; tokens: number }[];
   models: { model: string; tokens: number }[];
+  sources?: string[];
 }
 
 const SERIF = 'Georgia, "Times New Roman", "Noto Serif CJK SC", serif';
@@ -55,7 +58,7 @@ function MetricSparklineBackground({ color, index }: { color: string; index: num
 }
 
 export function ShareCardArtwork({
-  borderRadius = 16, cardRef, color, details, isHidden, rangeLabel, summary, toolLabel, userName,
+  borderRadius = 16, cardRef, color, details, isHidden, rangeLabel, summary, userName,
 }: {
   avatarUrl?: string;
   borderRadius?: number;
@@ -72,6 +75,13 @@ export function ShareCardArtwork({
     ? SHARE_POSTER_PALETTES.editorial
     : SHARE_POSTER_PALETTES.neon;
   const displayName = userName?.trim() || 'Quotern 用户';
+  const agentSources = [...new Map((details?.sources ?? []).map((source) => [sourceLabel(source), source])).values()];
+  const extraAgents = agentSources.slice(4);
+  const agentBadge: CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    width: 18, height: 18, borderRadius: 4, background: '#fff', color: '#111827',
+    border: `1px solid ${palette.rule}`,
+  };
   const modelTotals = new Map<string, number>();
   for (const row of details?.models ?? []) modelTotals.set(row.model, (modelTotals.get(row.model) ?? 0) + row.tokens);
   const models = [...modelTotals].filter(([, tokens]) => tokens > 0).sort((a, b) => b[1] - a[1]);
@@ -94,11 +104,27 @@ export function ShareCardArtwork({
     <article ref={cardRef} aria-hidden={isHidden || undefined} style={surface}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 10, borderBottom: `1px solid ${rule}` }}>
         <img alt="" src={quoternQrLogoUrl} style={{ width: 22, height: 22 }} />
-        <div style={{ flex: 1 }}><div style={{ fontSize: 9, letterSpacing: 2 }}>QUOTERN</div><div style={{ fontSize: 15, fontWeight: 700 }}>用量报告</div></div>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 9, letterSpacing: 2 }}>QUOTERN</div><div style={{ fontSize: 15, fontWeight: 700 }}>Agent 用量报告</div></div>
       </header>
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 9 }}>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
-        <span style={{ maxWidth: '60%', textAlign: 'right' }}>{rangeLabel || '全部时间'} · {toolLabel || '全部工具'}</span>
+      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 9 }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ whiteSpace: 'nowrap' }}>{rangeLabel || '全部时间'}</span>
+          {agentSources.length > 0 && (
+            <div role="group" aria-label="统计范围内的 Agent" style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+              {agentSources.slice(0, 4).map((source) => (
+                <span key={sourceLabel(source)} role="img" aria-label={sourceLabel(source)} title={sourceLabel(source)} style={agentBadge}>
+                  <ProviderIcon provider={source} size={14} onLightBackground color="#111827" />
+                </span>
+              ))}
+              {extraAgents.length > 0 && (
+                <span role="img" aria-label={`其他 ${extraAgents.length} 个 Agent：${extraAgents.map(sourceLabel).join('、')}`} title={extraAgents.map(sourceLabel).join('、')} style={{ ...agentBadge, fontSize: 8, fontFamily: SHARE_CARD_MONO_FONT_FAMILY }}>
+                  +{extraAgents.length}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <dl aria-label="用量汇总" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 6, margin: '12px 0 0' }}>
         {metrics.map((metric, index) => {
@@ -112,7 +138,7 @@ export function ShareCardArtwork({
           );
         })}
       </dl>
-      <section style={{ marginTop: 12 }} aria-label="模型用量排行">
+      <section style={{ marginTop: 24 }} aria-label="模型用量排行">
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, paddingBottom: 6, borderBottom: `1px solid ${rule}` }}><span>模型榜单</span><span>TOP 03</span></div>
         {models.slice(0, 3).map(([model, tokens], index) => (
           <div key={model} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 0', borderBottom: `1px solid ${rule}`, fontSize: 10, lineHeight: 1.5 }}>
@@ -125,7 +151,7 @@ export function ShareCardArtwork({
         {!models.length && <p style={{ fontSize: 10, opacity: 0.75 }}>暂无模型用量数据</p>}
       </section>
       <footer style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ fontSize: 8, lineHeight: 1.7, opacity: 0.85 }}>QUOTERN · AI 用量档案<br />本地生成 · 记录你的创造</div>
+        <div style={{ fontSize: 9, lineHeight: 1.7, opacity: 0.9, whiteSpace: 'nowrap' }}>记录你的创造</div>
         <QRCodeSVG bgColor="transparent" fgColor={palette.foreground} marginSize={2} size={32} level="M" title="查看 Quotern 项目" value="https://github.com/yuhengqin/Quotern" />
       </footer>
     </article>

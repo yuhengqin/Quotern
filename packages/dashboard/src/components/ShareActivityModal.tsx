@@ -26,7 +26,7 @@ export function ShareActivityModal() {
   return (
     <Modal.Backdrop isOpen={session !== null} onOpenChange={(open) => { if (!open) setSession(null); }}>
       <Modal.Container className="p-4 sm:p-4" scroll="inside" size="lg">
-        <Modal.Dialog aria-label="分享" className="max-h-[90dvh] overflow-hidden p-4 sm:max-w-[720px] sm:p-5">
+        <Modal.Dialog aria-label="分享用量报告" className="max-h-[90dvh] overflow-hidden p-4 sm:max-w-[720px] sm:p-5">
           <Modal.CloseTrigger aria-label="关闭分享" />
           {session && <ShareSession activeIndex={activeIndex} initial={session.snapshot} onActiveIndexChange={setActiveIndex} />}
         </Modal.Dialog>
@@ -76,9 +76,6 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
 
   return (
     <>
-      <Modal.Header className="px-0 pb-3 pr-8 sm:px-2">
-        <Modal.Heading className="text-base">分享用量报告</Modal.Heading>
-      </Modal.Header>
       <Modal.Body className="px-0 pb-0 pt-0 sm:px-2">
         <div className="flex flex-wrap items-center justify-center gap-2 pb-3" aria-label="分享筛选条件">
           <Select

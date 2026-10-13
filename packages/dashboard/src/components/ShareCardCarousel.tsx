@@ -97,7 +97,7 @@ function ShareCard({
   useLayoutEffect(() => {
     const node = previewRef.current;
     if (!node) return;
-    const resize = () => setScale(node.clientWidth / SHARE_CARD_DESIGN_WIDTH);
+    const resize = () => setScale(Number.parseFloat(getComputedStyle(node).width) / SHARE_CARD_DESIGN_WIDTH);
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(node);
@@ -223,7 +223,11 @@ export function ShareCardCarousel({
           <ChevronLeft className="size-5" />
         </Button>
 
-        <div className="relative aspect-2/3 w-full max-w-75 min-w-0 justify-self-center">
+        <div
+          className="relative aspect-2/3 w-full min-w-0 justify-self-center"
+          // Reserve vertical space for dialog padding and the export actions.
+          style={{ maxWidth: 'min(360px, calc((90dvh - 128px) * 2 / 3))' }}
+        >
           {SHARE_CARD_VARIANTS.map((variant, cardIndex) => {
             const relativeIndex = (
               cardIndex - stackActiveIndex + SHARE_CARD_VARIANTS.length

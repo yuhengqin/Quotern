@@ -26,10 +26,10 @@ export function ShareActivityModal() {
 
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
-      <Modal.Container scroll="inside" size="lg">
-        <Modal.Dialog aria-label="分享" className="overflow-hidden sm:max-w-[760px]">
+      <Modal.Container className="p-4 sm:p-4" scroll="inside" size="lg">
+        <Modal.Dialog aria-label="分享" className="max-h-[90dvh] overflow-hidden p-4 sm:max-w-[720px] sm:p-5">
           <Modal.CloseTrigger aria-label="关闭分享" />
-          <Modal.Body className="px-4 pb-4 pt-8 sm:px-8">
+          <Modal.Body className="px-0 pb-0 pt-5 sm:px-2">
             <ShareCardCarousel
               activeIndex={activeIndex}
               avatarUrl={avatarLarge}
@@ -41,7 +41,7 @@ export function ShareActivityModal() {
               userName={userName}
             />
           </Modal.Body>
-          <Modal.Footer className="justify-center">
+          <Modal.Footer className="mt-4 shrink-0 justify-center">
             <ShareCardActions
               avatarUrl={avatarLarge}
               color={getShareCardVariant(activeIndex).color}

@@ -164,7 +164,6 @@ function BackgroundCropModal({ source, library, onClose }: { source: CropSource;
                 {library.items.map((item) => <button key={item.id} type="button" aria-pressed={replaceId === item.id} aria-label={`替换背景：${item.name}`}
                   disabled={busy} onClick={() => setReplaceId(item.id)} className="w-24 overflow-hidden rounded-lg border-2 border-transparent p-1 data-[selected=true]:border-accent" data-selected={replaceId === item.id}>
                   <img alt={item.name} src={item.image} className="aspect-2/3 w-full rounded object-cover" />
-                  <span className="mt-1 block truncate text-xs">{item.name}</span>
                   {replacementSuggestion(library.items)?.id === item.id && <span className="text-xs text-muted">建议替换</span>}
                 </button>)}
               </div>

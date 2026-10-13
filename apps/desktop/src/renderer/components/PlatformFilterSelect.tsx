@@ -24,15 +24,15 @@ export function PlatformFilterSelect({
 
   const label =
     value.length === 0
-      ? '选择平台'
+      ? '选择 Agent'
       : allSelected
-        ? '全部平台'
-        : `已选 ${value.length} 个平台`;
+        ? '全部 Agent'
+        : `已选 ${value.length} 个 Agent`;
 
   return (
     <Popover>
       <Button
-        aria-label={`筛选平台：${label}`}
+        aria-label={`筛选 Agent：${label}`}
         className="h-7 min-h-0 w-auto min-w-0 max-w-40 gap-1 px-2 text-xs font-medium"
         size="sm"
         variant="tertiary"
@@ -52,7 +52,7 @@ export function PlatformFilterSelect({
             ) : null}
           </span>
         ) : (
-          <span className="whitespace-nowrap">选择平台</span>
+          <span className="whitespace-nowrap">选择 Agent</span>
         )}
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
@@ -63,7 +63,7 @@ export function PlatformFilterSelect({
       >
         <Popover.Dialog className="p-0">
           <ListBox
-            aria-label="平台列表"
+            aria-label="Agent 列表"
             className="flex max-h-64 min-w-48 flex-col gap-1 overflow-y-auto p-2"
             selectedKeys={new Set(value)}
             selectionMode="multiple"

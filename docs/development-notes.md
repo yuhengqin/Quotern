@@ -88,4 +88,6 @@ pnpm --filter quotern-desktop test
 
 图库最多三张。第四张完成裁剪后须明确选择替换对象，默认建议最久未使用的一张；新增、替换和删除都在持久化成功后更新图库。每次打开分享默认使用最新上传的自定义背景，手动选择旧图只更新使用时间。浏览器图片 Blob 存在当前 origin 的 IndexedDB `quotern-share-backgrounds`；清除站点数据会清除图库，不同域名/端口不共享。Desktop 通过有界 IPC 保存到 userData 下 `share-backgrounds.json`，原子替换整个图库快照，独立于 renderer 地址和浏览器图库。
 
-用量筛选统一称为「Agent」，表示 Codex、Claude 等工具的用量来源类型，计数不代表运行中的 Agent 实例数。订阅功能按语义使用「订阅来源」（服务或读取来源）、「订阅额度卡片」（展示）和「订阅卡片开关」（显示配置）。技术描述中的 `source`、IPC channel、接口字段和存储键按实际代码名称引用。
+产品定位和介绍统一使用「Coding Agent」；界面标题、筛选、图表、分享和诊断中的简短称呼使用「Agent」，表示 Codex、Claude 等产品系列的用量来源类型，包含 CLI、IDE、Desktop 等形态，计数不代表运行中的 Agent 实例数。
+
+订阅功能按语义使用「订阅来源」（服务或读取来源）、「订阅额度卡片」（展示）和「订阅卡片开关」（显示配置）。「平台」用于 Windows、macOS 等操作系统；「工具调用」、工具栏、迁移工具和开发工具链按原义表述。历史发布记录及参考项目介绍保留原文。技术描述中的 `Tool` / `Platform` 符号、`source`、IPC channel、接口字段和存储键按实际代码名称引用。

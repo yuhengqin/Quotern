@@ -56,9 +56,9 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
     <Card className="min-w-0 overflow-hidden rounded-2xl">
       <Card.Header className="flex-row items-start gap-3 pb-0">
         <div className="min-w-0">
-          <Card.Title id={headingId}>工具与模型用量</Card.Title>
+          <Card.Title id={headingId}>Agent 与模型用量</Card.Title>
           <Card.Description className="mt-1">
-            按平台比较总 Token
+            按 Agent 比较总 Token
           </Card.Description>
         </div>
       </Card.Header>
@@ -66,7 +66,7 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
       <Card.Content className="pt-2">
         {rows.length === 0 ? (
           <p className="flex min-h-52 items-center justify-center px-4 text-center text-sm text-muted">
-            暂无工具或模型用量
+            暂无 Agent 或模型用量
           </p>
         ) : (
           <div
@@ -82,7 +82,7 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
               <>
                 <div
                   aria-label={
-                    hasScrollableRows ? '平台用量列表，可纵向滚动' : undefined
+                    hasScrollableRows ? 'Agent 用量列表，可纵向滚动' : undefined
                   }
                   className="min-w-0 overscroll-contain overflow-y-auto pr-1 focus:[outline:none]"
                   style={{
@@ -318,7 +318,7 @@ function AccessibleUsageDetails({
 }) {
   return (
     <div className="sr-only">
-      <h4>平台与模型精确用量</h4>
+      <h4>Agent 与模型精确用量</h4>
       <ol>
         {rows.map((row) => (
           <li key={row.source}>
@@ -333,7 +333,7 @@ function AccessibleUsageDetails({
                 return (
                   <li key={item.key}>
                     {segment.model}：{formatTokens(segment.tokens)}，
-                    {formatUsd(segment.costUsd)}，占当前平台 Token{' '}
+                    {formatUsd(segment.costUsd)}，占当前 Agent Token{' '}
                     {formatPct(segment.pct)}。
                   </li>
                 );

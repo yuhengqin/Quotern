@@ -1,6 +1,6 @@
 # 架构注意事项
 
-项目在本机采集 AI 工具用量，以 Core 统一解析、存储和计算，由 CLI 浏览器面板或 Electron 桌面端展示。修改功能时，先确定数据归属和运行进程，再选择实现入口。
+项目在本机采集 Coding Agent 用量，以 Core 统一解析、存储和计算，由 CLI 浏览器面板或 Electron 桌面端展示。修改功能时，先确定数据归属和运行进程，再选择实现入口。
 
 相关说明：[数据采集与统计](./data-notes.md)、[运行维护](./runtime-notes.md)、[开发协作](./development-notes.md)。
 
@@ -20,7 +20,7 @@
 ## 数据流
 
 ```text
-工具日志或数据库 / 需要登录状态的数据源
+Agent 日志或数据库 / 需要登录状态的数据源
   → parser：增量读取、来源归一化、去重
   → sync：合并或替换统计桶，写入 queue 和 cursors
   → BucketStore + AggregateCache：本机统计与历史日缓存
@@ -29,7 +29,7 @@
       └─ Desktop IPC → Renderer / 托盘
 ```
 
-订阅额度走另一条链路：主进程读取工具登录状态或调用工具 CLI / 官方额度接口，生成展示快照后经专用 IPC 返回。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)。
+订阅额度走另一条链路：主进程读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，生成展示快照后经专用 IPC 返回。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)。
 
 ## 本地接口
 
@@ -72,7 +72,7 @@
 
 ## 网络与数据边界
 
-统计桶包含来源、模型、项目归属和 Token 等数值。部分 parser 为计算用量需要读取工具会话文件；持久化统计桶的结构以 [QueueBucket](../packages/core/src/types.ts) 为准，不应把原始对话或认证材料扩展进该结构。
+统计桶包含来源、模型、项目归属和 Token 等数值。部分 parser 为计算用量需要读取 Agent 会话文件；持久化统计桶的结构以 [QueueBucket](../packages/core/src/types.ts) 为准，不应把原始对话或认证材料扩展进该结构。
 
 运行时仍可能访问网络：Cursor 账单采集、价格覆盖表、供应商订阅额度、桌面更新和安装包下载各有独立入口。修改网络行为时，应同时检查调用目的、目标地址、超时、账号隔离和失败降级；不能从“本机统计”推断所有数据源都能离线取得最新读数。
 

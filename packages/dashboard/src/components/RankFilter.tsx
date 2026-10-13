@@ -66,7 +66,7 @@ export function RankFilter({
   onChange: (value: RankRange) => void;
 }) {
   const [isShareOpen, setIsShareOpen] = useState(false);
-  const toolLabel = tools.find((item) => item.key === tool)?.displayName ?? '全部工具';
+  const toolLabel = tools.find((item) => item.key === tool)?.displayName ?? '全部 Agent';
   const modelLabel = model || '全部模型';
 
   return (
@@ -177,13 +177,13 @@ function ToolSelect({
 
   return (
     <Select
-      aria-label="工具筛选"
+      aria-label="Agent 筛选"
       className="min-w-0 max-w-[7.5rem] shrink text-xs sm:max-w-52 sm:shrink-0"
       variant="secondary"
       value={value || 'all'}
       onChange={(key) => onChange(key === 'all' || key == null ? '' : String(key))}
     >
-      <Label className="sr-only">工具筛选</Label>
+      <Label className="sr-only">Agent 筛选</Label>
       <Select.Trigger
         className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none ps-2.5 pe-7 !text-xs font-normal sm:max-w-52 sm:ps-3 sm:pe-8`}
       >
@@ -195,16 +195,16 @@ function ToolSelect({
                 <span className="truncate">{selected.displayName}</span>
               </span>
             ) : (
-              '全部工具'
+              '全部 Agent'
             )
           }
         </Select.Value>
         <Select.Indicator className="size-3.5 text-muted" />
       </Select.Trigger>
       <Select.Popover className={FILTER_POPOVER} placement="bottom start">
-        <ListBox aria-label="工具筛选" className={FILTER_POPOVER_LIST}>
-          <ListBox.Item id="all" textValue="全部工具">
-            全部工具
+        <ListBox aria-label="Agent 筛选" className={FILTER_POPOVER_LIST}>
+          <ListBox.Item id="all" textValue="全部 Agent">
+            全部 Agent
             <ListBox.ItemIndicator />
           </ListBox.Item>
           {tools.map((item) => (

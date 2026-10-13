@@ -44,7 +44,7 @@ Codex JSONL 提供拆分明细，线程数据库提供生命周期累计量。[c
 
 证据：[账本补差测试](../packages/core/test/codex-ledger.test.ts)。
 
-数据源目录支持范围要逐个确认。当前 [WorkBuddy parser](../packages/core/src/parsers/workbuddy.ts) 读取单个 `WORKBUDDY_HOME`（默认 `~/.workbuddy`）及其 `workbuddy.db`，没有同时合并两个安装目录的逻辑。其他工具的多目录支持不能直接类推到 WorkBuddy。
+数据源目录支持范围要逐个确认。当前 [WorkBuddy parser](../packages/core/src/parsers/workbuddy.ts) 读取单个 `WORKBUDDY_HOME`（默认 `~/.workbuddy`）及其 `workbuddy.db`，没有同时合并两个安装目录的逻辑。其他 Agent 的多目录支持不能直接类推到 WorkBuddy。
 
 ## Token 总量与展示拆分
 

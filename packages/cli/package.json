@@ -1,7 +1,7 @@
 {
   "name": "quotern",
   "version": "0.1.13",
-  "description": "Quotern CLI：AI 编程工具用量、额度与费用的统一入口。",
+  "description": "Quotern CLI：Coding Agent 用量、额度与费用的统一入口。",
   "type": "module",
   "license": "MIT",
   "repository": {

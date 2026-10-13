@@ -598,7 +598,7 @@ export function ActivityHeatmap({
 
       {selectedSources != null && activeSources.length === 0 ? (
         <div className="w-full py-8 text-center text-sm text-muted">
-          请至少选择一个平台
+          请至少选择一个 Agent
         </div>
       ) : (
         <>

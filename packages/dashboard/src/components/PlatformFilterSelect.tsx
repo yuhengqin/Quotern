@@ -24,12 +24,12 @@ export function PlatformFilterSelect({
   const allSelected = value.length === allSources.length;
   const isFiltered = !allSelected && value.length > 0;
 
-  let label = '全部平台';
-  if (value.length === 0) label = '选择平台';
+  let label = '全部 Agent';
+  if (value.length === 0) label = '选择 Agent';
   else if (!allSelected && value.length === 1) {
     label = sourceLabel(value[0] ?? '');
   } else if (!allSelected) {
-    label = `已选 ${value.length} 个平台`;
+    label = `已选 ${value.length} 个 Agent`;
   }
 
   const toggleSource = (source: string) => {
@@ -42,7 +42,7 @@ export function PlatformFilterSelect({
   return (
     <Popover>
       <Button
-        aria-label={`筛选平台：${label}`}
+        aria-label={`筛选 Agent：${label}`}
         className={cn(
           'h-auto min-h-0 max-w-36 gap-1 rounded-none border-0 bg-transparent p-0',
           'text-xs font-medium text-muted shadow-none',
@@ -69,7 +69,7 @@ export function PlatformFilterSelect({
         <Popover.Dialog className="p-0 outline-none">
           <div className="flex items-center justify-between gap-2 px-3 py-2">
             <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
-              选择平台
+              选择 Agent
             </Popover.Heading>
             <div className="flex items-center gap-1">
               <button

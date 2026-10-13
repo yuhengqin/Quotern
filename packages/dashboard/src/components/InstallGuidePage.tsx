@@ -37,11 +37,11 @@ const copyByReason: Record<InstallGuideReason, GuideCopy> = {
     badge: 'Quotern',
     headline: [
       'Cursor、Claude、Codex',
-      '多工具 Token 与费用',
+      '多 Agent Token 与费用',
       '本地面板一张表看完。',
     ],
     description:
-      '汇总你实际在用的 AI 编码工具用量与趋势，安装后即可查看。',
+      '汇总你实际在用的 Coding Agent 用量与趋势，安装后即可查看。',
   },
   uninstalled: {
     badge: '客户端暂未连接',
@@ -510,7 +510,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
             className="text-lg font-semibold tracking-tight text-foreground sm:text-xl"
             id="supported-tools-heading"
           >
-            支持的工具
+            支持的 Agent
           </h2>
           <div className="mt-4">
             <SupportedToolsGrid className="lg:grid-cols-3" collapsible />

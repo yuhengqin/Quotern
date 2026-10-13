@@ -37,7 +37,12 @@ const SHARE_POSTER_PALETTES = {
     cost: '#087a49',
     rankAccent: '#c93238',
   },
+  custom: {
+    background: '#100b35', foreground: '#ffffff', border: '#ffffff40', rule: '#ffffff40',
+    metricBackground: '#08091699', muted: '#e2e8f0', cost: '#4ade80', rankAccent: '#d8b4fe',
+  },
 } as const;
+export type ShareCardTheme = keyof typeof SHARE_POSTER_PALETTES;
 
 const METRIC_SPARKLINE_PATHS = [
   'M0 42 C16 40 20 23 36 27 S58 38 72 20 S98 9 120 14',
@@ -58,12 +63,13 @@ function MetricSparklineBackground({ color, index }: { color: string; index: num
 }
 
 export function ShareCardArtwork({
-  borderRadius = 16, cardRef, color, details, isHidden, rangeLabel, summary, userName,
+  borderRadius = 16, cardRef, theme = 'neon', backgroundImage, details, isHidden, rangeLabel, summary, userName,
 }: {
   avatarUrl?: string;
   borderRadius?: number;
   cardRef?: Ref<HTMLElement>;
-  color: string;
+  theme?: ShareCardTheme;
+  backgroundImage?: string;
   details?: SharePosterDetails;
   isHidden?: boolean;
   rangeLabel?: string;
@@ -71,9 +77,7 @@ export function ShareCardArtwork({
   toolLabel?: string;
   userName?: string;
 }) {
-  const palette = color.toLowerCase() === '#f8f5ee'
-    ? SHARE_POSTER_PALETTES.editorial
-    : SHARE_POSTER_PALETTES.neon;
+  const palette = SHARE_POSTER_PALETTES[theme];
   const displayName = userName?.trim() || 'Quotern 用户';
   const agentSources = [...new Map((details?.sources ?? []).map((source) => [sourceLabel(source), source])).values()];
   const extraAgents = agentSources.slice(4);
@@ -98,10 +102,15 @@ export function ShareCardArtwork({
     color: palette.foreground, fontFamily: SHARE_CARD_FONT_FAMILY,
     background: palette.background,
     border: `1px solid ${palette.border}`,
+    isolation: 'isolate',
   };
   const rule = palette.rule;
   return (
     <article ref={cardRef} aria-hidden={isHidden || undefined} style={surface}>
+      {backgroundImage && <>
+        <img alt="" data-share-background src={backgroundImage} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: -2 }} />
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'rgba(8, 9, 22, 0.64)', zIndex: -1 }} />
+      </>}
       <header style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 10, borderBottom: `1px solid ${rule}` }}>
         <img alt="" src={quoternQrLogoUrl} style={{ width: 22, height: 22 }} />
         <div style={{ flex: 1 }}><div style={{ fontSize: 9, letterSpacing: 2 }}>QUOTERN</div><div style={{ fontSize: 15, fontWeight: 700 }}>Agent 用量报告</div></div>
@@ -152,7 +161,7 @@ export function ShareCardArtwork({
       </section>
       <footer style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 9, lineHeight: 1.7, opacity: 0.9, whiteSpace: 'nowrap' }}>记录你的创造</div>
-        <QRCodeSVG bgColor="transparent" fgColor={palette.foreground} marginSize={2} size={32} level="M" title="查看 Quotern 项目" value="https://github.com/yuhengqin/Quotern" />
+        <QRCodeSVG bgColor={backgroundImage ? '#ffffff' : 'transparent'} fgColor={backgroundImage ? '#111827' : palette.foreground} marginSize={backgroundImage ? 4 : 2} size={backgroundImage ? 36 : 32} level="M" title="查看 Quotern 项目" value="https://github.com/yuhengqin/Quotern" />
       </footer>
     </article>
   );

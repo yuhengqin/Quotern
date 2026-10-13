@@ -12,7 +12,7 @@ import {
   SHARE_CARD_DESIGN_WIDTH,
 } from '../lib/share-card-image';
 import { ShareCardArtwork } from './ShareCardCarousel';
-import type { SharePosterDetails } from './SharePosterArtwork';
+import type { SharePosterDetails, ShareCardTheme } from './SharePosterArtwork';
 
 type ShareAction = 'copy' | 'download';
 type ShareActionState = 'error' | 'idle' | 'pending' | 'success';
@@ -33,6 +33,8 @@ async function withMinimumPendingTime<T>(operation: Promise<T>): Promise<T> {
 }
 
 interface ExportRequest {
+  backgroundImage?: string;
+  theme: ShareCardTheme;
   details?: SharePosterDetails;
   avatarUrl?: string;
   color: string;
@@ -61,6 +63,9 @@ const ACTION_LABELS: Record<ShareAction, Record<ShareActionState, string>> = {
 };
 
 export function ShareCardActions({
+  onExportSuccess,
+  backgroundImage,
+  theme = 'neon',
   disabled = false,
   details,
   avatarUrl,
@@ -70,6 +75,9 @@ export function ShareCardActions({
   toolLabel,
   userName,
 }: {
+  onExportSuccess?: () => void;
+  backgroundImage?: string;
+  theme?: ShareCardTheme;
   disabled?: boolean;
   details?: SharePosterDetails;
   avatarUrl?: string;
@@ -141,6 +149,8 @@ export function ShareCardActions({
     nextRequestIdRef.current = id;
     return new Promise<Blob>((resolve, reject) => {
       setExportRequest({
+        backgroundImage,
+        theme,
         details,
         avatarUrl,
         color,
@@ -162,6 +172,7 @@ export function ShareCardActions({
     try {
       const blob = await withMinimumPendingTime(createExportBlob());
       downloadShareCardPng(blob);
+      onExportSuccess?.();
       finish('download', 'success');
       toastQueue.add({
         description: '卡片图片已保存到本地',
@@ -181,6 +192,7 @@ export function ShareCardActions({
     try {
       const blob = createExportBlob();
       await withMinimumPendingTime(copyShareCardPng(blob));
+      onExportSuccess?.();
       finish('copy', 'success');
       toastQueue.add({
         description: '卡片图片已复制，可直接粘贴',
@@ -241,9 +253,10 @@ export function ShareCardActions({
                 }}
               >
                 <ShareCardArtwork
+                  backgroundImage={exportRequest.backgroundImage}
+                  theme={exportRequest.theme}
                   avatarUrl={exportRequest.avatarUrl}
                   borderRadius={6}
-                  color={exportRequest.color}
                   details={exportRequest.details}
                   isHidden
                   rangeLabel={exportRequest.rangeLabel}

@@ -2,12 +2,14 @@ import { Button, Label, ListBox, Modal, Select, Spinner } from '@heroui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useShareSnapshot, type ShareSnapshot } from '../hooks/ShareSnapshotContext';
 import { useShareData } from '../hooks/useShareData';
+import { useShareBackgrounds } from '../hooks/useShareBackgrounds';
 import { OPEN_SHARE_EVENT } from '@/lib/shell-events';
 import { buildShareSnapshot, SHARE_RANGE_OPTIONS, type ShareFilters } from '../lib/share-snapshot';
 import { normalizeSourceId } from '../lib/usage-filter';
 import { ToolChannelSelect } from './DashboardFilter';
-import { getShareCardVariant, ShareCardCarousel } from './ShareCardCarousel';
+import { getShareCardVariant, SHARE_CARD_VARIANTS, ShareCardCarousel, type ShareCardVariant } from './ShareCardCarousel';
 import { ShareCardActions } from './ShareCardActions';
+import { ShareBackgroundPicker } from './ShareBackgroundPicker';
 
 /** Each opening captures the dashboard scope, then owns an independent share session. */
 export function ShareActivityModal() {
@@ -38,6 +40,23 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
 }) {
+  const backgrounds = useShareBackgrounds();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectionRevision, setSelectionRevision] = useState(0);
+  const variants = useMemo<ShareCardVariant[]>(() => [...SHARE_CARD_VARIANTS, ...(backgrounds.ready ? backgrounds.items : []).map((item) => ({
+    id: item.id, label: item.name, color: '#100b35', theme: 'custom' as const, backgroundImage: item.image,
+  }))], [backgrounds.items, backgrounds.ready]);
+  const customIndex = variants.findIndex((variant) => variant.id === backgrounds.selectedId);
+  const currentIndex = customIndex >= 0 ? customIndex : activeIndex;
+  const currentVariant = getShareCardVariant(currentIndex, variants);
+  const selectVariant = (index: number) => {
+    setDeletingId(null);
+    setSelectionRevision((revision) => revision + 1);
+    if (index < SHARE_CARD_VARIANTS.length) {
+      backgrounds.select(null);
+      onActiveIndexChange(index);
+    } else { backgrounds.select(variants[index].id); }
+  };
   const [filters, setFilters] = useState<ShareFilters>(() => ({
     rangeDays: initial?.filters.rangeDays ?? 7,
     selectedDate: initial?.filters.selectedDate ?? null,
@@ -102,8 +121,9 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
           />
         </div>
         <div className="relative" aria-busy={loading}>
-          <ShareCardCarousel activeIndex={activeIndex} onActiveIndexChange={onActiveIndexChange}
-            rangeLabel={rangeLabel} reservedHeight={224} summary={preview?.summary ?? null}
+          <ShareCardCarousel activeIndex={currentIndex} selectionRevision={selectionRevision} onActiveIndexChange={selectVariant} variants={variants} disabled={backgrounds.loading || backgrounds.busy}
+            onDeleteBackground={currentVariant.theme === 'custom' ? () => setDeletingId(currentVariant.id) : undefined}
+            rangeLabel={rangeLabel} reservedHeight={300} summary={preview?.summary ?? null}
             details={preview?.details} toolLabel={preview?.toolLabel} />
           {disabled && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-surface/90 p-6 text-center" role="status" aria-live="polite">
@@ -114,10 +134,13 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             </div>
           )}
         </div>
+        <ShareBackgroundPicker library={backgrounds} variants={variants} selectedId={currentVariant.id} onSelect={selectVariant}
+          deletingId={deletingId} onCancelDelete={() => setDeletingId(null)} />
       </Modal.Body>
       <Modal.Footer className="mt-3 shrink-0 justify-center">
-        <ShareCardActions color={getShareCardVariant(activeIndex).color} rangeLabel={rangeLabel}
-          summary={preview?.summary ?? null} details={preview?.details} toolLabel={preview?.toolLabel} disabled={disabled} />
+        <ShareCardActions color={currentVariant.color} theme={currentVariant.theme} backgroundImage={currentVariant.backgroundImage} rangeLabel={rangeLabel}
+          onExportSuccess={backgrounds.selectedId ? () => backgrounds.markUsed(currentVariant.id) : undefined}
+          summary={preview?.summary ?? null} details={preview?.details} toolLabel={preview?.toolLabel} disabled={disabled || backgrounds.loading || backgrounds.busy} />
       </Modal.Footer>
     </>
   );

@@ -23,6 +23,7 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import { SHARE_BACKGROUNDS_CHANNEL, type SavedShareBackground, type ShareBackgroundRequest } from '../shared/share-backgrounds';
 import {
   TRAY_USAGE_CHANGED_CHANNEL,
   TRAY_USAGE_GET_CHANNEL,
@@ -81,6 +82,15 @@ const WORKBUDDY_MAINLAND_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-mainland-subscrip
 
 type SettingsTabId = 'sync' | 'app';
 
+async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise<SavedShareBackground[]> {
+  try {
+    return await ipcRenderer.invoke(SHARE_BACKGROUNDS_CHANNEL, request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '背景图库请求失败，请重试';
+    throw new Error(message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''));
+  }
+}
+
 const tudApi = {
   version: () => '0.1.0',
   platform: process.platform,
@@ -114,6 +124,13 @@ const tudApi = {
 
   copyImageToClipboard: (dataUrl: string): Promise<boolean> =>
     ipcRenderer.invoke(SHARE_CARD_COPY_IMAGE_CHANNEL, dataUrl),
+  shareBackgrounds: {
+    list: (): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'list' }),
+    add: (input: { name: string; image: string }, replaceId?: string): Promise<SavedShareBackground[]> =>
+      requestShareBackgrounds({ operation: 'add', input, replaceId }),
+    remove: (id: string): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'remove', id }),
+    touch: (id: string): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'touch', id }),
+  },
 
   getCodexSubscription: (options?: { forceRefresh?: boolean }): Promise<CodexSubscriptionSnapshot> =>
     ipcRenderer.invoke(CODEX_SUBSCRIPTION_GET_CHANNEL, options),

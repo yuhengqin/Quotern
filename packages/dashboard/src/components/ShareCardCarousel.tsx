@@ -1,5 +1,5 @@
 import { Button } from '@heroui/react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import {
   type CSSProperties,
   type TransitionEvent,
@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
-import { ShareCardArtwork, type SharePosterDetails } from './SharePosterArtwork';
+import { ShareCardArtwork, type SharePosterDetails, type ShareCardTheme } from './SharePosterArtwork';
 import { SHARE_CARD_DESIGN_WIDTH, SHARE_CARD_DESIGN_HEIGHT } from '../lib/share-card-image';
 
 export const SHARE_CARD_COLORS = ['#100b35', '#f8f5ee'] as const;
@@ -26,29 +26,27 @@ interface CardTransition {
 const CARD_TRANSITION_CLASS =
   'transition-[transform,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none';
 
-function getCardSurfaceStyle(color: string): CSSProperties {
+function getCardSurfaceStyle(color: string, backgroundImage?: string): CSSProperties {
   return {
     backgroundColor: color,
+    backgroundImage: backgroundImage ? `url("${backgroundImage}")` : undefined,
+    backgroundSize: 'cover', backgroundPosition: 'center',
   };
 }
 
 function getPreviewPosition(relativeIndex: number, total: number) {
+  if (relativeIndex === 0) return { offset: 0, rotation: 0, opacity: 0, zIndex: 0 };
   if (total === 2) {
-    return relativeIndex === 0
-      ? { offset: 0, rotation: 0, opacity: 0, zIndex: 0 }
-      : { offset: 38, rotation: 3, opacity: 0.88, zIndex: 1 };
+    return { offset: 38, rotation: 3, opacity: 0.88, zIndex: 1 };
   }
 
   const sideCardCount = Math.max(0, total - 1);
-  if (relativeIndex >= sideCardCount) {
-    return { offset: 0, rotation: 0, opacity: 0.55, zIndex: 0 };
-  }
-
+  const sideIndex = relativeIndex - 1;
   const leftCardCount = Math.ceil(sideCardCount / 2);
-  const isLeft = relativeIndex < leftCardCount;
+  const isLeft = sideIndex < leftCardCount;
   const distance = isLeft
-    ? leftCardCount - relativeIndex
-    : relativeIndex - leftCardCount + 1;
+    ? leftCardCount - sideIndex
+    : sideIndex - leftCardCount + 1;
 
   return {
     offset: (isLeft ? -1 : 1) * 38 * distance,
@@ -70,6 +68,8 @@ function shouldReduceMotion() {
 export { ShareCardArtwork } from './SharePosterArtwork';
 
 function ShareCard({
+  theme,
+  backgroundImage,
   avatarUrl,
   color,
   details,
@@ -81,6 +81,8 @@ function ShareCard({
   toolLabel,
   userName,
 }: {
+  theme: ShareCardTheme;
+  backgroundImage?: string;
   avatarUrl?: string;
   color: string;
   details?: SharePosterDetails;
@@ -111,11 +113,12 @@ function ShareCard({
       onTransitionEnd={onTransitionEnd}
       style={style}
     >
-      <div style={{ width: SHARE_CARD_DESIGN_WIDTH, height: SHARE_CARD_DESIGN_HEIGHT, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+      <div style={{ width: SHARE_CARD_DESIGN_WIDTH, height: SHARE_CARD_DESIGN_HEIGHT, borderRadius: 16, overflow: 'hidden', backgroundColor: color, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
         <ShareCardArtwork
         avatarUrl={avatarUrl}
         details={details}
-        color={color}
+        theme={theme}
+        backgroundImage={backgroundImage}
         isHidden={isHidden}
         rangeLabel={rangeLabel}
         summary={summary}
@@ -127,31 +130,46 @@ function ShareCard({
   );
 }
 
-export const SHARE_CARD_VARIANTS = SHARE_CARD_COLORS.map((color, index) => ({ color, label: index === 0 ? '霓虹' : '特刊' }));
+export interface ShareCardVariant {
+  id: string;
+  color: string;
+  label: string;
+  theme: ShareCardTheme;
+  backgroundImage?: string;
+}
+export const SHARE_CARD_VARIANTS: ShareCardVariant[] = SHARE_CARD_COLORS.map((color, index) => ({ id: index === 0 ? 'neon' : 'editorial', color, label: index === 0 ? '霓虹' : '特刊', theme: index === 0 ? 'neon' : 'editorial' }));
 
-export function getShareCardVariant(index: number) {
+export function getShareCardVariant(index: number, variants = SHARE_CARD_VARIANTS) {
   const normalizedIndex = (
-    (index % SHARE_CARD_VARIANTS.length) + SHARE_CARD_VARIANTS.length
-  ) % SHARE_CARD_VARIANTS.length;
-  return SHARE_CARD_VARIANTS[normalizedIndex] ?? SHARE_CARD_VARIANTS[0];
+    (index % variants.length) + variants.length
+  ) % variants.length;
+  return variants[normalizedIndex] ?? SHARE_CARD_VARIANTS[0];
 }
 
 export function ShareCardCarousel({
+  variants = SHARE_CARD_VARIANTS,
+  disabled = false,
+  selectionRevision = 0,
   reservedHeight = 128,
   activeIndex,
   avatarUrl,
   details,
   onActiveIndexChange,
+  onDeleteBackground,
   rangeLabel,
   summary,
   toolLabel,
   userName,
 }: {
+  variants?: ShareCardVariant[];
+  disabled?: boolean;
+  selectionRevision?: number;
   reservedHeight?: number;
   activeIndex: number;
   avatarUrl?: string;
   details?: SharePosterDetails;
   onActiveIndexChange: (index: number) => void;
+  onDeleteBackground?: () => void;
   rangeLabel?: string;
   summary: DashboardUsageSummary | null;
   toolLabel?: string;
@@ -159,9 +177,11 @@ export function ShareCardCarousel({
 }) {
   const [transition, setTransition] = useState<CardTransition | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const variantIds = variants.map(({ id }) => id).join(',');
+  useEffect(() => { setTransition(null); }, [variantIds, activeIndex, selectionRevision]);
   const currentIndex = (
-    (activeIndex % SHARE_CARD_VARIANTS.length) + SHARE_CARD_VARIANTS.length
-  ) % SHARE_CARD_VARIANTS.length;
+    (activeIndex % variants.length) + variants.length
+  ) % variants.length;
 
   useEffect(() => {
     if (transition?.phase !== 'prepare') return undefined;
@@ -182,11 +202,11 @@ export function ShareCardCarousel({
   }, [transition?.phase]);
 
   const move = (direction: SlideDirection) => {
-    if (transition) return;
+    if (transition || disabled) return;
 
     const toIndex = (
-      currentIndex + direction + SHARE_CARD_VARIANTS.length
-    ) % SHARE_CARD_VARIANTS.length;
+      currentIndex + direction + variants.length
+    ) % variants.length;
 
     if (shouldReduceMotion()) {
       onActiveIndexChange(toIndex);
@@ -209,15 +229,15 @@ export function ShareCardCarousel({
   };
 
   const stackActiveIndex = transition?.toIndex ?? currentIndex;
-  const activeVariant = getShareCardVariant(currentIndex);
+  const activeVariant = getShareCardVariant(currentIndex, variants);
 
   return (
-    <section className="flex w-full flex-col items-center gap-5 py-2" aria-label="分享卡片选择">
+    <section className="flex w-full flex-col items-center gap-5 overflow-x-clip py-2" aria-label="分享卡片选择">
       <div className="grid w-full max-w-170 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 sm:gap-6">
         <Button
           aria-label="上一张卡片"
           className="z-20 rounded-full"
-          isDisabled={transition !== null}
+          isDisabled={disabled || transition !== null}
           isIconOnly
           onPress={() => move(-1)}
           variant="tertiary"
@@ -226,26 +246,26 @@ export function ShareCardCarousel({
         </Button>
 
         <div
-          className="relative aspect-2/3 w-full min-w-0 justify-self-center"
+          className="group/preview relative aspect-2/3 w-full min-w-0 justify-self-center"
           // Reserve vertical space for dialog controls and export actions.
           style={{ maxWidth: `min(360px, calc((90dvh - ${reservedHeight}px) * 2 / 3))` }}
         >
-          {SHARE_CARD_VARIANTS.map((variant, cardIndex) => {
+          {variants.map((variant, cardIndex) => {
             const relativeIndex = (
-              cardIndex - stackActiveIndex + SHARE_CARD_VARIANTS.length
-            ) % SHARE_CARD_VARIANTS.length;
+              cardIndex - stackActiveIndex + variants.length
+            ) % variants.length;
             const position = getPreviewPosition(
               relativeIndex,
-              SHARE_CARD_VARIANTS.length,
+              variants.length,
             );
 
             return (
               <div
                 aria-hidden="true"
                 className={`absolute left-1/2 top-1/2 h-[92%] aspect-2/3 rounded-[28px] ${CARD_TRANSITION_CLASS}`}
-                key={variant.color}
+                key={variant.id}
                 style={{
-                  ...getCardSurfaceStyle(variant.color),
+                  ...getCardSurfaceStyle(variant.color, variant.backgroundImage),
                   opacity: position.opacity,
                   transform: getCardTransform(position.offset, position.rotation),
                   zIndex: position.zIndex,
@@ -259,7 +279,9 @@ export function ShareCardCarousel({
               <ShareCard
                 avatarUrl={avatarUrl}
                 details={details}
-                color={getShareCardVariant(transition.fromIndex).color}
+                color={getShareCardVariant(transition.fromIndex, variants).color}
+                theme={getShareCardVariant(transition.fromIndex, variants).theme}
+                backgroundImage={getShareCardVariant(transition.fromIndex, variants).backgroundImage}
                 isHidden
                 rangeLabel={rangeLabel}
                 style={{
@@ -276,7 +298,9 @@ export function ShareCardCarousel({
               <ShareCard
                 avatarUrl={avatarUrl}
                 details={details}
-                color={getShareCardVariant(transition.toIndex).color}
+                color={getShareCardVariant(transition.toIndex, variants).color}
+                theme={getShareCardVariant(transition.toIndex, variants).theme}
+                backgroundImage={getShareCardVariant(transition.toIndex, variants).backgroundImage}
                 onTransitionEnd={finishTransition}
                 rangeLabel={rangeLabel}
                 style={{
@@ -296,6 +320,8 @@ export function ShareCardCarousel({
               avatarUrl={avatarUrl}
               details={details}
               color={activeVariant.color}
+              theme={activeVariant.theme}
+              backgroundImage={activeVariant.backgroundImage}
               rangeLabel={rangeLabel}
               style={{
                 opacity: 1,
@@ -307,12 +333,18 @@ export function ShareCardCarousel({
               userName={userName}
             />
           )}
+          {activeVariant.theme === 'custom' && onDeleteBackground && !transition && (
+            <button type="button" aria-label="删除这张背景" title="删除这张背景" disabled={disabled} onClick={onDeleteBackground}
+              className="absolute right-2 top-2 z-30 flex size-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-sm backdrop-blur-sm transition-opacity hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50 [@media(hover:hover)_and_(pointer:fine)]:size-8 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover/preview:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/preview:opacity-100">
+              <Trash2 aria-hidden="true" className="size-4" />
+            </button>
+          )}
         </div>
 
         <Button
           aria-label="下一张卡片"
           className="z-20 rounded-full"
-          isDisabled={transition !== null}
+          isDisabled={disabled || transition !== null}
           isIconOnly
           onPress={() => move(1)}
           variant="tertiary"

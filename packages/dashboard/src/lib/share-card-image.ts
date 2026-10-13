@@ -33,7 +33,9 @@ async function waitForShareImageAssets(node: HTMLElement): Promise<void> {
   await document.fonts.ready;
   await Promise.all(
     Array.from(node.querySelectorAll('img')).map((image) => (
-      image.decode().catch(() => undefined)
+      image.decode().catch(() => {
+        if (image.hasAttribute('data-share-background')) throw new Error('背景图片尚未准备完成，请重试');
+      })
     )),
   );
   await nextPaint();

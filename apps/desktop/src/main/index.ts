@@ -63,6 +63,7 @@ import {
 import { createMainWindowLauncher } from './main-window-launcher';
 import { restoreNativeTrapHandler } from './native-crash-signals';
 import { configureQuoternAppIdentity } from './app-identity';
+import { registerShareBackgroundIpc } from './share-background-ipc';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
 import {
   DEFAULT_DATA_DIR,
@@ -432,6 +433,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     registerOpenExternalIpc();
     registerThemeIpc();
     registerShareCardIpc();
+    registerShareBackgroundIpc();
     registerAutostartIpc();
     // Before the first window: get-state must not race initializeAutoUpdate.
     registerAutoUpdateIpc();

@@ -114,7 +114,9 @@ export function AppShell() {
           />
         </aside> */}
 
-        <div className="relative mx-auto w-full max-w-240 px-8 py-5 pb-12 sm:px-4 sm:py-6 min-[1040px]:pb-10">
+        <div className={`relative mx-auto w-full px-8 py-5 pb-12 sm:px-4 sm:py-6 min-[1040px]:pb-10 ${
+          pathname === '/pricing' ? 'max-w-240' : 'max-w-300 2xl:max-w-360'
+        }`}>
           <main className="min-w-0 w-full">
             <Outlet />
           </main>

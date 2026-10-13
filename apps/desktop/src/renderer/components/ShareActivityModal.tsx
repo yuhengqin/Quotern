@@ -35,6 +35,7 @@ export function ShareActivityModal() {
               onActiveIndexChange={setActiveIndex}
               rangeLabel={snapshot?.rangeLabel}
               summary={snapshot?.summary ?? null}
+              details={snapshot?.details}
               toolLabel={snapshot?.toolLabel}
               userName={profile.userName}
             />
@@ -45,6 +46,7 @@ export function ShareActivityModal() {
               color={getShareCardVariant(activeIndex).color}
               rangeLabel={snapshot?.rangeLabel}
               summary={snapshot?.summary ?? null}
+              details={snapshot?.details}
               toolLabel={snapshot?.toolLabel}
               userName={profile.userName}
             />

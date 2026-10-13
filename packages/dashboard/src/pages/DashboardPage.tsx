@@ -214,6 +214,12 @@ export function DashboardPage() {
   useEffect(() => {
     if (loading || refreshing) return;
     publishSnapshot({
+      details: {
+        days: visibleTrendRows.dailyRows
+          .filter((row) => !isHourly || row.date === (selectedDate ?? localDateNow()))
+          .map((row) => ({ date: row.date, tokens: isHourly ? visibleSummary.totalTokens : row.totalTokens })),
+        models: filterModelRowsBySources(view.modelRows, selectedTools),
+      },
       rangeLabel: shareRangeLabel,
       summary: visibleSummary,
       toolLabel: shareToolLabel,
@@ -225,6 +231,11 @@ export function DashboardPage() {
     shareRangeLabel,
     shareToolLabel,
     visibleSummary,
+    visibleTrendRows.dailyRows,
+    view.modelRows,
+    selectedTools,
+    selectedDate,
+    isHourly,
   ]);
   const handleSelectDate = (date: string) => {
     setSelectedDate((current) => (current === date ? null : date));

@@ -7,8 +7,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
+import type { SharePosterDetails } from '../components/SharePosterArtwork';
 
 export interface ShareSnapshot {
+  details?: SharePosterDetails;
   rangeLabel: string;
   summary: DashboardUsageSummary;
   toolLabel: string;

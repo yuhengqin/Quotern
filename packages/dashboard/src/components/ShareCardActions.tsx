@@ -12,6 +12,7 @@ import {
   SHARE_CARD_DESIGN_WIDTH,
 } from '../lib/share-card-image';
 import { ShareCardArtwork } from './ShareCardCarousel';
+import type { SharePosterDetails } from './SharePosterArtwork';
 
 type ShareAction = 'copy' | 'download';
 type ShareActionState = 'error' | 'idle' | 'pending' | 'success';
@@ -32,6 +33,7 @@ async function withMinimumPendingTime<T>(operation: Promise<T>): Promise<T> {
 }
 
 interface ExportRequest {
+  details?: SharePosterDetails;
   avatarUrl?: string;
   color: string;
   id: number;
@@ -59,6 +61,7 @@ const ACTION_LABELS: Record<ShareAction, Record<ShareActionState, string>> = {
 };
 
 export function ShareCardActions({
+  details,
   avatarUrl,
   color,
   rangeLabel,
@@ -66,6 +69,7 @@ export function ShareCardActions({
   toolLabel,
   userName,
 }: {
+  details?: SharePosterDetails;
   avatarUrl?: string;
   color: string;
   rangeLabel?: string;
@@ -135,6 +139,7 @@ export function ShareCardActions({
     nextRequestIdRef.current = id;
     return new Promise<Blob>((resolve, reject) => {
       setExportRequest({
+        details,
         avatarUrl,
         color,
         id,
@@ -237,6 +242,7 @@ export function ShareCardActions({
                   avatarUrl={exportRequest.avatarUrl}
                   borderRadius={6}
                   color={exportRequest.color}
+                  details={exportRequest.details}
                   isHidden
                   rangeLabel={exportRequest.rangeLabel}
                   summary={exportRequest.summary}

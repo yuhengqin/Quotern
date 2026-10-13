@@ -98,8 +98,6 @@ pnpm install
 
 ## 🤝 贡献指南
 
-- 联系Captain:229199157
-
 源码按 Desktop / CLI / 浏览器面板协作。分支规范与本地启动见 [Contributing Guide](./CONTRIBUTING.md)。
 
 - [Desktop](./CONTRIBUTING.md#desktop) — Electron 桌面端
@@ -113,13 +111,7 @@ pnpm install
 - [运行维护注意事项](./docs/runtime-notes.md)
 - [开发协作注意事项](./docs/development-notes.md)
 
-## Contributing
-
 感谢各位贡献者的支持！提交 PR 即可上榜。
-
-<a href="https://github.com/yuhengqin/Quotern/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=yuhengqin/Quotern&max=500&columns=20" alt="Quotern contributors" />
-</a>
 
 ## 📚 参考项目
 

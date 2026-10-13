@@ -1,5 +1,5 @@
-import { Button } from '@heroui/react';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Button, Tooltip } from '@heroui/react';
+import { ChevronLeft, ChevronRight, Crop, ImagePlus, Trash2 } from 'lucide-react';
 import {
   type CSSProperties,
   type TransitionEvent,
@@ -34,25 +34,14 @@ function getCardSurfaceStyle(color: string, backgroundImage?: string): CSSProper
   };
 }
 
-function getPreviewPosition(relativeIndex: number, total: number) {
+function getPreviewPosition(relativeIndex: number) {
   if (relativeIndex === 0) return { offset: 0, rotation: 0, opacity: 0, zIndex: 0 };
-  if (total === 2) {
-    return { offset: 38, rotation: 3, opacity: 0.88, zIndex: 1 };
-  }
-
-  const sideCardCount = Math.max(0, total - 1);
-  const sideIndex = relativeIndex - 1;
-  const leftCardCount = Math.ceil(sideCardCount / 2);
-  const isLeft = sideIndex < leftCardCount;
-  const distance = isLeft
-    ? leftCardCount - sideIndex
-    : sideIndex - leftCardCount + 1;
-
+  const distance = Math.abs(relativeIndex);
   return {
-    offset: (isLeft ? -1 : 1) * 38 * distance,
-    rotation: (isLeft ? -1 : 1) * 3 * distance,
+    offset: relativeIndex * 38,
+    rotation: relativeIndex * 3,
     opacity: Math.max(0.5, 0.88 - 0.16 * (distance - 1)),
-    zIndex: Math.max(1, leftCardCount - distance + 1),
+    zIndex: Math.max(1, 5 - distance),
   };
 }
 
@@ -140,9 +129,7 @@ export interface ShareCardVariant {
 export const SHARE_CARD_VARIANTS: ShareCardVariant[] = SHARE_CARD_COLORS.map((color, index) => ({ id: index === 0 ? 'neon' : 'editorial', color, label: index === 0 ? '霓虹' : '特刊', theme: index === 0 ? 'neon' : 'editorial' }));
 
 export function getShareCardVariant(index: number, variants = SHARE_CARD_VARIANTS) {
-  const normalizedIndex = (
-    (index % variants.length) + variants.length
-  ) % variants.length;
+  const normalizedIndex = Math.max(0, Math.min(index, variants.length - 1));
   return variants[normalizedIndex] ?? SHARE_CARD_VARIANTS[0];
 }
 
@@ -155,7 +142,11 @@ export function ShareCardCarousel({
   avatarUrl,
   details,
   onActiveIndexChange,
+  onAddBackground,
+  onAdjustBackground,
   onDeleteBackground,
+  addBackgroundDisabled = false,
+  replaceBackground = false,
   rangeLabel,
   summary,
   toolLabel,
@@ -169,7 +160,11 @@ export function ShareCardCarousel({
   avatarUrl?: string;
   details?: SharePosterDetails;
   onActiveIndexChange: (index: number) => void;
+  onAddBackground?: () => void;
+  onAdjustBackground?: () => void;
   onDeleteBackground?: () => void;
+  addBackgroundDisabled?: boolean;
+  replaceBackground?: boolean;
   rangeLabel?: string;
   summary: DashboardUsageSummary | null;
   toolLabel?: string;
@@ -179,9 +174,7 @@ export function ShareCardCarousel({
   const animationFrameRef = useRef<number | null>(null);
   const variantIds = variants.map(({ id }) => id).join(',');
   useEffect(() => { setTransition(null); }, [variantIds, activeIndex, selectionRevision]);
-  const currentIndex = (
-    (activeIndex % variants.length) + variants.length
-  ) % variants.length;
+  const currentIndex = Math.max(0, Math.min(activeIndex, variants.length - 1));
 
   useEffect(() => {
     if (transition?.phase !== 'prepare') return undefined;
@@ -204,9 +197,8 @@ export function ShareCardCarousel({
   const move = (direction: SlideDirection) => {
     if (transition || disabled) return;
 
-    const toIndex = (
-      currentIndex + direction + variants.length
-    ) % variants.length;
+    const toIndex = currentIndex + direction;
+    if (toIndex < 0 || toIndex >= variants.length) return;
 
     if (shouldReduceMotion()) {
       onActiveIndexChange(toIndex);
@@ -232,12 +224,12 @@ export function ShareCardCarousel({
   const activeVariant = getShareCardVariant(currentIndex, variants);
 
   return (
-    <section className="flex w-full flex-col items-center gap-5 overflow-x-clip py-2" aria-label="分享卡片选择">
+    <section className="flex w-full flex-col items-center gap-3 overflow-x-clip py-2" aria-label="分享卡片选择">
       <div className="grid w-full max-w-170 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 sm:gap-6">
         <Button
           aria-label="上一张卡片"
-          className="z-20 rounded-full"
-          isDisabled={disabled || transition !== null}
+          className="z-20 justify-self-center rounded-full"
+          isDisabled={disabled || transition !== null || currentIndex === 0}
           isIconOnly
           onPress={() => move(-1)}
           variant="tertiary"
@@ -251,13 +243,7 @@ export function ShareCardCarousel({
           style={{ maxWidth: `min(360px, calc((90dvh - ${reservedHeight}px) * 2 / 3))` }}
         >
           {variants.map((variant, cardIndex) => {
-            const relativeIndex = (
-              cardIndex - stackActiveIndex + variants.length
-            ) % variants.length;
-            const position = getPreviewPosition(
-              relativeIndex,
-              variants.length,
-            );
+            const position = getPreviewPosition(cardIndex - stackActiveIndex);
 
             return (
               <div
@@ -333,24 +319,39 @@ export function ShareCardCarousel({
               userName={userName}
             />
           )}
-          {activeVariant.theme === 'custom' && onDeleteBackground && !transition && (
-            <button type="button" aria-label="删除这张背景" title="删除这张背景" disabled={disabled} onClick={onDeleteBackground}
-              className="absolute right-2 top-2 z-30 flex size-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-sm backdrop-blur-sm transition-opacity hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50 [@media(hover:hover)_and_(pointer:fine)]:size-8 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover/preview:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/preview:opacity-100">
-              <Trash2 aria-hidden="true" className="size-4" />
-            </button>
+          {activeVariant.theme === 'custom' && !transition && (
+            <div className="absolute right-2 top-2 z-30 flex gap-1 transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover/preview:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/preview:opacity-100">
+              {onAdjustBackground && <button type="button" aria-label="调整背景图片" title="调整背景图片" disabled={disabled} onClick={onAdjustBackground}
+                className="flex size-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-sm backdrop-blur-sm hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50 [@media(hover:hover)_and_(pointer:fine)]:size-8">
+                <Crop aria-hidden="true" className="size-4" />
+              </button>}
+              {onDeleteBackground && <button type="button" aria-label="删除这张背景" title="删除这张背景" disabled={disabled} onClick={onDeleteBackground}
+                className="flex size-11 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white shadow-sm backdrop-blur-sm hover:bg-black/65 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-50 [@media(hover:hover)_and_(pointer:fine)]:size-8">
+                <Trash2 aria-hidden="true" className="size-4" />
+              </button>}
+            </div>
           )}
         </div>
 
-        <Button
+        {currentIndex === variants.length - 1 && onAddBackground ? (
+          <Tooltip delay={100} closeDelay={80}>
+            <Button aria-label={replaceBackground ? '更换背景' : '添加背景'} variant="tertiary" isIconOnly
+              className="z-20 justify-self-center rounded-full"
+              isDisabled={disabled || addBackgroundDisabled || transition !== null} onPress={onAddBackground}>
+              <ImagePlus aria-hidden="true" className="size-5" />
+            </Button>
+            <Tooltip.Content placement="top"><p>{replaceBackground ? '更换背景' : '添加背景'}</p></Tooltip.Content>
+          </Tooltip>
+        ) : <Button
           aria-label="下一张卡片"
-          className="z-20 rounded-full"
-          isDisabled={disabled || transition !== null}
+          className="z-20 justify-self-center rounded-full"
+          isDisabled={disabled || transition !== null || currentIndex === variants.length - 1}
           isIconOnly
           onPress={() => move(1)}
           variant="tertiary"
         >
           <ChevronRight className="size-5" />
-        </Button>
+        </Button>}
       </div>
     </section>
   );

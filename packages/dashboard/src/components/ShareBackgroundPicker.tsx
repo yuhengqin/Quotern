@@ -1,28 +1,33 @@
 import { Button, Modal, Spinner } from '@heroui/react';
-import { Check, Plus } from 'lucide-react';
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { cropRect, MAX_BACKGROUND_BYTES, MAX_SHARE_BACKGROUNDS, replacementSuggestion } from '../lib/share-backgrounds';
 import type { useShareBackgrounds } from '../hooks/useShareBackgrounds';
 import type { ShareCardVariant } from './ShareCardCarousel';
 
 type BackgroundLibrary = ReturnType<typeof useShareBackgrounds>;
+type CropSource = { name: string; image: File | string; replaceId?: string };
 
-export function ShareBackgroundPicker({ library, variants, selectedId, onSelect, deletingId, onCancelDelete }: {
+export function ShareBackgroundPicker({ library, selectedVariant, children, deletingId, onCancelDelete }: {
   library: BackgroundLibrary;
-  variants: ShareCardVariant[];
-  selectedId: string;
-  onSelect: (index: number) => void;
+  selectedVariant: ShareCardVariant;
+  children: (onUpload: () => void, onAdjust: () => void) => ReactNode;
   deletingId: string | null;
   onCancelDelete: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [source, setSource] = useState<CropSource | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const disabled = !library.ready || library.busy;
   return (
-    <div className="flex flex-col items-center gap-2 pb-2">
-      <div className="flex max-w-full flex-wrap items-center justify-center gap-2" role="group" aria-label="背景选择">
-        <span className="mr-1 text-xs text-muted">背景</span>
+    <div className="flex w-full flex-col items-center gap-1 pb-2">
+      {children(
+        () => { if (!disabled) { onCancelDelete(); setFileError(null); input.current?.click(); } },
+        () => {
+          if (disabled || !selectedVariant.backgroundImage) return;
+          onCancelDelete(); setFileError(null);
+          setSource({ name: selectedVariant.label, image: selectedVariant.backgroundImage, replaceId: selectedVariant.id });
+        },
+      )}
         <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} aria-label="选择背景图片"
           onChange={(event) => {
             const chosen = event.target.files?.[0];
@@ -31,24 +36,9 @@ export function ShareBackgroundPicker({ library, variants, selectedId, onSelect,
             if (!chosen) return;
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(chosen.type)) { setFileError('请选择 PNG、JPEG 或 WebP 图片'); return; }
             if (chosen.size > 20 * 1024 * 1024) { setFileError('原图不能超过 20 MB，请先缩小图片'); return; }
-            setFile(chosen);
+            setSource({ name: chosen.name, image: chosen });
           }} />
-        {variants.map((variant, index) => (
-          <button key={variant.id} type="button" aria-label={`使用背景：${variant.label}`} aria-pressed={selectedId === variant.id} title={variant.label}
-            disabled={library.loading || library.busy || (variant.theme === 'custom' && !library.ready)} onClick={() => onSelect(index)}
-            className="relative block h-12 w-8 shrink-0 overflow-hidden rounded-md border-2 border-border outline-offset-2 data-[selected=true]:border-accent disabled:opacity-50" data-selected={selectedId === variant.id}>
-            {variant.backgroundImage ? <img alt="" src={variant.backgroundImage} className="h-full w-full object-cover" /> :
-              <span aria-hidden="true" className="flex h-full w-full flex-col justify-between px-1 py-1.5" style={{ background: variant.theme === 'neon' ? 'linear-gradient(145deg, #361044, #100b35 50%, #292494)' : '#f8f5ee', color: variant.theme === 'neon' ? '#eee6ff' : '#262626' }}>
-                <span className="h-0.5 w-3 rounded bg-current opacity-70" />
-                <span className="text-[8px] leading-none">{variant.label}</span>
-                <span className="h-0.5 w-4 rounded bg-current opacity-30" />
-              </span>}
-            {selectedId === variant.id && <span aria-hidden="true" className="absolute bottom-0 right-0 rounded-tl bg-accent p-0.5 text-accent-foreground"><Check className="size-2.5" /></span>}
-          </button>
-        ))}
-        <Button size="sm" variant="secondary" className="!h-8 !min-h-8 shrink-0 gap-1 text-xs" isDisabled={disabled} onPress={() => { onCancelDelete(); input.current?.click(); }}>
-          <Plus aria-hidden="true" className="size-3.5" />上传图片
-        </Button>
+      <div className="flex items-center justify-center gap-1" role="group" aria-label="背景管理">
         {!library.ready && !library.error && <Spinner size="sm" aria-label="正在读取背景" />}
         {!library.ready && library.error && <Button size="sm" variant="tertiary" onPress={() => void library.reload()}>重试图库</Button>}
       </div>
@@ -58,12 +48,12 @@ export function ShareBackgroundPicker({ library, variants, selectedId, onSelect,
         <Button size="sm" variant="tertiary" isDisabled={library.busy} onPress={onCancelDelete}>取消</Button>
       </div>}
       {(fileError || library.error) && <p className="max-w-full text-center text-xs text-danger" role="alert">{fileError || library.error}</p>}
-      {file && <BackgroundCropModal file={file} library={library} onClose={() => setFile(null)} />}
+      {source && <BackgroundCropModal source={source} library={library} onClose={() => setSource(null)} />}
     </div>
   );
 }
 
-function BackgroundCropModal({ file, library, onClose }: { file: File; library: BackgroundLibrary; onClose: () => void }) {
+function BackgroundCropModal({ source, library, onClose }: { source: CropSource; library: BackgroundLibrary; onClose: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -79,16 +69,16 @@ function BackgroundCropModal({ file, library, onClose }: { file: File; library: 
   useEffect(() => {
     active.current = true;
     let cancelled = false;
-    const url = URL.createObjectURL(file);
-    const source = new Image();
-    source.src = url;
-    void source.decode().then(() => {
+    const url = typeof source.image === 'string' ? source.image : URL.createObjectURL(source.image);
+    const decoded = new Image();
+    decoded.src = url;
+    void decoded.decode().then(() => {
       if (cancelled) return;
-      if (source.naturalWidth * source.naturalHeight > 40_000_000) { setError('图片分辨率过大，请先缩小到 4000 万像素以内'); return; }
-      setImage(source);
+      if (decoded.naturalWidth * decoded.naturalHeight > 40_000_000) { setError('图片分辨率过大，请先缩小到 4000 万像素以内'); return; }
+      setImage(decoded);
     }).catch(() => { if (!cancelled) setError('无法解码这张图片，请选择有效的 PNG、JPEG 或 WebP 图片'); });
-    return () => { cancelled = true; active.current = false; URL.revokeObjectURL(url); };
-  }, [file]);
+    return () => { cancelled = true; active.current = false; if (typeof source.image !== 'string') URL.revokeObjectURL(url); };
+  }, [source]);
 
   useEffect(() => {
     if (!canvas.current || !image || cropped) return;
@@ -102,7 +92,7 @@ function BackgroundCropModal({ file, library, onClose }: { file: File; library: 
 
   const save = async (blob: Blob, replacing?: string) => {
     try {
-      await library.add(file.name.slice(0, 200), blob, replacing);
+      await library.add(source.name.slice(0, 200), blob, replacing);
       if (active.current) onClose();
     } catch (failure) { if (active.current) setError(failure instanceof Error ? failure.message : '背景保存失败，请重试'); }
   };
@@ -126,10 +116,10 @@ function BackgroundCropModal({ file, library, onClose }: { file: File; library: 
       }
       if (!blob || blob.size > MAX_BACKGROUND_BYTES) throw new Error('裁剪后的图片超过 2 MB，请选择更简单或更小的图片');
       if (!active.current) return;
-      if (library.items.length >= MAX_SHARE_BACKGROUNDS) {
+      if (!source.replaceId && library.items.length >= MAX_SHARE_BACKGROUNDS) {
         setCropped(blob);
         setReplaceId(replacementSuggestion(library.items)?.id);
-      } else { await save(blob); }
+      } else { await save(blob, source.replaceId); }
     } catch (failure) { if (active.current) setError(failure instanceof Error ? failure.message : '裁剪失败，请重试'); }
     finally { if (active.current) setProcessing(false); }
   };
@@ -150,9 +140,9 @@ function BackgroundCropModal({ file, library, onClose }: { file: File; library: 
   return (
     <Modal.Backdrop isOpen isDismissable={!busy} isKeyboardDismissDisabled={busy} onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
       <Modal.Container size="md" scroll="inside" className="p-3">
-        <Modal.Dialog aria-label={cropped ? '选择要替换的背景' : '裁剪背景图片'} className="max-h-[90dvh] p-4">
+        <Modal.Dialog aria-label={cropped ? '选择要替换的背景' : source.replaceId ? '调整背景图片' : '裁剪背景图片'} className="max-h-[90dvh] p-4">
           {!busy && <Modal.CloseTrigger aria-label="取消背景图片" />}
-          <Modal.Header className="pr-8"><Modal.Heading>{cropped ? '选择要替换的背景' : '裁剪背景图片'}</Modal.Heading></Modal.Header>
+          <Modal.Header className="pr-8"><Modal.Heading>{cropped ? '选择要替换的背景' : source.replaceId ? '调整背景图片' : '裁剪背景图片'}</Modal.Heading></Modal.Header>
           <Modal.Body className="flex flex-col items-center gap-3">
             {cropped ? <>
               <p className="text-sm text-muted">最多保存三张。已为你选中最久未使用的一张，也可以选择其他背景替换。</p>
@@ -166,6 +156,7 @@ function BackgroundCropModal({ file, library, onClose }: { file: File; library: 
               </div>
             </> : <>
               <p className="text-center text-xs text-muted">固定 2:3 · 拖动图片或使用方向键调整位置，再缩放取景</p>
+              {source.replaceId && <p className="text-center text-xs text-muted">基于已保存的图片调整，保存后替换当前背景</p>}
               {!image && !error && <Spinner aria-label="正在读取图片" />}
               <canvas ref={canvas} width={300} height={450} role="img" aria-label="背景裁剪预览，可用方向键调整取景位置" tabIndex={0}
                 className="max-w-full touch-none rounded-lg border border-border outline-offset-2" style={{ width: 'min(280px, calc((90dvh - 250px) * 2 / 3))', aspectRatio: '2 / 3', display: image ? 'block' : 'none', cursor: busy ? 'wait' : 'grab' }}

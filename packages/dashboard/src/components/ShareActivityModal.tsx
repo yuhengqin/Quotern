@@ -6,6 +6,7 @@ import { useShareBackgrounds } from '../hooks/useShareBackgrounds';
 import { OPEN_SHARE_EVENT } from '@/lib/shell-events';
 import { buildShareSnapshot, SHARE_RANGE_OPTIONS, type ShareFilters } from '../lib/share-snapshot';
 import { normalizeSourceId } from '../lib/usage-filter';
+import { MAX_SHARE_BACKGROUNDS } from '../lib/share-backgrounds';
 import { ToolChannelSelect } from './DashboardFilter';
 import { getShareCardVariant, SHARE_CARD_VARIANTS, ShareCardCarousel, type ShareCardVariant } from './ShareCardCarousel';
 import { ShareCardActions } from './ShareCardActions';
@@ -117,22 +118,25 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             onChange={(selectedSources) => setFilters((current) => ({ ...current, selectedSources }))}
           />
         </div>
-        <div className="relative" aria-busy={loading}>
-          <ShareCardCarousel activeIndex={currentIndex} selectionRevision={selectionRevision} onActiveIndexChange={selectVariant} variants={variants} disabled={backgrounds.loading || backgrounds.busy}
-            onDeleteBackground={currentVariant.theme === 'custom' ? () => setDeletingId(currentVariant.id) : undefined}
-            rangeLabel={rangeLabel} reservedHeight={300} summary={preview?.summary ?? null}
-            details={preview?.details} toolLabel={preview?.toolLabel} />
-          {disabled && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-surface/90 p-6 text-center" role="status" aria-live="polite">
-              {loading ? <><Spinner size="sm" /><span className="text-sm text-muted">正在更新分享预览…</span></> : <>
-                <p className="text-sm text-muted">{error || '暂无分享数据'}</p>
-                <Button size="sm" variant="secondary" onPress={retry}>重试</Button>
-              </>}
-            </div>
-          )}
-        </div>
-        <ShareBackgroundPicker library={backgrounds} variants={variants} selectedId={currentVariant.id} onSelect={selectVariant}
-          deletingId={deletingId} onCancelDelete={() => setDeletingId(null)} />
+        <ShareBackgroundPicker library={backgrounds} selectedVariant={currentVariant}
+          deletingId={deletingId} onCancelDelete={() => setDeletingId(null)}>
+          {(onUpload, onAdjust) => <div className="relative w-full" aria-busy={loading}>
+            <ShareCardCarousel activeIndex={currentIndex} selectionRevision={selectionRevision} onActiveIndexChange={selectVariant} variants={variants} disabled={backgrounds.loading || backgrounds.busy}
+              onAddBackground={onUpload} addBackgroundDisabled={!backgrounds.ready}
+              onAdjustBackground={onAdjust} onDeleteBackground={() => setDeletingId(currentVariant.id)}
+              replaceBackground={backgrounds.items.length >= MAX_SHARE_BACKGROUNDS}
+              rangeLabel={rangeLabel} reservedHeight={300} summary={preview?.summary ?? null}
+              details={preview?.details} toolLabel={preview?.toolLabel} />
+            {disabled && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-surface/90 p-6 text-center" role="status" aria-live="polite">
+                {loading ? <><Spinner size="sm" /><span className="text-sm text-muted">正在更新分享预览…</span></> : <>
+                  <p className="text-sm text-muted">{error || '暂无分享数据'}</p>
+                  <Button size="sm" variant="secondary" onPress={retry}>重试</Button>
+                </>}
+              </div>
+            )}
+          </div>}
+        </ShareBackgroundPicker>
       </Modal.Body>
       <Modal.Footer className="mt-3 shrink-0 justify-center">
         <ShareCardActions color={currentVariant.color} theme={currentVariant.theme} backgroundImage={currentVariant.backgroundImage} rangeLabel={rangeLabel}

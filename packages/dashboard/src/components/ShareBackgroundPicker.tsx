@@ -48,11 +48,10 @@ export function ShareBackgroundPicker({ library, selectedVariant, children, dele
             if (chosen.size > 20 * 1024 * 1024) { library.setEditing(false); setFileError('原图不能超过 20 MB，请先缩小图片'); return; }
             setSource({ name: chosen.name, image: chosen });
           }} />
-      <div className="flex items-center justify-center gap-1" role="group" aria-label="背景管理">
-        {!library.ready && !library.error && <Spinner size="sm" aria-label="正在读取背景" />}
-        {!library.ready && library.error && <Button size="sm" variant="tertiary" onPress={() => void library.reload()}>重试图库</Button>}
-        {library.ready && <Button size="sm" variant="tertiary" isDisabled={disabled} onPress={() => void library.reload()}>刷新图库</Button>}
-      </div>
+      {!library.ready && <div className="flex items-center justify-center gap-1" role="group" aria-label="背景管理">
+        {!library.error && <Spinner size="sm" aria-label="正在读取背景" />}
+        {library.error && <Button size="sm" variant="tertiary" onPress={() => void library.reload()}>重试图库</Button>}
+      </div>}
       {deletingId && <div className="flex items-center gap-2 text-xs" role="group" aria-label="确认删除背景">
         <span>删除这张背景？</span>
         <Button size="sm" variant="danger" isDisabled={disabled} onPress={() => void library.remove(deletingId).then(onCancelDelete).catch(() => undefined)}>删除</Button>

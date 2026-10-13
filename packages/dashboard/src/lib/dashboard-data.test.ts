@@ -1,0 +1,579 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { dailyModelKey } from 'quotern-core/daily-model-key';
+import {
+  addLocalDays,
+  localDateNow,
+} from 'quotern-core/timezone';
+
+import type { UsageDataset } from './api.ts';
+import {
+  buildDashboardDataFromDataset,
+  buildFilledHourlyForDate,
+  projectDashboardForDate,
+} from './dashboard-data.ts';
+import { buildToolModelUsage } from './dashboard-mock-data.ts';
+
+function datasetWithDays(
+  dailyRows: UsageDataset['dailyRows'],
+  extras: Partial<UsageDataset> = {},
+): UsageDataset {
+  return {
+    summary: {
+      totalTokens: dailyRows.reduce((sum, row) => sum + row.tokens, 0),
+      totalCostUsd: dailyRows.reduce((sum, row) => sum + row.costUsd, 0),
+      todayTokens: 0,
+      todayCostUsd: 0,
+      statsSince: '2026-01-01',
+      bySource: [],
+    },
+    dailyRows,
+    hourlyRows: [],
+    modelRows: [],
+    projectRows: [],
+    syncStatus: null,
+    ...extras,
+  };
+}
+
+test('today range stays zero when only yesterday has usage', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const dataset = datasetWithDays([
+    {
+      date: yesterday,
+      tokens: 12_000,
+      costUsd: 1.25,
+      models: { 'gpt-4': 12_000 },
+    },
+  ]);
+
+  const view = buildDashboardDataFromDataset(dataset, 1);
+
+  assert.equal(view.summary.totalTokens, 0);
+  assert.equal(view.summary.totalCostUsd, 0);
+  assert.equal(view.rangeDailyUsage.length, 0);
+  assert.ok(view.todayHourlyUsage.length > 0);
+  assert.ok(view.todayHourlyUsage.every((row) => row.totalTokens === 0));
+  assert.equal(view.heatmapDays.length, 1);
+  assert.equal(view.heatmapDays[0]?.date, yesterday);
+  assert.deepEqual(view.distributions.tools, []);
+  assert.deepEqual(view.distributions.models, []);
+});
+
+test('last-7-days includes yesterday but not days outside the calendar window', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const eightDaysAgo = addLocalDays(today, -8);
+  const dataset = datasetWithDays([
+    {
+      date: eightDaysAgo,
+      tokens: 99_000,
+      costUsd: 9,
+      models: {},
+    },
+    {
+      date: yesterday,
+      tokens: 5_000,
+      costUsd: 0.5,
+      models: {},
+    },
+  ]);
+
+  const view = buildDashboardDataFromDataset(dataset, 7);
+
+  assert.equal(view.summary.totalTokens, 5_000);
+  assert.equal(view.rangeDailyUsage.length, 1);
+  assert.equal(view.rangeDailyUsage[0]?.date, yesterday);
+});
+
+test('projectDashboardForDate builds project usage from that day projects', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const claudeOpus = dailyModelKey('claude', 'opus');
+  const codexGpt = dailyModelKey('codex', 'gpt-5');
+
+  const dataset = datasetWithDays(
+    [
+      {
+        date: yesterday,
+        tokens: 300,
+        costUsd: 3,
+        models: { [claudeOpus]: 200, [codexGpt]: 100 },
+        projects: [
+          {
+            project: 'ai-usage',
+            tokens: 300,
+            models: { [claudeOpus]: 200, [codexGpt]: 100 },
+          },
+        ],
+      },
+      {
+        date: addLocalDays(today, -2),
+        tokens: 50,
+        costUsd: 0.5,
+        models: { [claudeOpus]: 50 },
+        projects: [
+          {
+            project: 'docs-site',
+            tokens: 50,
+            models: { [claudeOpus]: 50 },
+          },
+        ],
+      },
+    ],
+    {
+      projectRows: [
+        {
+          project: 'ai-usage',
+          tokens: 300,
+          costUsd: 3,
+          pct: 85.7,
+          models: [
+            {
+              model: 'opus',
+              source: 'claude',
+              tokens: 200,
+              costUsd: 2,
+              pct: 66.7,
+            },
+            {
+              model: 'gpt-5',
+              source: 'codex',
+              tokens: 100,
+              costUsd: 1,
+              pct: 33.3,
+            },
+          ],
+        },
+        {
+          project: 'docs-site',
+          tokens: 50,
+          costUsd: 0.5,
+          pct: 14.3,
+          models: [
+            {
+              model: 'opus',
+              source: 'claude',
+              tokens: 50,
+              costUsd: 0.5,
+              pct: 100,
+            },
+          ],
+        },
+      ],
+    },
+  );
+
+  const rangeView = buildDashboardDataFromDataset(dataset, 7);
+  assert.equal(rangeView.projectModelUsage.length, 2);
+
+  const dayView = projectDashboardForDate(rangeView, yesterday);
+  assert.equal(dayView.projectModelUsage.length, 1);
+  assert.equal(dayView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(dayView.projectModelUsage[0]?.tokens, 300);
+  assert.equal(dayView.projectModelUsage[0]?.models.length, 2);
+  assert.ok(
+    dayView.distributions.projects.some((row) => row.label === 'ai-usage'),
+  );
+  assert.ok(
+    !dayView.distributions.projects.some((row) => row.label === 'docs-site'),
+  );
+});
+
+test('project usage decodes URI-encoded cwd and merges with folder name', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const dataset = datasetWithDays(
+    [
+      {
+        date: yesterday,
+        tokens: 300,
+        costUsd: 3,
+        models: {},
+        projects: [
+          {
+            project: '%2FUsers%2Fme%2Fcode%2Fai-usage',
+            tokens: 200,
+            models: { [dailyModelKey('grok', 'grok-4')]: 200 },
+          },
+          {
+            project: 'ai-usage',
+            tokens: 100,
+            models: { [dailyModelKey('codex', 'gpt-5')]: 100 },
+          },
+        ],
+      },
+    ],
+    {
+      projectRows: [
+        {
+          project: '%2FUsers%2Fme%2Fcode%2Fai-usage',
+          tokens: 200,
+          costUsd: 2,
+          pct: 66.7,
+          models: [
+            {
+              model: 'grok-4',
+              source: 'grok',
+              tokens: 200,
+              costUsd: 2,
+              pct: 100,
+            },
+          ],
+        },
+        {
+          project: 'ai-usage',
+          tokens: 100,
+          costUsd: 1,
+          pct: 33.3,
+          models: [
+            {
+              model: 'gpt-5',
+              source: 'codex',
+              tokens: 100,
+              costUsd: 1,
+              pct: 100,
+            },
+          ],
+        },
+      ],
+    },
+  );
+
+  const rangeView = buildDashboardDataFromDataset(dataset, 7);
+  assert.equal(rangeView.projectModelUsage.length, 1);
+  assert.equal(rangeView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(rangeView.projectModelUsage[0]?.label, 'ai-usage');
+  assert.equal(rangeView.projectModelUsage[0]?.tokens, 300);
+  assert.equal(rangeView.projectModelUsage[0]?.models.length, 2);
+  assert.ok(
+    rangeView.distributions.projects.some((row) => row.label === 'ai-usage'),
+  );
+  assert.ok(
+    !rangeView.distributions.projects.some((row) => row.label.includes('%2F')),
+  );
+
+  const dayView = projectDashboardForDate(rangeView, yesterday);
+  assert.equal(dayView.projectModelUsage.length, 1);
+  assert.equal(dayView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(dayView.projectModelUsage[0]?.tokens, 300);
+});
+
+test('projectDashboardForDate keeps empty project usage when day has no projects', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const dataset = datasetWithDays([
+    {
+      date: yesterday,
+      tokens: 100,
+      costUsd: 1,
+      models: { 'gpt-4': 100 },
+    },
+  ]);
+
+  const rangeView = buildDashboardDataFromDataset(dataset, 7);
+  const dayView = projectDashboardForDate(rangeView, yesterday);
+  assert.deepEqual(dayView.projectModelUsage, []);
+  assert.deepEqual(dayView.distributions.projects, []);
+});
+
+test('buildFilledHourlyForDate matches ISO midnight dates to YYYY-MM-DD', () => {
+  const rows = buildFilledHourlyForDate(
+    [
+      {
+        date: '2026-08-13T00:00:00.000Z',
+        hour: 10,
+        source: 'claude',
+        tokens: 1_000,
+        costUsd: 0.1,
+        inputTokens: 800,
+        outputTokens: 200,
+        cachedInputTokens: 0,
+      },
+      {
+        date: '2026-08-12T00:00:00.000Z',
+        hour: 9,
+        source: 'claude',
+        tokens: 50,
+        costUsd: 0.01,
+        inputTokens: 40,
+        outputTokens: 10,
+        cachedInputTokens: 0,
+      },
+    ],
+    '2026-08-13',
+  );
+
+  assert.equal(rows[10]?.totalTokens, 1_000);
+  assert.equal(rows[9]?.totalTokens, 0);
+});
+
+test('buildFilledHourlyForDate coerces hour strings', () => {
+  const rows = buildFilledHourlyForDate(
+    [
+      {
+        date: '2026-08-13',
+        hour: '14' as unknown as number,
+        source: 'codex',
+        tokens: 200,
+        costUsd: 0.02,
+        inputTokens: 150,
+        outputTokens: 50,
+        cachedInputTokens: 0,
+      },
+    ],
+    '2026-08-13',
+  );
+
+  assert.equal(rows[14]?.totalTokens, 200);
+});
+
+test('daily rows keep uncached input when cache reads dwarf fresh input', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays([
+    {
+      date: today,
+      tokens: 20_024,
+      costUsd: 0.5,
+      models: { 'claude-sonnet-4-6': 20_024 },
+      inputTokens: 4,
+      outputTokens: 20,
+      cachedInputTokens: 20_000,
+      cacheCreationInputTokens: 0,
+    },
+  ]);
+
+  const view = buildDashboardDataFromDataset(dataset, 1);
+  const row = view.rangeDailyUsage.find((entry) => entry.date === today);
+  assert.ok(row);
+  assert.equal(row.inputTokens, 4);
+  assert.equal(row.uncachedInputTokens, 4);
+  assert.equal(row.cachedInputTokens, 20_000);
+  assert.equal(row.outputTokens, 20);
+  assert.equal(view.summary.inputTokens, 4);
+  assert.equal(view.summary.cachedInputTokens, 20_000);
+});
+
+test('localMetrics requestCount is additive and does not wipe cache columns', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays([
+    {
+      date: today,
+      tokens: 20_024,
+      costUsd: 0.5,
+      models: { 'claude-sonnet-4-6': 20_024 },
+      inputTokens: 4,
+      outputTokens: 20,
+      cachedInputTokens: 20_000,
+      cacheCreationInputTokens: 300,
+      localMetrics: {
+        version: 1,
+        uncachedInputTokens: 4,
+        cacheReadTokens: 20_000,
+        cacheWriteTokens: 300,
+        outputTokens: 20,
+        reasoningOutputTokens: 0,
+        requestCount: 3,
+        knownRequestCount: 3,
+        cacheHitRate: 20_000 / 20_304,
+        missingReasons: [],
+      },
+    },
+  ]);
+
+  const view = buildDashboardDataFromDataset(dataset, 1);
+  assert.equal(view.summary.inputTokens, 4);
+  assert.equal(view.summary.cachedInputTokens, 20_000);
+  assert.equal(view.summary.cacheCreationInputTokens, 300);
+  assert.equal(view.summary.requestCount, 3);
+  assert.equal(view.summary.knownRequestCount, 3);
+  const denom =
+    view.summary.inputTokens +
+    view.summary.cachedInputTokens +
+    view.summary.cacheCreationInputTokens;
+  assert.equal(view.summary.cachedInputTokens / denom, 20_000 / 20_304);
+});
+
+test('incomplete localMetrics requestCount stays null without changing tokens', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays([
+    {
+      date: today,
+      tokens: 105,
+      costUsd: 0.1,
+      models: {},
+      inputTokens: 70,
+      outputTokens: 20,
+      cachedInputTokens: 10,
+      cacheCreationInputTokens: 5,
+      localMetrics: {
+        version: 1,
+        uncachedInputTokens: 70,
+        cacheReadTokens: null,
+        cacheWriteTokens: null,
+        outputTokens: 20,
+        reasoningOutputTokens: 0,
+        requestCount: null,
+        knownRequestCount: 1,
+        cacheHitRate: null,
+        missingReasons: ['legacy_data'],
+      },
+    },
+  ]);
+
+  const view = buildDashboardDataFromDataset(dataset, 1);
+  assert.equal(view.summary.requestCount, null);
+  assert.equal(view.summary.knownRequestCount, 1);
+  assert.equal(view.summary.cachedInputTokens, 10);
+  assert.equal(view.summary.cacheCreationInputTokens, 5);
+  assert.equal(view.summary.inputTokens, 70);
+});
+
+test('buildFilledHourlyForDate does not clamp cache reads to uncached input', () => {
+  const rows = buildFilledHourlyForDate(
+    [
+      {
+        date: '2026-08-13',
+        hour: 9,
+        source: 'claude',
+        tokens: 20_024,
+        costUsd: 0.5,
+        inputTokens: 4,
+        outputTokens: 20,
+        cachedInputTokens: 20_000,
+      },
+    ],
+    '2026-08-13',
+    9,
+  );
+
+  assert.equal(rows[9]?.inputTokens, 4);
+  assert.equal(rows[9]?.cachedInputTokens, 20_000);
+  assert.equal(rows[9]?.outputTokens, 20);
+  assert.equal(rows[9]?.totalTokens, 20_024);
+});
+
+test('projectDashboardForDate fills hourly from ISO date rows', () => {
+  const today = localDateNow();
+  const yesterday = addLocalDays(today, -1);
+  const dataset = datasetWithDays(
+    [
+      {
+        date: yesterday,
+        tokens: 500,
+        costUsd: 1,
+        models: { 'gpt-4': 500 },
+      },
+    ],
+    {
+      hourlyRows: [
+        {
+          date: `${yesterday}T00:00:00.000Z`,
+          hour: 9,
+          source: 'claude',
+          tokens: 500,
+          costUsd: 1,
+          inputTokens: 400,
+          outputTokens: 100,
+          cachedInputTokens: 0,
+        },
+      ],
+    },
+  );
+
+  const rangeView = buildDashboardDataFromDataset(dataset, 7);
+  const dayView = projectDashboardForDate(rangeView, yesterday);
+  assert.equal(dayView.todayHourlyUsage[9]?.totalTokens, 500);
+});
+
+test('buildToolModelUsage rounds the source total once, not per model then sum', () => {
+  const rows = buildToolModelUsage(
+    [
+      {
+        source: 'cursor',
+        tokens: 2,
+        costUsd: 4.516 + 4.516,
+        models: [
+          { model: 'composer-1', tokens: 1, costUsd: 4.516 },
+          { model: 'gpt-5', tokens: 1, costUsd: 4.516 },
+        ],
+      },
+    ],
+    2,
+  );
+
+  assert.equal(rows[0]?.costUsd, 9.03);
+  assert.notEqual(rows[0]?.costUsd, 9.04);
+  assert.equal(rows[0]?.models[0]?.costUsd, 4.52);
+  assert.equal(rows[0]?.models[1]?.costUsd, 4.52);
+});
+
+test('dashboard tool panel uses summed 8-decimal model costs then cents', () => {
+  const today = localDateNow();
+  const dataset = datasetWithDays(
+    [
+      {
+        date: today,
+        tokens: 2,
+        costUsd: 9.032,
+        models: {},
+      },
+    ],
+    {
+      modelRows: [
+        {
+          model: 'composer-1',
+          source: 'cursor',
+          tokens: 1,
+          costUsd: 4.516,
+          pct: 50,
+        },
+        {
+          model: 'gpt-5',
+          source: 'cursor',
+          tokens: 1,
+          costUsd: 4.516,
+          pct: 50,
+        },
+      ],
+    },
+  );
+
+  const view = buildDashboardDataFromDataset(dataset, 30);
+  assert.equal(view.toolModelUsage[0]?.source, 'cursor');
+  assert.equal(view.toolModelUsage[0]?.costUsd, 9.03);
+  assert.notEqual(view.toolModelUsage[0]?.costUsd, 9.04);
+});
+
+test('metricTrends uses calendar WoW not half-window averages', () => {
+  const today = localDateNow();
+  // Current 7d: high usage; prior 7d: half — expect ~+100% on tokens.
+  const dailyRows: UsageDataset['dailyRows'] = [];
+  for (let i = 0; i < 14; i += 1) {
+    const date = addLocalDays(today, -i);
+    const inCurrentWindow = i < 7;
+    dailyRows.push({
+      date,
+      tokens: inCurrentWindow ? 10_000 : 5_000,
+      costUsd: inCurrentWindow ? 2 : 1,
+      inputTokens: inCurrentWindow ? 6_000 : 3_000,
+      outputTokens: inCurrentWindow ? 4_000 : 2_000,
+      models: {},
+    });
+  }
+
+  const view = buildDashboardDataFromDataset(datasetWithDays(dailyRows), 7);
+
+  assert.ok(view.metricTrends.totalTokens);
+  assert.equal(view.metricTrends.totalTokens?.changeValue, 35_000);
+  assert.ok(
+    Math.abs((view.metricTrends.totalTokens?.changePct ?? 0) - 100) < 0.01,
+  );
+  assert.ok(view.metricTrends.totalCostUsd);
+  assert.equal(view.metricTrends.totalCostUsd?.changeValue, 7);
+  assert.ok(
+    Math.abs((view.metricTrends.totalCostUsd?.changePct ?? 0) - 100) < 0.01,
+  );
+});

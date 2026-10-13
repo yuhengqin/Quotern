@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnpm-store
+# Build outputs
+dist/
+dist-test/
+out/
+output/
+output_resource/
+release/
+*.tsbuildinfo
+
+# Tooling caches
+.tanstack/
+.vite/
+.heroui-docs/
+
+# Local agent plans
+.plans/
+
+# Env & secrets
+.env
+.env.*
+!.env.production.example
+!.env.development.example
+
+# OS
+.DS_Store
+
+# Logs
+*.log

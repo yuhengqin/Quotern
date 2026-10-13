@@ -1,0 +1,61 @@
+appId: dev.quotern.desktop
+productName: Quotern
+publish:
+  provider: github
+  owner: yuhengqin
+  repo: Quotern
+  private: true
+afterPack: ./scripts/after-pack.cjs
+# Desktop deps are bundled by electron-vite; no native modules need @electron/rebuild.
+# Skipping rebuild also avoids broken pnpm symlinks failing `stat` during native dependency install.
+npmRebuild: false
+# Drop leftover workspace sources from the asar to keep release archives small.
+compression: maximum
+directories:
+  output: release/${version}
+  buildResources: resources
+files:
+  - "!**/*"
+  - out/**
+  - package.json
+  - resources/**/*
+asar: true
+asarUnpack:
+  - out/main/sync-worker*.js
+extraResources:
+  - from: resources
+    filter:
+      - quoternTemplate.png
+      - quoternTemplate@2x.png
+      - icon.png
+      - icon-512.png
+    to: resources
+mac:
+  icon: resources/icon.png
+  electronLanguages:
+    - zh-CN
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  notarize: true
+dmg:
+  format: UDBZ
+nsis:
+  # Keep the installed application's upgrade identity while changing its product name/appId.
+  guid: 77c89c13-52a6-5b46-b7b1-f5b025d10759
+win:
+  icon: resources/icon.png
+  electronLanguages:
+    - zh-CN
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]

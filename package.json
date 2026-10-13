@@ -1,0 +1,57 @@
+{
+  "name": "quotern-workspace",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhengqin/Quotern.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yuhengqin/Quotern/issues"
+  },
+  "homepage": "https://github.com/yuhengqin/Quotern#readme",
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:packages": "pnpm --filter \"./packages/**\" -r build",
+    "build:cli": "pnpm --filter quotern... build",
+    "test": "pnpm test:state-migration && pnpm build && pnpm -r --if-present test",
+    "test:state-migration": "node --test scripts/migrate-state.test.mjs",
+    "start": "pnpm start:cli",
+    "start:cli": "pnpm build:cli && pnpm --filter quotern start",
+    "dev:cli": "pnpm build:cli && node scripts/run-parallel.mjs dev:cli:api dev:cli:ui",
+    "dev:cli:api": "pnpm --filter quotern start",
+    "dev:cli:ui": "cross-env VITE_API_TARGET=cli pnpm --filter quotern-dashboard dev -- --open",
+    "sync": "pnpm --filter quotern sync",
+    "sync:pricing": "pnpm --filter quotern-core sync:pricing",
+    "dev:dashboard": "pnpm --filter quotern-dashboard dev",
+    "start:dashboard": "pnpm --filter quotern-dashboard preview",
+    "dev:desktop": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop dev",
+    "build:desktop": "pnpm --filter quotern-desktop... build",
+    "build:desktop:mac": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop build:mac",
+    "build:desktop:mac:arm": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop build:mac:arm",
+    "build:desktop:win": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop build:win",
+    "release:desktop:mac": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop release:mac",
+    "release:desktop:win": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop release:win",
+    "start:desktop": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop start",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build:cli && changeset publish"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "electron"
+    ]
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1",
+    "@types/node": "^22.20.1",
+    "cross-env": "^10.1.0",
+    "typescript": "^5.9.3"
+  }
+}

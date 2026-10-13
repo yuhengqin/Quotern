@@ -1,0 +1,481 @@
+import { randomUUID } from 'node:crypto';
+import { hostname } from 'node:os';
+import { dirname } from 'node:path';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { lock } from 'proper-lockfile';
+
+import type { TudConfig } from './types.js';
+import {
+  configPath,
+  resolveDataDir,
+  stableDeviceIdPath,
+  syncLogPath,
+} from './paths.js';
+import { appendJsonLog } from './debug-log.js';
+import { clearCursors } from './queue/index.js';
+import {
+  BAKED_PRICING_TTL_MS,
+  BAKED_PRICING_URL,
+} from './pricing/baked-defaults.js';
+
+const DEVICE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isDeviceId(value: string | null | undefined): boolean {
+  return Boolean(value?.trim() && DEVICE_ID_RE.test(value.trim()));
+}
+
+/** Read durable deviceId from XDG/AppData sidecar (null if missing/invalid). */
+export async function readStableDeviceId(): Promise<string | null> {
+  try {
+    const raw = (await readFile(stableDeviceIdPath(), 'utf8')).trim();
+    return isDeviceId(raw) ? raw.trim() : null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    return null;
+  }
+}
+
+/** Persist deviceId outside the wipeable data dir. */
+export async function writeStableDeviceId(deviceId: string): Promise<void> {
+  const id = deviceId.trim();
+  if (!isDeviceId(id)) {
+    throw new Error(`Invalid deviceId for sidecar: ${deviceId}`);
+  }
+  const path = stableDeviceIdPath();
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, `${id}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    });
+    await rename(temporary, path);
+  } finally {
+    await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+}
+
+/**
+ * Prefer config → sidecar → new randomUUID. Always sync a valid id to sidecar.
+ */
+export async function resolveOrCreateDeviceId(
+  existing?: string | null,
+): Promise<{ deviceId: string; created: boolean }> {
+  const fromConfig = existing?.trim();
+  if (fromConfig && isDeviceId(fromConfig)) {
+    await writeStableDeviceId(fromConfig);
+    return { deviceId: fromConfig, created: false };
+  }
+  const fromSidecar = await readStableDeviceId();
+  if (fromSidecar) {
+    return { deviceId: fromSidecar, created: false };
+  }
+  const deviceId = randomUUID();
+  await writeStableDeviceId(deviceId);
+  return { deviceId, created: true };
+}
+
+/** Default local collect floor when `statsSince` is first seeded. */
+export const DEFAULT_STATS_SINCE_DAYS = 90;
+
+/** Dashboard local range chips (今天 / 7D / 30D / 90D). */
+export const LOCAL_RANGE_DAYS = [1, 7, 30, 90] as const;
+export type LocalRangeDays = (typeof LOCAL_RANGE_DAYS)[number];
+
+export function daysAgoIso(days: number, nowMs = Date.now()): string {
+  return new Date(nowMs - days * 86_400_000).toISOString();
+}
+
+/** Local collect/display floor; falls back to `statsSince`. */
+export function resolveLocalCollectSince(config: TudConfig): string {
+  const local = config.localCollectSince?.trim();
+  if (local) return local;
+  return config.statsSince?.trim() || '';
+}
+
+export function isLocalRangeDays(days: number): days is LocalRangeDays {
+  return (LOCAL_RANGE_DAYS as readonly number[]).includes(days);
+}
+
+/**
+ * Move local statistics / collection floors earlier to cover `daysAgo` (default 90).
+ * Never moves a floor later. Returns whether collect floor expanded.
+ */
+export function alignLookbackFloors(
+  config: TudConfig,
+  opts?: { daysAgo?: number; nowMs?: number },
+): { changed: boolean; collectExpanded: boolean } {
+  const daysAgo =
+    opts?.daysAgo != null && opts.daysAgo > 0
+      ? opts.daysAgo
+      : DEFAULT_STATS_SINCE_DAYS;
+  const desired = daysAgoIso(daysAgo, opts?.nowMs);
+  const desiredMs = Date.parse(desired);
+  let changed = false;
+  let collectExpanded = false;
+
+  const statsMs = Date.parse(config.statsSince ?? '');
+  if (!Number.isFinite(statsMs) || statsMs > desiredMs) {
+    config.statsSince = desired;
+    changed = true;
+  }
+
+  const collectMs = Date.parse(resolveLocalCollectSince(config));
+  if (!Number.isFinite(collectMs) || collectMs > desiredMs) {
+    config.localCollectSince = desired;
+    changed = true;
+    collectExpanded = true;
+  }
+
+  return { changed, collectExpanded };
+}
+
+export function bakedPricingConfig(): NonNullable<TudConfig['pricing']> {
+  return {
+    url: BAKED_PRICING_URL,
+    ttlMs: BAKED_PRICING_TTL_MS,
+  };
+}
+
+/**
+ * Align `config.pricing` to package bake. Missing or different → overwrite.
+ * Returns whether pricing was mutated.
+ */
+export function ensurePricingAligned(config: TudConfig): boolean {
+  const desired = bakedPricingConfig();
+  const cur = config.pricing;
+  const curTtl =
+    cur?.ttlMs != null && Number.isFinite(cur.ttlMs) && cur.ttlMs > 0
+      ? cur.ttlMs
+      : BAKED_PRICING_TTL_MS;
+  if (
+    cur == null ||
+    (cur.url ?? '') !== desired.url ||
+    curTtl !== desired.ttlMs
+  ) {
+    config.pricing = desired;
+    return true;
+  }
+  return false;
+}
+
+export async function ensureDataDir(dataDir?: string): Promise<string> {
+  const dir = resolveDataDir(dataDir);
+  await mkdir(dir, { recursive: true });
+  await mkdir(`${dir}/queue`, { recursive: true });
+  await mkdir(`${dir}/bin`, { recursive: true });
+  await mkdir(`${dir}/logs`, { recursive: true });
+  return dir;
+}
+
+function defaultConfig(dir: string, deviceId: string = randomUUID()): TudConfig {
+  return {
+    deviceId,
+    // Filled by touchStatsSince on start/sync (supports hidden --days debug seed).
+    statsSince: '',
+    hostname: hostname(),
+    dataDir: dir,
+    pricing: bakedPricingConfig(),
+    serverPort: 8452,
+    lastSyncAt: null,
+  };
+}
+
+/**
+ * Ensure local device identity and pricing defaults exist.
+ * Returns whether config was mutated.
+ * Prefer `resolveOrCreateDeviceId` at load time so wipe recovers from sidecar;
+ * this sync helper only fills a missing id with a new UUID when called alone.
+ */
+export function ensureIdentity(config: TudConfig): {
+  changed: boolean;
+  deviceIdCreated: boolean;
+} {
+  let changed = false;
+  let deviceIdCreated = false;
+
+  if (!isDeviceId(config.deviceId)) {
+    config.deviceId = randomUUID();
+    deviceIdCreated = true;
+    changed = true;
+  }
+
+  if (ensurePricingAligned(config)) {
+    changed = true;
+  }
+
+  return { changed, deviceIdCreated };
+}
+
+export function salvageIdentityFromCorruptConfig(raw: string): {
+  deviceId?: string;
+} {
+  const deviceId = /"deviceId"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/i.exec(
+    raw,
+  )?.[1];
+  return {
+    ...(deviceId ? { deviceId } : {}),
+  };
+}
+
+export interface CorruptConfigRecovery {
+  backupPath: string;
+  tokenSalvaged: boolean;
+  deviceIdSalvaged: boolean;
+}
+
+export interface LoadConfigResult {
+  dir: string;
+  config: TudConfig;
+  recoveredFromCorrupt?: CorruptConfigRecovery;
+}
+
+async function recoverCorruptConfig(
+  dir: string,
+  path: string,
+  raw: string,
+): Promise<LoadConfigResult> {
+  const backupPath = `${path}.bak.${Date.now()}`;
+  try {
+    await rename(path, backupPath);
+  } catch {
+    // If rename fails, still try to overwrite with a valid config.
+  }
+  const salvaged = salvageIdentityFromCorruptConfig(raw);
+  const { deviceId } = await resolveOrCreateDeviceId(salvaged.deviceId);
+  const config = defaultConfig(dir, deviceId);
+  ensureIdentity(config);
+  await writeConfigUnlocked(dir, config);
+  const recovery: CorruptConfigRecovery = {
+    backupPath,
+    tokenSalvaged: false,
+    deviceIdSalvaged: Boolean(salvaged.deviceId),
+  };
+  await appendJsonLog(syncLogPath(dir), {
+    event: 'config_recovered_from_corrupt',
+    backupPath,
+    tokenSalvaged: recovery.tokenSalvaged,
+    deviceIdSalvaged: recovery.deviceIdSalvaged,
+  });
+  return { dir, config, recoveredFromCorrupt: recovery };
+}
+
+export async function loadConfig(dataDir?: string): Promise<LoadConfigResult> {
+  const dir = await ensureDataDir(dataDir);
+  return withConfigLock(dir, () => loadConfigUnlocked(dir));
+}
+
+/** Caller holds the config lock, including initialization and migration writes. */
+async function loadConfigUnlocked(dir: string): Promise<LoadConfigResult> {
+  const path = configPath(dir);
+  if (!existsSync(path)) {
+    const { deviceId } = await resolveOrCreateDeviceId();
+    const config = defaultConfig(dir, deviceId);
+    await writeConfigUnlocked(dir, config);
+    return { dir, config };
+  }
+  const raw = await readFile(path, 'utf8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return recoverCorruptConfig(dir, path, raw);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return recoverCorruptConfig(dir, path, raw);
+  }
+  const config = parsed as TudConfig;
+  config.dataDir = dir;
+  let identityChanged = false;
+  if (!isDeviceId(config.deviceId)) {
+    const resolved = await resolveOrCreateDeviceId(config.deviceId);
+    config.deviceId = resolved.deviceId;
+    identityChanged = true;
+  } else {
+    await writeStableDeviceId(config.deviceId);
+  }
+  const { changed, deviceIdCreated } = ensureIdentity(config);
+  if (deviceIdCreated) {
+    await writeStableDeviceId(config.deviceId);
+  }
+  if (identityChanged || changed) {
+    await writeConfigUnlocked(dir, config);
+  }
+  return { dir, config };
+}
+
+export async function saveConfig(dir: string, config: TudConfig): Promise<void> {
+  await withConfigLock(dir, async () => {
+    const persisted = await readPersistedConfig(dir);
+    const next = { ...config };
+    ensureIdentity(next);
+    // A settings snapshot may predate a completed background local sync.
+    // These fields belong to the runtime, not to the settings writer.
+    for (const field of ['lastSyncAt'] as const) {
+      if (persisted?.[field]) {
+        next[field] = latestTimestamp(persisted[field], config[field]);
+      }
+    }
+    await writeConfigUnlocked(dir, next);
+    for (const field of ['lastSyncAt'] as const) {
+      if (field in next) config[field] = next[field];
+    }
+  });
+}
+
+async function withConfigLock<T>(dir: string, operation: () => Promise<T>): Promise<T> {
+  // Both the main process and sync worker must use the same lock. It also
+  // covers a config that does not exist yet, and recovers locks left by crashes.
+  const release = await lock(configPath(dir), {
+    realpath: false,
+    stale: 10_000,
+    update: 5_000,
+    retries: { retries: 100, factor: 1.2, minTimeout: 10, maxTimeout: 200 },
+  });
+  try {
+    return await operation();
+  } finally {
+    await release();
+  }
+}
+
+async function readPersistedConfig(dir: string): Promise<TudConfig | null> {
+  let raw: string;
+  try {
+    raw = await readFile(configPath(dir), 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+  const parsed: unknown = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid config: expected an object');
+  }
+  return parsed as TudConfig;
+}
+
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+/** Backs off to ~5.7s total; a slow scanner outlasted a 0.8s ladder on CI. */
+const RENAME_RETRY_DELAYS_MS = [
+  5, 10, 20, 40, 80, 120, 160, 200, 250, 300, 400, 500, 600, 800, 1000, 1200,
+];
+
+/**
+ * `rename` over an existing path is an atomic replace on POSIX, but on Windows
+ * it fails with EPERM/EACCES/EBUSY while any handle to the destination is still
+ * open — a reader that has not closed yet, an indexer, or a virus scanner
+ * touching the file we just wrote. The writers are already serialised by the
+ * config lock, so the only useful response is to wait out the other handle.
+ */
+async function renameReplacing(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? '';
+      const delay = RENAME_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !RENAME_RETRY_CODES.has(code)) {
+        // Keep `code` and the stack; only note that waiting did not help, so a
+        // report distinguishes "lost a race" from "blocked the whole time".
+        if (attempt > 0 && error instanceof Error) {
+          error.message = `${error.message} (still ${code} after ${attempt} retries)`;
+        }
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+async function writeConfigUnlocked(dir: string, config: TudConfig): Promise<void> {
+  const path = configPath(dir);
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const mode = await stat(path).then((info) => info.mode & 0o777).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return 0o600;
+    throw error;
+  });
+  try {
+    await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, {
+      encoding: 'utf8', flag: 'wx', mode,
+    });
+    await renameReplacing(temporary, path);
+  } finally {
+    await unlink(temporary).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+}
+
+function latestTimestamp(
+  persisted: string | null | undefined,
+  proposed: string | null | undefined,
+): string | null | undefined {
+  const persistedMs = Date.parse(persisted ?? '');
+  const proposedMs = Date.parse(proposed ?? '');
+  return Number.isFinite(persistedMs) &&
+    (!Number.isFinite(proposedMs) || persistedMs > proposedMs)
+    ? persisted : proposed;
+}
+
+export async function touchStatsSince(
+  dir: string,
+  config: TudConfig,
+  opts?: { daysAgo?: number },
+): Promise<TudConfig> {
+  let changed = false;
+  let collectExpanded = false;
+  if (!config.statsSince?.trim()) {
+    const daysAgo =
+      opts?.daysAgo != null && opts.daysAgo > 0
+        ? opts.daysAgo
+        : DEFAULT_STATS_SINCE_DAYS;
+    config.statsSince = daysAgoIso(daysAgo);
+    changed = true;
+  }
+  // Seed local collect floor once; later dashboard expands may move it earlier.
+  if (!config.localCollectSince?.trim()) {
+    config.localCollectSince = config.statsSince;
+    changed = true;
+  }
+  // Existing installs: only expand toward 90d. Hidden `--days` skips this so
+  // debug seeds are not immediately overwritten.
+  if (opts?.daysAgo == null) {
+    const aligned = alignLookbackFloors(config);
+    changed = changed || aligned.changed;
+    collectExpanded = aligned.collectExpanded;
+  }
+  if (changed) {
+    await saveConfig(dir, config);
+  }
+  if (collectExpanded) {
+    await clearCursors(dir);
+  }
+  return config;
+}
+
+export async function setLastSyncAt(dir: string, config: TudConfig): Promise<void> {
+  await setRuntimeTimestamp(dir, config, 'lastSyncAt');
+}
+
+async function setRuntimeTimestamp(
+  dir: string,
+  config: TudConfig,
+  field: 'lastSyncAt',
+): Promise<void> {
+  const completedAt = new Date().toISOString();
+  await withConfigLock(dir, async () => {
+    // Parsers hold old snapshots across awaits. Never write their
+    // settings back just to record completion of background work.
+    const persisted = await readPersistedConfig(dir) ?? { ...config };
+    persisted[field] = latestTimestamp(persisted[field], completedAt);
+    ensureIdentity(persisted);
+    await writeConfigUnlocked(dir, persisted);
+    config[field] = persisted[field];
+  });
+}

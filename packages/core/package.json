@@ -1,0 +1,82 @@
+{
+  "name": "quotern-core",
+  "version": "0.1.13",
+  "description": "Quotern 核心库：AI Agent 用量采集与本地 API（parsers / sync / hooks / pricing）",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhengqin/Quotern.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/yuhengqin/Quotern/issues"
+  },
+  "homepage": "https://github.com/yuhengqin/Quotern#readme",
+  "keywords": [
+    "ai",
+    "token",
+    "usage",
+    "parser",
+    "sync"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./pricing-data": "./dist/pricing/pricing.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./leaderboard": {
+      "types": "./dist/leaderboard.d.ts",
+      "import": "./dist/leaderboard.js"
+    },
+    "./daily-model-key": {
+      "types": "./dist/daily-model-key.d.ts",
+      "import": "./dist/daily-model-key.js"
+    },
+    "./dashboard-trend": {
+      "types": "./dist/dashboard-trend.d.ts",
+      "import": "./dist/dashboard-trend.js"
+    },
+    "./timezone": {
+      "types": "./dist/timezone.d.ts",
+      "import": "./dist/timezone.js"
+    },
+    "./project-label": {
+      "types": "./dist/project-label.d.ts",
+      "import": "./dist/project-label.js"
+    },
+    "./local-metrics": {
+      "types": "./dist/local-metrics.d.ts",
+      "import": "./dist/local-metrics.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('src/pricing/pricing.json','dist/pricing/pricing.json')\"",
+    "dev": "tsc -p tsconfig.json --watch",
+    "sync:pricing": "node scripts/sync-pricing.mjs",
+    "test": "pnpm test:compile && node --test dist-test/test/*.test.js",
+    "test:compile": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json && node -e \"require('node:fs').copyFileSync('src/pricing/pricing.json','dist-test/src/pricing/pricing.json')\""
+  },
+  "dependencies": {
+    "fzstd": "^0.1.1",
+    "hono": "^4.7.5",
+    "proper-lockfile": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/proper-lockfile": "^4.1.4",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yuhengqin/Quotern/blob/main/docs/schemas/subscription-snapshot.schema.json",
+  "title": "Subscription Snapshot",
+  "description": "Vendor-neutral documentation schema for the current desktop subscription snapshot shapes.",
+  "oneOf": [
+    { "$ref": "#/$defs/namedWindowSnapshot" },
+    { "$ref": "#/$defs/modelPoolSnapshot" },
+    { "$ref": "#/$defs/limitCollectionSnapshot" }
+  ],
+  "$defs": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "unavailable",
+        "authorization-required",
+        "custom-provider",
+        "not-installed",
+        "not-signed-in",
+        "expired",
+        "access-denied",
+        "temporarily-unavailable",
+        "unsupported-account",
+        "unsupported-plan",
+        "unsupported-version"
+      ]
+    },
+    "nullableTimestamp": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "null" }
+      ],
+      "description": "Unix timestamp in seconds, or null when unknown."
+    },
+    "nullableLabel": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "nullableMessage": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "rateWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usedPercent", "resetsAt"],
+      "properties": {
+        "usedPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "resetsAt": { "$ref": "#/$defs/nullableTimestamp" }
+      }
+    },
+    "nullableRateWindow": {
+      "oneOf": [
+        { "$ref": "#/$defs/rateWindow" },
+        { "type": "null" }
+      ]
+    },
+    "commonProperties": {
+      "type": "object",
+      "required": ["status", "planLabel", "message"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "planLabel": { "$ref": "#/$defs/nullableLabel" },
+        "message": { "$ref": "#/$defs/nullableMessage" }
+      }
+    },
+    "namedWindowSnapshot": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/commonProperties" },
+        {
+          "type": "object",
+          "required": ["fiveHour"],
+          "properties": {
+            "fiveHour": { "$ref": "#/$defs/nullableRateWindow" },
+            "weekly": { "$ref": "#/$defs/nullableRateWindow" },
+            "sevenDay": { "$ref": "#/$defs/nullableRateWindow" },
+            "fetchedAt": { "$ref": "#/$defs/nullableTimestamp" },
+            "stale": { "type": "boolean" }
+          },
+          "oneOf": [
+            {
+              "required": ["weekly"],
+              "not": { "required": ["sevenDay"] }
+            },
+            {
+              "required": ["sevenDay", "fetchedAt", "stale"],
+              "not": { "required": ["weekly"] }
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "modelPoolSnapshot": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/commonProperties" },
+        {
+          "type": "object",
+          "required": [
+            "primaryModels",
+            "otherModels",
+            "plan",
+            "fetchedAt",
+            "stale"
+          ],
+          "properties": {
+            "primaryModels": { "$ref": "#/$defs/nullableRateWindow" },
+            "otherModels": { "$ref": "#/$defs/nullableRateWindow" },
+            "plan": { "$ref": "#/$defs/nullableRateWindow" },
+            "fetchedAt": { "$ref": "#/$defs/nullableTimestamp" },
+            "stale": { "type": "boolean" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "percentLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "usedPercent", "resetsAt"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "usedPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "resetsAt": { "$ref": "#/$defs/nullableTimestamp" }
+      }
+    },
+    "balanceLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "usedPercent",
+        "description",
+        "remaining",
+        "total",
+        "resetsAt"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "usedPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "description": { "$ref": "#/$defs/nullableMessage" },
+        "remaining": {
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "total": {
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "resetsAt": { "$ref": "#/$defs/nullableTimestamp" }
+      }
+    },
+    "limitCollectionSnapshot": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/commonProperties" },
+        {
+          "type": "object",
+          "required": ["limits", "fetchedAt", "stale"],
+          "properties": {
+            "region": {
+              "oneOf": [
+                { "type": "string", "enum": ["global", "mainland"] },
+                { "type": "null" }
+              ]
+            },
+            "limits": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  { "$ref": "#/$defs/percentLimit" },
+                  { "$ref": "#/$defs/balanceLimit" }
+                ]
+              }
+            },
+            "fetchedAt": { "$ref": "#/$defs/nullableTimestamp" },
+            "stale": { "type": "boolean" }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

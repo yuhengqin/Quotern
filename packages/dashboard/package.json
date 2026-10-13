@@ -1,0 +1,48 @@
+{
+  "name": "quotern-dashboard",
+  "version": "0.1.13",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhengqin/Quotern.git",
+    "directory": "packages/dashboard"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && cross-env VITE_API_TARGET=cli VITE_BASE=/ VITE_ROUTER_BASE=/ vite build",
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "5.2.8",
+    "@gravity-ui/icons": "^2.20.0",
+    "@heroui/react": "^3.2.4",
+    "@heroui/styles": "^3.2.4",
+    "quotern-core": "workspace:*",
+    "@lobehub/icons-static-svg": "^1.94.0",
+    "@nivo/heatmap": "^0.99.0",
+    "@tailwindcss/vite": "^4.3.2",
+    "@tanstack/react-router": "^1.170.18",
+    "clsx": "^2.1.1",
+    "html-to-image": "^1.11.13",
+    "lucide-react": "^1.24.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.0.0",
+    "react-aria": "3.51.0",
+    "react-aria-components": "1.20.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.168.20",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.2"
+  }
+}

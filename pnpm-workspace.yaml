@@ -1,0 +1,11 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+overrides:
+  '@heroui/react': 3.2.4
+  '@heroui/styles': 3.2.4
+  tailwind-variants: 3.3.1
+allowBuilds:
+  electron: true
+  esbuild: true
+  protobufjs: false

@@ -1,0 +1,55 @@
+{
+  "name": "quotern",
+  "version": "0.1.13",
+  "description": "Quotern CLI：AI 编程工具用量、额度与费用的统一入口。",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhengqin/Quotern.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/yuhengqin/Quotern/issues"
+  },
+  "homepage": "https://github.com/yuhengqin/Quotern#readme",
+  "keywords": [
+    "ai",
+    "token",
+    "usage",
+    "claude",
+    "codex",
+    "cursor",
+    "cli"
+  ],
+  "bin": {
+    "quotern": "./bin/quotern.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ./scripts/copy-dashboard.mjs",
+    "start": "node ./bin/quotern.js start",
+    "sync": "node ./bin/quotern.js sync",
+    "status": "node ./bin/quotern.js status",
+    "service": "node ./bin/quotern.js service",
+    "test": "tsc -p tsconfig.json && node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "quotern-core": "workspace:*"
+  },
+  "devDependencies": {
+    "quotern-dashboard": "workspace:*",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

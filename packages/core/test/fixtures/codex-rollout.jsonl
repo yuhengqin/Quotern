@@ -1,0 +1,6 @@
+{"type":"event_msg","timestamp":"2026-06-09T20:47:00.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":107,"cached_input_tokens":100,"output_tokens":13,"reasoning_output_tokens":3,"total_tokens":120},"model":"gpt-5.4"}}}
+{"type":"session_meta","timestamp":"2026-06-09T20:46:00.000Z","payload":{"id":"source-session-1","cwd":"/Users/dev/my-app","git":{"repository_url":"https://github.com/org/my-app.git"}}}
+{"type":"event_msg","timestamp":"2026-06-09T20:46:30.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":60},"model":"gpt-5.4"}}}
+{"type":"session_meta","timestamp":"2026-06-09T21:00:00.000Z","payload":{"id":"fork-session-1","forked_from_id":"source-session-1","cwd":"/Users/dev/my-app"}}
+{"type":"event_msg","timestamp":"2026-06-09T21:00:01.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":60},"model":"gpt-5.4"}}}
+{"type":"event_msg","timestamp":"2026-06-09T21:00:05.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":20,"cached_input_tokens":5,"output_tokens":8,"reasoning_output_tokens":2,"total_tokens":28},"model":"gpt-5.4"}}}

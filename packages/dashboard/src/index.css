@@ -1,0 +1,214 @@
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+@import "@heroui/styles";
+
+:root {
+  --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-dashboard-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --chart-1: #0485f7;
+  --chart-2: #4fbd91;
+  --chart-3: #f0a12b;
+  --chart-4: #8b6ee8;
+  --chart-5: #e45b55;
+  --chart-6: #d65791;
+  --chart-7: #20a5a5;
+  --chart-8: #7e8797;
+  --source-claude: #f0a12b;
+  --source-codex: #4fbd91;
+  --source-cursor: #0485f7;
+  --source-qoder: #e85d04;
+  --source-trae: #0d9488;
+  --source-gemini: #4285f4;
+  --source-opencode: #ff5c00;
+  --source-copilot: #6e40c9;
+  --source-antigravity: #1a73e8;
+  --source-openclaw: #0ea5e9;
+  --source-autoclaw: #e11d48;
+  --source-hermes: #7c3aed;
+  --source-zcode: #10b981;
+  --source-pi: #f59e0b;
+  --source-kimi: #6366f1;
+  --source-roocode: #14b8a6;
+  --source-droid: #64748b;
+  --source-kiro: #ec4899;
+  --source-cline: #f97316;
+  --source-amp: #a855f7;
+  --source-qwen: #6366f1;
+  --source-codebuddy: #0052d9;
+  --source-workbuddy: #0ea5e9;
+  --source-grok: #111827;
+  --source-mimo: #ff6900;
+  --source-every-code: #4fbd91;
+  --source-omp: #6366f1;
+  --source-kilo-cli: #22c55e;
+  --source-kilocode: #22c55e;
+  --source-goose: #f97316;
+  --source-zed: #084ccf;
+  --source-warp: #01a4ff;
+  --source-dsh: #4d6bfe;
+  --source-qwenwork: #7c3aed;
+  --source-command-code: #06b6d4;
+  --source-minimax-code: #ef4444;
+  --source-wps-comate: #e34d59;
+  --source-kinetaios: #7c5cff;
+  /* Blue heatmap scale (empty → peak). Empty uses a soft blue wash, not gray. */
+  --heatmap-0: #f0f6ff;
+  --heatmap-1: #bfdbfe;
+  --heatmap-2: #93c5fd;
+  --heatmap-3: #3b82f6;
+  --heatmap-4: #007fff;
+}
+
+.dark,
+[data-theme="dark"] {
+  --chart-1: #48a7ff;
+  --chart-2: #62cfa4;
+  --chart-3: #f4b64c;
+  --chart-4: #aa91f2;
+  --chart-5: #f07872;
+  --chart-6: #e776aa;
+  --chart-7: #45bdbd;
+  --chart-8: #a0a8b6;
+  --source-claude: #f4b64c;
+  --source-codex: #62cfa4;
+  --source-cursor: #48a7ff;
+  --source-qoder: #fb923c;
+  --source-trae: #2dd4bf;
+  --source-gemini: #6ba4f8;
+  --source-opencode: #ff7a33;
+  --source-copilot: #8b5cf6;
+  --source-antigravity: #4d9af5;
+  --source-openclaw: #38bdf8;
+  --source-autoclaw: #fb7185;
+  --source-hermes: #a78bfa;
+  --source-zcode: #34d399;
+  --source-pi: #fbbf24;
+  --source-kimi: #818cf8;
+  --source-roocode: #2dd4bf;
+  --source-droid: #94a3b8;
+  --source-kiro: #f472b6;
+  --source-cline: #fb923c;
+  --source-amp: #c084fc;
+  --source-qwen: #818cf8;
+  --source-codebuddy: #3b82f6;
+  --source-workbuddy: #38bdf8;
+  --source-grok: #e5e7eb;
+  --source-mimo: #fb923c;
+  --source-every-code: #62cfa4;
+  --source-omp: #818cf8;
+  --source-kilo-cli: #4ade80;
+  --source-kilocode: #4ade80;
+  --source-goose: #fb923c;
+  --source-zed: #3b82f6;
+  --source-warp: #38bdf8;
+  --source-dsh: #6b85fe;
+  --source-qwenwork: #a78bfa;
+  --source-command-code: #22d3ee;
+  --source-minimax-code: #f87171;
+  --source-wps-comate: #ff6b6b;
+  --source-kinetaios: #9d85ff;
+  --heatmap-0: #1a2433;
+  --heatmap-1: #0c2d4d;
+  --heatmap-2: #0f4d82;
+  --heatmap-3: #1565b8;
+  --heatmap-4: #007fff;
+}
+
+@theme inline {
+  --font-sans: var(--font-dashboard-sans);
+  --font-mono: var(--font-dashboard-mono);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tools-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes tools-marquee-reverse {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.tools-marquee:hover .tools-marquee-track,
+.tools-marquee:hover .tools-marquee-track-reverse {
+  animation-play-state: paused !important;
+}
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(0 0 0 / 10%) transparent;
+    outline: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(0 0 0 / 10%);
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html,
+  body {
+    font-family: var(--font-sans);
+  }
+
+  /* Keep trackpad horizontal inertia from moving the whole dashboard. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+    overflow-y: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* HeroUI's default theme leaves the unselected checkbox invisible: the
+   * control background (--field-background) equals the settings overlay
+   * background in dark mode (oklch 21%, 1.00:1), --field-border is
+   * transparent, and --field-shadow is transparent in dark mode. Give
+   * unselected controls a visible 1px border (--muted is >= 3:1 against both
+   * themes, WCAG 1.4.11). Selector mirrors the library's own unselected-state
+   * rule so selected / indeterminate / hover states keep their styles. */
+  .checkbox:not([aria-checked="true"]):not([data-selected="true"]):not([data-indeterminate="true"])
+    .checkbox__control {
+    border-color: var(--muted);
+    border-width: 1px;
+  }
+}

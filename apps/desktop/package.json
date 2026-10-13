@@ -1,0 +1,61 @@
+{
+  "name": "quotern-desktop",
+  "version": "0.1.13",
+  "private": true,
+  "license": "MIT",
+  "description": "Quotern 统计客户端：Token 用量明细追踪，本地采集与统计面板。",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhengqin/Quotern.git",
+    "directory": "apps/desktop"
+  },
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:mac:arm": "electron-vite build && electron-builder --mac --arm64",
+    "build:win": "electron-vite build && electron-builder --win",
+    "release:mac": "electron-vite build && electron-builder --mac --publish always",
+    "release:win": "electron-vite build && electron-builder --win --publish always",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node --test \"dist-test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "5.2.8",
+    "@gravity-ui/icons": "^2.20.0",
+    "@heroui/react": "^3.2.4",
+    "@heroui/styles": "^3.2.4",
+    "quotern-core": "workspace:*",
+    "@lobehub/icons": "^5.18.0",
+    "@lobehub/icons-static-svg": "^1.94.0",
+    "@nivo/heatmap": "^0.99.0",
+    "@tailwindcss/vite": "^4.3.2",
+    "@tanstack/history": "^1.162.0",
+    "@tanstack/react-router": "^1.170.18",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "electron-updater": "^6.8.9",
+    "lucide-react": "^1.24.0",
+    "react": "^19.0.0",
+    "react-aria": "3.51.0",
+    "react-aria-components": "1.20.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.8.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.168.20",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.10",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "35.4.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.2.2"
+  }
+}

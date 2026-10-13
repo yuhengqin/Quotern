@@ -1,0 +1,593 @@
+import { app, BrowserWindow, clipboard, ipcMain, nativeImage, nativeTheme, powerMonitor } from 'electron';
+import {
+  initAutostartOnLaunch,
+  loadShowTrayUsage,
+  loadTrayUsageMode,
+  loadThemeMode,
+  onTrayUsagePrefChanged,
+  registerAutostartIpc,
+  saveThemeMode,
+  shouldStartHidden,
+  unregisterAutostartIpc,
+} from './autostart';
+import {
+  DesktopWindow,
+  defaultPreloadPath,
+  markAppQuitting,
+  registerDesktopWindowControls,
+  registerOpenExternalIpc,
+  resetAppQuitting,
+  resolveAppIconPath,
+  type DesktopWindowTheme,
+  unregisterOpenExternalIpc,
+} from './DesktopWindow';
+import {
+  createTrayPopover,
+  disposeTrayPopover,
+  hideTrayPopover,
+  markTrayPopoverQuitting,
+  resetTrayPopoverQuitting,
+  setPopoverTheme,
+  setTrayUsageTitle,
+} from './TrayPopover';
+import { formatTrayUsage } from '../shared/tray-usage';
+import { registerLocalApiIpc } from './local-api-ipc';
+import { registerCodexSubscriptionIpc } from './codex-subscription-ipc';
+import { registerClaudeSubscriptionIpc } from './claude-subscription-ipc';
+import { registerCursorSubscriptionIpc } from './cursor-subscription-ipc';
+import { registerCopilotSubscriptionIpc } from './copilot-subscription-ipc';
+import { registerGrokSubscriptionIpc } from './grok-subscription-ipc';
+import { registerKimiSubscriptionIpc } from './kimi-subscription-ipc';
+import { registerZcodeSubscriptionIpc } from './zcode-subscription-ipc';
+import { registerAntigravitySubscriptionIpc } from './antigravity-subscription-ipc';
+import { registerQoderSubscriptionIpc } from './qoder-subscription-ipc';
+import { registerMiniMaxSubscriptionIpc } from './minimax-subscription-ipc';
+import { registerDeepSeekSubscriptionIpc } from './deepseek-subscription-ipc';
+import { registerOpenCodeSubscriptionIpc } from './opencode-subscription-ipc';
+import { registerTraeSubscriptionIpc } from './trae-subscription-ipc';
+import { registerWorkBuddySubscriptionIpc } from './workbuddy-subscription-ipc';
+import {
+  localApiRequest,
+  onLocalRuntimeSynced,
+  pokeSyncOnForeground,
+  resumeLocalRuntimeWatchdog,
+  setLocalRuntimeQuitting,
+  startLocalRuntime,
+  stopLocalRuntime,
+} from './local-runtime';
+import {
+  disposeAutoUpdate,
+  initializeAutoUpdate,
+  registerAutoUpdateIpc,
+} from './auto-update';
+import { createMainWindowLauncher } from './main-window-launcher';
+import { restoreNativeTrapHandler } from './native-crash-signals';
+import { configureQuoternAppIdentity } from './app-identity';
+import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
+import {
+  DEFAULT_DATA_DIR,
+  evictRuntimeKind,
+  isHeartbeatFresh,
+  readRuntimeHeartbeat,
+  touchRuntimeHeartbeat,
+} from 'quotern-core';
+
+configureQuoternAppIdentity(app);
+restoreNativeTrapHandler();
+
+type Theme = DesktopWindowTheme;
+
+const THEME_GET_CHANNEL = 'theme:get';
+const THEME_SET_CHANNEL = 'theme:set';
+const THEME_CHANGED_CHANNEL = 'theme:changed';
+const OPEN_SETTINGS_CHANNEL = 'app:open-settings';
+const RUNTIME_NOTICE_CHANNEL = 'app:runtime-notice';
+const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
+
+/**
+ * quotern-desktop main entry.
+ *
+ * Opens the desktop UI while the shared ~/.ai-usage Core runtime starts.
+ */
+
+const windows = new Set<DesktopWindow>();
+let disposeLocalApiIpc: (() => void) | null = null;
+let disposeCodexSubscriptionIpc: (() => void) | null = null;
+let disposeClaudeSubscriptionIpc: (() => void) | null = null;
+let disposeCursorSubscriptionIpc: (() => void) | null = null;
+let disposeCopilotSubscriptionIpc: (() => void) | null = null;
+let disposeGrokSubscriptionIpc: (() => void) | null = null;
+let disposeKimiSubscriptionIpc: (() => void) | null = null;
+let disposeZcodeSubscriptionIpc: (() => void) | null = null;
+let disposeAntigravitySubscriptionIpc: (() => void) | null = null;
+let disposeQoderSubscriptionIpc: (() => void) | null = null;
+let disposeMiniMaxSubscriptionIpc: (() => void) | null = null;
+let disposeDeepSeekSubscriptionIpc: (() => void) | null = null;
+let disposeOpenCodeSubscriptionIpc: (() => void) | null = null;
+let disposeTraeSubscriptionIpc: (() => void) | null = null;
+let disposeWorkBuddySubscriptionIpc: (() => void) | null = null;
+let currentThemeMode: ThemeMode = 'system';
+let currentTheme: Theme = 'light';
+let pendingConfigResetNotice = false;
+const mainWindowLauncher = createMainWindowLauncher(showMainWindowNow, () => {
+  if (process.platform === 'darwin') app.dock?.hide();
+});
+
+async function acquireDesktopInstanceLock(): Promise<boolean> {
+  const dir = DEFAULT_DATA_DIR;
+  if (!isHeartbeatFresh(await readRuntimeHeartbeat(dir))) {
+    console.warn('[tud-desktop] stale desktop heartbeat; evicting leftover instances');
+    try {
+      await evictRuntimeKind('desktop', {
+        exceptPid: process.pid,
+        dataDir: dir,
+      });
+    } catch (err) {
+      console.error(
+        '[tud-desktop] failed to evict leftover desktop instances:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  return app.requestSingleInstanceLock();
+}
+
+function broadcastConfigResetNotice(): void {
+  pendingConfigResetNotice = false;
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send(RUNTIME_NOTICE_CHANNEL, {
+        kind: 'config-reset',
+        tokenSalvaged: false,
+      });
+    }
+  }
+}
+
+function onNativeThemeUpdated(): void {
+  // `system` mode re-resolves on OS appearance changes; fixed modes keep the
+  // resolved theme stable (shouldUseDarkColors follows themeSource).
+  const next = resolveTheme(currentThemeMode, nativeTheme.shouldUseDarkColors);
+  if (next === currentTheme) return;
+  applyResolvedTheme(next);
+  broadcastThemeState();
+}
+
+/** Apply the rendered theme to window chrome; no-op when unchanged. */
+function applyResolvedTheme(next: Theme): void {
+  if (next === currentTheme) return;
+  currentTheme = next;
+  for (const desktopWindow of windows) {
+    if (desktopWindow.window.isDestroyed()) continue;
+    desktopWindow.setThemeBackground(currentTheme);
+  }
+  setPopoverTheme(currentTheme);
+}
+
+/** Push the full theme state to every window: mode drives the selector
+ *  highlight, resolved drives the rendered theme. */
+function broadcastThemeState(): void {
+  const payload = { mode: currentThemeMode, resolved: currentTheme };
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(THEME_CHANGED_CHANNEL, payload);
+  }
+}
+
+function registerThemeIpc(): void {
+  ipcMain.removeHandler(THEME_GET_CHANNEL);
+  ipcMain.handle(THEME_GET_CHANNEL, () => ({
+    mode: currentThemeMode,
+    resolved: currentTheme,
+  }));
+
+  ipcMain.removeAllListeners(THEME_SET_CHANNEL);
+  ipcMain.on(THEME_SET_CHANNEL, (_event, nextMode: unknown) => {
+    if (!isThemeMode(nextMode) || nextMode === currentThemeMode) return;
+    currentThemeMode = nextMode;
+    nativeTheme.themeSource = nextMode;
+    // Persist the user's choice; failure must not block the in-memory switch.
+    saveThemeMode(nextMode).catch((err) => {
+      console.error(
+        '[tud-desktop] failed to persist theme mode:',
+        err instanceof Error ? err.message : err,
+      );
+    });
+    // Always broadcast the full state: the selector highlight must follow the
+    // new mode even when the resolved theme does not change.
+    applyResolvedTheme(resolveTheme(nextMode, nativeTheme.shouldUseDarkColors));
+    broadcastThemeState();
+  });
+
+  nativeTheme.removeListener('updated', onNativeThemeUpdated);
+  nativeTheme.on('updated', onNativeThemeUpdated);
+}
+
+function registerShareCardIpc(): void {
+  ipcMain.removeHandler(SHARE_CARD_COPY_IMAGE_CHANNEL);
+  ipcMain.handle(SHARE_CARD_COPY_IMAGE_CHANNEL, (_event, dataUrl: unknown) => {
+    if (
+      typeof dataUrl !== 'string'
+      || !dataUrl.startsWith('data:image/png;base64,')
+      || dataUrl.length > 20_000_000
+    ) {
+      return false;
+    }
+
+    const image = nativeImage.createFromDataURL(dataUrl);
+    if (image.isEmpty()) return false;
+    clipboard.writeImage(image);
+    return true;
+  });
+}
+
+let disposeTrayUsageSync: (() => void) | null = null;
+let onPowerResumeListener: (() => void) | null = null;
+let trayUsageRefreshGeneration = 0;
+
+async function refreshTrayUsage(): Promise<void> {
+  if (process.platform !== 'darwin') return;
+  const generation = ++trayUsageRefreshGeneration;
+  try {
+    const [enabled, mode] = await Promise.all([
+      loadShowTrayUsage(),
+      loadTrayUsageMode(),
+    ]);
+    if (generation !== trayUsageRefreshGeneration) return;
+    if (!enabled) {
+      setTrayUsageTitle('');
+      return;
+    }
+    const res = await localApiRequest('/functions/tud-usage-summary');
+    if (generation !== trayUsageRefreshGeneration) return;
+    if (res.status === 200 && res.body && typeof res.body === 'object') {
+      const envelope = res.body as {
+        success?: boolean;
+        data?: {
+          todayCostUsd?: number;
+          todayTokens?: number;
+        };
+      };
+      if (envelope.success && envelope.data) {
+        const text = formatTrayUsage(envelope.data, mode);
+        setTrayUsageTitle(text);
+      }
+    }
+  } catch (err) {
+    console.debug('[tud-desktop] failed to refresh tray usage:', err);
+  }
+}
+
+function getMainWindow(): BrowserWindow | null {
+  // destroy() marks the BrowserWindow dead before 'closed' removes the
+  // wrapper from the set. Skip (and drop) stale entries so a just-rebuilt
+  // window is still found.
+  for (const wrapper of [...windows]) {
+    const w = wrapper.window;
+    if (!w || w.isDestroyed()) {
+      windows.delete(wrapper);
+      continue;
+    }
+    return w;
+  }
+  return null;
+}
+
+async function showMainWindowNow(): Promise<void> {
+  // Hide tray popover first so its blur→hide does not race with activation and
+  // hand focus back to the previously frontmost app on macOS.
+  hideTrayPopover();
+  pokeSyncOnForeground();
+  if (process.platform === 'darwin' && app.dock && !app.dock.isVisible()) {
+    // The dock icon was hidden (accessory mode, set on main-window close).
+    // `dock.show()` transforms the activation policy asynchronously and any
+    // window shown mid-transform gets hidden by macOS — await it first.
+    try {
+      await app.dock.show();
+    } catch {
+      // ignore: window is still shown below even if the dock stays hidden
+    }
+  }
+  // Re-check after the Dock transition: the previous window may have closed.
+  const w = getMainWindow();
+  if (w) {
+    if (w.isMinimized()) w.restore();
+    w.show();
+    w.focus();
+  } else {
+    createWindow();
+  }
+  if (process.platform === 'darwin') {
+    app.focus({ steal: true });
+  }
+  flushPendingConfigResetNotice();
+}
+
+function showMainWindowAsync(): Promise<void> {
+  return mainWindowLauncher.show();
+}
+
+function showMainWindow(): void {
+  void showMainWindowAsync().catch((err) => {
+    console.error('[tud-desktop] failed to show main window:', err);
+  });
+}
+
+/** Same as in-app / tray「同步数据」→ POST tud-trigger-sync. */
+function triggerSync(): void {
+  void localApiRequest('/functions/tud-trigger-sync', {
+    method: 'POST',
+    body: '{}',
+  }).catch((err) => {
+    console.error(
+      '[tud-desktop] sync failed:',
+      err instanceof Error ? err.message : err,
+    );
+  });
+}
+
+/** After a tray rebuild the page may still be loading, and SettingsPanel
+ *  only subscribes in useEffect — wait for both before sending IPC. */
+function sendToMainWindowWhenReady(
+  w: BrowserWindow,
+  send: (window: BrowserWindow) => void,
+): void {
+  let sent = false;
+  const fire = () => {
+    if (sent || w.isDestroyed()) return;
+    sent = true;
+    // Small delay so AppShell's listeners are attached after first paint.
+    setTimeout(() => {
+      if (!w.isDestroyed()) send(w);
+    }, 50);
+  };
+  if (w.webContents.isLoading()) {
+    w.webContents.once('did-finish-load', fire);
+    // Load can finish between isLoading() and once(); don't hang.
+    if (!w.webContents.isLoading()) fire();
+    return;
+  }
+  fire();
+}
+
+function flushPendingConfigResetNotice(): void {
+  if (!pendingConfigResetNotice) return;
+  const main = getMainWindow();
+  if (!main) return;
+  sendToMainWindowWhenReady(main, () => broadcastConfigResetNotice());
+}
+
+async function openSettings(detail?: { tab?: 'sync' | 'app' }): Promise<void> {
+  await showMainWindowAsync();
+  const w = getMainWindow();
+  if (!w) return;
+  sendToMainWindowWhenReady(w, (window) => {
+    window.webContents.send(OPEN_SETTINGS_CHANNEL, detail ?? {});
+  });
+}
+
+function createWindow(opts?: { startHidden?: boolean }): void {
+  const w = new DesktopWindow({
+    preloadPath: defaultPreloadPath(),
+    theme: currentTheme,
+    title: 'Quotern',
+    startHidden: opts?.startHidden,
+  });
+  windows.add(w);
+  w.window.on('closed', () => windows.delete(w));
+}
+
+/** Dev/preview runs Electron.app itself — override Dock so it is not the default atom. */
+function applyDevDockIcon(): void {
+  if (app.isPackaged || process.platform !== 'darwin') return;
+  const image = nativeImage.createFromPath(resolveAppIconPath());
+  if (image.isEmpty()) return;
+  app.dock?.setIcon(image);
+}
+
+// Acquire the single-instance lock before ready.
+// Evict hung leftovers first so we can take the lock without quitting
+// the electron-vite child (exit 143).
+void acquireDesktopInstanceLock().then((gotLock) => {
+  if (!gotLock) {
+    app.quit();
+    return;
+  }
+
+  app.on('second-instance', () => showMainWindow());
+
+  let shutdownPromise: Promise<void> | null = null;
+
+  app.whenReady().then(async () => {
+    // Listen before preferences or services can yield. The hidden-login flag
+    // controls only the default first window, never a subsequent user open.
+    app.on('activate', showMainWindow);
+    app.on('browser-window-focus', () => {
+      pokeSyncOnForeground();
+    });
+
+    applyDevDockIcon();
+
+    // Restore the persisted theme mode before any window / IPC is registered
+    // so the first window and theme:get already resolve correctly.
+    try {
+      currentThemeMode = await loadThemeMode();
+    } catch (err) {
+      console.error(
+        '[tud-desktop] failed to load theme mode:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+    nativeTheme.themeSource = currentThemeMode;
+    currentTheme = resolveTheme(
+      currentThemeMode,
+      nativeTheme.shouldUseDarkColors,
+    );
+
+    ipcMain.removeAllListeners('app:quit');
+    ipcMain.on('app:quit', () => app.quit());
+
+    registerDesktopWindowControls(() => getMainWindow(), {
+      onShow: showMainWindow,
+    });
+    registerOpenExternalIpc();
+    registerThemeIpc();
+    registerShareCardIpc();
+    registerAutostartIpc();
+    // Before the first window: get-state must not race initializeAutoUpdate.
+    registerAutoUpdateIpc();
+    disposeLocalApiIpc = registerLocalApiIpc();
+    disposeCodexSubscriptionIpc = registerCodexSubscriptionIpc();
+    disposeClaudeSubscriptionIpc = registerClaudeSubscriptionIpc();
+    disposeCursorSubscriptionIpc = registerCursorSubscriptionIpc();
+    disposeCopilotSubscriptionIpc = registerCopilotSubscriptionIpc();
+    disposeGrokSubscriptionIpc = registerGrokSubscriptionIpc();
+    disposeKimiSubscriptionIpc = registerKimiSubscriptionIpc();
+    disposeZcodeSubscriptionIpc = registerZcodeSubscriptionIpc();
+    disposeAntigravitySubscriptionIpc = registerAntigravitySubscriptionIpc();
+    disposeQoderSubscriptionIpc = registerQoderSubscriptionIpc();
+    disposeMiniMaxSubscriptionIpc = registerMiniMaxSubscriptionIpc();
+    disposeDeepSeekSubscriptionIpc = registerDeepSeekSubscriptionIpc();
+    disposeOpenCodeSubscriptionIpc = registerOpenCodeSubscriptionIpc();
+    disposeTraeSubscriptionIpc = registerTraeSubscriptionIpc();
+    disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
+    try {
+      await initAutostartOnLaunch();
+    } catch (err) {
+      console.error(
+        '[tud-desktop] failed to init autostart:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+
+    // IPC and theme are ready. Service initialization must not delay opening
+    // the app; localApiRequest already waits for/retries runtime startup.
+    await mainWindowLauncher.initialize(shouldStartHidden()).catch((err) => {
+      console.error('[tud-desktop] failed to open initial window:', err);
+    });
+    createTrayPopover({
+      showMainWindow,
+      openSettings: () => openSettings(),
+      triggerSync,
+      theme: currentTheme,
+    });
+
+    try {
+      await touchRuntimeHeartbeat({ kind: 'desktop', pid: process.pid });
+      const started = await startLocalRuntime();
+      if (
+        started.recoveredFromCorrupt &&
+        !started.recoveredFromCorrupt.tokenSalvaged
+      ) {
+        pendingConfigResetNotice = true;
+        flushPendingConfigResetNotice();
+      }
+    } catch (err) {
+      console.error(
+        '[tud-desktop] failed to start local runtime:',
+        err instanceof Error ? err.message : err,
+      );
+    }
+    resumeLocalRuntimeWatchdog();
+
+    if (process.platform === 'darwin') {
+      void refreshTrayUsage();
+      onTrayUsagePrefChanged(() => {
+        void refreshTrayUsage();
+      });
+      disposeTrayUsageSync = onLocalRuntimeSynced(() => {
+        void refreshTrayUsage();
+      });
+      onPowerResumeListener = () => {
+        void refreshTrayUsage();
+      };
+      powerMonitor.on('resume', onPowerResumeListener);
+    }
+
+    // Cached updates can finish immediately. Start updating only after runtime
+    // and windows are ready, so startup cannot restart services during install.
+    await initializeAutoUpdate({
+      beforeInstall: async () => {
+        hideTrayPopover();
+        markTrayPopoverQuitting();
+        markAppQuitting();
+        setLocalRuntimeQuitting(true);
+        await stopLocalRuntime();
+      },
+      onInstallFailed: async () => {
+        resetAppQuitting();
+        resetTrayPopoverQuitting();
+        shutdownPromise = null;
+        resumeLocalRuntimeWatchdog();
+        // Keep the recovery UI accessible even when runtime startup fails.
+        showMainWindow();
+        await startLocalRuntime();
+      },
+    }).catch((err) => {
+      console.error('[tud-desktop] failed to initialize auto update:', err);
+    });
+  });
+
+  // Stay alive in the tray when all windows are closed/hidden.
+  // Real exit is via tray "退出" or app:quit.
+  app.on('window-all-closed', () => {});
+
+  app.on('before-quit', (event) => {
+    if (shutdownPromise) return;
+    event.preventDefault();
+    markAppQuitting();
+    markTrayPopoverQuitting();
+    setLocalRuntimeQuitting(true);
+    shutdownPromise = stopLocalRuntime().finally(() => {
+      app.quit();
+    });
+  });
+
+  // before-quit/window close can be cancelled. Keep IPC and the update
+  // watchdog alive until windows have closed and the app is actually exiting.
+  app.on('will-quit', () => {
+    ipcMain.removeHandler(THEME_GET_CHANNEL);
+    ipcMain.removeHandler(SHARE_CARD_COPY_IMAGE_CHANNEL);
+    ipcMain.removeAllListeners(THEME_SET_CHANNEL);
+    nativeTheme.removeListener('updated', onNativeThemeUpdated);
+    unregisterOpenExternalIpc();
+    unregisterAutostartIpc();
+    disposeTrayPopover();
+    disposeTrayUsageSync?.();
+    disposeTrayUsageSync = null;
+    if (onPowerResumeListener) {
+      powerMonitor.removeListener('resume', onPowerResumeListener);
+      onPowerResumeListener = null;
+    }
+    disposeLocalApiIpc?.();
+    disposeLocalApiIpc = null;
+    disposeCodexSubscriptionIpc?.();
+    disposeCodexSubscriptionIpc = null;
+    disposeClaudeSubscriptionIpc?.();
+    disposeClaudeSubscriptionIpc = null;
+    disposeCursorSubscriptionIpc?.();
+    disposeCursorSubscriptionIpc = null;
+    disposeCopilotSubscriptionIpc?.();
+    disposeCopilotSubscriptionIpc = null;
+    disposeGrokSubscriptionIpc?.();
+    disposeGrokSubscriptionIpc = null;
+    disposeKimiSubscriptionIpc?.();
+    disposeKimiSubscriptionIpc = null;
+    disposeZcodeSubscriptionIpc?.();
+    disposeZcodeSubscriptionIpc = null;
+    disposeAntigravitySubscriptionIpc?.();
+    disposeAntigravitySubscriptionIpc = null;
+    disposeQoderSubscriptionIpc?.();
+    disposeQoderSubscriptionIpc = null;
+    disposeMiniMaxSubscriptionIpc?.();
+    disposeMiniMaxSubscriptionIpc = null;
+    disposeDeepSeekSubscriptionIpc?.();
+    disposeDeepSeekSubscriptionIpc = null;
+    disposeOpenCodeSubscriptionIpc?.();
+    disposeOpenCodeSubscriptionIpc = null;
+    disposeTraeSubscriptionIpc?.();
+    disposeTraeSubscriptionIpc = null;
+    disposeWorkBuddySubscriptionIpc?.();
+    disposeWorkBuddySubscriptionIpc = null;
+    disposeAutoUpdate();
+  });
+});

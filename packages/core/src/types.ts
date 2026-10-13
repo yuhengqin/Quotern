@@ -1,0 +1,771 @@
+import type {
+  LocalMetricEvidence,
+  LocalUsageMetrics,
+} from './local-metrics.js';
+export type {
+  LocalMetricEvidence,
+  LocalUsageMetrics,
+} from './local-metrics.js';
+
+export interface QueueBucket {
+  /** Local-only request/cache evidence. Never uploaded. */
+  local_metrics?: LocalMetricEvidence;
+  hour_start: string;
+  source: string;
+  model: string;
+  project: string;
+  /**
+   * Client variant within a product family (e.g. `claude-code-cli` vs
+   * `claude-desktop`, `qoder-ide` vs `qoder-cn-ide`). Optional for legacy
+   * rows; new parsers should always set it. Upload prefers this over the
+   * integration→collector fallback map.
+   */
+  collector?: string;
+  input_tokens: number;
+  output_tokens: number;
+  cached_input_tokens: number;
+  cache_creation_input_tokens: number;
+  reasoning_output_tokens: number;
+  total_tokens: number;
+  conversation_count: number;
+  /** Cursor CSV Cost column aggregate (USD); used for billing-accurate cost when present */
+  reported_cost_usd?: number;
+}
+
+export interface TokenTotals {
+  local_metrics?: LocalMetricEvidence;
+  input_tokens: number;
+  output_tokens: number;
+  cached_input_tokens: number;
+  cache_creation_input_tokens: number;
+  reasoning_output_tokens: number;
+  total_tokens: number;
+  conversation_count: number;
+}
+
+/**
+ * One assistant turn being aggregated from a QwenWork streamed transcript.
+ *
+ * A turn reaches disk as 2–3 records sharing one `message.id` (first is always
+ * `thinking`, later ones carry `tool_use` / `text`), so the fragments are
+ * buffered here until a `user` or compaction record marks the turn complete.
+ */
+export interface QwenworkPendingTurn {
+  /** `chatcmpl-…`, shared by every fragment of the same turn. */
+  messageId: string;
+  model: string;
+  /** Timestamp of the turn's first fragment (ISO 8601). */
+  startedAt: string | null;
+  /** Pre-computed half-hour bucket key; keeps a turn in a single bucket. */
+  hourStart: string | null;
+  /**
+   * Set once a fragment with a non-null `stop_reason` (`tool_use` / `end_turn`)
+   * has been seen — the transcript then guarantees the turn is fully written
+   * and safe to bill even at end-of-file.
+   */
+  complete: boolean;
+  /** Concatenated content blocks from all fragments. */
+  blocks: Array<{
+    type?: string;
+    text?: string;
+    thinking?: string;
+    name?: string;
+    input?: unknown;
+    tool_use_id?: string;
+    content?: unknown;
+    is_error?: boolean;
+  }>;
+}
+
+export interface ClaudeFileCursor {
+  inode: number;
+  offset: number;
+  /** Resolved project name cached so unchanged files skip the cwd peek. */
+  project?: string;
+}
+
+export interface CodexFileCursor {
+  /** Last cumulative snapshot, used to ignore repeated usage notifications. */
+  lastUsageSnapshot?: string;
+  inode: number;
+  offset: number;
+  tokenCountSeen?: number;
+  prevTotal?: Record<
+    string,
+    {
+      input_tokens?: number;
+      output_tokens?: number;
+      cached_input_tokens?: number;
+      cache_creation_input_tokens?: number;
+      reasoning_output_tokens?: number;
+      total_tokens?: number;
+    }
+  >;
+  /**
+   * Model in effect at `offset`. Later tail scans restore this so
+   * `token_count` events that omit `info.model` are not filed as `unknown`.
+   */
+  lastModel?: string;
+  /** Session meta cached at index time so unchanged files skip a full re-read. */
+  meta?: CodexSessionFileMeta;
+}
+
+export interface CodexSessionFileMeta {
+  sessionId: string | null;
+  forkedFromId: string | null;
+  sessionProject: string;
+  tokenCountRecords: number;
+  /** File size when this meta was indexed; stale when the file grows. */
+  size: number;
+}
+
+export interface CodexSessionIndexEntry {
+  tokenCount: number;
+  forkedFrom?: string | null;
+}
+
+export interface CursorsFile {
+  minimaxCode?: {
+    databases: Record<string, number>;
+    files: Record<string, { offset: number; inode?: number }>;
+    seenMessageIds?: string[];
+  };
+  claude?: {
+    files: Record<string, ClaudeFileCursor>;
+    /** Legacy first-wins keys; still honored so already-ingested rows are not double-counted. */
+    seenHashes?: string[];
+    /** Last-seen cumulative usage per message.id[:requestId] for streaming last-wins deltas. */
+    seenUsage?: Record<string, TokenTotals>;
+  };
+  codex?: {
+    files: Record<string, CodexFileCursor>;
+    sessionIndex?: Record<string, CodexSessionIndexEntry>;
+    seenHashes?: string[];
+    /**
+     * Lifetime upper bound already contributed for each Codex thread
+     * (precise JSONL rows plus any ledger gap). Missing on older cursors.
+     */
+    ledgerTotals?: Record<string, { tokens: number }>;
+    /** mtimeMs of each `state_*.sqlite` last read. */
+    dbMtimes?: Record<string, number>;
+  };
+  cursor?: {
+    lastRecordTimestamp?: string | null;
+    lastSyncAt?: string | null;
+    lastError?: string | null;
+  };
+  qoder?: {
+    /** Message / line ids already counted (IDE message id, CLI dedup key). */
+    seenHashes?: string[];
+    /** Per JSONL file byte cursors for CLI / Work transcripts. */
+    files?: Record<string, ClaudeFileCursor>;
+    /** Per IDE local.db: last gmt_create ms processed. */
+    ideWatermarks?: Record<string, number>;
+  };
+  trae?: {
+    /** chat_turn ids (or equivalent) already counted, keyed by collector. */
+    seenHashes?: string[];
+    /** Optional last error from decrypt / key scan. */
+    lastError?: string | null;
+  };
+  gemini?: {
+    /** Per session file: inode/size/mtime + cumulative lastIndex/lastTotals. */
+    files: Record<
+      string,
+      {
+        inode: number;
+        size: number;
+        mtimeMs: number;
+        lastIndex: number;
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        } | null;
+        lastModel?: string;
+      }
+    >;
+  };
+  opencode?: {
+    /** Per message key (`sessionId|msgId`) last token snapshot for rewrite-safe deltas. */
+    messages: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
+  copilot?: {
+    /** Per events.jsonl byte cursors. */
+    files?: Record<string, ClaudeFileCursor>;
+    /** sessionId|shutdown|stamp|model dedup keys. */
+    seenHashes?: string[];
+  };
+  qwenwork?: {
+    /**
+     * Per session JSONL cursor. Uses `lastLine` (not a byte offset): the append
+     * frontier may lack a trailing newline, which would leave an offset pointing
+     * into the middle of a half-written line and lose that record forever.
+     */
+    files: Record<
+      string,
+      {
+        inode: number;
+        size: number;
+        mtimeMs: number;
+        /** Absolute 1-based line already consumed; replay resumes here. */
+        lastLine: number;
+        /**
+         * Estimated size of the logical context the model receives on the next
+         * call. Seeded from `compactMetadata.postTokens` at a compaction
+         * boundary. This is an estimate, not a billed figure.
+         */
+        contextTokens: number;
+        /** Model seen most recently, backing up records that omit `message.model`. */
+        lastModel: string | null;
+        /** Assistant fragments not yet settled (stream still being written). */
+        pendingTurns?: QwenworkPendingTurn[];
+      }
+    >;
+    /**
+     * @deprecated Legacy turn-dedup table from the previous implementation.
+     * No longer read; kept so an existing `cursors.json` still deserialises.
+     */
+    seenTurns?: Record<string, TokenTotals>;
+  };
+  /** KinetAios: seen cost_log.id window + max ts(ms). */
+  kinetaios?: {
+    seenIds: string[];
+    lastTs: number;
+  };
+  commandCode?: {
+    files: Record<string, ClaudeFileCursor>;
+    /** Legacy first-wins keys; still honored so already-ingested rows are not double-counted. */
+    seenHashes?: string[];
+    /** Last-seen cumulative usage per message.id for streaming last-wins deltas. */
+    seenUsage?: Record<string, TokenTotals>;
+  };
+  antigravity?: {
+    /** Per transcript.jsonl: inode/size/mtime + delta-billing cursor. */
+    files: Record<
+      string,
+      {
+        inode: number;
+        size: number;
+        mtimeMs: number;
+        lastLine: number;
+        contextTokens: number;
+        previousContextTokens: number;
+        currentModel: string | null;
+      }
+    >;
+  };
+  openclaw?: {
+    files?: Record<string, ClaudeFileCursor>;
+  };
+  autoclaw?: {
+    files?: Record<string, ClaudeFileCursor>;
+  };
+  hermes?: {
+    profiles?: Record<
+      string,
+      {
+        snapshots?: Record<string, Record<string, number>>;
+        unfinishedIds?: string[];
+        lastCompletedStartedAt?: number;
+      }
+    >;
+  };
+  zcode?: {
+    messages?: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
+  dsh?: {
+    /** Per session file cursor (inode/size/mtime 短路) + project cache. */
+    files?: Record<
+      string,
+      {
+        inode: number;
+        size: number;
+        mtimeMs: number;
+        project: string;
+      }
+    >;
+    /** Per message key (`file|messageId`) last token snapshot for dedup. */
+    messages?: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
+  pi?: {
+    files?: Record<string, ClaudeFileCursor>;
+    seenIds?: string[];
+  };
+  omp?: {
+    files?: Record<string, ClaudeFileCursor>;
+    seenIds?: string[];
+  };
+  kiloCli?: {
+    /** Per message key (`sessionId|msgId`) last token snapshot for rewrite-safe deltas. */
+    messages?: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
+  kilocode?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
+  };
+  kimi?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; inode?: number; ino?: number; mtimeMs?: number; offset?: number; model?: string }>;
+  };
+  roocode?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; mtimeMs: number; ino?: number; inode?: number }>;
+  };
+  cline?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
+  };
+  amp?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
+  };
+  qwen?: {
+    seenIds?: string[];
+    files?: Record<string, { inode: number; size: number; mtimeMs: number }>;
+  };
+  droid?: {
+    sessionTotals?: Record<
+      string,
+      {
+        input: number;
+        output: number;
+        cacheCreation: number;
+        cacheRead: number;
+        thinking: number;
+        mtimeMs: number;
+      }
+    >;
+  };
+  kiro?: {
+    files?: Record<string, ClaudeFileCursor>;
+    seenHashes?: string[];
+    dbWatermark?: number;
+  };
+  mimo?: {
+    /** Per message key (`sessionId|msgId`) last token snapshot for rewrite-safe deltas. */
+    messages?: Record<
+      string,
+      {
+        lastTotals: {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens: number;
+          cache_creation_input_tokens: number;
+          reasoning_output_tokens: number;
+          total_tokens: number;
+        };
+      }
+    >;
+  };
+  everyCode?: {
+    files: Record<string, CodexFileCursor>;
+    sessionIndex?: Record<string, CodexSessionIndexEntry>;
+    seenHashes?: string[];
+  };
+  codebuddy?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
+    logModelsByAgent?: Record<string, string>;
+    updatedAt?: string;
+    /** Message ids already ingested from the CodeBuddy App / editor extension history. */
+    extSeenIds?: string[];
+    /** mtimeMs per extension history message file, so unchanged files are skipped. Capped at 20k entries, oldest-modified dropped first. */
+    extFileMtimes?: Record<string, number>;
+  };
+  workbuddy?: {
+    seenIds?: string[];
+    fileOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
+    sqliteSessions?: Record<
+      string,
+      { used: number; updatedAt?: number; model?: string }
+    >;
+    detailedSessions?: Record<string, boolean>;
+    updatedAt?: string;
+  };
+  grok?: {
+    version?: number;
+    sessionSnapshots?: Record<
+      string,
+      {
+        totalTokens: number;
+        messageCount: number;
+        model?: string | null;
+        source?: string | null;
+        lastEventId?: string | null;
+        lastEventTimestamp?: string | null;
+        updatedAt?: string | null;
+        legacySeen?: boolean;
+      }
+    >;
+    seenSessions?: string[];
+    updateOffsets?: Record<string, { size: number; mtimeMs: number; ino: number }>;
+    updatedAt?: string;
+  };
+  goose?: {
+    /** Per session id: last-seen cumulative input/output/total. */
+    sessionTotals?: Record<
+      string,
+      {
+        input: number;
+        output: number;
+        total: number;
+      }
+    >;
+    lastDbMtimeMs?: number;
+    updatedAt?: string;
+  };
+  zed?: {
+    /** Per thread id: last-seen cumulative token tuple. */
+    threadTotals?: Record<
+      string,
+      {
+        input: number;
+        output: number;
+        cache_read: number;
+        cache_write: number;
+      }
+    >;
+    /** ISO updated_at watermark for incremental SQL filter. */
+    lastUpdatedAt?: string | null;
+    lastDbMtimeMs?: number;
+    updatedAt?: string;
+  };
+  warp?: {
+    /** Per conversation|model: last-seen cumulative warp+byok tokens. */
+    conversationTotals?: Record<string, { tokens: number }>;
+    dbMtimes?: Record<string, number>;
+    updatedAt?: string;
+  };
+  wpsComate?: {
+    /** Per session file: inode/offset cursor + cached project name. */
+    files?: Record<
+      string,
+      { inode: number; offset: number; project?: string }
+    >;
+    /** Assistant entry ids already counted (`<fileName>:<entryId>`). */
+    seenIds?: string[];
+  };
+}
+
+export interface TudConfig {
+  deviceId: string;
+  /** Local statistics floor (ISO8601 UTC). */
+  statsSince: string;
+  /**
+   * Local collect / display floor (ISO8601 UTC). May be earlier than
+   * `statsSince` until lookback alignment / 90D ensure expands the history window.
+   * Missing on older installs → treat as `statsSince`.
+   */
+  localCollectSince?: string;
+  hostname: string;
+  dataDir: string;
+  /**
+   * Optional remote pricing overlay. Env `TUD_PRICING_URL` / `TUD_PRICING_TTL_MS`
+   * override these when set. Misses fall back to bundled pricing.json.
+   */
+  pricing?: {
+    url?: string | null;
+    ttlMs?: number | null;
+  };
+  serverPort?: number;
+  serverHost?: string;
+  lastSyncAt?: string | null;
+}
+
+export interface ManifestFile {
+  activeMonth: string;
+  files: Array<{
+    month: string;
+    path: string;
+    firstHour: string | null;
+    lastHour: string | null;
+  }>;
+}
+
+export interface ModelUsageRow {
+  localMetrics?: LocalUsageMetrics;
+  model: string;
+  tokens: number;
+  costUsd: number;
+  pct: number;
+}
+
+export interface SourceUsageRow {
+  localMetrics?: LocalUsageMetrics;
+  source: string;
+  tokens: number;
+  costUsd: number;
+  pct: number;
+  models: ModelUsageRow[];
+}
+
+export interface UsageSummary {
+  /** Aggregated local request/cache evidence across the summary window. */
+  localMetrics?: LocalUsageMetrics;
+  /** Same evidence restricted to the local "today" date. */
+  todayLocalMetrics?: LocalUsageMetrics;
+  totalTokens: number;
+  totalCostUsd: number;
+  todayTokens: number;
+  todayCostUsd: number;
+  statsSince: string;
+  bySource: SourceUsageRow[];
+}
+
+/** Per-day project slice; model keys use `dailyModelKey(source, model)`. */
+export interface DailyProjectUsage {
+  project: string;
+  tokens: number;
+  models: Record<string, number>;
+}
+
+export interface DailyUsageRow {
+  date: string;
+  tokens: number;
+  costUsd: number;
+  models: Record<string, number>;
+  /** Optional for backward compatibility with older daily payloads. */
+  projects?: DailyProjectUsage[];
+  /** Present when local/server daily aggregation includes token breakdown. */
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  /** Per-source local evidence for this day (additive requestCount). */
+  sources?: Array<{
+    source: string;
+    tokens: number;
+    costUsd: number;
+    localMetrics: LocalUsageMetrics;
+  }>;
+  localMetrics?: LocalUsageMetrics;
+}
+
+export interface DailyUsageResponse {
+  days: DailyUsageRow[];
+}
+
+/** One hour bucket in the stats timezone (default Asia/Shanghai). */
+export interface HourlyUsageRow {
+  date: string;
+  hour: number;
+  /** Tool / integration channel (e.g. `claude`, `cursor`). */
+  source: string;
+  tokens: number;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  localMetrics?: LocalUsageMetrics;
+}
+
+export interface HourlyUsageResponse {
+  hours: HourlyUsageRow[];
+  timeZone: string;
+}
+
+export interface ModelBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
+  model: string;
+  source: string;
+  tokens: number;
+  costUsd: number;
+  pct: number;
+}
+
+export interface ProjectModelBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
+  model: string;
+  source: string;
+  tokens: number;
+  costUsd: number;
+  /** Share of the parent project's Token usage. */
+  pct: number;
+}
+
+export interface ProjectBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
+  project: string;
+  tokens: number;
+  costUsd: number;
+  pct: number;
+  models: ProjectModelBreakdownRow[];
+}
+
+export interface ModelBreakdownResponse {
+  models: ModelBreakdownRow[];
+  projects: ProjectBreakdownRow[];
+}
+
+export type LeaderboardMetric = 'cost' | 'tokens';
+
+export interface LeaderboardRow {
+  rank: number;
+  displayName: string;
+  userHash: string;
+  /** Plain user id for profile lookup; legacy clients may omit it. */
+  uid?: string;
+  tokens: number;
+  totalTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  reasoningOutputTokens?: number;
+  costUsd: number;
+  isCurrentUser: boolean;
+}
+
+export interface LeaderboardUserProfile {
+  uid: string;
+  userName: string;
+  avatarUrl: string;
+  profileUrl: string;
+}
+
+export interface LeaderboardResponse {
+  configured: boolean;
+  metric: LeaderboardMetric;
+  days: number;
+  limit: number;
+  generatedAt: string;
+  totalUsers: number;
+  rows: LeaderboardRow[];
+  currentUser: LeaderboardRow | null;
+}
+
+export type LeaderboardRange = 'today' | 'week' | 'month' | 'all';
+
+export interface LeaderboardBoard {
+  metric: LeaderboardMetric;
+  totalUsers: number;
+  rows: LeaderboardRow[];
+  currentUser: LeaderboardRow | null;
+}
+
+export interface LeaderboardMetricBoards {
+  cost: LeaderboardBoard;
+  tokens: LeaderboardBoard;
+}
+
+export interface ToolLeaderboard {
+  tool: string;
+  displayName: string;
+  sortOrder: number;
+  costSupported: boolean;
+  boards: LeaderboardMetricBoards;
+}
+
+export interface LeaderboardOverviewResponse {
+  configured: boolean;
+  range: LeaderboardRange;
+  days: number | null;
+  limit: number;
+  generatedAt: string;
+  global: LeaderboardMetricBoards;
+  tools: ToolLeaderboard[];
+  /** Profiles for users visible in the global boards, keyed by plain user id. */
+  profiles?: Record<string, LeaderboardUserProfile>;
+  filterOptions?: {
+    tools: Array<{ key: string; displayName: string }>;
+    models: Array<{ tool: string; model: string }>;
+  };
+}
+
+export interface SyncStatus {
+  lastSyncAt: string | null;
+  statsSince: string;
+  pollIntervalSeconds: number;
+  sources: Record<
+    string,
+    {
+      status: string;
+      rows?: number;
+      hook: string;
+      syncMode: string;
+      message?: string;
+      error?: string;
+    }
+  >;
+}
+
+export interface IngestBucket {
+  hour_start: string;
+  source: string;
+  model: string;
+  collector?: string;
+  input_tokens: number;
+  output_tokens: number;
+  cached_input_tokens: number;
+  cache_creation_input_tokens: number;
+  reasoning_output_tokens: number;
+  total_tokens: number;
+  conversation_count: number;
+  /** Cursor CSV Cost aggregate (USD); omitted when unknown */
+  reported_cost_usd?: number;
+}
+
+export interface IngestRequest {
+  deviceId: string;
+  buckets: IngestBucket[];
+  syncedAt: string;
+}
+
+export interface TudConfigView {
+  deviceId: string;
+  statsSince: string;
+  localCollectSince: string;
+  lastSyncAt: string | null;
+}

@@ -68,7 +68,7 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
     summary,
     details,
     rangeLabel: selectedDate ?? SHARE_RANGE_OPTIONS.find((option) => option.days === rangeDays)?.label ?? '',
-    toolLabel: selectedSources.length > 0 ? selectedSources.map(sourceLabel).join('、') : '全部工具',
+    toolLabel: selectedSources.length > 0 ? selectedSources.map(sourceLabel).join('、') : '全部 Agent',
     tools: view.toolModelUsage,
   };
 }

@@ -96,7 +96,7 @@ export function DashboardPage() {
     : DASHBOARD_RANGE_LABELS[range];
   const shareToolLabel = selectedTools.length > 0
     ? selectedTools.map(sourceLabel).join('、')
-    : '全部工具';
+    : '全部 Agent';
 
   useEffect(() => {
     const available = new Set(view.toolModelUsage.map((row) => row.source));
@@ -370,9 +370,9 @@ export function DashboardPage() {
             />
             */}
             <UsageDistributionCard
-              description="按编程工具与 Agent 查看用量占比"
+              description="按 Agent 查看用量占比"
               rows={visibleDistributions.tools}
-              title="工具分布"
+              title="Agent 分布"
             />
             <UsageDistributionCard
               description="按模型查看 Token 与费用占比"

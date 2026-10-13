@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 const PROJECT_ROW_HEIGHT = 56;
 const MAX_VISIBLE_PROJECT_ROWS = 5;
 const PROJECT_HELP =
-  '按工作目录查看用量。仅本地展示，不上报。部分工具如 Cursor 暂无项目信息。';
+  '按工作目录查看用量。仅本地展示，不上报。部分 Agent（如 Cursor）暂无项目信息。';
 
 function percentage(part: number, total: number) {
   if (total <= 0) return 0;

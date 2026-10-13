@@ -74,6 +74,6 @@ node scripts/migrate-state.mjs --from "/原状态目录" --to "/Quotern状态目
 
 ## 订阅读数的环境与账号
 
-GUI 启动环境的 PATH 可能缺少 Node 或工具 CLI。Claude reader 使用 [cli-runtime.ts](../apps/desktop/src/main/cli-runtime.ts) 补齐运行环境，在临时目录以受限参数执行 `/usage`；Codex reader 直接读取本机登录状态并请求额度，不以 Codex CLI 是否存在作为前提。
+GUI 启动环境的 PATH 可能缺少 Node 或 Agent CLI。Claude reader 使用 [cli-runtime.ts](../apps/desktop/src/main/cli-runtime.ts) 补齐运行环境，在临时目录以受限参数执行 `/usage`；Codex reader 直接读取本机登录状态并请求额度，不以 Codex CLI 是否存在作为前提。
 
 同一账号的临时失败可以保留最近读数，退出、认证失败或账号变化应清除不再匹配的快照。并发请求返回时再次检查身份或 generation，避免把前一账号的结果发布到当前界面。具体字段和订阅来源差异见[订阅数据说明](./subscription-plan-design.md)，不要假设所有 reader 都有相同缓存与状态枚举。

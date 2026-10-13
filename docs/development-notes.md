@@ -92,4 +92,6 @@ pnpm --filter quotern-desktop test
 
 首次在原浏览器、原地址打开分享时，会读取旧 IndexedDB `quotern-share-backgrounds`；Desktop 读取旧 userData 的 `share-backgrounds.json`。有空位时自动导入，按图片内容去重并保留时间，满额的图片显示待迁移提示，用户删除不需要的共享背景后可「重试迁移」。旧 IndexedDB / JSON 始终保留为备份；Core 记录已迁移图片的内容收据，重试或删除已导入图片后重新打开，不会重复导入或复活。旧源读取失败不影响已有共享图库。不同浏览器及不同 origin 的旧数据只能由对应浏览器和地址读取，需分别打开一次。备份新图库时复制整个 `share-backgrounds/`，不要只复制索引。
 
-用量筛选统一称为「Agent」，表示 Codex、Claude 等工具的用量来源类型，计数不代表运行中的 Agent 实例数。订阅功能按语义使用「订阅来源」（服务或读取来源）、「订阅额度卡片」（展示）和「订阅卡片开关」（显示配置）。技术描述中的 `source`、IPC channel、接口字段和存储键按实际代码名称引用。
+产品定位和介绍统一使用「Coding Agent」；界面标题、筛选、图表、分享和诊断中的简短称呼使用「Agent」，表示 Codex、Claude 等产品系列的用量来源类型，包含 CLI、IDE、Desktop 等形态，计数不代表运行中的 Agent 实例数。
+
+订阅功能按语义使用「订阅来源」（服务或读取来源）、「订阅额度卡片」（展示）和「订阅卡片开关」（显示配置）。「平台」用于 Windows、macOS 等操作系统；「工具调用」、工具栏、迁移工具和开发工具链按原义表述。历史发布记录及参考项目介绍保留原文。技术描述中的 `Tool` / `Platform` 符号、`source`、IPC channel、接口字段和存储键按实际代码名称引用。

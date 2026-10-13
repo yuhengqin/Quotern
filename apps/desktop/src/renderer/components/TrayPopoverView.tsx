@@ -503,7 +503,7 @@ export function TrayPopoverView() {
               {topTools.length > 0 && (
                 <DistributionMiniCard
                   rows={topTools}
-                  title="工具分布 Top 3"
+                  title="Agent 分布 Top 3"
                   totalTokens={visibleSummary.totalTokens}
                 />
               )}

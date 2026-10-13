@@ -65,7 +65,7 @@ export function printDoctorReport(report: DoctorReport): void {
   const undetected = report.collectors.items.filter((i) => !i.present);
 
   console.log(
-    `${c('cyan', '📊 AI 编程工具探测详情', useColor)} ` +
+    `${c('cyan', '📊 Coding Agent 探测详情', useColor)} ` +
       `(${c('bold', String(detected.length), useColor)} / ${report.collectors.total} 款已就绪)`,
   );
 
@@ -75,13 +75,13 @@ export function printDoctorReport(report: DoctorReport): void {
       console.log(`  ${c('green', '✓', useColor)} ${d.displayName}${hookText}`);
     }
   } else {
-    console.log(`  ${c('yellow', '!', useColor)} 尚未检测到任何支持的 AI 工具`);
+    console.log(`  ${c('yellow', '!', useColor)} 尚未检测到任何支持的 Agent`);
   }
 
   if (undetected.length > 0) {
     const unNames = undetected.map((u) => u.displayName).join(', ');
     console.log(
-      `  ${c('dim', `- 未探测到日志的工具 (${undetected.length}): ${unNames}`, useColor)}`,
+      `  ${c('dim', `- 未探测到日志的 Agent (${undetected.length}): ${unNames}`, useColor)}`,
     );
   }
   console.log();

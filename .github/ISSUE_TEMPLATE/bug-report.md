@@ -41,7 +41,7 @@ Dashboard：CLI 包版本；源码开发时注明提交与启动命令
 ### 🔌 涉及的数据源
 
 <!--
-哪个 AI 工具的用量数据出了问题？如 Claude Code / Codex / Cursor / Copilot / Gemini / Cline / Zed 等。
+哪个 Agent 的用量数据出了问题？如 Claude Code / Codex / Cursor / Copilot / Gemini / Cline / Zed 等。
 与具体数据源无关（比如面板样式问题）请写「无关」。
 -->
 

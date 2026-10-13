@@ -443,9 +443,9 @@ export async function runDoctorDiagnostics(
   if (detectedCollectors.length > 0) {
     toolCheckItems.push({
       id: 'collectors-summary',
-      name: '已探测工具',
+      name: '已探测 Agent',
       status: 'ok',
-      message: `检测到 ${detectedCollectors.length} 款 AI 编程工具存在本地有效数据源`,
+      message: `检测到 ${detectedCollectors.length} 款 Coding Agent 存在本地有效数据源`,
       detail: detectedCollectors
         .map((c) => `${c.displayName}${c.hookStatus ? ` (Hook: ${c.hookStatus})` : ''}`)
         .join(', '),
@@ -453,11 +453,11 @@ export async function runDoctorDiagnostics(
   } else {
     const item: DoctorCheckItem = {
       id: 'collectors-summary',
-      name: '已探测工具',
+      name: '已探测 Agent',
       status: 'warn',
-      message: '未在系统中检测到任何支持的 AI 工具日志或数据库',
+      message: '未在系统中检测到任何支持的 Agent 日志或数据库',
       suggestion:
-        '请确认是否已使用过支持的 AI 工具（如 Cursor、Claude Code、Codex、Trae 等）并产生过对话用量。',
+        '请确认是否已使用过支持的 Agent（如 Cursor、Claude Code、Codex、Trae 等）并产生过对话用量。',
     };
     toolCheckItems.push(item);
     rememberSuggestion(suggestions, item);
@@ -465,7 +465,7 @@ export async function runDoctorDiagnostics(
 
   categories.push({
     id: 'collectors',
-    title: `本地 AI 工具与数据源 (已检测到 ${detectedCollectors.length} / ${collectorItems.length} 款)`,
+    title: `本地 Agent 与数据源 (已检测到 ${detectedCollectors.length} / ${collectorItems.length} 款)`,
     status: resolveCategoryStatus(toolCheckItems),
     items: toolCheckItems,
   });

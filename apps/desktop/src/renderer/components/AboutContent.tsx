@@ -37,7 +37,7 @@ export function AboutContent() {
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium text-foreground">支持的工具</h3>
+        <h3 className="text-sm font-medium text-foreground">支持的 Agent</h3>
         <p className="text-xs text-foreground/55">
           同一系列的多端形态用括号标出。
         </p>

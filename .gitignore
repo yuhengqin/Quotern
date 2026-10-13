@@ -10,6 +10,9 @@ output_resource/
 release/
 *.tsbuildinfo
 
+#reference
+reference/
+
 # Tooling caches
 .tanstack/
 .vite/

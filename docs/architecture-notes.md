@@ -46,6 +46,8 @@
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
 | `POST /functions/tud-trigger-sync` | 可传 `{ source }`；省略或 `all` 为全量，未知来源返回 400 |
 | `POST /functions/tud-ensure-local-range` | 可传 `{ days }`；支持 1、7、30、90，按需扩展采集范围 |
+| `GET /functions/tud-share-backgrounds` | 读取本机共享背景图库，返回图片 Data URL 和元数据 |
+| `POST /functions/tud-share-backgrounds` | `operation` 为 `add` / `remove` / `touch` / `import`；导入返回图库、已接收与待导入旧 ID，满额不自动覆盖 |
 
 统计接口成功时返回 `{ success: true, message: 'ok', data }`，已处理的参数错误返回 `{ success: false, message, data: null }`。调用方同时处理 HTTP 错误、非 JSON 响应和业务状态；`trigger-sync` 的 `data.ok` 还表示实际同步结果，不能只检查外层 `success`。
 
@@ -67,6 +69,7 @@
 | `notify.signal`、`sync.done` | Hook 唤醒与同步完成信号 |
 | `bin/notify.sh` 或 `bin/notify.cmd`、`bin/notify.ps1` | 平台对应的 Hook 信号脚本 |
 | `logs/` | 同步、通知与后台服务排障日志 |
+| `share-backgrounds/` | Core 管理的共享背景图片及 `index.json`；独立文件锁协调 CLI、Desktop 多进程访问，备份须复制完整目录 |
 
 设备标识还有独立 sidecar：Windows 使用 `%APPDATA%/quotern/device-id`，其他平台使用 `$XDG_CONFIG_HOME/quotern/device-id`，未设置时使用 `~/.config/quotern/device-id`。可用 `QUOTERN_CONFIG_HOME` 覆盖配置目录。仅清理统计数据目录不会生成新的设备身份。从旧目录升级时，应先按[状态迁移步骤](runtime-notes.md#升级前迁移状态)复制设备身份和 Desktop 设置；运行时只使用 Quotern 目录。
 

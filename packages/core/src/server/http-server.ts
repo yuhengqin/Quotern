@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import type { Hono } from 'hono';
 
 import { isApiPath, serveStatic } from './static.js';
+import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
 
 export interface HttpServerOptions {
   honoApp: Hono;
@@ -20,9 +21,11 @@ export function createHttpServer(opts: HttpServerOptions): Server {
 
     if (isApiPath(url)) {
       try {
+        const limit = url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
+        if (Number(req.headers['content-length']) > limit) throw new ShareBackgroundError('背景请求超过大小限制', 413);
         const body =
           req.method !== 'GET' && req.method !== 'HEAD'
-            ? await readBody(req)
+            ? await readBody(req, limit)
             : undefined;
 
         const headers = new Headers();
@@ -45,6 +48,13 @@ export function createHttpServer(opts: HttpServerOptions): Server {
         const buf = Buffer.from(await response.arrayBuffer());
         res.end(buf);
       } catch (err) {
+        if (err instanceof ShareBackgroundError) {
+          res.statusCode = err.status;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ success: false, message: err.message, data: null }));
+          req.resume();
+          return;
+        }
         res.statusCode = 500;
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.end(err instanceof Error ? err.message : 'Internal error');
@@ -64,15 +74,21 @@ export function createHttpServer(opts: HttpServerOptions): Server {
   return server;
 }
 
-function readBody(req: import('node:http').IncomingMessage): Promise<Uint8Array | undefined> {
+function readBody(req: import('node:http').IncomingMessage, limit: number): Promise<Uint8Array | undefined> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (c) => chunks.push(c));
+    let size = 0;
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > limit) { chunks.length = 0; reject(new ShareBackgroundError('背景请求超过大小限制', 413)); }
+      else chunks.push(c);
+    });
     req.on('end', () => {
       if (chunks.length === 0) resolve(undefined);
       else resolve(new Uint8Array(Buffer.concat(chunks)));
     });
     req.on('error', reject);
+    req.on('aborted', () => reject(new Error('Request aborted')));
   });
 }
 

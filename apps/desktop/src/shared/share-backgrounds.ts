@@ -6,7 +6,4 @@ export interface SavedShareBackground {
   createdAt: number;
   lastUsedAt: number;
 }
-export type ShareBackgroundRequest =
-  | { operation: 'list' }
-  | { operation: 'add'; input: { name: string; image: string }; replaceId?: string }
-  | { operation: 'remove' | 'touch'; id: string };
+export type ShareBackgroundRequest = { operation: 'legacy' };

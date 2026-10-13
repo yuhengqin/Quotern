@@ -56,7 +56,7 @@ Quotern 提供 macOS / Windows 桌面客户端，安装即用，无需额外配�
 
 ## ⌨️ CLI 使用
 
-需要 Node.js >= 20。macOS / Windows / Linux 安装后后台启动即可打开本地面板：
+需要 Node.js >= 20.10。macOS / Windows / Linux 安装后后台启动即可打开本地面板：
 
 ```bash
 npm i -g quotern

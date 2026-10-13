@@ -6,8 +6,8 @@ publish:
   repo: Quotern
   private: true
 afterPack: ./scripts/after-pack.cjs
-# Desktop deps are bundled by electron-vite; no native modules need @electron/rebuild.
-# Skipping rebuild also avoids broken pnpm symlinks failing `stat` during native dependency install.
+# Sharp uses prebuilt Node-API binaries; preserve its complete platform package instead of ABI rebuilding.
+# Other JS dependencies are bundled by electron-vite; the decoder closure is staged separately.
 npmRebuild: false
 # Drop leftover workspace sources from the asar to keep release archives small.
 compression: maximum
@@ -16,12 +16,19 @@ directories:
   buildResources: resources
 files:
   - "!**/*"
-  - out/**
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
   - package.json
   - resources/**/*
+  - from: out/native-runtime
+    to: node_modules
+    filter:
+      - "**/*"
 asar: true
 asarUnpack:
   - out/main/sync-worker*.js
+  - out/native-runtime/**
 extraResources:
   - from: resources
     filter:

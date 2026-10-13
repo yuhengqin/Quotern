@@ -69,7 +69,9 @@
   "dependencies": {
     "fzstd": "^0.1.1",
     "hono": "^4.7.5",
-    "proper-lockfile": "^4.1.2"
+    "image-size": "2.0.2",
+    "proper-lockfile": "^4.1.2",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
@@ -77,6 +79,6 @@
     "typescript": "^5.8.2"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.10.0"
   }
 }

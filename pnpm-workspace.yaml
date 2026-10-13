@@ -1,6 +1,13 @@
 packages:
   - 'packages/*'
   - 'apps/*'
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - current
+    - x64
+    - arm64
 overrides:
   '@heroui/react': 3.2.4
   '@heroui/styles': 3.2.4

@@ -25,10 +25,7 @@ declare global {
       ) => () => void;
       copyImageToClipboard: (dataUrl: string) => Promise<boolean>;
       shareBackgrounds: {
-        list: () => Promise<import('../shared/share-backgrounds').SavedShareBackground[]>;
-        add: (input: { name: string; image: string }, replaceId?: string) => Promise<import('../shared/share-backgrounds').SavedShareBackground[]>;
-        remove: (id: string) => Promise<import('../shared/share-backgrounds').SavedShareBackground[]>;
-        touch: (id: string) => Promise<import('../shared/share-backgrounds').SavedShareBackground[]>;
+        legacy: () => Promise<import('../shared/share-backgrounds').SavedShareBackground[]>;
       };
       getCodexSubscription: (options?: { forceRefresh?: boolean }) => Promise<
         import('../shared/codex-subscription').CodexSubscriptionSnapshot

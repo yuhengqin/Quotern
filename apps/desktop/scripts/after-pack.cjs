@@ -1,4 +1,4 @@
-const { readdir, rm } = require('node:fs/promises');
+const { access, readFile, readdir, rm } = require('node:fs/promises');
 const path = require('node:path');
 
 const MACOS_SIMPLIFIED_CHINESE_LOCALE = 'zh_CN.lproj';
@@ -9,6 +9,7 @@ const MACOS_SIMPLIFIED_CHINESE_LOCALE = 'zh_CN.lproj';
  * Resources, so strip unused languages here before the app is signed.
  */
 module.exports = async function afterPack(context) {
+  await verifySharpResources(context);
   if (context.electronPlatformName !== 'darwin') {
     return;
   }
@@ -39,3 +40,28 @@ module.exports = async function afterPack(context) {
       .map((entry) => rm(path.join(localesDir, entry.name), { recursive: true, force: true })),
   );
 };
+
+async function verifySharpResources(context) {
+  const platform = context.electronPlatformName;
+  const arch = context.arch === 1 ? 'x64' : context.arch === 3 ? 'arm64' : null;
+  if (!arch) throw new Error(`Unsupported Sharp packaging architecture: ${context.arch}`);
+  let resources = path.join(context.appOutDir, 'resources');
+  if (platform === 'darwin') {
+    const app = (await readdir(context.appOutDir)).find((name) => name.endsWith('.app'));
+    if (!app) throw new Error('Packaged macOS application is missing');
+    resources = path.join(context.appOutDir, app, 'Contents/Resources');
+  }
+  const modules = path.join(resources, 'app.asar.unpacked/node_modules');
+  const sharpDirectory = path.join(modules, 'sharp');
+  const manifest = JSON.parse(await readFile(path.join(sharpDirectory, 'package.json'), 'utf8'));
+  await access(path.join(sharpDirectory, manifest.main));
+  const binary = path.join(modules, `@img/sharp-${platform}-${arch}/lib`);
+  const entries = await readdir(binary);
+  if (!entries.some((name) => name.endsWith('.node'))) throw new Error(`Packaged Sharp native module is missing: ${binary}`);
+  if (platform === 'win32') {
+    if (!entries.some((name) => name.endsWith('.dll'))) throw new Error(`Packaged Sharp DLLs are missing: ${binary}`);
+  } else {
+    const vips = path.join(modules, `@img/sharp-libvips-${platform}-${arch}/lib`);
+    if (!(await readdir(vips)).some((name) => /\.(dylib|so(?:\..*)?)$/.test(name))) throw new Error(`Packaged libvips is missing: ${vips}`);
+  }
+}

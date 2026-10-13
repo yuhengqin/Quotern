@@ -33,7 +33,7 @@ export const LOCAL_RUNTIME_RECOVERING_HINT = '本地服务正在恢复，请稍�
 const LOCAL_RUNTIME_RETRY_MS = 20_000;
 const LOCAL_RUNTIME_RETRY_GAP_MS = 500;
 
-async function request<T>(input: string, init?: RequestInit): Promise<T> {
+export async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const envelope = await transportRequest<T>(input, init);
   if (!envelope || envelope.success !== true || envelope.data === null) {
     const code = envelope?.message ?? 'REQUEST_FAILED';

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { defaultBackground, shareBackgroundStore, type ShareBackground } from '../lib/share-backgrounds';
+import { defaultBackground, type ShareBackground } from '../lib/share-backgrounds';
+import { loadBackgroundLibrary, shareBackgroundStore } from '../lib/share-background-client';
 
 export function useShareBackgrounds() {
   const [items, setItems] = useState<ShareBackground[]>([]);
@@ -8,34 +9,54 @@ export function useShareBackgrounds() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [migrationNotice, setMigrationNotice] = useState<string | null>(null);
   const locked = useRef(false);
   const mounted = useRef(false);
   const generation = useRef(0);
+  const initialized = useRef(false);
+  const editing = useRef(false);
+  const setEditing = useCallback((value: boolean) => { editing.current = value; }, []);
 
   const reload = useCallback(async () => {
+    if (locked.current) return;
+    locked.current = true;
     const request = ++generation.current;
-    setReady(false);
     setLoading(true);
-    setSelectedId(null);
     setError(null);
     try {
-      const saved = await shareBackgroundStore.list();
+      const result = await loadBackgroundLibrary();
+      const saved = result.items;
       if (mounted.current && request === generation.current) {
         setItems(saved);
-        setSelectedId(defaultBackground(saved)?.id ?? null);
+        const first = !initialized.current;
+        setSelectedId((id) => first ? defaultBackground(saved)?.id ?? null : id === null || saved.some((item) => item.id === id) ? id : defaultBackground(saved)?.id ?? null);
+        initialized.current = true;
+        setMigrationNotice(result.migrationNotice);
         setReady(true);
       }
     } catch (failure) {
-      if (mounted.current && request === generation.current) setError(failure instanceof Error ? failure.message : '读取背景失败，请重试');
+      if (mounted.current && request === generation.current) {
+        setReady(false);
+        setError(failure instanceof Error ? failure.message : '读取背景失败，请重试');
+      }
     } finally {
-      if (mounted.current && request === generation.current) setLoading(false);
+      if (request === generation.current) {
+        locked.current = false;
+        if (mounted.current) setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     mounted.current = true;
     void reload();
-    return () => { mounted.current = false; generation.current++; };
+    return () => { mounted.current = false; generation.current++; locked.current = false; };
+  }, [reload]);
+
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden && !editing.current) void reload(); };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, [reload]);
 
   const run = useCallback(async (operation: () => Promise<ShareBackground[]>, select?: (items: ShareBackground[]) => string | null) => {
@@ -66,7 +87,7 @@ export function useShareBackgrounds() {
   }, [ready, loading, run]);
 
   return {
-    items, selectedId, ready, loading, busy, error, reload, select,
+    items, selectedId, ready, loading, busy, error, migrationNotice, reload, select, setEditing,
     markUsed: (id: string) => {
       if (!locked.current) void run(() => shareBackgroundStore.touch(id)).catch(() => undefined);
     },

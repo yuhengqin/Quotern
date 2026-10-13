@@ -49,6 +49,7 @@ export default defineConfig({
     build: {
       outDir: 'out/main',
       rollupOptions: {
+        external: ['sharp'],
         input: { index: resolve(__dirname, 'src/main/index.ts') },
       },
     },

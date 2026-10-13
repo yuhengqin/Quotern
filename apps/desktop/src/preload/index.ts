@@ -125,11 +125,7 @@ const tudApi = {
   copyImageToClipboard: (dataUrl: string): Promise<boolean> =>
     ipcRenderer.invoke(SHARE_CARD_COPY_IMAGE_CHANNEL, dataUrl),
   shareBackgrounds: {
-    list: (): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'list' }),
-    add: (input: { name: string; image: string }, replaceId?: string): Promise<SavedShareBackground[]> =>
-      requestShareBackgrounds({ operation: 'add', input, replaceId }),
-    remove: (id: string): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'remove', id }),
-    touch: (id: string): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'touch', id }),
+    legacy: (): Promise<SavedShareBackground[]> => requestShareBackgrounds({ operation: 'legacy' }),
   },
 
   getCodexSubscription: (options?: { forceRefresh?: boolean }): Promise<CodexSubscriptionSnapshot> =>

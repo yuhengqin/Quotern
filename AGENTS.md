@@ -19,7 +19,7 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 ## 开发指南
 
-发布产物需要 Node.js >= 20；仓库开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `pnpm install`，pnpm 版本以根 `package.json` 为准。
+发布产物需要 Node.js >= 20.10；仓库开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `pnpm install`，pnpm 版本以根 `package.json` 为准。
 
 如 `pnpm install` 卡在 electron postinstall
 

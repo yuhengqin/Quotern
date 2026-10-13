@@ -17,11 +17,21 @@ export function ShareBackgroundPicker({ library, selectedVariant, children, dele
   const input = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<CropSource | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const disabled = !library.ready || library.busy;
+  const disabled = !library.ready || library.busy || library.loading;
+  useEffect(() => {
+    if (source) library.setEditing(true);
+    return () => library.setEditing(false);
+  }, [source, library.setEditing]);
+  useEffect(() => {
+    const element = input.current;
+    const cancel = () => library.setEditing(false);
+    element?.addEventListener('cancel', cancel);
+    return () => element?.removeEventListener('cancel', cancel);
+  }, [library.setEditing]);
   return (
     <div className="flex w-full flex-col items-center gap-1 pb-2">
       {children(
-        () => { if (!disabled) { onCancelDelete(); setFileError(null); input.current?.click(); } },
+        () => { if (!disabled) { onCancelDelete(); setFileError(null); library.setEditing(true); input.current?.click(); } },
         () => {
           if (disabled || !selectedVariant.backgroundImage) return;
           onCancelDelete(); setFileError(null);
@@ -33,14 +43,15 @@ export function ShareBackgroundPicker({ library, selectedVariant, children, dele
             const chosen = event.target.files?.[0];
             event.target.value = '';
             setFileError(null);
-            if (!chosen) return;
-            if (!['image/png', 'image/jpeg', 'image/webp'].includes(chosen.type)) { setFileError('请选择 PNG、JPEG 或 WebP 图片'); return; }
-            if (chosen.size > 20 * 1024 * 1024) { setFileError('原图不能超过 20 MB，请先缩小图片'); return; }
+            if (!chosen) { library.setEditing(false); return; }
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(chosen.type)) { library.setEditing(false); setFileError('请选择 PNG、JPEG 或 WebP 图片'); return; }
+            if (chosen.size > 20 * 1024 * 1024) { library.setEditing(false); setFileError('原图不能超过 20 MB，请先缩小图片'); return; }
             setSource({ name: chosen.name, image: chosen });
           }} />
       <div className="flex items-center justify-center gap-1" role="group" aria-label="背景管理">
         {!library.ready && !library.error && <Spinner size="sm" aria-label="正在读取背景" />}
         {!library.ready && library.error && <Button size="sm" variant="tertiary" onPress={() => void library.reload()}>重试图库</Button>}
+        {library.ready && <Button size="sm" variant="tertiary" isDisabled={disabled} onPress={() => void library.reload()}>刷新图库</Button>}
       </div>
       {deletingId && <div className="flex items-center gap-2 text-xs" role="group" aria-label="确认删除背景">
         <span>删除这张背景？</span>
@@ -48,6 +59,10 @@ export function ShareBackgroundPicker({ library, selectedVariant, children, dele
         <Button size="sm" variant="tertiary" isDisabled={library.busy} onPress={onCancelDelete}>取消</Button>
       </div>}
       {(fileError || library.error) && <p className="max-w-full text-center text-xs text-danger" role="alert">{fileError || library.error}</p>}
+      {library.migrationNotice && <div className="flex max-w-full flex-wrap items-center justify-center gap-2 text-center text-xs text-muted" role="status">
+        <p>{library.migrationNotice}</p>
+        <Button size="sm" variant="tertiary" isDisabled={disabled} onPress={() => void library.reload()}>重试迁移</Button>
+      </div>}
       {source && <BackgroundCropModal source={source} library={library} onClose={() => setSource(null)} />}
     </div>
   );

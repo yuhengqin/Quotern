@@ -60,7 +60,7 @@ interface Envelope<T> {
   data: T | null;
 }
 
-async function request<T>(input: string, init?: RequestInit): Promise<T> {
+export async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, init);
   let body: Envelope<T> | null = null;
   try {

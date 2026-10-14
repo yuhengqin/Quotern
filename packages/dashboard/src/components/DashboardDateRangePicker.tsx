@@ -70,6 +70,12 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
                         <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
                       </DateField.Group>
                     </DateField>
+                    <Button slot={null} size="sm" variant="secondary" className="h-7 min-h-7 self-start rounded-lg px-2 text-xs font-normal" onPress={() => {
+                      const today = parseDate(localDateNow());
+                      setEnd(today);
+                      state.setAnchorDate(null);
+                      state.setFocusedDate(today);
+                    }}>结束日期设为今天</Button>
                     <p className="text-xs text-muted">按北京时间统计，包含起止日期。可选择近一年内的日期。</p>
                     {!valid && <p role="alert" className="text-xs text-danger">请选择有效的起止日期，开始日期不能晚于结束日期。</p>}
                     <div className="mt-auto flex justify-end gap-2 pt-1">

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
-import { ArrowLeft } from '@gravity-ui/icons';
-import { Button, Label, ListBox, ListLayout, SearchField, Select, Skeleton, Table, TableLayout, Virtualizer } from '@heroui/react';
+import { ArrowLeft, Xmark } from '@gravity-ui/icons';
+import { Button, ButtonGroup, Label, ListBox, ListLayout, SearchField, Select, Skeleton, Table, TableLayout, Virtualizer } from '@heroui/react';
 import { ModelProviderIcon } from '../components/ModelProviderIcon';
 import { StatusBanner } from '../components/StatusBanner';
 import { fetchPricingCatalog, type PricingCatalogResponse, type PricingCatalogRow } from '../lib/pricing-data';
@@ -126,6 +126,7 @@ export function PricingPage() {
   const [query, setQuery] = useState(initialQuery);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
+  const providerTriggerRef = useRef<HTMLButtonElement>(null);
   const [sort, setSort] = useState<PricingSortDescriptor>(DEFAULT_PRICING_SORT);
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,25 +188,40 @@ export function PricingPage() {
             <SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder="搜索模型名称或 ID" /><SearchField.ClearButton />
           </SearchField.Group>
         </SearchField>
-        <Select aria-label="提供商筛选" selectionMode="multiple" value={providerFilters.length ? providerFilters : ['all']} variant="secondary" onChange={(keys) => {
-          if (Array.isArray(keys)) setProviderFilters(keys.includes('all') && providerFilters.length > 0
-            ? [] : keys.filter((key) => key !== 'all').map(String));
-        }} className="min-w-0 max-w-52 text-xs">
-          <Label className="sr-only">提供商筛选</Label>
-          <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-52 !text-xs">
-            <Select.Value className="truncate">{() => providerLabel}</Select.Value><Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover className="w-60" placement="bottom start">
-            <ListBox aria-label="提供商列表">
-              <ListBox.Item id="all" textValue="全部提供商">全部提供商<ListBox.ItemIndicator /></ListBox.Item>
-              {providers.map((provider) => (
-                <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label} className="text-xs">
-                  <ModelProviderIcon provider={provider} size={16} /><span>{provider.label}</span><ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <ButtonGroup className="shrink-0">
+          <Select aria-label="提供商筛选" selectionMode="multiple" value={providerFilters.length ? providerFilters : ['all']} variant="secondary" onChange={(keys) => {
+            if (Array.isArray(keys)) setProviderFilters(keys.includes('all') && providerFilters.length > 0
+              ? [] : keys.filter((key) => key !== 'all').map(String));
+          }} className="min-w-0 max-w-52 text-xs">
+            <Label className="sr-only">提供商筛选</Label>
+            <Select.Trigger ref={providerTriggerRef} className={`!h-8 !min-h-8 !w-fit max-w-52 !text-xs ${providerFilters.length ? '!rounded-r-none' : '!rounded-full'}`}>
+              <Select.Value className="truncate">{() => providerLabel}</Select.Value><Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="w-60" placement="bottom start">
+              <ListBox aria-label="提供商列表">
+                <ListBox.Item id="all" textValue="全部提供商">全部提供商<ListBox.ItemIndicator /></ListBox.Item>
+                {providers.map((provider) => (
+                  <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label} className="text-xs">
+                    <ModelProviderIcon provider={provider} size={16} /><span>{provider.label}</span><ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          {providerFilters.length > 0 && <Button
+            aria-label="清空提供商筛选"
+            className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0"
+            size="sm"
+            isIconOnly
+            variant="tertiary"
+            onPress={() => {
+              setProviderFilters([]);
+              providerTriggerRef.current?.focus();
+            }}
+          >
+            <ButtonGroup.Separator /><Xmark className="size-3.5" />
+          </Button>}
+        </ButtonGroup>
         <Select aria-label="模型价格排序" value={sortKey} variant="secondary" onChange={(key) => {
           const choice = SORT_CHOICES.find((option) => option.key === key);
           if (choice) setSort({ column: choice.column, direction: choice.direction });

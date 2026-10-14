@@ -47,7 +47,7 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
           <I18nProvider locale="zh-CN">
             <RangeCalendar
               aria-label="选择起止日期"
-              className="!w-full !border-0 !bg-transparent !p-0 !shadow-none"
+              className="!w-full !max-w-none !border-0 !bg-transparent !p-0 !shadow-none"
               value={selected}
               defaultFocusedValue={parseDate(initial.end)}
               minValue={min}
@@ -79,10 +79,10 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
                       }}>确定</Button>
                     </div>
                   </div>
-                  <div className="min-w-0 w-full sm:w-72 sm:shrink-0">
+                  <div className="min-w-0 w-full sm:flex-1">
                     <RangeCalendar.Header>
                       <RangeCalendar.NavButton slot="previous" aria-label="上个月" />
-                      <RangeCalendar.Heading />
+                      <RangeCalendar.Heading className="text-center" />
                       <RangeCalendar.NavButton slot="next" aria-label="下个月" />
                     </RangeCalendar.Header>
                     <RangeCalendar.Grid>

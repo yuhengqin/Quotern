@@ -9,7 +9,7 @@ import { AchievementShareModal } from './AchievementShareModal';
 import { AchievementSeriesModal } from './AchievementSeriesModal';
 
 export function AchievementOverlays() {
-  const { snapshot, detailIds, closeDetails, shareSelection, closeShare, share, familyDetail, openFamily, busy, updatePreferences } = useAchievements();
+  const { snapshot, detailIds, closeDetails, shareSelection, closeShare, share, familyDetail, openFamily, closeFamily, busy, updatePreferences } = useAchievements();
   const [activeIndex, setActiveIndex] = useState(0);
   useEffect(() => setActiveIndex(0), [detailIds]);
   const items = detailIds.map(id => snapshot?.progress.find(item => item.id === id)).filter(item => item !== undefined);
@@ -40,9 +40,9 @@ export function AchievementOverlays() {
           <Modal.Footer className="flex-wrap justify-center gap-2 px-5 pb-5">
             {owned && <Button variant="primary" onPress={() => share({ kind: 'single', id: owned.id })}><Share2 size={15} />分享这枚成就</Button>}
             {owned && <Button variant="secondary" aria-pressed={pinned} isDisabled={busy || !pinned && (snapshot?.preferences.showcaseIds.length ?? 0) >= 3} onPress={() => { if (!snapshot) return; const ids = snapshot.preferences.showcaseIds; void updatePreferences({ showcaseIds: pinned ? ids.filter(id => id !== owned.id) : [...ids, owned.id] }).catch(() => undefined); }}>{pinned ? <Check size={15}/> : <Plus size={15}/>} {pinned ? '移出展示架' : '加入展示架'}</Button>}
-            <Button variant="secondary" onPress={closeDetails}>{owned ? '收下' : '知道了'}</Button>
-            {item && <Button variant="tertiary" className="w-full" onPress={() => openFamily(item.family)}>查看本系列全部记录</Button>}
-            <Link to="/achievements" onClick={closeDetails} className="w-full py-1 text-center text-xs text-muted hover:text-accent">查看全部收藏</Link>
+            <Button variant="secondary" onPress={closeDetails}>{familyDetail ? '返回列表' : owned ? '收下' : '知道了'}</Button>
+            {item && !familyDetail && <Button variant="tertiary" className="w-full" onPress={() => openFamily(item.family)}>查看本系列全部徽章</Button>}
+            <Link to="/achievements" onClick={() => { closeDetails(); closeFamily(); }} className="w-full py-1 text-center text-xs text-muted hover:text-accent">查看全部收藏</Link>
           </Modal.Footer>
         </Modal.Dialog>
       </Modal.Container>

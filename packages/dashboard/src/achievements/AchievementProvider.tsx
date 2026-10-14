@@ -38,8 +38,8 @@ export function AchievementProvider({ request, children }: { request: Achievemen
     if (alive.current) setSnapshot(result.snapshot);
     return result;
   }, [requestInOrder]);
-  const openCelebration = useCallback((ids: string[]) => {
-    setFamilyDetail(null);
+  const openCelebration = useCallback((ids: string[], keepFamily = false) => {
+    if (!keepFamily) setFamilyDetail(null);
     setDetailIds(ids);
     const owned = ids.filter(id => snapshotRef.current?.earned.some(item => item.id === id));
     if (owned.length) void apply({ operation: 'seen', ids: owned }).catch(() => queue.add({ title: '已读状态未保存，可稍后重试', variant: 'warning' }));
@@ -93,7 +93,7 @@ export function AchievementProvider({ request, children }: { request: Achievemen
   const value = useMemo<AchievementContextValue>(() => ({
     snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, familyDetail,
     openFamily: family => { setShareSelection(null); setDetailIds([]); setFamilyDetail(family); }, closeFamily: () => setFamilyDetail(null),
-    openDetails: id => openCelebration([id]), closeDetails: () => setDetailIds([]), shareSelection,
+    openDetails: id => openCelebration([id], true), closeDetails: () => setDetailIds([]), shareSelection,
     share: selection => { setFamilyDetail(null); setDetailIds([]); setShareSelection(selection); }, closeShare: () => setShareSelection(null),
   }), [snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, shareSelection, familyDetail]);
   return <AchievementContext.Provider value={value}>{children}</AchievementContext.Provider>;

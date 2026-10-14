@@ -117,7 +117,7 @@ export function AchievementsPage() {
           <select aria-label="筛选成就状态" value={status} onChange={event => setStatus(event.target.value)} className="rounded-xl border border-border bg-surface px-3 py-2 text-xs"><option value="all">全部状态</option><option value="earned">已获得</option><option value="progress">进行中</option></select>
         </div></div>
         <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="成就分类">{(['all', ...Object.keys(ACHIEVEMENT_CATEGORY_LABELS)] as Array<AchievementCategory | 'all'>).map(key => <button type="button" key={key} aria-pressed={category === key} onClick={() => setCategory(key)} className={'rounded-full px-3 py-1.5 text-xs transition-colors ' + (category === key ? 'bg-accent text-accent-foreground' : 'bg-surface-secondary text-muted hover:text-foreground')}>{key === 'all' ? '全部' : ACHIEVEMENT_CATEGORY_LABELS[key]}</button>)}</div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{shown.map(group => <CollectionCard key={group.id} group={group} editing={editing} showcaseIds={snapshot.preferences.showcaseIds} unread={group.items.some(item => snapshot.unreadIds.includes(item.id))} onOpen={openFamily}/>)}</div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{shown.map(group => <CollectionCard key={group.id} group={group} editing={editing} showcaseIds={snapshot.preferences.showcaseIds} unread={group.items.some(item => snapshot.unreadIds.includes(item.id))} onOpen={openFamily} onDetails={openDetails}/>)}</div>
         {shown.length === 0 && <p className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted">这个分类中还没有符合条件的收藏。</p>}
       </section>
       <footer className="mt-8 space-y-1.5 border-t border-border pt-4 text-[11px] leading-5 text-muted">
@@ -130,17 +130,17 @@ export function AchievementsPage() {
   </div>;
 }
 
-function CollectionCard({ group, editing, showcaseIds, unread, onOpen }: { group: AchievementGroup; editing: boolean; showcaseIds: string[]; unread: boolean; onOpen: (family: AchievementFamily) => void }) {
+function CollectionCard({ group, editing, showcaseIds, unread, onOpen, onDetails }: { group: AchievementGroup; editing: boolean; showcaseIds: string[]; unread: boolean; onOpen: (family: AchievementFamily) => void; onDetails: (id: string) => void }) {
   const item = group.featured, next = group.next;
   const selected = group.items.filter(item => showcaseIds.includes(item.id)).length;
   const meta = ACHIEVEMENT_FAMILIES.find(family => family.id === item.family)!;
   const target = next ?? item;
   return <article className={'relative flex min-w-0 flex-col rounded-2xl border bg-surface p-4 transition-colors ' + (selected ? 'border-accent bg-accent/[.035]' : 'border-border hover:border-accent/30')}>
-    <button type="button" onClick={() => onOpen(group.family)} className="flex w-full items-center gap-3 rounded-xl text-left outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent" aria-label={'查看' + meta.label + '系列'}>
+    <button type="button" onClick={() => onDetails(item.id)} className="flex w-full items-center gap-3 rounded-xl text-left outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent" aria-label={'查看代表徽章：' + achievementDisplayName(item)}>
       <BadgeArtwork family={item.family} tier={item.tier} locked={group.earnedCount === 0} size={84} className="shrink-0"/>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{meta.label}</span><span className="mt-2 block text-xs leading-5 text-muted">{achievementGroupSummary(group)}</span><span className={'mt-1.5 block text-[10px] ' + (group.earnedCount ? 'text-accent' : 'text-muted')}>{group.earnedCount ? '最高已获得：' + item.title : '等待第一枚纪念'}{unread ? ' · NEW' : ''}</span></span>
+      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{meta.label}</span><span className="mt-2 block text-xs leading-5 text-muted">{achievementGroupSummary(group)}</span><span className={'mt-1.5 block break-words text-[10px] ' + (group.earnedCount ? 'text-accent' : 'text-muted')}>{group.earnedCount ? '最高已获得：' + achievementDisplayName(item) : achievementDisplayName(item)}{unread ? ' · NEW' : ''}</span></span>
     </button>
     <div className="mt-4 min-h-16 flex-1"><p className="text-[11px] leading-5 text-muted">{next ? '最近目标：' + achievementDisplayName(next) : group.earnedCount ? '已点亮当前全部等级' : '留下记录后自动累计'}</p>{next && (next.family === 'annual' ? <p className="mt-2 text-[11px] text-muted">本年度进行中，年末结束后结算。</p> : <><p className="mt-1 text-[11px] text-muted">{achievementProgressText(target)}{target.family === 'monthly-full' && target.value >= target.target ? ' · 月底结算' : ''}</p><progress className="achievement-progress mt-2" value={Math.min(target.value, target.target)} max={target.target} aria-label={achievementDisplayName(target) + '进度'}/></>)}</div>
-    <Button className="mt-3 w-full justify-between" size="sm" variant="tertiary" onPress={() => onOpen(group.family)}>{editing ? '选择本系列徽章' : ['agent-loyalty', 'project'].includes(group.family) ? '查看全部对象记录' : ['monthly-full', 'monthly-active', 'annual'].includes(group.family) ? '查看全部周期记录' : '查看全部等级'}{selected > 0 ? <span className="text-[10px] text-accent">已展示 {selected} 枚</span> : <ArrowUpRight size={13}/>}</Button>
+    <Button className="mt-3 w-full justify-between" size="sm" variant="tertiary" onPress={() => onOpen(group.family)}>{editing ? '选择本系列徽章' : '查看全部徽章'}{selected > 0 ? <span className="text-[10px] text-accent">已展示 {selected} 枚</span> : <ArrowUpRight size={13}/>}</Button>
   </article>;
 }

@@ -316,7 +316,7 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
           try {
             if (!runtime || runtimeRole !== 'owner' || !runSyncFn) return;
             const results = await runSyncFn('poll');
-            const wroteAny = results.some((r) => r.writtenBuckets.length > 0);
+            const wroteAny = results.some((r) => r.writtenBuckets.length > 0 || r.sessionsChanged);
             nextDelayMs = pollBackoff.noteRound(wroteAny);
           } catch (err) {
             console.error(

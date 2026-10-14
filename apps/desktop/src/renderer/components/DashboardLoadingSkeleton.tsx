@@ -23,7 +23,7 @@ export function DashboardOverviewSlotSkeleton() {
   return (
     <div aria-hidden="true" className="w-full">
       <section className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
+        {Array.from({ length: 8 }, (_, index) => (
           <Card className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3" key={index}>
             <Card.Content className="grid grid-rows-[auto_auto] gap-4 p-0">
               <div className="flex items-center justify-between gap-2">

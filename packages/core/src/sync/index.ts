@@ -5,6 +5,7 @@ import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } fr
 import { measureCpuPhase } from '../debug-log.js';
 import { isSyncSourcePresent } from './source-presence.js';
 import { parseClaudeIncremental } from '../parsers/claude.js';
+import { syncSessionSource } from '../session-collector.js';
 import { parseCommandCodeIncremental } from '../parsers/command-code.js';
 import { parseCodexIncremental } from '../parsers/codex.js';
 import { parseCursorIncremental } from '../parsers/cursor.js';
@@ -64,6 +65,9 @@ export interface SyncResult {
   bucketsWritten: number;
   /** Buckets appended to queue this sync (latest row per key). */
   writtenBuckets: QueueBucket[];
+  /** Independent session metadata changed, including messages with no tokens. */
+  sessionsChanged?: boolean;
+  sessionError?: string;
   skipped?: boolean;
   error?: string;
 }
@@ -895,7 +899,7 @@ export function normalizeSyncSource(
   return SYNC_SOURCE_ALIASES[value] ?? null;
 }
 
-async function syncOneSource(
+async function syncTokenSource(
   dataDir: string,
   config: TudConfig,
   source: string,
@@ -997,6 +1001,16 @@ async function syncOneSource(
         skipped: true,
         error: `unknown source: ${source}`,
       };
+  }
+}
+
+async function syncOneSource(dataDir: string, config: TudConfig, source: string, opts?: SyncSourceOptions): Promise<SyncResult> {
+  const result = await syncTokenSource(dataDir, config, source, opts);
+  try {
+    const sessionsChanged = await syncSessionSource(dataDir, source);
+    return sessionsChanged ? { ...result, sessionsChanged } : result;
+  } catch (error) {
+    return { ...result, sessionError: error instanceof Error ? error.message : String(error) };
   }
 }
 

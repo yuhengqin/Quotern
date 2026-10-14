@@ -242,7 +242,7 @@ function readSessionCwd(text: string): string | null {
  * 完整文件一次 decompress；尾帧截断时回退到 decodeDshCompletedFrames，
  * 保留已完成帧（写入中的会话仍可统计已落盘用量）。
  */
-function decodeDsh(compressed: Buffer): string | null {
+export function decodeDsh(compressed: Buffer): string | null {
   try {
     const out = fzstdDecompress(compressed);
     if (out.length === 0 || out.length > MAX_DECODED_BYTES) return null;

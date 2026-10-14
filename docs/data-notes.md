@@ -65,6 +65,10 @@ input_tokens + output_tokens + cached_input_tokens
 
 ## 请求数与缓存命中率
 
+会话概览通过独立的 `sessions/<source>.json` 本地元数据缓存采集，不从 Token 桶的 `conversation_count` 推导。只保存会话/消息身份、角色、时间和不可逆的回放匹配摘要，不保存消息正文。独立游标首次补扫原始消息，后续 JSONL 追加增量读取；文件重写重建对应快照。消息单独变化也触发面板刷新。
+
+会话数按来源和逻辑会话去重，总消息数只计用户与 AI 逻辑消息，排除工具、元数据及事件镜像。日期筛选只使用范围内的消息：跨天会话计一次，总时长是各会话范围内首末消息跨度之和；同时进行的会话分别累计。不具备完整消息元数据的来源显示覆盖不完整。活跃时长没有精确首 Token 与生成结束证据时为 `null`，面板显示“—”，不得用请求跨度或 AI 事件间隔替代。
+
 [local-metrics.ts](../packages/core/src/local-metrics.ts) 区分完整请求计数与已知下界：有完整证据时使用 `requestCount`；证据不足时 `requestCount` 可以为 `null`，`knownRequestCount` 使用已有证据或合法的 `conversation_count`。
 
 缓存命中率为：

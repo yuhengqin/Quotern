@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { groupAchievements, closestAchievements, formatAchievementAmount } from './view-model.ts';
+import * as viewModel from './view-model.ts';
 import { buildAchievementShare } from './share-model.ts';
 import type { AchievementSnapshot, AchievementProgress, EarnedAchievement } from 'quotern-core/achievements';
 
@@ -69,4 +70,67 @@ test('annual badge captions identify the year of earning instead of presenting l
   const result = buildAchievementShare(state, { kind: 'annual', year: 2025 });
   assert.equal(result.badges[0]!.subtitle, '2025-12-20 点亮');
   assert.equal(JSON.stringify(result).includes('102'), false);
+});
+
+test('collection aggregates Agent, project and month records into one card per family without dropping levels', () => {
+  const state = snapshot([
+    badge('agent-codex-30', 30, 44, true, { family: 'agent-loyalty', groupId: 'agent-codex', scope: 'codex', tier: 1 }),
+    badge('agent-codex-100', 100, 44, false, { family: 'agent-loyalty', groupId: 'agent-codex', scope: 'codex', tier: 2 }),
+    badge('agent-claude-30', 30, 26, false, { family: 'agent-loyalty', groupId: 'agent-claude', scope: 'claude', tier: 1 }),
+    badge('project-a-30', 30, 5, false, { family: 'project', groupId: 'project-a', scope: 'a' }),
+    badge('project-b-30', 30, 9, false, { family: 'project', groupId: 'project-b', scope: 'b' }),
+    badge('month-09', 20, 20, true, { family: 'monthly-active', groupId: 'month-09', period: '2026-09' }),
+    badge('month-10', 20, 10, false, { family: 'monthly-active', groupId: 'month-10', period: '2026-10' }),
+  ]);
+  const result = groupAchievements(state);
+  assert.equal(result.length, 3);
+  const agents = result.find(group => group.family === 'agent-loyalty')! as any;
+  assert.equal(agents.records.length, 2);
+  assert.equal(agents.items.length, 3);
+  assert.equal(agents.earnedObjectCount, 1);
+  assert.equal(agents.next.id, 'agent-claude-30');
+});
+
+test('closest targets show at most one object per series and skip expired monthly records', () => {
+  const state = snapshot([
+    badge('agent-codex', 30, 29, false, { family: 'agent-loyalty', groupId: 'agent-codex' }),
+    badge('agent-claude', 30, 28, false, { family: 'agent-loyalty', groupId: 'agent-claude' }),
+    badge('tokens', 100, 80), badge('sessions', 100, 70, false, { family: 'sessions', groupId: 'sessions' }),
+  ]);
+  assert.deepEqual(closestAchievements(state).map(item => item.id), ['agent-codex', 'tokens', 'sessions']);
+});
+
+test('recommended showcase chooses different series while explicit sharing preserves repeated series selections', () => {
+  const state = snapshot([
+    badge('agent-codex', 30, 30, true, { family: 'agent-loyalty', scope: 'codex', scopeLabel: 'codex' }),
+    badge('agent-claude', 30, 30, true, { family: 'agent-loyalty', scope: 'claude', scopeLabel: 'claude' }),
+    badge('tokens', 100, 100, true), badge('streak', 7, 7, true, { family: 'streak' }),
+  ]);
+  assert.equal(typeof (viewModel as any).recommendShowcase, 'function');
+  const ids: string[] = (viewModel as any).recommendShowcase(state);
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids.map(id => state.earned.find(item => item.id === id)!.family)).size, 3);
+  state.preferences.showcaseIds = ['agent-codex', 'agent-claude'];
+  const shared = buildAchievementShare(state, { kind: 'showcase' });
+  assert.equal(shared.badges.length, 2);
+  assert.equal(shared.badges[0]!.title, 'agent-codex · Codex');
+  assert.equal(shared.badges[1]!.title, 'agent-claude · Claude');
+});
+
+test('project-family share privacy applies to older records even when their privateScope flag is absent', () => {
+  const state = snapshot([badge('legacy-project', 30, 30, true, { family: 'project', scope: 'legacy-id', scopeLabel: 'confidential-project', title: '项目长跑' })]);
+  assert.equal(JSON.stringify(buildAchievementShare(state, { kind: 'single', id: 'legacy-project' })).includes('confidential-project'), false);
+  assert.equal(buildAchievementShare(state, { kind: 'single', id: 'legacy-project' }, { showCost: false, showProjects: true }).badges[0]!.title, '项目长跑 · confidential-project');
+});
+
+test('detail status filtering separates owned levels, current goals and expired periods', () => {
+  const matches = (viewModel as any).achievementMatchesStatus;
+  assert.equal(typeof matches, 'function');
+  const owned = badge('owned', 30, 44, true), goal = badge('goal', 100, 44), expired = badge('old-month', 31, 20, false, { period: '2026-09' });
+  assert.equal(matches(owned, 'current', '2026-10-15'), false);
+  assert.equal(matches(goal, 'current', '2026-10-15'), true);
+  assert.equal(matches(expired, 'current', '2026-10-15'), false);
+  assert.equal(matches(expired, 'expired', '2026-10-15'), true);
+  assert.equal(matches(owned, 'earned', '2026-10-15'), true);
+  assert.equal(matches(goal, 'earned', '2026-10-15'), false);
 });

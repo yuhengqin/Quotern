@@ -4,12 +4,14 @@
 
 ## 环境与启动
 
+并行 worktree、分支及开发服务归属遵守 [worktree 开发规范](./worktree-development.md)。开发用 `pnpm dev:*` 的私有运行目录与端口；不要停止其他会话的服务来腾端口。实际地址及归属记录由启动输出和 `pnpm dev:status` 提供。
+
 发布产物声明 Node.js >= 20；仓库开发和测试使用 Node.js 22.13+，以满足 `node:sqlite` 和 TypeScript 测试运行需求。包管理器版本由根 [package.json](../package.json) 的 `packageManager` 指定，当前为 pnpm 11.1.2。依赖版本以 lockfile 为准。
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm dev:cli
-# CLI API :8452，浏览器开发面板 :5194
+# 实际 API / Vite 地址见启动输出；默认端口占用时选择空闲端口
 ```
 
 桌面开发使用 `pnpm dev:desktop`。CLI 托管构建产物时使用 `pnpm start:cli`，该命令先构建 Core / Dashboard / CLI，再启动服务；它不提供浏览器页面 HMR。Electron 下载镜像配置见 [CONTRIBUTING.md](../CONTRIBUTING.md#安装依赖的注意事项)。

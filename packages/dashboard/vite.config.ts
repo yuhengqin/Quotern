@@ -54,10 +54,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5194,
+      host: '127.0.0.1',
+      port: Number(env.QUOTERN_DEV_UI_PORT || 5194),
+      strictPort: true,
       proxy: {
-        '/functions': 'http://127.0.0.1:8452',
-        '/health': 'http://127.0.0.1:8452',
+        '/functions': env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8452',
+        '/health': env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8452',
       },
     },
     build: {

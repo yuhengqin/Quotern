@@ -8,6 +8,7 @@ import {
   runtimeKindLabel,
   saveConfig,
   touchStatsSince,
+  isIsolatedDevRuntime,
 } from 'quotern-core';
 
 import {
@@ -37,6 +38,9 @@ import {
 type ServicePlatform = 'darwin' | 'win32' | 'linux';
 
 function assertSupportedPlatform(): ServicePlatform {
+  if (isIsolatedDevRuntime()) {
+    throw new Error('隔离开发模式禁止操作系统级 quotern service；使用 pnpm dev:cli，并通过所属会话退出');
+  }
   const p = platform();
   if (p === 'darwin' || p === 'win32' || p === 'linux') return p;
   throw new Error(`quotern service 仅支持 macOS、Windows 与 Linux（当前: ${p}）`);

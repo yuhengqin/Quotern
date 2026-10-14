@@ -54,7 +54,12 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.use('*', cors());
   registerShareBackgroundApi(app, deps.dataDir);
 
-  app.get('/health', (c) => c.json({ ok: true }));
+  app.get('/health', (c) => {
+    if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {
+      c.header('X-Quotern-Dev-Instance', process.env.QUOTERN_DEV_INSTANCE_ID);
+    }
+    return c.json({ ok: true });
+  });
 
   const summaryHandler = async (c: Context) => {
     const config = deps.getConfig();

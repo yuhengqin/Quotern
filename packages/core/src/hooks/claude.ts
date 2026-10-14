@@ -11,6 +11,7 @@ import {
   notifyScriptPathLegacy,
   NOTIFY_THROTTLE_MS,
   LOG_MAX_BYTES,
+  isIsolatedDevRuntime,
 } from '../paths.js';
 
 /** Fires each turn when Claude finishes responding (not only on session exit). */
@@ -343,6 +344,7 @@ export async function upsertClaudeHook(
   notifyPath: string,
   events: readonly string[] = CLAUDE_HOOK_EVENTS,
 ): Promise<{ changed: boolean; configured: boolean }> {
+  if (isIsolatedDevRuntime()) return { changed: false, configured: false };
   const settingsPath = claudeSettingsPath();
   const hookCommand = buildHookCommand(notifyPath, 'claude');
   const existing = await readJson(settingsPath);

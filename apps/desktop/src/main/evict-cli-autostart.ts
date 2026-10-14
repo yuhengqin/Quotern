@@ -9,6 +9,7 @@ import { unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { isIsolatedDevRuntime } from 'quotern-core';
 
 const MACOS_LABELS = ['dev.quotern.cli'] as const;
 const WINDOWS_TASK_NAMES = ['quotern'] as const;
@@ -58,6 +59,7 @@ function evictWindowsCliAutostart(): void {
 
 /** Best-effort: never throw. Missing CLI autostart is a no-op. */
 export async function evictCliAutostart(): Promise<void> {
+  if (isIsolatedDevRuntime()) return;
   try {
     if (process.platform === 'darwin') {
       await evictMacosCliAutostart();

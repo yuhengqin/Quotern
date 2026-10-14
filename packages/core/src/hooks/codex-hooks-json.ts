@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { buildHookCommand } from './claude.js';
-import { codexHooksJsonPath } from '../paths.js';
+import { codexHooksJsonPath, isIsolatedDevRuntime } from '../paths.js';
 
 export const CODEX_HOOK_EVENTS = ['Stop'] as const;
 
@@ -53,6 +53,7 @@ export async function upsertCodexHooksJson(
   notifyPath: string,
   events: readonly string[] = CODEX_HOOK_EVENTS,
 ): Promise<{ changed: boolean; configured: boolean }> {
+  if (isIsolatedDevRuntime()) return { changed: false, configured: false };
   const settingsPath = codexHooksJsonPath();
   const hookCommand = buildHookCommand(notifyPath, 'codex');
   const existing = await readJson(settingsPath);

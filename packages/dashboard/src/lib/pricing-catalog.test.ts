@@ -4,6 +4,7 @@ import type { PricingCatalogRow } from './api.ts';
 import {
   DEFAULT_PRICING_SORT,
   PRICING_PAGE_SIZE,
+  PRICING_SORT_OPTIONS,
   filterAndSortPricingCatalog,
   filterDirectPricingCatalog,
   isGatewayPricingModel,
@@ -64,6 +65,19 @@ describe('pricing catalog helpers', () => {
       direction: 'descending',
     });
     assert.deepEqual(result.map((row) => row.model), ['Beta', 'alpha-mini', 'Alpha']);
+    assert.ok(PRICING_SORT_OPTIONS.some(option => option.key === 'output:descending'));
+  });
+
+  it('sorts context and release dates without placing missing metadata first', () => {
+    const samples = [
+      { ...rows[0], model: 'unknown' },
+      { ...rows[0], model: 'small', contextWindow: 32_000, releaseDate: '2025-01-01' },
+      { ...rows[0], model: 'large', contextWindow: 1_000_000, releaseDate: '2026-10-14' },
+    ];
+    for (const column of ['contextWindow', 'releaseDate'] as const) {
+      assert.deepEqual(filterAndSortPricingCatalog(samples, '', { column, direction: 'descending' }).map(row => row.model), ['large', 'small', 'unknown']);
+      assert.deepEqual(filterAndSortPricingCatalog(samples, '', { column, direction: 'ascending' }).map(row => row.model), ['small', 'large', 'unknown']);
+    }
   });
 
   it('keeps unknown rates last in either direction and preserves zero as a price', () => {

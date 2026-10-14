@@ -1,7 +1,7 @@
 {
   "_meta": {
     "units": "usd_per_million_tokens",
-    "generated_at": "2026-10-14T00:00:00.000Z",
+    "generated_at": "2026-10-14T14:57:12.595Z",
     "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev."
   },
   "exact": {
@@ -2999,1331 +2999,1993 @@
   "model_metadata": {
     "alibaba/qvq-max": {
       "release_date": "2025-03-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-flash": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-max": {
       "release_date": "2024-04-03",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-mt-plus": {
       "release_date": "2025-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16384,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-mt-turbo": {
       "release_date": "2025-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16384,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-omni-turbo": {
       "release_date": "2025-01-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-plus-character-ja": {
       "release_date": "2024-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 8192,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-plus": {
       "release_date": "2024-01-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-turbo": {
       "release_date": "2024-11-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-vl-max": {
       "release_date": "2024-04-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-vl-ocr": {
       "release_date": "2024-10-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 34096,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen-vl-plus": {
       "release_date": "2024-01-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-14b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-32b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-72b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-7b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-omni-7b": {
       "release_date": "2024-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-vl-72b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen2-5-vl-7b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-14b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-235b-a22b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-32b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-8b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-asr-flash": {
       "release_date": "2025-09-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 53248,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-coder-30b-a3b-instruct": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-coder-480b-a35b-instruct": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-coder-flash": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-coder-plus": {
       "release_date": "2025-07-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-max": {
       "release_date": "2025-09-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-next-80b-a3b-instruct": {
       "release_date": "2025-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-next-80b-a3b-thinking": {
       "release_date": "2025-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-omni-flash": {
       "release_date": "2025-09-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 65536,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-vl-235b-a22b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-vl-30b-a3b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3-vl-plus": {
       "release_date": "2025-09-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.5-122b-a10b": {
       "release_date": "2026-02-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.5-27b": {
       "release_date": "2026-02-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.5-35b-a3b": {
       "release_date": "2026-02-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.5-397b-a17b": {
       "release_date": "2026-02-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.5-plus": {
       "release_date": "2026-02-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.6-27b": {
       "release_date": "2026-04-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.6-35b-a3b": {
       "release_date": "2026-04-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.6-flash": {
       "release_date": "2026-04-27",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.6-max-preview": {
       "release_date": "2026-04-20",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.6-plus": {
       "release_date": "2026-04-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.7-max": {
       "release_date": "2026-05-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.7-plus": {
       "release_date": "2026-06-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwq-plus": {
       "release_date": "2025-03-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.8-max": {
       "release_date": "2026-08-03",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.7-flash": {
       "release_date": "2026-07-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.8-flash": {
       "release_date": "2026-08-26",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qvq-max": {
       "release_date": "2025-03-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-deep-research": {
       "release_date": "2024-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-doc-turbo": {
       "release_date": "2024-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-flash": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-long": {
       "release_date": "2025-01-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 10000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-math-plus": {
       "release_date": "2024-08-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 4096,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-math-turbo": {
       "release_date": "2024-09-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 4096,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-max": {
       "release_date": "2024-04-03",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-mt-plus": {
       "release_date": "2025-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16384,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-mt-turbo": {
       "release_date": "2025-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16384,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-omni-turbo": {
       "release_date": "2025-01-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-plus-character": {
       "release_date": "2024-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-plus": {
       "release_date": "2024-01-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-turbo": {
       "release_date": "2024-11-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-vl-max": {
       "release_date": "2024-04-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-vl-ocr": {
       "release_date": "2024-10-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 34096,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen-vl-plus": {
       "release_date": "2024-01-25",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-14b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-32b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-72b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-7b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-coder-32b-instruct": {
       "release_date": "2024-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-coder-7b-instruct": {
       "release_date": "2024-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-math-72b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 4096,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-math-7b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 4096,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-omni-7b": {
       "release_date": "2024-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-vl-72b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen2-5-vl-7b-instruct": {
       "release_date": "2024-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-14b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-235b-a22b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-32b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-8b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-asr-flash": {
       "release_date": "2025-09-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 53248,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-coder-30b-a3b-instruct": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-coder-480b-a35b-instruct": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-coder-flash": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-max": {
       "release_date": "2026-01-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-next-80b-a3b-instruct": {
       "release_date": "2025-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-next-80b-a3b-thinking": {
       "release_date": "2025-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-omni-flash": {
       "release_date": "2025-09-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 65536,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-vl-235b-a22b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-vl-30b-a3b": {
       "release_date": "2025-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-vl-plus": {
       "release_date": "2025-09-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.5-397b-a17b": {
       "release_date": "2026-02-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.5-flash": {
       "release_date": "2026-02-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.5-plus": {
       "release_date": "2026-02-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.6-max-preview": {
       "release_date": "2026-04-20",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 245800,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.6-plus": {
       "release_date": "2026-04-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.7-flash": {
       "release_date": "2026-07-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.7-plus": {
       "release_date": "2026-06-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.8-max": {
       "release_date": "2026-08-03",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwq-32b": {
       "release_date": "2024-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwq-plus": {
       "release_date": "2025-03-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/tongyi-intent-detect-v3": {
       "release_date": "2024-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 8192,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-fable-5": {
       "release_date": "2026-06-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-fable-5-1": {
       "release_date": "2026-09-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-haiku-4-5-20251001": {
       "release_date": "2025-10-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-4-5-20251101": {
       "release_date": "2025-11-24",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-4-6": {
       "release_date": "2026-02-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-4-7": {
       "release_date": "2026-04-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "deepseek/deepseek-v4-flash": {
       "release_date": "2026-09-10",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "deepseek/deepseek-v4-pro": {
       "release_date": "2026-08-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "google/gemini-2.5-flash": {
       "release_date": "2025-06-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.5-flash-lite": {
       "release_date": "2026-07-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.6-flash": {
       "release_date": "2026-07-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.7-flash": {
       "release_date": "2026-08-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.8-flash": {
       "release_date": "2026-09-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-4-8": {
       "release_date": "2026-05-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-5": {
       "release_date": "2026-07-24",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-sonnet-4-5-20250929": {
       "release_date": "2025-09-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-sonnet-4-5": {
       "release_date": "2025-09-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-sonnet-4-6": {
       "release_date": "2026-02-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-sonnet-5": {
       "release_date": "2026-06-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "deepseek/deepseek-v4-flash-vision-exp": {
       "release_date": "2026-09-10",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "google/deep-research-max-preview-04-2026": {
       "release_date": "2026-04-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "google/deep-research-preview-04-2026": {
       "release_date": "2026-04-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "google/gemini-2.5-computer-use-preview-10-2025": {
       "release_date": "2025-10-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "google/gemini-2.5-flash-lite": {
       "release_date": "2025-06-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-2.5-pro": {
       "release_date": "2025-06-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3-flash-preview": {
       "release_date": "2025-12-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.1-flash-lite-preview": {
       "release_date": "2026-03-03",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.1-flash-lite": {
       "release_date": "2026-05-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.1-pro-preview-customtools": {
       "release_date": "2026-02-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.1-pro-preview": {
       "release_date": "2026-02-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.5-flash": {
       "release_date": "2026-05-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-3.5-live-translate-preview": {
       "release_date": "2026-06-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16384,
+      "context_window_source": "models.dev"
     },
     "google/gemini-flash-latest": {
       "release_date": "2026-08-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-flash-lite-latest": {
       "release_date": "2026-07-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "google/gemini-omni-flash-preview": {
       "release_date": "2026-06-30",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M2.1": {
       "release_date": "2025-12-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M2.5-highspeed": {
       "release_date": "2026-02-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "mistral/codestral-2508": {
       "release_date": "2025-07-30",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "mistral/ministral-14b-2512": {
       "release_date": "2025-12-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/ministral-3b-2512": {
       "release_date": "2025-12-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "mistral/ministral-8b-2512": {
       "release_date": "2025-12-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M2.5": {
       "release_date": "2026-02-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M2.7-highspeed": {
       "release_date": "2026-03-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "moonshotai/kimi-k2.7-code": {
       "release_date": "2026-06-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "moonshotai/kimi-k3": {
       "release_date": "2026-07-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M2.7": {
       "release_date": "2026-03-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M2": {
       "release_date": "2025-10-27",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax/MiniMax-M3": {
       "release_date": "2026-06-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M2.1": {
       "release_date": "2025-12-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M2.5-highspeed": {
       "release_date": "2026-02-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M2.5": {
       "release_date": "2026-02-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M2.7-highspeed": {
       "release_date": "2026-03-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M2.7": {
       "release_date": "2026-03-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M2": {
       "release_date": "2025-10-27",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "minimax-cn/MiniMax-M3": {
       "release_date": "2026-06-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "mistral/codestral-latest": {
       "release_date": "2024-05-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "mistral/devstral-2512": {
       "release_date": "2025-12-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/devstral-latest": {
       "release_date": "2025-12-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/devstral-medium-2507": {
       "release_date": "2025-07-10",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/devstral-medium-latest": {
       "release_date": "2025-12-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/devstral-small-2505": {
       "release_date": "2025-05-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/devstral-small-2507": {
       "release_date": "2025-07-10",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/magistral-medium-latest": {
       "release_date": "2025-03-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/ministral-3b-latest": {
       "release_date": "2024-10-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "mistral/ministral-8b-latest": {
       "release_date": "2024-10-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-embed": {
       "release_date": "2023-12-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 8000,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-large-2411": {
       "release_date": "2024-11-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-large-2512": {
       "release_date": "2024-11-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-large-latest": {
       "release_date": "2024-11-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-medium-2505": {
       "release_date": "2025-05-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-medium-2508": {
       "release_date": "2025-08-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-medium-2604": {
       "release_date": "2026-04-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5": {
       "release_date": "2025-08-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-nemo": {
       "release_date": "2024-07-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-small-2506": {
       "release_date": "2025-06-20",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-small-2603": {
       "release_date": "2026-03-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-small-latest": {
       "release_date": "2026-03-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "mistral/open-mistral-7b": {
       "release_date": "2023-09-27",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 8000,
+      "context_window_source": "models.dev"
     },
     "mistral/open-mistral-nemo": {
       "release_date": "2024-07-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/open-mixtral-8x22b": {
       "release_date": "2024-04-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 64000,
+      "context_window_source": "models.dev"
     },
     "mistral/open-mixtral-8x7b": {
       "release_date": "2023-12-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32000,
+      "context_window_source": "models.dev"
     },
     "mistral/pixtral-12b": {
       "release_date": "2024-09-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "mistral/pixtral-large-latest": {
       "release_date": "2024-11-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "moonshotai/kimi-k2.6": {
       "release_date": "2026-04-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-3.5-turbo": {
       "release_date": "2023-03-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16385,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4-turbo": {
       "release_date": "2023-11-06",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4.1-mini": {
       "release_date": "2025-04-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1047576,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4.1-nano": {
       "release_date": "2025-04-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1047576,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4.1": {
       "release_date": "2025-04-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1047576,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4": {
       "release_date": "2023-11-06",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 8192,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4o-2024-05-13": {
       "release_date": "2024-05-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4o-2024-08-06": {
       "release_date": "2024-08-06",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4o-2024-11-20": {
       "release_date": "2024-11-20",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4o-mini": {
       "release_date": "2024-07-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-4o": {
       "release_date": "2024-05-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5-mini": {
       "release_date": "2025-08-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5-nano": {
       "release_date": "2025-08-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5-pro": {
       "release_date": "2025-10-06",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.1": {
       "release_date": "2025-11-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.2-chat-latest": {
       "release_date": "2025-12-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.2-pro": {
       "release_date": "2025-12-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.2": {
       "release_date": "2025-12-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.3-chat-latest": {
       "release_date": "2026-03-03",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.3-codex-spark": {
       "release_date": "2026-02-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.3-codex": {
       "release_date": "2026-02-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.4-mini": {
       "release_date": "2026-03-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.4-nano": {
       "release_date": "2026-03-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.4-pro": {
       "release_date": "2026-03-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.4": {
       "release_date": "2026-03-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.5-pro": {
       "release_date": "2026-04-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.5": {
       "release_date": "2026-04-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.6-luna": {
       "release_date": "2026-07-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.6-sol": {
       "release_date": "2026-07-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.6-terra": {
       "release_date": "2026-07-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-6-astra": {
       "featured": true,
       "release_date": "2026-09-04",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-5.6": {
       "release_date": "2026-07-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/o1-pro": {
       "release_date": "2025-03-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "openai/o1": {
       "release_date": "2024-12-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "openai/o3-mini": {
       "release_date": "2024-12-20",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "openai/o3-pro": {
       "release_date": "2025-06-10",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "openai/o3": {
       "release_date": "2025-04-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "openai/o4-mini": {
       "release_date": "2025-04-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-evolving": {
       "release_date": "2026-06-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.20-0309-non-reasoning": {
       "release_date": "2026-03-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.20-0309-reasoning": {
       "release_date": "2026-03-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.20-multi-agent-0309": {
       "release_date": "2026-03-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.3": {
       "release_date": "2026-04-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.5": {
       "release_date": "2026-07-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 500000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.6": {
       "release_date": "2026-08-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 500000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-build-0.1": {
       "release_date": "2026-04-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2-flash": {
       "release_date": "2025-12-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2-omni": {
       "release_date": "2026-03-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2-pro": {
       "release_date": "2026-03-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2.5-pro-ultraspeed": {
       "release_date": "2026-06-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2.5-pro": {
       "release_date": "2026-04-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2.5": {
       "release_date": "2026-04-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2.6-flash": {
       "release_date": "2026-09-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2.6-pro": {
       "release_date": "2026-09-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "xiaomi/mimo-v2.6-pro-ultraspeed": {
       "release_date": "2026-09-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.5-air": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.5": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.5v": {
       "release_date": "2025-08-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 64000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.6": {
       "release_date": "2025-09-30",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.6v": {
       "release_date": "2025-12-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.7-flashx": {
       "release_date": "2026-01-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.7": {
       "release_date": "2025-12-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5-turbo": {
       "release_date": "2026-03-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5v-turbo": {
       "release_date": "2026-04-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.5": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.5-air": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.5v": {
       "release_date": "2025-08-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 64000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.6": {
       "release_date": "2025-09-30",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.6v": {
       "release_date": "2025-12-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.7": {
       "release_date": "2025-12-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.7-flashx": {
       "release_date": "2026-01-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5": {
       "release_date": "2026-02-11",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5.1": {
       "release_date": "2026-03-27",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5.2": {
       "release_date": "2026-06-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5.3": {
       "release_date": "2026-08-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5.3-flash": {
       "release_date": "2026-08-26",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5v-turbo": {
       "release_date": "2026-04-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "meta/muse-spark-1.1": {
       "release_date": "2026-04-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "stepfun/step-3.5-flash": {
       "release_date": "2026-01-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "stepfun/step-3.7-flash": {
       "release_date": "2026-05-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "meta/muse-spark-1.2": {
       "release_date": "2026-08-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "meta/muse-spark-1.2-contributor": {
       "release_date": "2026-08-05",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "moonshotai/kimi-k2.7-code-highspeed": {
       "release_date": "2026-06-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-4-5": {
       "release_date": "2025-11-24",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-haiku-4-5": {
       "release_date": "2025-10-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.5-flash": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5": {
       "release_date": "2026-02-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 204800,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5.3": {
       "release_date": "2026-08-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5.2": {
       "release_date": "2026-06-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5.1": {
       "release_date": "2026-04-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.7-flash": {
       "release_date": "2026-01-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5.3-flash": {
       "release_date": "2026-08-26",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.7-max": {
       "release_date": "2026-05-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.6-flash": {
       "release_date": "2026-04-27",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3-coder-plus": {
       "release_date": "2025-07-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "stepfun/step-3.5-flash-2603": {
       "release_date": "2026-04-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "stepfun/step-2-16k": {
       "release_date": "2025-01-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 16384,
+      "context_window_source": "models.dev"
     },
     "stepfun/step-1-32k": {
       "release_date": "2025-01-01",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-2-0-pro-260215": {
       "release_date": "2026-02-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-1-6-251015": {
       "release_date": "2025-10-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-2-1-pro-260628": {
       "release_date": "2026-06-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-1-6-flash-250828": {
       "release_date": "2025-08-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-2-0-lite-260428": {
       "release_date": "2026-02-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-2-0-code-preview-260215": {
       "release_date": "2026-02-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-1-6-vision-250815": {
       "release_date": "2025-08-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-2-0-mini-260428": {
       "release_date": "2026-02-14",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-2-1-turbo-260628": {
       "release_date": "2026-06-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-character-260628": {
       "release_date": "2026-06-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "volcengine/doubao-seed-1-8-251228": {
       "release_date": "2025-12-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.7-flash": {
       "release_date": "2026-01-19",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 200000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.5-flash": {
       "release_date": "2025-07-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 131072,
+      "context_window_source": "models.dev"
     },
     "mistral/labs-devstral-small-2512": {
       "release_date": "2025-12-09",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
     },
     "mistral/voxtral-small-latest": {
       "release_date": "2025-07-15",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-medium-latest": {
       "release_date": "2026-04-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "moonshotai-cn/kimi-k2.6": {
       "release_date": "2026-04-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "moonshotai-cn/kimi-k2.7-code-highspeed": {
       "release_date": "2026-06-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "moonshotai-cn/kimi-k3": {
       "release_date": "2026-07-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "moonshotai-cn/kimi-k2.7-code": {
       "release_date": "2026-06-12",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.8-flash": {
       "release_date": "2026-08-26",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "meta/muse-spark-1.3": {
       "release_date": "2026-09-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "meta/muse-spark-1.3-contributor": {
       "release_date": "2026-09-02",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "deepseek/deepseek-flash": {
       "release_date": "2026-09-10",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-5.3-flashx": {
       "release_date": "2026-09-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zhipuai/glm-4.6v-flash": {
       "release_date": "2025-12-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "xai/grok-4.7": {
       "release_date": "2026-09-21",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 500000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-5.3-flashx": {
       "release_date": "2026-09-18",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "zai/glm-4.6v-flash": {
       "release_date": "2025-12-08",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 128000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-opus-5-5": {
       "featured": true,
       "release_date": "2026-09-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-6-sol": {
       "release_date": "2026-09-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-6-luna": {
       "release_date": "2026-09-22",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-sonnet-5-5": {
       "release_date": "2026-09-28",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.5-flash": {
       "release_date": "2026-02-23",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "alibaba/qwen3.8-omni-flash": {
       "release_date": "2026-09-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "stepfun/step-5-preview": {
       "release_date": "2026-09-16",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-daybreak-blue-latest": {
       "release_date": "2026-08-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-daybreak-red-latest": {
       "release_date": "2026-08-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 400000,
+      "context_window_source": "models.dev"
     },
     "alibaba-cn/qwen3.8-omni-flash": {
       "release_date": "2026-09-17",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "anthropic/claude-haiku-5-5": {
       "release_date": "2026-10-07",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     },
     "mistral/mistral-large-4": {
       "release_date": "2026-10-06",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     },
     "mistral/labs-leanstral-1-5-1": {
       "release_date": "2026-06-30",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
     },
     "openai/gpt-6.1-sol": {
       "featured": true,
       "release_date": "2026-09-29",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1050000,
+      "context_window_source": "models.dev"
     },
     "google/gemini-4-argon": {
       "featured": true,
       "release_date": "2026-10-13",
-      "release_date_source": "models.dev"
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
     }
   }
 }

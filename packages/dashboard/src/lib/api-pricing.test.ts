@@ -66,6 +66,27 @@ it('retains release metadata and source-specific aliases in the catalog', async 
   assert.deepEqual(result.matching, { sourceAlias: { codex: { auto: 'test/new' } } });
 });
 
+it('projects only valid context windows into catalog rows', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
+    exact: {
+      'test/valid': { input: 2, output: 4 },
+      'test/fractional': { input: 1, output: 2 },
+      'test/zero': { input: 0, output: 0 },
+      'test/missing': { input: 3, output: 5 },
+    },
+    model_metadata: {
+      'test/valid': { context_window: 65_536 },
+      'test/fractional': { context_window: 65_536.5 },
+      'test/zero': { context_window: 0 },
+    },
+  })));
+  const result = await fetchPricingCatalog();
+  assert.equal(result.models.find(row => row.model === 'test/valid')?.contextWindow, 65_536);
+  for (const model of ['test/fractional', 'test/zero', 'test/missing']) {
+    assert.equal(result.models.find(row => row.model === model)?.contextWindow, undefined);
+  }
+});
+
 it('keeps a newer bundled catalog instead of replacing it with an older published table', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
     _meta: { generated_at: '2000-01-01T00:00:00.000Z' }, exact: { 'obsolete-only': { input: 1, output: 1 } },

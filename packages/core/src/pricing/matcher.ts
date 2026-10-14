@@ -9,6 +9,8 @@ export interface PricingModelMetadata {
   release_date?: string;
   /** models.dev for synchronized dates; an announcement URL for manual corrections. */
   release_date_source?: string;
+  context_window?: number;
+  context_window_source?: string;
   featured?: boolean;
 }
 

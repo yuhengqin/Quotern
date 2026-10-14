@@ -1,2 +1,6 @@
-// The public, browser-safe price catalog is identical in CLI and Desktop.
-export { PricingPage } from '../../../../../packages/dashboard/src/pages/PricingPage';
+import { PricingPage as SharedPricingPage } from '../../../../../packages/dashboard/src/pages/PricingPage';
+import { fetchModelBreakdown } from '../lib/api';
+
+export function PricingPage() {
+  return <SharedPricingPage loadUsage={fetchModelBreakdown} />;
+}

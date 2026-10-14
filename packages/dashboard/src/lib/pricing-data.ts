@@ -9,6 +9,7 @@ export interface PricingCatalogRow {
   cacheRead: number | null;
   cacheWrite: number | null;
   releaseDate?: string;
+  contextWindow?: number;
   featured?: boolean;
   usageTokens?: number;
 }
@@ -78,17 +79,23 @@ function pricingDataToCatalog(
     generatedAt: typeof generatedAt === 'string' && Number.isFinite(Date.parse(generatedAt)) ? generatedAt : null,
     updatedAt,
     source,
-    models: Object.entries(data.exact).map(([model, rates]) => ({
-      model,
-      input: rates.input ?? null,
-      output: rates.output ?? null,
-      cacheRead: rates.cache_read ?? null,
-      cacheWrite: rates.cache_write ?? null,
-      ...(isModelReleaseDate(data.model_metadata?.[model]?.release_date)
-        ? { releaseDate: data.model_metadata![model]!.release_date } : {}),
-      ...(typeof data.model_metadata?.[model]?.featured === 'boolean'
-        ? { featured: data.model_metadata[model]!.featured } : {}),
-    })).sort((a, b) => a.model.localeCompare(b.model)),
+    models: Object.entries(data.exact).map(([model, rates]) => {
+      const metadata = data.model_metadata?.[model];
+      const contextWindow = metadata?.context_window;
+      return {
+        model,
+        input: rates.input ?? null,
+        output: rates.output ?? null,
+        cacheRead: rates.cache_read ?? null,
+        cacheWrite: rates.cache_write ?? null,
+        ...(isModelReleaseDate(metadata?.release_date)
+          ? { releaseDate: metadata!.release_date } : {}),
+        ...(typeof contextWindow === 'number' && Number.isSafeInteger(contextWindow) && contextWindow > 0
+          ? { contextWindow } : {}),
+        ...(typeof metadata?.featured === 'boolean'
+          ? { featured: metadata.featured } : {}),
+      };
+    }).sort((a, b) => a.model.localeCompare(b.model)),
     ...((data.alias || data.sourceAlias) ? { matching: {
       ...(data.alias ? { alias: data.alias } : {}),
       ...(data.sourceAlias ? { sourceAlias: data.sourceAlias } : {}),

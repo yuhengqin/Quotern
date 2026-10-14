@@ -6,6 +6,7 @@
 @source "../../../../packages/dashboard/src/components/ShareBackgroundPicker.tsx";
 @source "../../../../packages/dashboard/src/components/ShareActivityModal.tsx";
 @source "../../../../packages/dashboard/src/pages/PricingPage.tsx";
+@source "../../../../packages/dashboard/src/components/PricingMoreFilters.tsx";
 @source "../../../../packages/dashboard/src/components/ModelProviderIcon.tsx";
 
 :root {

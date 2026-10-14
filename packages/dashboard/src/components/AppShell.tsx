@@ -28,10 +28,7 @@ export function AppShell() {
         <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
           <Toast.Provider placement="top end" queue={toastQueue} />
           <div className={cn('relative min-h-0 flex-1 overflow-x-hidden overscroll-contain', pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto')}>
-            <div className={cn(
-              'relative mx-auto w-full px-4 py-4 pb-12 sm:py-6 md:px-8',
-              pathname === '/pricing' ? 'max-w-240' : 'max-w-300 2xl:max-w-360',
-            )}>
+            <div className="relative mx-auto w-full max-w-300 px-4 py-4 pb-12 sm:py-6 md:px-8 2xl:max-w-360">
               <main className="min-w-0 w-full"><Outlet /></main>
             </div>
             <BackendConfigModal hideTrigger isOpen={settingsOpen} onOpenChange={setSettingsOpen} />

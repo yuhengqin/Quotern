@@ -4,6 +4,7 @@
 
 ## 工作区与分支
 
+- “并行开发”指已确认有其他会话正在本仓库执行开发任务。仅存在其他 worktree、分支、历史未提交修改或运行中的服务，不足以证明正在并行开发。没有明确的并行开发证据且 main 完全干净时，直接在 main 开发，不因保留的 worktree 另建工作区。main 自身存在未提交修改时，仍按下一条使用独立分支和 worktree；服务归属和隔离规则始终生效。
 - 没有并行开发且 main 工作区完全干净时，直接在 main 开发，无需创建分支或 worktree；否则使用独立分支和 worktree。完全干净指在 main 工作区执行 `git status --porcelain` 输出为空，包括没有已暂存、未暂存修改或未跟踪文件；即使未提交修改与本任务无关，也使用独立分支和 worktree。
 - 操作前确认 `git status --short --branch`、`git worktree list --porcelain` 及当前绝对目录。已有合适且属于本任务的 worktree 时复用。Codex 新分支使用 `codex/<short-desc>`；其他贡献分支按 [CONTRIBUTING.md](../CONTRIBUTING.md#分支规范)。
 - 不在其他会话正在使用的目录切分支、构建、重置、清理文件或安装依赖。不要将多个 worktree 的 `node_modules`、`dist`、`out` 指向同一可写目录；可以使用包管理器的依赖缓存。

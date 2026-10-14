@@ -1,15 +1,18 @@
 # worktree 开发规范
 
-适用于并行分支开发、Git worktree 管理及开发服务的启动、验证和清理。目标是让每个会话独立完成开发，不占用、停止或改写其他会话的资源。
+适用于直接在 main 开发、并行分支开发、Git worktree 管理及开发服务的启动、验证和清理。目标是让每个会话独立完成开发，不占用、停止或改写其他会话的资源。
 
 ## 工作区与分支
 
-- 操作前确认 `git status --short --branch`、`git worktree list --porcelain` 及当前绝对目录。已有合适且属于本任务的 worktree 时复用；独立并行任务使用独立 worktree / 分支。Codex 新分支使用 `codex/<short-desc>`；其他贡献分支按 [CONTRIBUTING.md](../CONTRIBUTING.md#分支规范)。
+- 没有并行开发且 main 工作区完全干净时，直接在 main 开发，无需创建分支或 worktree；否则使用独立分支和 worktree。完全干净指在 main 工作区执行 `git status --porcelain` 输出为空，包括没有已暂存、未暂存修改或未跟踪文件；即使未提交修改与本任务无关，也使用独立分支和 worktree。
+- 操作前确认 `git status --short --branch`、`git worktree list --porcelain` 及当前绝对目录。已有合适且属于本任务的 worktree 时复用。Codex 新分支使用 `codex/<short-desc>`；其他贡献分支按 [CONTRIBUTING.md](../CONTRIBUTING.md#分支规范)。
 - 不在其他会话正在使用的目录切分支、构建、重置、清理文件或安装依赖。不要将多个 worktree 的 `node_modules`、`dist`、`out` 指向同一可写目录；可以使用包管理器的依赖缓存。
 - 不把其他任务的未提交修改纳入自己的提交。合并时确认目标目录及分支归属；若目标目录正被其他会话开发或运行服务，保留自己的可验收分支，等待明确协调后再集成。
 - 清理前检查未提交修改、未推送提交和本任务启动的服务。只删除本任务确认可丢弃的分支或 worktree；Codex 管理的 worktree 使用应用提供的归档工具。
 
 ## 开发入口与端口
+
+服务归属和隔离规则始终生效，包括没有并行开发、直接在 main 开发时。
 
 在各自 worktree 根运行：
 
@@ -62,7 +65,7 @@ pnpm dev:cli:ui
 
 开发实例独立采集，可读取现有本地来源，写入私有数据目录，可能增加扫描负载；不复制正式身份、账号配置或数据库。首次开发目录没有正式实例中的偏好与缓存。Desktop 与 CLI 在同一开发 worktree 内不同时取得 runtime，避免相互接管。
 
-`pnpm start:cli`、`pnpm start:desktop`、包内直接 `start` / `dev` 命令及系统 `quotern service` 不提供上述启动器隔离。并行开发不得用这些入口替代 `pnpm dev:*`；需要验证正式接管 / 系统服务行为时，先明确测试环境和现有服务归属。
+`pnpm start:cli`、`pnpm start:desktop`、包内直接 `start` / `dev` 命令及系统 `quotern service` 不提供上述启动器隔离。开发时不得用这些入口替代 `pnpm dev:*`，包括直接在 main 开发时；需要验证正式接管 / 系统服务行为时，先明确测试环境和现有服务归属。
 
 ## 退出与异常恢复
 
@@ -74,6 +77,6 @@ pnpm dev:cli:ui
 
 ## 验收与文档
 
-验证应使用临时数据目录、受控来源和独立端口。至少覆盖：两实例共存、代理分别指向自身 API、显式端口冲突不影响占用者、重复启动不接管，以及一个实例退出后另一个仍响应。报告区分脚本 / Core 自动化、实际 CLI/Vite 探测和 Electron 实机验证。
+修改开发启动器或运行隔离逻辑时，验证应使用临时数据目录、受控来源和独立端口。至少覆盖：两实例共存、代理分别指向自身 API、显式端口冲突不影响占用者、重复启动不接管，以及一个实例退出后另一个仍响应。报告区分脚本 / Core 自动化、实际 CLI/Vite 探测和 Electron 实机验证。仅修改文档时检查文档差异即可，无需运行这些测试。
 
 AGENTS.md 只保留适用条件、关键禁令和本文引用。普通文档不会因一个链接自动加入 Codex 指令链，所以引用要明确要求在相关操作前读取。官方建议按任务需要引用相关材料，避免每次修改都要求阅读全部文档；见 [OpenAI 关于 AGENTS.md 的建议](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra) 和 [指令加载规则](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。具体目录名和端口策略是本项目约定，并非 Codex 官方强制要求。

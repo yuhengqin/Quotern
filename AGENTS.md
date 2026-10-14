@@ -17,9 +17,11 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 维护注意事项：[架构](docs/architecture-notes.md)、[数据采集与统计](docs/data-notes.md)、[运行维护](docs/runtime-notes.md)、[开发协作](docs/development-notes.md)。
 
-## 并行开发与服务归属
+## 工作区与服务归属
 
-创建、切换、合并或清理 worktree / 分支，以及启动、重启、停止开发服务前，必须阅读并遵守 [worktree 开发规范](docs/worktree-development.md)。开发使用隔离的 `pnpm dev:*` 入口；端口冲突时换端口，不得停止其他会话的服务。只清理本会话可核实归属的进程、文件和分支，归属不明时保留并报告。
+开始开发、操作 worktree / 分支或管理开发服务前，必须阅读并遵守 [worktree 开发规范](docs/worktree-development.md)。没有并行开发且 main 工作区完全干净时，直接在 main 开发；否则使用独立分支和 worktree。
+
+服务归属和隔离规则始终生效，包括直接在 main 开发时：使用隔离的 `pnpm dev:*` 入口；端口冲突不得停止其他会话的服务。只清理本会话可核实归属的进程、文件和分支，归属不明时保留并报告。
 
 ## 开发指南
 

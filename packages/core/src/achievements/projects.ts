@@ -15,7 +15,10 @@ export function resolveAchievementProjects(facts: AchievementFacts, settings: Ac
   const base = new Map<string, AchievementProject>();
   for (const project of facts.projects) {
     const id = canonical(project.id), previous = base.get(id);
-    if (previous) previous.dates = [...new Set([...previous.dates, ...project.dates])].sort();
+    if (previous) {
+      previous.dates = [...new Set([...previous.dates, ...project.dates])].sort();
+      if (project.id === id) { previous.label = project.label; previous.kind = project.kind; }
+    }
     else base.set(id, { ...project, id, dates: [...new Set(project.dates)].sort() });
   }
   for (const badge of historical) if (badge.family === 'project' && badge.scope) {
@@ -23,7 +26,18 @@ export function resolveAchievementProjects(facts: AchievementFacts, settings: Ac
     if (!base.has(id)) base.set(id, { id, label: badge.scopeLabel ?? '历史项目', kind: 'unconfirmed', dates: [] });
   }
   const preferences = new Map<string, AchievementProjectSetting>();
-  for (const setting of settings) preferences.set(canonical(setting.id), setting);
+  // A previously separate directory can become an alias of its manual merge target.
+  // Canonical settings take precedence and identity-induced self-edges disappear.
+  const orderedSettings = [...settings].sort((a, b) => Number(a.id === canonical(a.id)) - Number(b.id === canonical(b.id)));
+  for (const setting of orderedSettings) {
+    const id = canonical(setting.id), normalized = { ...setting, id };
+    if (setting.mergeInto) {
+      const target = canonical(setting.mergeInto);
+      if (target === id && (setting.id !== id || setting.mergeInto !== target)) delete normalized.mergeInto;
+      else normalized.mergeInto = target;
+    }
+    preferences.set(id, normalized);
+  }
   const owner = (input: string) => {
     let id = canonical(input);
     const visited = new Set<string>();
@@ -64,6 +78,8 @@ export function resolveAchievementProjects(facts: AchievementFacts, settings: Ac
   const badge = <T extends AchievementProgress>(item: T): T => item.family === 'project' && item.scope ? {
     ...item, id: badgeId(item.id), scope: owner(item.scope), groupId: 'project-' + owner(item.scope), scopeLabel: label(owner(item.scope)),
   } : item;
+  const dateFor = (project: AchievementProject | undefined, target: number): string | null => project?.dates.filter(date => date <= facts.today)[target - 1] ?? null;
+  const originalDate = (item: AchievementProgress): string | null => item.family === 'project' && item.scope ? dateFor(base.get(canonical(item.scope)), item.target) : null;
   const earned = (items: EarnedAchievement[]): EarnedAchievement[] => {
     const result = new Map<string, EarnedAchievement>();
     for (const original of items) {
@@ -75,8 +91,13 @@ export function resolveAchievementProjects(facts: AchievementFacts, settings: Ac
         snapshot: { ...previous.snapshot, value: Math.max(previous.snapshot.value, item.snapshot.value) },
       });
     }
+    // A combined calendar can reach a target earlier. Apply that date only to the
+    // visible award, so undoing a manual merge restores each original snapshot.
+    for (const item of result.values()) if (item.family === 'project' && item.scope) {
+      item.achievedOn = earlier(item.achievedOn, dateFor(grouped.get(item.scope), item.target));
+    }
     return [...result.values()];
   };
-  return { facts: { ...facts, projects: [...grouped.values()] }, projects, badge, badgeId, earned, canonical };
+  return { facts: { ...facts, projects: [...grouped.values()] }, projects, settings: [...preferences.values()], badge, badgeId, earned, canonical, originalDate };
 }
 export type AchievementProjectResolution = ReturnType<typeof resolveAchievementProjects>;

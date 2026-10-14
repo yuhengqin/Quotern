@@ -130,3 +130,69 @@ test('project merging unions dates and can be undone; aliases keep old showcase 
   assert.equal(restored.earned.find(item => item.scope === other)!.scopeLabel, '另一个 app');
   await assert.rejects(store.update({ operation: 'project', id: root, mergeInto: other } as any).then(() => store.update({ operation: 'project', id: other, mergeInto: root } as any)), /循环/);
 });
+
+test('a later repository alias absorbs an existing manual merge without blocking reads or project settings', async t => {
+  const dir = await directory(t), child = 'a'.repeat(64), root = 'b'.repeat(64);
+  let facts: AchievementFacts = { ...initialFacts(), projects: [
+    { id: child, label: 'src', kind: 'unconfirmed', dates: ['2026-09-01'] },
+    { id: root, label: 'app', kind: 'repository', dates: ['2026-09-01'] },
+  ] };
+  const store = new AchievementStore(dir, async () => facts);
+  await store.update({ operation: 'project', id: child, mergeInto: root, name: '组合项目' });
+  facts = { ...facts, projects: [{ id: root, label: 'app', kind: 'repository', aliases: [child], dates: ['2026-09-01'] }] };
+  const migrated = await store.read();
+  assert.equal(migrated.projects!.length, 1);
+  assert.equal(migrated.projectSettings![0]!.id, root);
+  assert.equal(migrated.projectSettings![0]!.mergeInto, undefined);
+  await store.update({ operation: 'project', id: root, name: '仓库项目', mergeInto: null });
+  assert.equal((await store.read()).projects![0]!.label, '仓库项目');
+});
+
+test('current canonical repository evidence supersedes a previously catalogued unconfirmed subdirectory', async t => {
+  const dir = await directory(t), child = 'a'.repeat(64), root = 'b'.repeat(64);
+  const dates = Array.from({ length: 30 }, (_, i) => '2026-09-' + String(i + 1).padStart(2, '0'));
+  let facts: AchievementFacts = { ...initialFacts(), projects: [{ id: child, label: 'src', dates }] };
+  const store = new AchievementStore(dir, async () => facts);
+  await store.read();
+  facts = { ...facts, projects: [{ id: root, label: 'app', kind: 'repository', aliases: [child], dates }] };
+  const migrated = await store.read(), project = migrated.projects!.find(item => item.id === root)!;
+  assert.equal(project.kind, 'repository');
+  assert.equal(project.confirmed, true);
+  assert.equal(project.label, 'app');
+  assert.equal(migrated.earned.some(item => item.id === 'project-' + root + '-30'), true);
+});
+
+test('undoing a merge restores each original earned date and snapshot instead of persisting the merged date', async t => {
+  const dir = await directory(t), a = 'a'.repeat(64), b = 'b'.repeat(64);
+  const dates = (month: string) => Array.from({ length: 30 }, (_, i) => month + '-' + String(i + 1).padStart(2, '0'));
+  const facts: AchievementFacts = { ...initialFacts(), projects: [{ id: a, label: 'A', kind: 'repository', dates: dates('2026-09') }, { id: b, label: 'B', kind: 'repository', dates: dates('2026-08') }] };
+  const store = new AchievementStore(dir, async () => facts);
+  const original = (await store.read()).earned.filter(item => item.family === 'project');
+  await store.update({ operation: 'project', id: a, mergeInto: b });
+  assert.equal((await store.read()).earned.find(item => item.family === 'project')!.achievedOn, '2026-08-30');
+  await store.update({ operation: 'project', id: a, mergeInto: null });
+  const restored = (await store.read()).earned.filter(item => item.family === 'project');
+  for (const item of original) {
+    const after = restored.find(value => value.id === item.id)!;
+    assert.equal(after.achievedOn, item.achievedOn);
+    assert.deepEqual(after.snapshot, item.snapshot);
+    assert.equal(after.unlockedAt, item.unlockedAt);
+  }
+});
+
+test('a merged project displays the first qualifying union date without changing the separate original dates', async t => {
+  const dir = await directory(t), a = 'a'.repeat(64), b = 'b'.repeat(64);
+  const range = (month: string, start: number) => Array.from({ length: 15 }, (_, i) => month + '-' + String(start + i).padStart(2, '0'));
+  const facts: AchievementFacts = { ...initialFacts(), projects: [
+    { id: a, label: 'A', kind: 'repository', dates: [...range('2026-08', 1), ...range('2026-09', 1)] },
+    { id: b, label: 'B', kind: 'repository', dates: [...range('2026-08', 16), ...range('2026-09', 16)] },
+  ] };
+  const store = new AchievementStore(dir, async () => facts);
+  await store.read();
+  await store.update({ operation: 'project', id: a, mergeInto: b });
+  assert.equal((await store.read()).earned.find(item => item.family === 'project')!.achievedOn, '2026-08-30');
+  await store.update({ operation: 'project', id: a, mergeInto: null });
+  const restored = await store.read();
+  assert.equal(restored.earned.find(item => item.scope === a)!.achievedOn, '2026-09-15');
+  assert.equal(restored.earned.find(item => item.scope === b)!.achievedOn, '2026-09-30');
+});

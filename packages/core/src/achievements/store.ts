@@ -86,13 +86,17 @@ export class AchievementStore {
   private merge(state: StoredAchievements, facts: AchievementFacts, evaluation: AchievementEvaluation, projects: AchievementProjectResolution): void {
     const earned = new Map(state.earned.map(item => [item.id, item]));
     const historical = state.initializedAt === null;
+    for (const previous of state.earned) if (previous.family === 'project') {
+      const achievedOn = projects.originalDate(previous);
+      if (achievedOn && (!previous.achievedOn || achievedOn < previous.achievedOn)) previous.achievedOn = achievedOn;
+    }
     for (const item of evaluation.progress) {
       if (!item.eligible) continue;
       const previous = [...earned.values()].find(value => projects.badgeId(value.id) === item.id);
       if (previous) {
         if (item.family === 'records' && item.value > previous.value) {
           Object.assign(previous, item, { snapshot: { value: item.value, coverageFromDate: facts.coverageFromDate, timeZone: facts.timeZone } });
-        } else if (item.family !== 'records' && item.achievedOn && (!previous.achievedOn || item.achievedOn < previous.achievedOn)) previous.achievedOn = item.achievedOn;
+        } else if (item.family !== 'records' && item.family !== 'project' && item.achievedOn && (!previous.achievedOn || item.achievedOn < previous.achievedOn)) previous.achievedOn = item.achievedOn;
         continue;
       }
       earned.set(item.id, { ...item, ruleVersion: 1, unlockedAt: facts.observedAt, seenAt: null, notifiedAt: null, historical: historical || Boolean(state.initializedAt && item.achievedOn && item.achievedOn < state.initializedAt.slice(0, 10)), snapshot: { value: item.value, coverageFromDate: facts.coverageFromDate, timeZone: facts.timeZone } });
@@ -125,7 +129,7 @@ export class AchievementStore {
     return {
       ...evaluation, progress: [...progress.values()], records: state.records, annual: [...annual.values()].sort((a, b) => b.year - a.year),
       earned, preferences: { ...state.preferences, showcaseIds: [...new Set(state.preferences.showcaseIds.map(projects.badgeId))] }, unreadIds: earned.filter(item => item.seenAt === null).map(item => item.id),
-      projects: projects.projects, projectSettings: state.projectSettings ?? [],
+      projects: projects.projects, projectSettings: projects.settings,
       coverage: { fromDate: facts.coverageFromDate, asOfDate: facts.today, timeZone: facts.timeZone, missingSessionSources: facts.missingSessionSources, projectSources: ['claude', 'codex'] },
     };
   }
@@ -147,6 +151,7 @@ export class AchievementStore {
         catch (reason) { throw new AchievementError(reason instanceof Error ? reason.message : '项目归属无效'); }
       };
       let projects = resolveProjects();
+      if (state.projectSettings !== undefined) state.projectSettings = projects.settings;
       if (operation?.operation === 'project') {
         const id = projects.canonical(operation.id);
         if (!projects.projects.some(item => item.id === id)) throw new AchievementError('项目不存在，请刷新后重试');

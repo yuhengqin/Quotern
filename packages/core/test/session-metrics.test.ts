@@ -18,7 +18,63 @@ test('session metrics deduplicate logical messages and namespace identical sessi
   assert.equal(result.sessionCount, 2);
   assert.equal(result.messageCount, 4);
   assert.equal(result.durationSeconds, 180);
-  assert.equal(result.activeSeconds, null);
+  assert.equal(result.activeSeconds, 0);
+});
+
+test('estimated active time excludes time before the first assistant and idle gaps between prompts', () => {
+  const rows = [
+    message('a4', '2026-10-14T00:10:20Z'),
+    message('u1', '2026-10-14T00:00:00Z', 'user'),
+    message('a2', '2026-10-14T00:00:20Z'),
+    message('a1', '2026-10-14T00:00:10Z'),
+    message('u2', '2026-10-14T00:10:00Z', 'user'),
+    message('a3', '2026-10-14T00:10:05Z'),
+    message('a2', '2026-10-14T00:00:25Z'),
+  ];
+  const result = aggregateSessionMetrics(rows);
+  assert.equal(result.activeSeconds, 30); // 10→25 and 605→620 seconds.
+  assert.equal(result.messageCount, 6);
+  assert.equal(result.durationSeconds, 620);
+});
+
+test('estimated assistant spans are isolated by source and session including leading assistant records', () => {
+  const rows = [
+    message('a1', '2026-10-14T00:00:10Z'),
+    message('a2', '2026-10-14T00:00:30Z'),
+    message('u1', '2026-10-14T00:00:00Z', 'user', 'claude'),
+    message('a1', '2026-10-14T00:00:05Z', 'assistant', 'claude'),
+    message('a2', '2026-10-14T00:00:35Z', 'assistant', 'claude'),
+    message('a1', '2026-10-14T00:00:15Z', 'assistant', 'codex', 's2'),
+    message('a2', '2026-10-14T00:00:25Z', 'assistant', 'codex', 's2'),
+  ];
+  assert.equal(aggregateSessionMetrics(rows).activeSeconds, 60);
+  assert.equal(aggregateSessionMetrics(rows, { sources: ['claude'] }).activeSeconds, 30);
+});
+
+test('estimated active time only uses assistant records within the selected local date range', () => {
+  const rows = [
+    message('u1', '2026-10-13T15:50:00Z', 'user'),
+    message('a1', '2026-10-13T15:55:00Z'),
+    message('a2', '2026-10-13T16:02:00Z'),
+    message('a3', '2026-10-13T16:10:00Z'),
+    message('u2', '2026-10-14T16:00:00Z', 'user'),
+    message('a4', '2026-10-14T16:05:00Z'),
+    message('a5', '2026-10-14T16:15:00Z'),
+  ];
+  const result = aggregateSessionMetrics(rows, { fromDate: '2026-10-14', toDate: '2026-10-14', timeZone: 'Asia/Shanghai' });
+  assert.equal(result.activeSeconds, 480);
+  assert.equal(result.messageCount, 2);
+});
+
+test('single-record turns and known empty histories have zero estimated span', () => {
+  const rows = [
+    message('u1', '2026-10-14T00:00:00Z', 'user'),
+    message('a1', '2026-10-14T00:01:00Z'),
+    message('u2', '2026-10-14T01:00:00Z', 'user'),
+    message('a2', '2026-10-14T01:02:00Z'),
+  ];
+  assert.equal(aggregateSessionMetrics(rows).activeSeconds, 0);
+  assert.equal(aggregateSessionMetrics([]).activeSeconds, 0);
 });
 
 test('session range filters use local dates and count a cross-day session once', () => {
@@ -183,7 +239,7 @@ test('session API validates bounds/sources and returns persisted metadata withou
   assert.equal(body.data.sessionCount, 1);
   assert.equal(body.data.messageCount, 2);
   assert.equal(body.data.durationSeconds, 60);
-  assert.equal(body.data.activeSeconds, null);
+  assert.equal(body.data.activeSeconds, 0);
   assert.equal((await app.request('/functions/tud-usage-sessions?fromDate=2026-02-30&toDate=2026-03-01')).status, 400);
   assert.equal((await app.request('/functions/tud-usage-sessions?sources=../../private')).status, 400);
 });

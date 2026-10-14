@@ -13,7 +13,7 @@ export interface SessionMetrics {
   sessionCount: number;
   messageCount: number;
   durationSeconds: number;
-  /** Null until a source supplies verified generation timing, excluding TTFT. */
+  /** Estimated assistant-record spans per turn; null when no session coverage is available. */
   activeSeconds: number | null;
   complete: boolean;
   missingSources: string[];
@@ -25,6 +25,27 @@ export interface SessionMetricOptions {
   sources?: readonly string[];
   missingSources?: readonly string[];
   timeZone?: string;
+}
+
+/** Assistant timestamps approximate a turn, including any tool waits between records. */
+function estimateActiveSeconds(messages: readonly SessionMessage[]): number {
+  const ordered = messages.map((message) => ({ role: message.role, stamp: Date.parse(message.timestamp) }))
+    .sort((a, b) => a.stamp - b.stamp || (a.role === b.role ? 0 : a.role === 'user' ? -1 : 1));
+  let activeSeconds = 0;
+  let turnStart: number | null = null;
+  let turnEnd = 0;
+  for (const message of ordered) {
+    if (message.role === 'user') {
+      if (turnStart !== null) activeSeconds += Math.round((turnEnd - turnStart) / 1000);
+      turnStart = null;
+    } else {
+      // A date filter can leave only the assistant portion of the first turn.
+      turnStart ??= message.stamp;
+      turnEnd = message.stamp;
+    }
+  }
+  if (turnStart !== null) activeSeconds += Math.round((turnEnd - turnStart) / 1000);
+  return activeSeconds;
 }
 
 /** Distinct sessions are counted over the whole range, never summed by day. */
@@ -43,24 +64,26 @@ export function aggregateSessionMetrics(
     // supplies the message time; it never increments the logical count again.
     if (!previous || message.timestamp > previous.timestamp) unique.set(key, message);
   }
-  const sessions = new Map<string, { first: number; last: number; count: number }>();
+  const sessions = new Map<string, { first: number; last: number; messages: SessionMessage[] }>();
   for (const message of unique.values()) {
     const date = localDateAndHour(message.timestamp, options.timeZone ?? DEFAULT_STATS_TIMEZONE).date;
     if (options.fromDate && date < options.fromDate) continue;
     if (options.toDate && date > options.toDate) continue;
     const key = JSON.stringify([message.source, message.sessionId]);
     const stamp = Date.parse(message.timestamp);
-    const session = sessions.get(key) ?? { first: stamp, last: stamp, count: 0 };
+    const session = sessions.get(key) ?? { first: stamp, last: stamp, messages: [] };
     session.first = Math.min(session.first, stamp);
     session.last = Math.max(session.last, stamp);
-    session.count++;
+    session.messages.push(message);
     sessions.set(key, session);
   }
   let messageCount = 0;
   let durationMs = 0;
+  let activeSeconds = 0;
   for (const session of sessions.values()) {
-    messageCount += session.count;
+    messageCount += session.messages.length;
     durationMs += session.last - session.first;
+    activeSeconds += estimateActiveSeconds(session.messages);
   }
   const missingSources = [...new Set(options.missingSources ?? [])]
     .filter((source) => !selected || selected.has(source)).sort();
@@ -68,7 +91,7 @@ export function aggregateSessionMetrics(
     sessionCount: sessions.size,
     messageCount,
     durationSeconds: Math.round(durationMs / 1000),
-    activeSeconds: null,
+    activeSeconds: sessions.size === 0 && missingSources.length > 0 ? null : activeSeconds,
     complete: missingSources.length === 0,
     missingSources,
   };

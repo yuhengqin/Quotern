@@ -5,6 +5,8 @@ import type {
   UsageSummary,
 } from './api.ts';
 import { localDateDaysAgo, localDateNow } from './stats-timezone.ts';
+import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
+import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
 
 export type TimeRangeKey = 'week' | 'month' | 'all';
 
@@ -86,7 +88,12 @@ function buildBySourceFromModels(
   type Acc = {
     tokens: number;
     costUsd: number;
-    models: Map<string, { tokens: number; costUsd: number }>;
+    metricParts: (LocalUsageMetrics | undefined)[];
+    models: Map<string, {
+      tokens: number;
+      costUsd: number;
+      metricParts: (LocalUsageMetrics | undefined)[];
+    }>;
   };
   const map = new Map<string, Acc>();
 
@@ -94,14 +101,16 @@ function buildBySourceFromModels(
     if (row.tokens <= 0) continue;
     let src = map.get(row.source);
     if (!src) {
-      src = { tokens: 0, costUsd: 0, models: new Map() };
+      src = { tokens: 0, costUsd: 0, metricParts: [], models: new Map() };
       map.set(row.source, src);
     }
     src.tokens += row.tokens;
     src.costUsd += row.costUsd;
-    const m = src.models.get(row.model) ?? { tokens: 0, costUsd: 0 };
+    src.metricParts.push(row.localMetrics);
+    const m = src.models.get(row.model) ?? { tokens: 0, costUsd: 0, metricParts: [] };
     m.tokens += row.tokens;
     m.costUsd += row.costUsd;
+    m.metricParts.push(row.localMetrics);
     src.models.set(row.model, m);
   }
 
@@ -113,12 +122,14 @@ function buildBySourceFromModels(
   return Array.from(map.entries())
     .map(([source, v]) => ({
       source,
+      localMetrics: mergeCompleteLocalMetrics(v.metricParts),
       tokens: v.tokens,
       costUsd: Math.round(v.costUsd * 1e8) / 1e8,
       pct: grand > 0 ? Math.round((v.tokens / grand) * 1000) / 10 : 0,
       models: Array.from(v.models.entries())
         .map(([model, m]) => ({
           model,
+          localMetrics: mergeCompleteLocalMetrics(m.metricParts),
           tokens: m.tokens,
           costUsd: Math.round(m.costUsd * 1e8) / 1e8,
           pct: v.tokens > 0 ? Math.round((m.tokens / v.tokens) * 1000) / 10 : 0,

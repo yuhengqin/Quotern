@@ -1,10 +1,12 @@
-import { memo, useMemo, useState } from 'react';
-import { Button, Card, Modal } from '@heroui/react';
+import { memo, useMemo, useRef, useState } from 'react';
+import { Button, Card, Modal, Tooltip } from '@heroui/react';
+import { UNSAFE_PortalProvider } from 'react-aria/PortalProvider';
 import { Cell, Pie, PieChart } from 'recharts';
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  CHART_TOOLTIP_SURFACE_CLASSNAME,
   type ChartConfig,
 } from '@/components/ChartPrimitives';
 import { DashboardMetricTabs } from '@/components/DashboardMetricTabs';
@@ -35,6 +37,7 @@ export const UsageDistributionCard = memo(function UsageDistributionCard({
     useState<DashboardDistributionMetric>('tokens');
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [isAllOpen, setIsAllOpen] = useState(false);
+  const tooltipContainerRef = useRef<HTMLDivElement>(null);
 
   const { chartConfig, chartRows } = useMemo(
     () => buildDistributionView(rows, metric),
@@ -182,23 +185,29 @@ export const UsageDistributionCard = memo(function UsageDistributionCard({
       <Modal isOpen={isAllOpen} onOpenChange={setIsAllOpen}>
         <Modal.Backdrop>
           <Modal.Container size="md">
-            <Modal.Dialog>
-              <Modal.CloseTrigger aria-label="关闭" />
-              <Modal.Header>
-                <Modal.Heading>{title}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <div className="max-h-[60vh] overflow-y-auto">
-                  <DistributionRowList
-                    metric={metric}
-                    rows={chartRows}
-                    hiddenIds={hiddenIds}
-                    visibleTotal={visibleTotal}
-                    onToggle={toggleRow}
-                  />
-                </div>
-              </Modal.Body>
-            </Modal.Dialog>
+            {/* Keep tooltips inside the active modal, outside its clipped dialog. */}
+            <div className="contents" ref={tooltipContainerRef}>
+              <Modal.Dialog>
+                <Modal.CloseTrigger aria-label="关闭" />
+                <Modal.Header>
+                  <Modal.Heading>{title}</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body>
+                  <UNSAFE_PortalProvider getContainer={() => tooltipContainerRef.current}>
+                    <div className="max-h-[60vh] overflow-y-auto">
+                      <DistributionRowList
+                        showDetails
+                        metric={metric}
+                        rows={chartRows}
+                        hiddenIds={hiddenIds}
+                        visibleTotal={visibleTotal}
+                        onToggle={toggleRow}
+                      />
+                    </div>
+                  </UNSAFE_PortalProvider>
+                </Modal.Body>
+              </Modal.Dialog>
+            </div>
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
@@ -207,12 +216,14 @@ export const UsageDistributionCard = memo(function UsageDistributionCard({
 });
 
 function DistributionRowList({
+  showDetails = false,
   metric,
   rows,
   hiddenIds,
   visibleTotal,
   onToggle,
 }: {
+  showDetails?: boolean;
   metric: DashboardDistributionMetric;
   rows: Array<DashboardDistributionRow & { value: number }>;
   hiddenIds: Set<string>;
@@ -229,37 +240,101 @@ function DistributionRowList({
             : 0;
 
         return (
-          <button
-            className={cn(
-              'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md px-1 py-1.5 text-left text-xs transition-opacity',
-              hidden
-                ? 'opacity-40 text-muted'
-                : 'text-foreground hover:bg-surface-secondary',
-            )}
+          <Tooltip
+            closeDelay={120}
+            delay={250}
+            isDisabled={!showDetails}
             key={row.id}
-            title={hidden ? `显示 ${row.label}` : `隐藏 ${row.label}`}
-            type="button"
-            onClick={() => onToggle(row.id)}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: hidden ? 'var(--muted)' : row.color }}
-              />
-              <span className={cn('truncate', hidden && 'line-through')}>
-                {row.label}
+            <Tooltip.Trigger<'button'>
+              render={(props) => <button {...props} />}
+              aria-label={hidden ? `显示 ${row.label}` : `隐藏 ${row.label}`}
+              aria-pressed={!hidden}
+              className={cn(
+                'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md px-1 py-1.5 text-left text-xs transition-opacity',
+                hidden
+                  ? 'opacity-40 text-muted'
+                  : 'text-foreground hover:bg-surface-secondary',
+              )}
+              title={showDetails ? undefined : hidden ? `显示 ${row.label}` : `隐藏 ${row.label}`}
+              type="button"
+              onClick={() => onToggle(row.id)}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: hidden ? 'var(--muted)' : row.color }}
+                />
+                <span className={cn('truncate', hidden && 'line-through')}>
+                  {row.label}
+                </span>
+              </div>
+              <span className="text-right font-medium tabular-nums">
+                {formatDashboardMetric(metric, row.value)}
               </span>
-            </div>
-            <span className="text-right font-medium tabular-nums">
-              {formatDashboardMetric(metric, row.value)}
-            </span>
-            <span className="w-11 text-right text-muted tabular-nums">
-              {hidden ? '—' : `${percentage.toFixed(1)}%`}
-            </span>
-          </button>
+              <span className="w-11 text-right text-muted tabular-nums">
+                {hidden ? '—' : `${percentage.toFixed(1)}%`}
+              </span>
+            </Tooltip.Trigger>
+            {showDetails ? (
+              <Tooltip.Content
+                className={cn(
+                  'pointer-events-auto z-[100] w-64 max-w-[calc(100vw-24px)] p-3 text-xs',
+                  CHART_TOOLTIP_SURFACE_CLASSNAME,
+                )}
+                containerPadding={12}
+                offset={8}
+                placement="top"
+              >
+                <DistributionRowDetails row={row} />
+              </Tooltip.Content>
+            ) : null}
+          </Tooltip>
         );
       })}
+    </div>
+  );
+}
+
+function DistributionRowDetails({ row }: { row: DashboardDistributionRow }) {
+  const metrics = row.localMetrics;
+  const details = [
+    ['输入（未缓存）', metrics?.uncachedInputTokens],
+    ['缓存读取', metrics?.cacheReadTokens],
+    ['缓存写入', metrics?.cacheWriteTokens],
+    ['输出', metrics?.outputTokens],
+    ['推理', metrics?.reasoningOutputTokens],
+  ] as const;
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-start gap-2">
+        <span
+          aria-hidden="true"
+          className="mt-1 size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: row.color }}
+        />
+        <span className="min-w-0 break-all font-semibold">{row.label}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-2 gap-y-1 text-muted tabular-nums">
+        <span>{formatDashboardMetric('tokens', row.tokens)} Token</span>
+        <span>·</span>
+        <span>预估费用 {formatDashboardMetric('cost', row.costUsd)}</span>
+      </div>
+      <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1.5 border-t border-border/60 pt-2.5">
+        {details.map(([label, value]) => (
+          <div className="contents" key={label}>
+            <dt className="text-muted">{label}</dt>
+            <dd className="text-right font-medium tabular-nums">
+              {value == null ? '—' : formatDashboardMetric('tokens', value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {details.some(([, value]) => value == null) ? (
+        <p className="text-[10px] text-muted">— 表示该明细暂未提供</p>
+      ) : null}
     </div>
   );
 }

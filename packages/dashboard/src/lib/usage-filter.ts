@@ -1,4 +1,6 @@
 import { parseDailyModelKey } from 'quotern-core/daily-model-key';
+import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
+import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
 import { addLocalDays } from 'quotern-core/timezone';
 import { chartColor } from './chart-data.ts';
 import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
@@ -484,6 +486,7 @@ export function buildToolModelDistributions(
 
   const tools: DashboardDistributionRow[] = activeTools.map((row, index) => ({
     id: row.source,
+    localMetrics: row.localMetrics,
     label: sourceLabel(row.source),
     color: chartColor(index),
     tokens: row.tokens,
@@ -491,13 +494,18 @@ export function buildToolModelDistributions(
     durationMinutes: 0,
   }));
 
-  const modelTotals = new Map<string, { tokens: number; costUsd: number }>();
+  const modelTotals = new Map<string, {
+    tokens: number;
+    costUsd: number;
+    metricParts: (LocalUsageMetrics | undefined)[];
+  }>();
   for (const tool of activeTools) {
     for (const model of tool.models) {
       if (!model.model || model.tokens <= 0) continue;
-      const entry = modelTotals.get(model.model) ?? { tokens: 0, costUsd: 0 };
+      const entry = modelTotals.get(model.model) ?? { tokens: 0, costUsd: 0, metricParts: [] };
       entry.tokens += model.tokens;
       entry.costUsd += model.costUsd;
+      entry.metricParts.push(model.localMetrics);
       modelTotals.set(model.model, entry);
     }
   }
@@ -506,6 +514,7 @@ export function buildToolModelDistributions(
     .sort(([, a], [, b]) => b.tokens - a.tokens)
     .map(([model, usage], index) => ({
       id: model,
+      localMetrics: mergeCompleteLocalMetrics(usage.metricParts),
       label: model,
       color: chartColor(index),
       tokens: usage.tokens,

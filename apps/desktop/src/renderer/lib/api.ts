@@ -1,6 +1,7 @@
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 
 export interface ModelUsageRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   tokens: number;
   costUsd: number;
@@ -110,6 +111,7 @@ async function transportRequest<T>(
 }
 
 export interface SourceUsageRow {
+  localMetrics?: LocalUsageMetrics;
   source: string;
   tokens: number;
   costUsd: number;
@@ -176,6 +178,7 @@ export interface HourlyUsageResponse {
 }
 
 export interface ModelBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   source: string;
   tokens: number;

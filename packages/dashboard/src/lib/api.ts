@@ -32,6 +32,7 @@ export interface LeaderboardFilters {
 }
 
 export interface ModelUsageRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   tokens: number;
   costUsd: number;
@@ -77,6 +78,7 @@ export async function request<T>(input: string, init?: RequestInit): Promise<T> 
 }
 
 export interface SourceUsageRow {
+  localMetrics?: LocalUsageMetrics;
   source: string;
   tokens: number;
   costUsd: number;
@@ -143,6 +145,7 @@ export interface HourlyUsageResponse {
 }
 
 export interface ModelBreakdownRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   source: string;
   tokens: number;

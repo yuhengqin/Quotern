@@ -1,4 +1,6 @@
 import { normalizeProjectName } from 'quotern-core/project-label';
+import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
+import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
 import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
 
 /** Presentation model shared by server-backed dashboard components. */
@@ -100,6 +102,7 @@ export interface DashboardMetricTrends {
 }
 
 export interface DashboardDistributionRow {
+  localMetrics?: LocalUsageMetrics;
   id: string;
   label: string;
   color: string;
@@ -116,6 +119,7 @@ export interface DashboardDistributions {
 }
 
 export interface DashboardModelUsageRow {
+  localMetrics?: LocalUsageMetrics;
   model: string;
   tokens: number;
   costUsd: number;
@@ -131,6 +135,7 @@ export interface DashboardProjectModelUsageRow {
 }
 
 export interface DashboardToolUsageRow {
+  localMetrics?: LocalUsageMetrics;
   source: string;
   tokens: number;
   costUsd: number;
@@ -148,10 +153,11 @@ export interface DashboardProjectUsageRow {
 }
 
 export interface DashboardToolUsageInput {
+  localMetrics?: LocalUsageMetrics;
   source: string;
   tokens: number;
   costUsd: number;
-  models: Array<{ model: string; tokens: number; costUsd: number }>;
+  models: Array<{ model: string; tokens: number; costUsd: number; localMetrics?: LocalUsageMetrics }>;
 }
 
 export interface DashboardMockData {
@@ -197,23 +203,27 @@ export const emptyDashboardData: DashboardMockData = {
 };
 
 export function buildToolModelUsage(rows: DashboardToolUsageInput[], totalTokens = 0): DashboardToolUsageRow[] {
-  const tools = new Map<string, { tokens: number; costUsd: number; models: Map<string, { tokens: number; costUsd: number }> }>();
+  type Totals = { tokens: number; costUsd: number; metricParts: (LocalUsageMetrics | undefined)[] };
+  const tools = new Map<string, Totals & { models: Map<string, Totals> }>();
   for (const row of rows) {
     if (!row.source || row.tokens <= 0) continue;
-    const tool = tools.get(row.source) ?? { tokens: 0, costUsd: 0, models: new Map() };
+    const tool = tools.get(row.source) ?? { tokens: 0, costUsd: 0, metricParts: [] as (LocalUsageMetrics | undefined)[], models: new Map() };
     tool.tokens += row.tokens;
     tool.costUsd += row.costUsd;
+    tool.metricParts.push(row.localMetrics);
     for (const model of row.models) {
-      const current = tool.models.get(model.model) ?? { tokens: 0, costUsd: 0 };
+      const current = tool.models.get(model.model) ?? { tokens: 0, costUsd: 0, metricParts: [] };
       current.tokens += model.tokens;
       current.costUsd += model.costUsd;
+      current.metricParts.push(model.localMetrics);
       tool.models.set(model.model, current);
     }
     tools.set(row.source, tool);
   }
   return [...tools.entries()].map(([source, tool]) => ({
+    localMetrics: mergeCompleteLocalMetrics(tool.metricParts),
     source, tokens: tool.tokens, costUsd: Math.round(tool.costUsd * 100) / 100, pct: totalTokens > 0 ? (tool.tokens / totalTokens) * 100 : 0,
-    models: [...tool.models.entries()].map(([model, usage]) => ({ model, tokens: usage.tokens, costUsd: Math.round(usage.costUsd * 100) / 100, pct: tool.tokens > 0 ? (usage.tokens / tool.tokens) * 100 : 0 })),
+    models: [...tool.models.entries()].map(([model, usage]) => ({ model, localMetrics: mergeCompleteLocalMetrics(usage.metricParts), tokens: usage.tokens, costUsd: Math.round(usage.costUsd * 100) / 100, pct: tool.tokens > 0 ? (usage.tokens / tool.tokens) * 100 : 0 })),
   })).sort((a, b) => b.tokens - a.tokens);
 }
 

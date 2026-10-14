@@ -141,9 +141,7 @@ export function buildDashboardDataFromDataset(
   const allDailyUsage = selectedApiDays.map(normalizeDailyRow);
   const heatmapDailyUsage = heatmapApiDays.map(normalizeDailyRow);
   const heatmapDays = heatmapApiDays.map((row) => ({
-    date: row.date,
-    tokens: row.tokens,
-    costUsd: row.costUsd,
+    ...row,
     models: row.models ?? {},
     projects: row.projects,
   }));
@@ -315,6 +313,18 @@ export function projectDashboardForDate(
   const modelRows = buildModelRowsFromDailyModels(dayApi, sourceFallback);
   const projectRows = buildProjectRowsFromDaily(dayApi, sourceFallback);
   const rangeSummary = buildSummaryFromRange([dayApi], modelRows, '');
+  // Daily payloads contain source evidence but only token totals per model.
+  // Never reuse the range's model breakdown for a single-day projection.
+  const daySources = new Map(dayApi.sources?.map((row) => [row.source, row]));
+  const sourceRows = rangeSummary.bySource.map((row) => {
+    const dailySource = daySources.get(row.source);
+    return {
+      ...row,
+      localMetrics: dailySource?.tokens === row.tokens
+        ? dailySource.localMetrics
+        : undefined,
+    };
+  });
   const summary = aggregateDailyRows([dailyRow]);
   const today = localDateNow();
   const upToHour = date === today ? localHourNow() : undefined;
@@ -333,13 +343,13 @@ export function projectDashboardForDate(
     hourlyUsage: [],
     changes: buildMetricChanges([dailyRow]),
     distributions: buildDistributions(
-      rangeSummary.bySource,
+      sourceRows,
       modelRows,
       projectRows,
       summary,
     ),
     toolModelUsage: buildToolModelUsage(
-      rangeSummary.bySource,
+      sourceRows,
       summary.totalTokens,
     ),
     projectModelUsage: buildProjectModelUsage(

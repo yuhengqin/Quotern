@@ -14,6 +14,7 @@ import {
   createApplyAfterSync,
   createLocalApiApp,
   DEFAULT_DATA_DIR,
+  isIsolatedDevRuntime,
   evictRuntimeKind,
   getHookStatus,
   getRunningOwner,
@@ -285,7 +286,7 @@ async function startLocalRuntimeUnlocked(): Promise<{
   lastCorruptRecovery = recoveredFromCorrupt;
   await touchStatsSince(dir, config);
 
-  const claim = await claimRuntimeOwner(dir, { kind: 'desktop', force: true });
+  const claim = await claimRuntimeOwner(dir, { kind: 'desktop', force: !isIsolatedDevRuntime() });
   if (claim.role !== 'owner') {
     throw new Error('无法抢占本地 runtime');
   }

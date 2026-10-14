@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 
-import { DEFAULT_DATA_DIR, heartbeatPath } from './paths.js';
+import { DEFAULT_DATA_DIR, heartbeatPath, isIsolatedDevRuntime } from './paths.js';
 import {
   argsMatchRuntimeKind,
   clearPid,
@@ -174,6 +174,8 @@ function descendantPids(
 function looksLikeDevTooling(args: string): boolean {
   const lower = args.toLowerCase();
   return (
+    lower.includes('--quotern-dev-instance') ||
+    /[\\/]scripts[\\/]dev\.mjs(?:["\s]|$)/.test(lower) ||
     lower.includes('electron-vite') ||
     lower.includes('/vite.js') ||
     lower.includes('\\vite.js') ||
@@ -217,6 +219,7 @@ export async function evictRuntimeKind(
   kind: RuntimeKind,
   opts?: { exceptPid?: number; dataDir?: string },
 ): Promise<number[]> {
+  if (isIsolatedDevRuntime()) return [];
   const exceptPid = opts?.exceptPid ?? process.pid;
   const dataDir = opts?.dataDir ?? DEFAULT_DATA_DIR;
   const snapshots = listProcessSnapshots();

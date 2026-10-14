@@ -539,4 +539,14 @@ process.on('SIGTERM', () => {
   void shutdownFromSignal();
 });
 
+if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.send) {
+  process.on('message', (message: unknown) => {
+    if (message && typeof message === 'object' && 'type' in message && message.type === 'quotern-dev-stop') {
+      // Keep the parent alive after cleanup so the supervisor can terminate its
+      // owned tree on Windows, including any remaining native helper processes.
+      void cmdStop().then(() => process.send?.({ type: 'quotern-dev-stopped' }));
+    }
+  });
+}
+
 main();

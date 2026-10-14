@@ -45,3 +45,24 @@ test('existing Quotern profile keeps preferences, update state and session direc
   assert.equal(readFileSync(join(profile, 'desktop-prefs.json'), 'utf8'), '{"theme":"dark"}');
   assert.equal(readFileSync(join(profile, 'auto-update.json'), 'utf8'), '{"version":"0.1.13"}');
 });
+
+test('development profile is selected before the single-instance lock and preserves production prefs', (t) => {
+  const f = fixture(t);
+  configureQuoternAppIdentity(f.app);
+  const original = f.result().userData;
+  writeFileSync(join(original, 'desktop-prefs.json'), 'production-prefs');
+  const previous = process.env.QUOTERN_DESKTOP_USER_DATA;
+  const previousMode = process.env.QUOTERN_DEV_ISOLATED;
+  t.after(() => {
+    if (previous == null) delete process.env.QUOTERN_DESKTOP_USER_DATA;
+    else process.env.QUOTERN_DESKTOP_USER_DATA = previous;
+    if (previousMode == null) delete process.env.QUOTERN_DEV_ISOLATED;
+    else process.env.QUOTERN_DEV_ISOLATED = previousMode;
+  });
+  process.env.QUOTERN_DEV_ISOLATED = '1';
+  process.env.QUOTERN_DESKTOP_USER_DATA = join(f.base, 'isolated-profile');
+  configureQuoternAppIdentity(f.app);
+  assert.equal(f.result().userData, join(f.base, 'isolated-profile'));
+  assert.equal(f.result().sessionData, join(f.base, 'isolated-profile'));
+  assert.equal(readFileSync(join(original, 'desktop-prefs.json'), 'utf8'), 'production-prefs');
+});

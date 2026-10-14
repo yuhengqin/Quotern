@@ -17,6 +17,10 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 维护注意事项：[架构](docs/architecture-notes.md)、[数据采集与统计](docs/data-notes.md)、[运行维护](docs/runtime-notes.md)、[开发协作](docs/development-notes.md)。
 
+## 并行开发与服务归属
+
+创建、切换、合并或清理 worktree / 分支，以及启动、重启、停止开发服务前，必须阅读并遵守 [worktree 开发规范](docs/worktree-development.md)。开发使用隔离的 `pnpm dev:*` 入口；端口冲突时换端口，不得停止其他会话的服务。只清理本会话可核实归属的进程、文件和分支，归属不明时保留并报告。
+
 ## 开发指南
 
 发布产物需要 Node.js >= 20.10；仓库开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `pnpm install`，pnpm 版本以根 `package.json` 为准。
@@ -55,7 +59,7 @@ pnpm install
 
 ## Dashboard 进 CLI 包
 
-`pnpm start:cli` 先执行 `pnpm build:cli` 再托管 dist。直接运行已构建的 CLI 包时，修改 Dashboard 后需要重新构建。`pnpm dev:cli` 提供 Vite HMR（面板开 `:5194`）。
+`pnpm start:cli` 先执行 `pnpm build:cli` 再托管 dist，使用正式运行数据。直接运行已构建的 CLI 包时，修改 Dashboard 后需要重新构建。并行开发使用 `pnpm dev:cli`，提供 Vite HMR 与独立 CLI；实际端口、数据目录和会话归属见启动输出及 `pnpm dev:status`。
 
 CLI 构建固定 `VITE_BASE=/`。子路径在构建环境注入 `PUBLIC_PATH` / `VITE_BASE`；写进已提交的 `.env.development` / `.env.production` 会打进 CLI 包。
 

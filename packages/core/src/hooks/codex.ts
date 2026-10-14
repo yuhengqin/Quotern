@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 
 import { writeNotifyScript } from './claude.js';
 import { isCodexHooksJsonConfigured, upsertCodexHooksJson } from './codex-hooks-json.js';
-import { codexConfigPath, codexNotifyOriginalPath } from '../paths.js';
+import { codexConfigPath, codexNotifyOriginalPath, isIsolatedDevRuntime } from '../paths.js';
 
 function parseTomlStringArray(rhs: string): string[] | null {
   const trimmed = rhs.trim();
@@ -215,6 +215,7 @@ export function isLegacyCodexNotifyCmd(notify: string[] | null, notifyPath: stri
 }
 
 async function upsertCodexNotify(notifyPath: string, dataDir: string): Promise<{ changed: boolean; configured: boolean }> {
+  if (isIsolatedDevRuntime()) return { changed: false, configured: false };
   const configPath = codexConfigPath();
   if (!existsSync(configPath)) {
     return { changed: false, configured: false };

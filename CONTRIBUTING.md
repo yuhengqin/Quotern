@@ -27,6 +27,8 @@ pnpm install
 
 从 `main` 拉分支，PR 回 `main`。
 
+多 worktree 并行开发及服务归属见 [worktree 开发规范](./docs/worktree-development.md)。Codex 独立任务分支使用 `codex/<short-desc>`；不要切换其他会话的工作区或停止其开发服务。
+
 ## 提 Issue
 
 先按场景选对入口：
@@ -110,14 +112,15 @@ pnpm start:desktop
 ```bash
 pnpm install
 pnpm start:cli        # 构建后启动，面板 http://127.0.0.1:8452
-pnpm dev:cli          # CLI API :8452 + Vite HMR :5194（开发请打开 5194）
+pnpm dev:cli          # 独立 CLI API + Vite HMR（实际地址见启动输出）
+pnpm dev:status       # 只读查看当前 worktree 的端口与会话归属
 ```
 
 根命令 `start:cli` 会先执行 `build:cli`；直接运行 CLI 包的 `start` 命令时，修改 UI 后需要先重新构建。
 
 ### Dashboard 开发
 
-本地浏览器面板通过 CLI 提供数据。执行 `pnpm dev:cli`，打开 Vite 的本地地址即可调试。
+本地浏览器面板通过 CLI 提供数据。执行 `pnpm dev:cli`，打开启动输出中的 Vite 地址即可调试。开发数据保存在当前 worktree 的 `.quotern-dev/`，不接管正式 `~/.ai-usage/` runtime。
 
 ## 发版
 

@@ -1,8 +1,33 @@
 import { homedir, platform } from 'node:os';
-import { join, basename, delimiter, isAbsolute } from 'node:path';
+import { join, basename, delimiter, isAbsolute, relative, resolve } from 'node:path';
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 
-export const DEFAULT_DATA_DIR = join(homedir(), '.ai-usage');
+export function isIsolatedDevRuntime(): boolean {
+  return process.env.QUOTERN_DEV_ISOLATED === '1';
+}
+
+function defaultDataDir(): string {
+  const production = join(homedir(), '.ai-usage');
+  if (!isIsolatedDevRuntime()) return production;
+  const dataDir = process.env.QUOTERN_DATA_DIR?.trim();
+  const configHome = process.env.QUOTERN_CONFIG_HOME?.trim();
+  const base = platform() === 'win32'
+    ? process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming')
+    : process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config');
+  const related = (a: string, b: string) => {
+    const rel = relative(resolve(a), resolve(b));
+    return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${platform() === 'win32' ? '\\' : '/'}`));
+  };
+  const productionConfig = join(base, 'quotern');
+  if (!dataDir || !isAbsolute(dataDir) || !configHome || !isAbsolute(configHome)
+    || related(dataDir, production) || related(production, dataDir)
+    || related(configHome, productionConfig) || related(productionConfig, configHome)) {
+    throw new Error('隔离开发模式必须提供独立的绝对 QUOTERN_DATA_DIR 和 QUOTERN_CONFIG_HOME；请使用 pnpm dev:cli / dev:desktop');
+  }
+  return dataDir;
+}
+
+export const DEFAULT_DATA_DIR = defaultDataDir();
 export const DEFAULT_PORT = 8452;
 /** Background syncAll interval for all sources (including Claude/Codex when hooks fail). */
 export const POLL_INTERVAL_MS = 60_000;

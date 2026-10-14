@@ -26,6 +26,7 @@ import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { localDateNow } from '@/lib/stats-timezone';
 import { dateRangeDays, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { sourceLabel } from '@/lib/tokens';
+import { usageErrorDescription, usageErrorTitle } from '@/lib/usage-error';
 import { useShareSnapshot } from '../../../../../packages/dashboard/src/hooks/ShareSnapshotContext';
 import {
   buildVisibleMetricTrends,
@@ -320,12 +321,12 @@ export function DashboardPage() {
         <div className="mb-4">
           <StatusBanner
             description={
-              error === LOCAL_RUNTIME_RECOVERING_HINT ? undefined : error
+              error === LOCAL_RUNTIME_RECOVERING_HINT ? undefined : usageErrorDescription(error)
             }
             title={
               error === LOCAL_RUNTIME_RECOVERING_HINT
                 ? LOCAL_RUNTIME_RECOVERING_HINT
-                : '暂无用量数据'
+                : usageErrorTitle(error)
             }
             tone="warn"
           />

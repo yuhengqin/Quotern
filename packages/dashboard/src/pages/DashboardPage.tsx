@@ -27,6 +27,7 @@ import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { localDateNow } from '@/lib/stats-timezone';
 import { dateRangeDays, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { sourceLabel } from '@/lib/tokens';
+import { usageErrorDescription, usageErrorTitle } from '@/lib/usage-error';
 import {
   buildVisibleMetricTrends,
   buildToolModelDistributions,
@@ -299,7 +300,7 @@ export function DashboardPage() {
 
       {source === 'api' && error && !loading && (
         <div className="mb-4">
-          <StatusBanner description={error} title="暂无用量数据" tone="warn" />
+          <StatusBanner description={usageErrorDescription(error)} title={usageErrorTitle(error)} tone="warn" />
         </div>
       )}
 

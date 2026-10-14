@@ -1,5 +1,6 @@
 import { Button, Label, ListBox, Modal, Select, Spinner } from '@heroui/react';
 import { useEffect, useMemo, useState } from 'react';
+import { usageErrorDescription } from '@/lib/usage-error';
 import { useShareSnapshot, type ShareSnapshot } from '../hooks/ShareSnapshotContext';
 import { useShareData } from '../hooks/useShareData';
 import { useShareBackgrounds } from '../hooks/useShareBackgrounds';
@@ -137,7 +138,7 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             {disabled && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-surface/90 p-6 text-center" role="status" aria-live="polite">
                 {loading ? <><Spinner size="sm" /><span className="text-sm text-muted">正在更新分享预览…</span></> : <>
-                  <p className="text-sm text-muted">{error || '暂无分享数据'}</p>
+                  <p className="text-sm text-muted">{error ? usageErrorDescription(error) : '暂无分享数据'}</p>
                   <Button size="sm" variant="secondary" onPress={retry}>重试</Button>
                 </>}
               </div>

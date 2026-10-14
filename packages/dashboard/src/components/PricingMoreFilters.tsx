@@ -1,11 +1,104 @@
 import { useEffect, useId, useState } from 'react';
+import { ChevronDown } from '@gravity-ui/icons';
 import { SlidersHorizontal } from 'lucide-react';
-import { Button, Input, Label, ListBox, Popover, Select } from '@heroui/react';
+import { Button, DateField, Input, Label, ListBox, Popover, RangeCalendar, Select } from '@heroui/react';
+import { CalendarDate, parseDate } from '@internationalized/date';
+import { I18nProvider } from 'react-aria';
 import type { PricingCurrency, PricingExchangeRate } from '../lib/pricing-currency';
 import { getRecentReleaseRange, type PricingFilters } from '../lib/pricing-filters';
+import { localDateNow } from '../lib/stats-timezone';
 
 export type PricingAdvancedFilters = Required<Pick<PricingFilters, 'minContext' | 'releasedAfter' | 'releasedBefore'>>;
 export const EMPTY_PRICING_FILTERS: PricingAdvancedFilters = { minContext: 0, releasedAfter: '', releasedBefore: '' };
+
+function ReleaseDateRangePicker({ filters, onChange }: {
+  filters: PricingAdvancedFilters;
+  onChange: (filters: PricingAdvancedFilters) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [start, setStart] = useState<CalendarDate | null>(() => filters.releasedAfter ? parseDate(filters.releasedAfter) : null);
+  const [end, setEnd] = useState<CalendarDate | null>(() => filters.releasedBefore ? parseDate(filters.releasedBefore) : null);
+  const valid = !start || !end || start.compare(end) <= 0;
+  const selected = start && end && start.compare(end) <= 0 ? { start, end } : null;
+  const label = filters.releasedAfter || filters.releasedBefore
+    ? `${filters.releasedAfter ? filters.releasedAfter.replaceAll('-', '/') : '不限'} ～ ${filters.releasedBefore ? filters.releasedBefore.replaceAll('-', '/') : '不限'}`
+    : '选择日期范围';
+  const changeOpen = (next: boolean) => {
+    if (next) {
+      setStart(filters.releasedAfter ? parseDate(filters.releasedAfter) : null);
+      setEnd(filters.releasedBefore ? parseDate(filters.releasedBefore) : null);
+    }
+    setOpen(next);
+  };
+
+  return (
+    <Popover isOpen={open} onOpenChange={changeOpen}>
+      <Button aria-label={`发布时间范围：${label}`} className="!h-9 !min-h-9 w-full justify-between !text-xs" variant="secondary">
+        <span className="truncate">{label}</span><ChevronDown className="size-3 shrink-0 text-muted" />
+      </Button>
+      <Popover.Content className="!w-[560px] max-w-[calc(100vw-24px)] rounded-2xl border border-border bg-overlay p-0 shadow-surface" placement="bottom start" offset={8}>
+        <Popover.Dialog aria-label="选择发布时间范围" className="p-4 outline-none">
+          <I18nProvider locale="zh-CN">
+            <RangeCalendar
+              aria-label="选择发布日期起止日期"
+              className="!w-full !max-w-none !border-0 !bg-transparent !p-0 !shadow-none"
+              value={selected}
+              defaultFocusedValue={end ?? start ?? parseDate(localDateNow())}
+              onChange={range => { setStart(parseDate(range.start.toString())); setEnd(parseDate(range.end.toString())); }}
+            >
+              {({ state }) => (
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  <div className="flex w-full flex-col gap-3 sm:w-48 sm:shrink-0">
+                    <h2 className="text-sm font-medium">自定义发布日期范围</h2>
+                    <DateField value={start} onChange={setStart}>
+                      <Label className="text-xs text-muted">开始日期</Label>
+                      <DateField.Group className="rounded-xl">
+                        <DateField.Input>{segment => <DateField.Segment segment={segment} />}</DateField.Input>
+                      </DateField.Group>
+                    </DateField>
+                    <DateField value={end} onChange={setEnd}>
+                      <div className="flex min-h-6 items-center justify-between gap-2">
+                        <Label className="text-xs text-muted">结束日期</Label>
+                        <Button slot={null} size="sm" variant="ghost" className="!h-6 !min-h-6 !min-w-0 rounded-md px-1.5 text-xs font-normal text-accent hover:bg-accent/10" onPress={() => {
+                          const today = parseDate(localDateNow());
+                          if (state.anchorDate) state.selectDate(today);
+                          else setEnd(today);
+                          state.setFocusedDate(today);
+                        }}>结束日期设为今天</Button>
+                      </div>
+                      <DateField.Group className="rounded-xl">
+                        <DateField.Input>{segment => <DateField.Segment segment={segment} />}</DateField.Input>
+                      </DateField.Group>
+                    </DateField>
+                    {!valid && <p role="alert" className="text-xs text-danger">开始日期不能晚于结束日期</p>}
+                    <div className="mt-auto flex justify-end gap-2 pt-1">
+                      <Button slot={null} size="sm" variant="ghost" onPress={() => setOpen(false)}>取消</Button>
+                      <Button slot={null} size="sm" isDisabled={!valid || Boolean(state.anchorDate)} onPress={() => {
+                        onChange({ ...filters, releasedAfter: start?.toString() ?? '', releasedBefore: end?.toString() ?? '' });
+                        setOpen(false);
+                      }}>确定</Button>
+                    </div>
+                  </div>
+                  <div className="min-w-0 w-full sm:flex-1">
+                    <RangeCalendar.Header>
+                      <RangeCalendar.NavButton slot="previous" aria-label="上个月" />
+                      <RangeCalendar.Heading className="text-center" />
+                      <RangeCalendar.NavButton slot="next" aria-label="下个月" />
+                    </RangeCalendar.Header>
+                    <RangeCalendar.Grid weekdayStyle="narrow">
+                      <RangeCalendar.GridHeader>{day => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}</RangeCalendar.GridHeader>
+                      <RangeCalendar.GridBody>{date => <RangeCalendar.Cell date={date} />}</RangeCalendar.GridBody>
+                    </RangeCalendar.Grid>
+                  </div>
+                </div>
+              )}
+            </RangeCalendar>
+          </I18nProvider>
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover>
+  );
+}
 
 export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, exchangeStatus, onManualRate, onRefreshRate }: {
   filters: PricingAdvancedFilters;
@@ -44,16 +137,7 @@ export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, 
           </Select>
           <div className="space-y-2">
             <p className="text-xs font-medium">发布时间</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="min-w-0 space-y-1">
-                <label htmlFor={`${id}-after`} className="text-xs text-muted">发布自</label>
-                <Input id={`${id}-after`} type="date" className="!h-9 min-w-0 !text-xs" value={filters.releasedAfter} onChange={event => onChange({ ...filters, releasedAfter: event.target.value })} variant="secondary" />
-              </div>
-              <div className="min-w-0 space-y-1">
-                <label htmlFor={`${id}-before`} className="text-xs text-muted">发布至</label>
-                <Input id={`${id}-before`} type="date" className="!h-9 min-w-0 !text-xs" value={filters.releasedBefore} onChange={event => onChange({ ...filters, releasedBefore: event.target.value })} variant="secondary" />
-              </div>
-            </div>
+            <ReleaseDateRangePicker filters={filters} onChange={onChange} />
             <div className="flex flex-wrap gap-1">
               {[30, 90, 365].map(days => <Button key={days} className="!h-7 !min-h-7 !text-xs" size="sm" variant="tertiary" onPress={() => onChange({ ...filters, ...getRecentReleaseRange(days) })}>{days === 365 ? '近一年' : `近 ${days} 天`}</Button>)}
             </div>

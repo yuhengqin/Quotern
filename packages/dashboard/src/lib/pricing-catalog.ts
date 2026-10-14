@@ -68,48 +68,9 @@ export interface PricingSortDescriptor {
 }
 
 export const DEFAULT_PRICING_SORT: PricingSortDescriptor = {
-  column: 'latest',
+  column: 'usage',
   direction: 'descending',
 };
-
-export const PRICING_SORT_STORAGE_KEY = 'quotern.pricing.sort.v1';
-
-export const PRICING_SORT_OPTIONS = [
-  { key: 'latest:descending', label: '最新旗舰' },
-  { key: 'usage:descending', label: '我的常用' },
-  { key: 'input:ascending', label: '输入价：低 → 高' },
-  { key: 'input:descending', label: '输入价：高 → 低' },
-  { key: 'output:ascending', label: '输出价：低 → 高' },
-  { key: 'output:descending', label: '输出价：高 → 低' },
-  { key: 'cacheRead:ascending', label: '缓存读：低 → 高' },
-  { key: 'cacheRead:descending', label: '缓存读：高 → 低' },
-  { key: 'cacheWrite:ascending', label: '缓存写：低 → 高' },
-  { key: 'cacheWrite:descending', label: '缓存写：高 → 低' },
-  { key: 'contextWindow:descending', label: '上下文：长 → 短' },
-  { key: 'contextWindow:ascending', label: '上下文：短 → 长' },
-  { key: 'releaseDate:descending', label: '发布时间：新 → 旧' },
-  { key: 'releaseDate:ascending', label: '发布时间：旧 → 新' },
-  { key: 'model:ascending', label: '模型名称：A → Z' },
-  { key: 'model:descending', label: '模型名称：Z → A' },
-] as const;
-
-export function readPricingSort(storage?: Pick<Storage, 'getItem'>): PricingSortDescriptor {
-  try {
-    const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
-    const saved = JSON.parse(target?.getItem(PRICING_SORT_STORAGE_KEY) ?? 'null') as PricingSortDescriptor | null;
-    if (saved?.column === 'inputOutput') saved.column = 'input';
-    if (saved?.column === 'cache') saved.column = 'cacheRead';
-    if (saved && PRICING_SORT_OPTIONS.some(option => option.key === `${saved.column}:${saved.direction}`)) return saved;
-  } catch { /* Storage may be unavailable in a private or restricted window. */ }
-  return DEFAULT_PRICING_SORT;
-}
-
-export function writePricingSort(sort: PricingSortDescriptor, storage?: Pick<Storage, 'setItem'>): void {
-  try {
-    const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
-    target?.setItem(PRICING_SORT_STORAGE_KEY, JSON.stringify(sort));
-  } catch { /* The page remains usable without preference storage. */ }
-}
 
 export function addPricingUsage(
   rows: PricingCatalogRow[],

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
-import { addPricingUsage, readPricingSort } from './pricing-catalog.ts';
+import { addPricingUsage } from './pricing-catalog.ts';
 import type { ModelBreakdownRow, PricingCatalogRow } from './api.ts';
 
 const rows: PricingCatalogRow[] = [
@@ -23,11 +23,4 @@ it('combines aliases across Agents while preserving distinct pricing variants', 
     ['openai/gpt-6.1-sol', 300], ['openai/gpt-6.1-sol-fast', 400], ['anthropic/claude-opus-5-5', 500],
   ]);
   assert.equal('usageTokens' in rows[0]!, false);
-});
-
-it('restores a valid saved choice and falls back when storage is blocked or corrupt', () => {
-  assert.deepEqual(readPricingSort({ getItem: () => '{"column":"model","direction":"ascending"}' }), { column: 'model', direction: 'ascending' });
-  assert.deepEqual(readPricingSort({ getItem: () => '{"column":"unknown","direction":"descending"}' }), { column: 'latest', direction: 'descending' });
-  assert.deepEqual(readPricingSort({ getItem: () => 'invalid JSON' }), { column: 'latest', direction: 'descending' });
-  assert.deepEqual(readPricingSort({ getItem: () => { throw new Error('blocked'); } }), { column: 'latest', direction: 'descending' });
 });

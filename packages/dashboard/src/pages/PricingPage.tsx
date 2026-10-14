@@ -14,14 +14,10 @@ import type { PricingCurrency } from '../lib/pricing-currency';
 import {
   addPricingUsage, filterAndSortPricingCatalog, filterDirectPricingCatalog,
   formatPricingRate, getPricingChannel, getPricingModelName, getPricingProvider,
-  readPricingSort, writePricingSort, PRICING_SORT_OPTIONS,
+  DEFAULT_PRICING_SORT,
   type PricingSortDescriptor, type PricingSortKey,
 } from '../lib/pricing-catalog';
 
-const SORT_CHOICES = PRICING_SORT_OPTIONS.map(option => {
-  const [column, direction] = option.key.split(':') as [PricingSortKey, 'ascending' | 'descending'];
-  return { column, direction, key: option.key, text: option.label };
-});
 type PriceDisplay = { currency: PricingCurrency; exchangeRate: number | null };
 type TableColumn = { id: PricingSortKey; label: string; minWidth: number; width: NonNullable<ComponentProps<typeof Table.Column>['defaultWidth']> };
 const WIDE_COLUMNS: TableColumn[] = [
@@ -95,10 +91,9 @@ function PricingList({ rows, sort, hasUsage, onSortChange, currency, exchangeRat
   const wide = width >= 960;
   const columns = wide ? WIDE_COLUMNS : COMPACT_COLUMNS;
   const handleSort = (descriptor: SortDescriptor) => {
-    if (PRICING_SORT_OPTIONS.some(option => option.key === `${descriptor.column}:${descriptor.direction}`)) {
-      onSortChange({ column: descriptor.column as PricingSortKey, direction: descriptor.direction });
-    } else if (descriptor.column === 'inputOutput' || descriptor.column === 'cache') {
-      onSortChange({ column: descriptor.column === 'inputOutput' ? 'input' : 'cacheRead', direction: descriptor.direction });
+    const column = columns.find(column => column.id === descriptor.column)?.id;
+    if (column) {
+      onSortChange({ column: column === 'inputOutput' ? 'input' : column === 'cache' ? 'cacheRead' : column, direction: descriptor.direction });
     }
   };
   const displayedSort = !wide && sort.column === 'input' ? { ...sort, column: 'inputOutput' }
@@ -170,7 +165,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
   const [advancedFilters, setAdvancedFilters] = useState<PricingAdvancedFilters>(EMPTY_PRICING_FILTERS);
   const providerTriggerRef = useRef<HTMLButtonElement>(null);
-  const [sort, setSort] = useState<PricingSortDescriptor>(readPricingSort);
+  const [sort, setSort] = useState<PricingSortDescriptor>(DEFAULT_PRICING_SORT);
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
   const [usage, setUsage] = useState<ModelBreakdownRow[]>([]);
   const [usageStatus, setUsageStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -208,7 +203,6 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
 
   const directModels = useMemo(() => addPricingUsage(filterDirectPricingCatalog(catalog?.models ?? []), usage, catalog?.matching), [catalog, usage]);
   const hasUsage = directModels.some(row => (row.usageTokens ?? 0) > 0);
-  const updateSort = (next: PricingSortDescriptor) => { setSort(next); writePricingSort(next); };
   const providers = useMemo(() => {
     const unique = new Map<string, ReturnType<typeof getPricingProvider>>();
     for (const row of directModels) {
@@ -250,14 +244,6 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
           </Select>
           {providerFilters.length > 0 && <Button aria-label="清空提供商筛选" className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0" size="sm" isIconOnly variant="tertiary" onPress={() => { setProviderFilters([]); providerTriggerRef.current?.focus(); }}><ButtonGroup.Separator /><Xmark className="size-3.5" /></Button>}
         </ButtonGroup>
-        <Select aria-label="模型价格排序" value={sortKey} variant="secondary" onChange={key => {
-          const choice = SORT_CHOICES.find(option => option.key === key);
-          if (choice) updateSort({ column: choice.column, direction: choice.direction });
-        }} className="min-w-0 max-w-48 text-xs">
-          <Label className="sr-only">模型价格排序</Label>
-          <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs"><Select.Value>{() => SORT_CHOICES.find(choice => choice.key === sortKey)?.text}</Select.Value><Select.Indicator /></Select.Trigger>
-          <Select.Popover className="w-56 max-h-80" placement="bottom start"><ListBox aria-label="排序选项">{SORT_CHOICES.map(choice => <ListBox.Item id={choice.key} key={choice.key} textValue={choice.text} className="text-xs">{choice.text}<ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></Select.Popover>
-        </Select>
         <Select aria-label="价格币种" value={currency} variant="secondary" onChange={key => { if (key === 'USD' || key === 'CNY') setCurrency(key); }} className="min-w-0 text-xs">
           <Label className="sr-only">价格币种</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
@@ -285,7 +271,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
       </div>}
       {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
         : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry(value => value + 1)}>重试</Button></div>
-          : <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}`} rows={rows} sort={sort} hasUsage={hasUsage} onSortChange={updateSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} />}
+          : <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}`} rows={rows} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} />}
       <p className="shrink-0 text-[11px] text-muted">所有价格均按百万 Token 计 · {currency === 'USD' ? '$0' : '¥0'} 表示零价，— 表示未提供定价{currency === 'CNY' ? '或汇率暂不可用 · 人民币为参考换算' : ''}</p>
     </section>
   );

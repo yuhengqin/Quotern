@@ -4,7 +4,6 @@ import type { PricingCatalogRow } from './api.ts';
 import {
   DEFAULT_PRICING_SORT,
   PRICING_PAGE_SIZE,
-  PRICING_SORT_OPTIONS,
   filterAndSortPricingCatalog,
   filterDirectPricingCatalog,
   isGatewayPricingModel,
@@ -24,14 +23,14 @@ const rows: PricingCatalogRow[] = [
 ];
 
 describe('pricing catalog helpers', () => {
-  it('defaults to the latest flagship and puts featured models before newer non-flagships', () => {
-    assert.deepEqual(DEFAULT_PRICING_SORT, { column: 'latest', direction: 'descending' });
+  it('defaults to recent usage and ranks unused featured models before newer non-flagships', () => {
     const result = filterAndSortPricingCatalog([
       { ...rows[0]!, model: 'new-mini', releaseDate: '2026-10-14' },
+      { ...rows[0]!, model: 'frequent-model', releaseDate: '2025-01-01', usageTokens: 100 },
       { ...rows[0]!, model: 'current-opus', releaseDate: '2026-09-22', featured: true },
       { ...rows[0]!, model: 'current-sol', releaseDate: '2026-09-29', featured: true },
     ], '', DEFAULT_PRICING_SORT);
-    assert.deepEqual(result.map((row) => row.model), ['current-sol', 'current-opus', 'new-mini']);
+    assert.deepEqual(result.map((row) => row.model), ['frequent-model', 'current-sol', 'current-opus', 'new-mini']);
   });
 
   it('filters model names case-insensitively after trimming the query', () => {
@@ -65,7 +64,6 @@ describe('pricing catalog helpers', () => {
       direction: 'descending',
     });
     assert.deepEqual(result.map((row) => row.model), ['Beta', 'alpha-mini', 'Alpha']);
-    assert.ok(PRICING_SORT_OPTIONS.some(option => option.key === 'output:descending'));
   });
 
   it('sorts context and release dates without placing missing metadata first', () => {

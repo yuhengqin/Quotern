@@ -45,8 +45,20 @@ interface TokenUsage {
   cached_input_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
+  cache_write_input_tokens?: number;
   reasoning_output_tokens?: number;
   total_tokens?: number;
+}
+
+function normalizeCacheWriteAlias(usage: TokenUsage | undefined): TokenUsage | undefined {
+  // Codex includes cache writes in gross input; keep the normalized buckets disjoint.
+  return usage && usage.cache_creation_input_tokens == null && usage.cache_write_input_tokens != null
+    ? {
+        ...usage,
+        input_tokens: Math.max(0, (usage.input_tokens ?? 0) - Math.max(0, usage.cache_write_input_tokens)),
+        cache_creation_input_tokens: usage.cache_write_input_tokens,
+      }
+    : usage;
 }
 
 function extractProject(meta: SessionMeta): string {
@@ -307,10 +319,10 @@ export async function parseCodexIncremental(
       if (!tokenEvent?.info) continue;
 
       const info = tokenEvent.info;
-      const lastUsage = info.last_token_usage as TokenUsage | undefined;
-      const totalUsage = info.total_token_usage as TokenUsage | undefined;
+      const lastUsage = normalizeCacheWriteAlias(info.last_token_usage as TokenUsage | undefined);
+      const totalUsage = normalizeCacheWriteAlias(info.total_token_usage as TokenUsage | undefined);
       const modelKey = readModel(info.model) ?? turnContextModel;
-      const prevTotals = prevTotalMap.get(modelKey);
+      const prevTotals = normalizeCacheWriteAlias(prevTotalMap.get(modelKey));
       const rawUsage = pickDelta(lastUsage, totalUsage, prevTotals);
       if (totalUsage) prevTotalMap.set(modelKey, { ...totalUsage });
       const cumulative = Number(totalUsage?.total_tokens);

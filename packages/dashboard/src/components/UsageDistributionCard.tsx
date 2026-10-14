@@ -302,7 +302,9 @@ function DistributionRowDetails({ row }: { row: DashboardDistributionRow }) {
   const details = [
     ['输入（未缓存）', metrics?.uncachedInputTokens],
     ['缓存读取', metrics?.cacheReadTokens],
-    ['缓存写入', metrics?.cacheWriteTokens],
+    ...((metrics?.cacheWriteTokens ?? 0) > 0
+      ? [['缓存写入', metrics?.cacheWriteTokens] as const]
+      : []),
     ['输出', metrics?.outputTokens],
     ['推理', metrics?.reasoningOutputTokens],
   ] as const;

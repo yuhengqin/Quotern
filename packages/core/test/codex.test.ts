@@ -74,6 +74,73 @@ test('parseCodexIncremental normalizes input and skips fork replay', async () =>
   });
 });
 
+test('parseCodexIncremental reads cache write alias and preserves the canonical field', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-cache-write-'));
+  const sessionsDir = join(tempHome, '.codex', 'sessions');
+  await mkdir(sessionsDir, { recursive: true });
+  const cases = [
+    { model: 'alias', fields: { cache_write_input_tokens: 7 }, expected: 7, input: 33 },
+    { model: 'canonical', fields: { cache_creation_input_tokens: 3, cache_write_input_tokens: 7 }, expected: 3, input: 40 },
+    { model: 'canonical-zero', fields: { cache_creation_input_tokens: 0, cache_write_input_tokens: 7 }, expected: 0, input: 40 },
+  ];
+  for (const sample of cases) {
+    await writeFile(join(sessionsDir, `rollout-${sample.model}.jsonl`), [
+      JSON.stringify({ type: 'session_meta', payload: { id: sample.model, cwd: '/test/app' } }),
+      JSON.stringify({ type: 'event_msg', timestamp: '2026-06-09T20:46:30.000Z', payload: {
+        type: 'token_count', info: { model: sample.model, last_token_usage: {
+          input_tokens: 50, cached_input_tokens: 10, output_tokens: 10,
+          ...sample.fields,
+        } },
+      } }),
+      '',
+    ].join('\n'));
+  }
+  await withIsolatedCodexHome(tempHome, async () => {
+    const { result } = await parseCodexIncremental({}, '2026-01-01T00:00:00.000Z');
+    for (const sample of cases) {
+      const bucket = result.buckets.find((row) => row.model === sample.model);
+      assert.equal(bucket?.cache_creation_input_tokens, sample.expected);
+      assert.equal(bucket?.input_tokens, sample.input);
+      assert.equal(bucket?.output_tokens, 10);
+      if (sample.model === 'alias') assert.equal(bucket?.total_tokens, 60);
+    }
+  });
+});
+
+test('parseCodexIncremental keeps cache write cumulative deltas across scans', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-cache-delta-'));
+  const sessionsDir = join(tempHome, '.codex', 'sessions');
+  await mkdir(sessionsDir, { recursive: true });
+  const filePath = join(sessionsDir, 'rollout-cache-delta.jsonl');
+  const first = [
+    JSON.stringify({ type: 'session_meta', payload: { id: 'cache-delta', cwd: '/test/app' } }),
+    JSON.stringify({ type: 'event_msg', timestamp: '2026-06-09T20:46:30.000Z', payload: {
+      type: 'token_count', info: { model: 'gpt-test', total_token_usage: {
+        input_tokens: 50, cached_input_tokens: 10, output_tokens: 10, cache_write_input_tokens: 7,
+      } },
+    } }),
+    '',
+  ].join('\n');
+  await writeFile(filePath, first);
+  await withIsolatedCodexHome(tempHome, async () => {
+    const cursors: CursorsFile = {};
+    const initial = await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
+    assert.equal(initial.result.buckets[0]?.cache_creation_input_tokens, 7);
+    assert.equal(initial.result.buckets[0]?.input_tokens, 33);
+    assert.equal(initial.result.buckets[0]?.total_tokens, 60);
+    const next = JSON.stringify({ type: 'event_msg', timestamp: '2026-06-09T20:47:00.000Z', payload: {
+      type: 'token_count', info: { model: 'gpt-test', total_token_usage: {
+        input_tokens: 100, cached_input_tokens: 20, output_tokens: 20, cache_write_input_tokens: 13,
+      } },
+    } });
+    await writeFile(filePath, `${first}${next}\n`);
+    const incremental = await parseCodexIncremental(cursors, '2026-01-01T00:00:00.000Z');
+    assert.equal(incremental.result.buckets[0]?.cache_creation_input_tokens, 6);
+    assert.equal(incremental.result.buckets[0]?.input_tokens, 34);
+    assert.equal(incremental.result.buckets[0]?.total_tokens, 60);
+  });
+});
+
 test('codexHomeCandidates splits env path lists and deduplicates roots', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-env-list-'));
   const snapshot = snapshotCodexEnv();

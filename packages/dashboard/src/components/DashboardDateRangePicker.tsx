@@ -65,17 +65,20 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
                       </DateField.Group>
                     </DateField>
                     <DateField value={end} onChange={setEnd} minValue={min} maxValue={max}>
-                      <Label className="text-xs text-muted">结束日期</Label>
+                      <div className="flex min-h-6 items-center justify-between gap-2">
+                        <Label className="text-xs text-muted">结束日期</Label>
+                        <Button slot={null} size="sm" variant="ghost" className="!h-6 !min-h-6 !min-w-0 rounded-md px-1.5 text-xs font-normal text-accent hover:bg-accent/10" onPress={() => {
+                          const today = parseDate(localDateNow());
+                          // Finish a pending calendar range before updating an existing end date.
+                          if (state.anchorDate) state.selectDate(today);
+                          else setEnd(today);
+                          state.setFocusedDate(today);
+                        }}>结束日期设为今天</Button>
+                      </div>
                       <DateField.Group className="rounded-xl">
                         <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
                       </DateField.Group>
                     </DateField>
-                    <Button slot={null} size="sm" variant="secondary" className="h-7 min-h-7 self-start rounded-lg px-2 text-xs font-normal" onPress={() => {
-                      const today = parseDate(localDateNow());
-                      setEnd(today);
-                      state.setAnchorDate(null);
-                      state.setFocusedDate(today);
-                    }}>结束日期设为今天</Button>
                     <p className="text-xs text-muted">按北京时间统计，包含起止日期。可选择近一年内的日期。</p>
                     {!valid && <p role="alert" className="text-xs text-danger">请选择有效的起止日期，开始日期不能晚于结束日期。</p>}
                     <div className="mt-auto flex justify-end gap-2 pt-1">

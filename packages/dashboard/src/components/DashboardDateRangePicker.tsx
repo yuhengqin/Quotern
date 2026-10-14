@@ -85,7 +85,7 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
                       <RangeCalendar.Heading className="text-center" />
                       <RangeCalendar.NavButton slot="next" aria-label="下个月" />
                     </RangeCalendar.Header>
-                    <RangeCalendar.Grid>
+                    <RangeCalendar.Grid weekdayStyle="narrow">
                       <RangeCalendar.GridHeader>{(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}</RangeCalendar.GridHeader>
                       <RangeCalendar.GridBody>{(date) => <RangeCalendar.Cell date={date} />}</RangeCalendar.GridBody>
                     </RangeCalendar.Grid>

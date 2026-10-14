@@ -22,7 +22,9 @@ export function buildAchievementShare(snapshot: AchievementSnapshot, selection: 
     if (!annual || annual.activeDays === 0) throw new Error('这一年还没有可分享的足迹');
     return {
       title: annual.year + ' 年度足迹', subtitle: annual.complete ? '这一年，与 AI 一起走过' : '今年的故事，还在继续',
-      badges: snapshot.earned.filter(item => item.achievedOn?.startsWith(String(annual.year))).slice(0, 3).map(publicBadge),
+      badges: snapshot.earned.filter(item => item.achievedOn?.startsWith(String(annual.year))).slice(0, 3).map(item => ({
+        ...publicBadge(item), subtitle: item.family === 'cost' && !privacy.showCost ? '费用已隐藏' : item.achievedOn + ' 点亮',
+      })),
       stats: [
         { label: '活跃日', value: String(annual.activeDays) }, { label: '活跃月份', value: String(annual.activeMonths) },
         { label: 'Token', value: formatAchievementAmount(annual.tokens, 'Token') },

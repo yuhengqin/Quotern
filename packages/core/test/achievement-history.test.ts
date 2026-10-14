@@ -6,6 +6,14 @@ import { tmpdir } from 'node:os';
 import { extractSessionMessage, type SessionFileContext } from '../src/session-sources.js';
 import { syncSessionSource } from '../src/session-collector.js';
 
+test('raw cwd identity preserves literal percent names and unifies Windows extended and UNC paths', () => {
+  const extract = (cwd: string) => extractSessionMessage('claude', { type: 'user', uuid: 'u', timestamp: '2026-10-14T00:00:00Z', cwd, message: { content: 'hello' } }, { sessionId: 's' }) as unknown as Record<string, unknown>;
+  assert.notEqual(extract('/work/team%20one/app').projectId, extract('/work/team one/app').projectId);
+  assert.equal(extract('D:\\Work\\app').projectId, extract('\\\\?\\D:\\Work\\app').projectId);
+  assert.equal(extract('\\\\server\\share\\app').projectId, extract('\\\\?\\UNC\\server\\share\\app').projectId);
+  assert.notEqual(extract('/server/share/app').projectId, extract('\\\\server\\share\\app').projectId);
+});
+
 test('project evidence separates identical folder names and normalizes Windows path casing without storing cwd', () => {
   const at = '2026-10-14T00:00:00Z';
   const extract = (cwd: string) => extractSessionMessage('claude', { type: 'user', uuid: 'u', timestamp: at, cwd, message: { content: 'hello' } }, { sessionId: 's' }) as unknown as Record<string, unknown>;

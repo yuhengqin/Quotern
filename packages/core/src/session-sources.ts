@@ -14,7 +14,6 @@ import { zcodeDbPath, isZcodeNativeMessage } from './parsers/zcode.js';
 import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
 import type { SessionMessage } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
-import { decodeEncodedProjectPath, normalizeProjectName } from './project-label.js';
 import { posix } from 'node:path';
 
 type ObjectValue = Record<string, unknown>;
@@ -67,6 +66,28 @@ function humanContent(content: unknown): boolean {
   return content.length === 0 || content.some((block) => !['tool_result', 'tool_use', 'function_call', 'function_call_output'].includes(string(object(block).type)));
 }
 
+/** cwd is a literal filesystem path, not an encoded URL or project-directory name. */
+function projectIdentity(raw: string): { identity: string; label: string } | null {
+  let path = raw.replace(/\\/g, '/');
+  if (/^\/\/\?\/UNC\//i.test(path)) path = '//' + path.slice(8);
+  else if (/^\/\/\?\/[a-z]:\//i.test(path)) path = path.slice(4);
+  else if (path.startsWith('//?/') || path.startsWith('//./')) return null;
+  let identity: string;
+  if (/^[a-z]:\//i.test(path)) {
+    path = posix.normalize(path).replace(/\/+$/, '');
+    identity = 'win-drive:' + path.toLowerCase();
+  } else if (path.startsWith('//')) {
+    path = '//' + posix.normalize(path.slice(2)).replace(/\/+$/, '');
+    if (path.split('/').filter(Boolean).length < 2) return null;
+    identity = 'win-unc:' + path.toLowerCase();
+  } else if (path.startsWith('/')) {
+    path = posix.normalize(path).replace(/\/+$/, '') || '/';
+    identity = 'posix:' + path;
+  } else return null;
+  const label = posix.basename(path);
+  return label && !/^[a-z]:$/i.test(label) ? { identity, label } : null;
+}
+
 /** Extract messages before any usage/token filtering. Event mirrors are excluded. */
 export function extractSessionMessage(source: string, record: ObjectValue, context: SessionFileContext): CollectedSessionMessage | null {
   context.recordIndex = (context.recordIndex ?? 0) + 1;
@@ -74,14 +95,10 @@ export function extractSessionMessage(source: string, record: ObjectValue, conte
   if (source === 'claude' || source === 'codex') {
     const raw = source === 'claude' ? string(record.cwd) : ['session_meta', 'turn_context'].includes(string(record.type)) ? string(payload.cwd) : '';
     if (raw) {
-      const path = decodeEncodedProjectPath(raw).replace(/\\/g, '/');
-      const absolute = /^(?:[a-z]:\/|\/)/i.test(path);
-      const label = normalizeProjectName(path);
-      if (absolute && label !== 'unknown') {
-        const normalized = posix.normalize(path).replace(/\/+$/, '');
-        const identity = /^[a-z]:\//i.test(normalized) || path.startsWith('//') ? normalized.toLowerCase() : normalized;
-        context.projectId = createHash('sha256').update(identity).digest('hex');
-        context.projectLabel = label;
+      const project = projectIdentity(raw);
+      if (project) {
+        context.projectId = createHash('sha256').update(project.identity).digest('hex');
+        context.projectLabel = project.label;
       } else {
         delete context.projectId; delete context.projectLabel;
       }

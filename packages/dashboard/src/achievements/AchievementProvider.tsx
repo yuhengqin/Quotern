@@ -3,6 +3,7 @@ import type { AchievementSnapshot, AchievementOperation, AchievementNotice, Achi
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import type { AchievementShareSelection } from './share-model';
+import { createAchievementRequestQueue } from './request-queue';
 
 type AchievementRequest = (operation: AchievementOperation) => Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }>;
 interface AchievementContextValue {
@@ -24,15 +25,15 @@ export function AchievementProvider({ request, children }: { request: Achievemen
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [detailIds, setDetailIds] = useState<string[]>([]);
   const [shareSelection, setShareSelection] = useState<AchievementShareSelection | null>(null);
-  const alive = useRef(true), serial = useRef(0), applied = useRef(0);
+  const alive = useRef(true);
+  const requestInOrder = useMemo(() => createAchievementRequestQueue(request), [request]);
   const inFlight = useRef<Promise<void> | null>(null);
   const snapshotRef = useRef(snapshot); snapshotRef.current = snapshot;
   const apply = useCallback(async (operation: AchievementOperation) => {
-    const sequence = ++serial.current;
-    const result = await request(operation);
-    if (alive.current && sequence >= applied.current) { applied.current = sequence; setSnapshot(result.snapshot); }
+    const result = await requestInOrder(operation);
+    if (alive.current) setSnapshot(result.snapshot);
     return result;
-  }, [request]);
+  }, [requestInOrder]);
   const openCelebration = useCallback((ids: string[]) => {
     setDetailIds(ids);
     const owned = ids.filter(id => snapshotRef.current?.earned.some(item => item.id === id));

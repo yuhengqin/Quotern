@@ -62,3 +62,11 @@ test('sharing a locked badge or empty shelf fails explicitly, while annual cards
   assert.equal(JSON.stringify(result).includes('999'), true);
   assert.equal(JSON.stringify(result).includes('1000.25'), false);
 });
+
+test('annual badge captions identify the year of earning instead of presenting lifetime totals as annual usage', () => {
+  const state = snapshot([badge('active-days-100', 100, 102, true, { family: 'active-days', title: '百日同行', unit: '天', achievedOn: '2025-12-20' })]);
+  state.annual = [{ year: 2025, activeDays: 30, activeMonths: 1, tokens: 999, costUsd: 88, topSource: 'codex', fromDate: '2025-12-01', toDate: '2025-12-30', complete: true }];
+  const result = buildAchievementShare(state, { kind: 'annual', year: 2025 });
+  assert.equal(result.badges[0]!.subtitle, '2025-12-20 点亮');
+  assert.equal(JSON.stringify(result).includes('102'), false);
+});

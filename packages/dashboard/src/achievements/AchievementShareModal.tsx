@@ -36,8 +36,8 @@ export function AchievementShareModal({ snapshot, selection, onClose }: { snapsh
             {payload.data ? <div ref={preview}><AchievementPoster payload={payload.data}/></div> : <p className="p-8 text-center text-sm text-muted">{payload.error}</p>}
           </div>
           <div className="mx-auto mt-4 flex max-w-[360px] flex-wrap justify-center gap-x-5 gap-y-3">
-            <Switch size="sm" isSelected={showCost} onChange={setShowCost} isDisabled={Boolean(action)}><Switch.Control><Switch.Thumb/></Switch.Control><Label className="text-xs">显示预估费用</Label></Switch>
-            <Switch size="sm" isSelected={showProjects} onChange={setShowProjects} isDisabled={Boolean(action)}><Switch.Control><Switch.Thumb/></Switch.Control><Label className="text-xs">显示项目名称</Label></Switch>
+            <Switch size="sm" isSelected={showCost} onChange={setShowCost} isDisabled={Boolean(action)}><Switch.Content><Switch.Control><Switch.Thumb/></Switch.Control><Label className="text-xs">显示预估费用</Label></Switch.Content></Switch>
+            <Switch size="sm" isSelected={showProjects} onChange={setShowProjects} isDisabled={Boolean(action)}><Switch.Content><Switch.Control><Switch.Thumb/></Switch.Control><Label className="text-xs">显示项目名称</Label></Switch.Content></Switch>
           </div>
           <p className="mt-3 flex items-center justify-center gap-1 text-[10px] text-muted"><ShieldCheck size={11}/>默认隐藏费用与项目名称，仅导出预览中可见的内容</p>
           {(error || success) && <p role="status" className={'mt-3 text-center text-xs ' + (error ? 'text-danger' : 'text-success')}>{error ?? success}</p>}

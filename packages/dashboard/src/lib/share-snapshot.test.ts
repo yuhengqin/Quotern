@@ -35,6 +35,15 @@ const dataset: UsageDataset = {
   ],
 };
 
+test('sharing a custom historical day retains its label and hourly date', () => {
+  const dateRange = { start: yesterday, end: yesterday };
+  const data = buildDashboardDataFromDataset(dataset, 1, dateRange);
+  const result = buildShareSnapshot(data, { rangeDays: 1, selectedDate: null, selectedSources: [], dateRange });
+  assert.equal(result.summary.totalTokens, 1000);
+  assert.equal(result.rangeLabel, yesterday);
+  assert.deepEqual(result.details.days, [{ date: yesterday, tokens: 1000 }]);
+});
+
 test('share Agent filter keeps totals, model ranking and badges in the same scope', () => {
   const data = buildDashboardDataFromDataset(dataset, 30);
   const before = structuredClone(data);

@@ -25,6 +25,7 @@ import { projectDashboardForDate } from '@/lib/dashboard-data';
 import { scheduleAfterPaint } from '@/lib/schedule-after-paint';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { localDateNow } from '@/lib/stats-timezone';
+import { dateRangeDays, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { sourceLabel } from '@/lib/tokens';
 import {
   buildVisibleMetricTrends,
@@ -69,21 +70,25 @@ export function DashboardPage() {
       typeof value === 'string' && value in DASHBOARD_RANGE_DAYS,
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [customRange, setCustomRange] = useLocalStorage<DashboardDateRange | null>(
+    'tud.dashboardCustomRange', null,
+    (value): value is DashboardDateRange | null => value === null || isDashboardDateRange(value),
+  );
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const { publishSnapshot } = useShareSnapshot();
   const dataRange = useDeferredDashboardRange(range);
-  const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
+  const rangeDays = customRange ? dateRangeDays(customRange) : DASHBOARD_RANGE_DAYS[dataRange];
   const { data, error, loading, refreshing, reload, source } =
-    useDashboardData(rangeDays, selectedDate);
+    useDashboardData(rangeDays, selectedDate, customRange);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
   );
-  const dayScoped = selectedDate != null;
+  const dayScoped = selectedDate != null || Boolean(customRange && rangeDays === 1 && customRange.end !== localDateNow());
   const isHourly = dayScoped || rangeDays === 1;
   const shareRangeLabel = selectedDate
     ? formatFilterDayLabel(selectedDate)
-    : SHARE_RANGE_LABELS[range];
+    : customRange ? formatDashboardDateRange(customRange) : SHARE_RANGE_LABELS[range];
   const shareToolLabel = selectedTools.length > 0
     ? selectedTools.map(sourceLabel).join('、')
     : '全部 Agent';
@@ -106,7 +111,8 @@ export function DashboardPage() {
   }, [reload]);
 
   const handleRangeChange = (next: DashboardRange) => {
-    if (next === range) return;
+    if (next === range && !customRange && !selectedDate) return;
+    setCustomRange(null);
     setSelectedDate(null);
     setRange(next);
   };
@@ -129,7 +135,7 @@ export function DashboardPage() {
         dailyRows: view.rangeDailyUsage,
         hourlyRows: view.todayHourlyUsage,
         hourlyApiRows: data.hourlyApiRows,
-        hourlyDate: selectedDate ?? (isHourly ? localDateNow() : undefined),
+        hourlyDate: selectedDate ?? (isHourly ? customRange?.end ?? localDateNow() : undefined),
         heatmapDays: data.heatmapDays,
         modelRows: view.modelRows,
         toolRows: view.toolModelUsage,
@@ -141,6 +147,7 @@ export function DashboardPage() {
       isHourly,
       selectedDate,
       selectedTools,
+      customRange,
       view.modelRows,
       view.rangeDailyUsage,
       view.todayHourlyUsage,
@@ -154,7 +161,7 @@ export function DashboardPage() {
     ? dayScoped
       ? '当日小时'
       : '今日小时'
-    : `近 ${rangeDays} 日`;
+    : customRange ? formatDashboardDateRange(customRange) : `近 ${rangeDays} 日`;
   const visibleProjectRows = useMemo(
     () => filterProjectRowsBySources(view.projectModelUsage, selectedTools),
     [selectedTools, view.projectModelUsage],
@@ -181,10 +188,12 @@ export function DashboardPage() {
         selectedSources: selectedTools,
         rangeDays: dayScoped ? 1 : rangeDays,
         hourly: isHourly,
-        currentDate: selectedDate ?? undefined,
+        currentDate: selectedDate ?? customRange?.end,
+        availableFromDate: data.availableFromDate,
       }),
     [
       data.heatmapDailyUsage,
+      data.availableFromDate,
       data.heatmapDays,
       data.hourlyApiRows,
       data.modelRows,
@@ -192,6 +201,7 @@ export function DashboardPage() {
       isHourly,
       rangeDays,
       selectedDate,
+      customRange,
       selectedTools,
       view.toolModelUsage,
       visibleTrendRows,
@@ -214,7 +224,7 @@ export function DashboardPage() {
   useEffect(() => {
     publishSnapshot({
       data,
-      filters: { rangeDays: DASHBOARD_RANGE_DAYS[range], selectedDate, selectedSources: selectedTools },
+      filters: { rangeDays, selectedDate, selectedSources: selectedTools, dateRange: customRange },
       loading: loading || refreshing || range !== dataRange,
       error,
       details: {
@@ -222,7 +232,7 @@ export function DashboardPage() {
           ? selectedTools
           : view.toolModelUsage.filter((row) => row.tokens > 0).map((row) => row.source),
         days: visibleTrendRows.dailyRows
-          .filter((row) => !isHourly || row.date === (selectedDate ?? localDateNow()))
+          .filter((row) => !isHourly || row.date === (selectedDate ?? customRange?.end ?? localDateNow()))
           .map((row) => ({ date: row.date, tokens: isHourly ? visibleSummary.totalTokens : row.totalTokens })),
         models: filterModelRowsBySources(view.modelRows, selectedTools),
       },
@@ -234,6 +244,8 @@ export function DashboardPage() {
     data,
     dataRange,
     range,
+    rangeDays,
+    customRange,
     error,
     loading,
     publishSnapshot,
@@ -258,6 +270,8 @@ export function DashboardPage() {
       className="dashboard-page flex w-full min-w-0 flex-col"
     >
       <DashboardFilter
+        customRange={customRange}
+        onCustomRangeChange={(next) => { setSelectedDate(null); setCustomRange(next); }}
         selectedTools={selectedTools}
         tools={view.toolModelUsage}
         value={range}
@@ -320,10 +334,11 @@ export function DashboardPage() {
               hourlyRows={visibleTrendRows.hourlyRows}
             />
             <DailyUsageTrendCard
+              rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined}
               dayScoped={dayScoped}
               hourly={isHourly}
               hourlyRows={visibleTrendRows.hourlyRows}
-              rangeDays={DASHBOARD_RANGE_DAYS[range]}
+              rangeDays={rangeDays}
               rows={visibleTrendRows.dailyRows}
             />
             {/* 分时活跃热力图：按天热力图已并入概览大卡片，此处注释便于以后恢复

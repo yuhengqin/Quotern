@@ -4,12 +4,14 @@ import { buildDashboardDataFromDataset, projectDashboardForDate } from './dashbo
 import type { UsageDataset } from './api.ts';
 import { localDateNow } from './stats-timezone.ts';
 import { sourceLabel } from './tokens.ts';
+import { formatDashboardDateRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { filterModelRowsBySources, filterTrendRowsBySources, normalizeSourceId, summarizeTrendRows } from './usage-filter.ts';
 
 export interface ShareFilters {
   rangeDays: number;
   selectedDate: string | null;
   selectedSources: string[];
+  dateRange?: DashboardDateRange | null;
 }
 
 /** Desktop omits comparison trends; sharing only needs the common usage fields. */
@@ -18,10 +20,11 @@ export type ShareDashboardData = Omit<DashboardMockData, 'metricTrends'>;
 export function buildShareDataFromDataset(
   dataset: UsageDataset,
   rangeDays: number,
-  convert: (dataset: UsageDataset, rangeDays: number) => ShareDashboardData = buildDashboardDataFromDataset,
+  convert: (dataset: UsageDataset, rangeDays: number, dateRange?: DashboardDateRange | null) => ShareDashboardData = buildDashboardDataFromDataset,
+  dateRange?: DashboardDateRange | null,
 ): ShareDashboardData {
   // The browser converter's demo fallback must never fabricate an export.
-  return dataset.dailyRows.length > 0 ? convert(dataset, rangeDays) : emptyDashboardData;
+  return dataset.dailyRows.length > 0 ? convert(dataset, rangeDays, dateRange) : emptyDashboardData;
 }
 
 export const SHARE_RANGE_OPTIONS = [
@@ -43,7 +46,7 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
     sourceKeys.get(normalizeSourceId(source)) ?? normalizeSourceId(source)
   )))];
   const hourly = selectedDate != null || rangeDays === 1;
-  const hourlyDate = selectedDate ?? (hourly ? localDateNow() : undefined);
+  const hourlyDate = selectedDate ?? (hourly ? filters.dateRange?.end ?? localDateNow() : undefined);
   const rows = filterTrendRowsBySources({
     dailyRows: view.rangeDailyUsage,
     hourlyRows: view.todayHourlyUsage,
@@ -67,7 +70,7 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
   return {
     summary,
     details,
-    rangeLabel: selectedDate ?? SHARE_RANGE_OPTIONS.find((option) => option.days === rangeDays)?.label ?? '',
+    rangeLabel: selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : SHARE_RANGE_OPTIONS.find((option) => option.days === rangeDays)?.label ?? ''),
     toolLabel: selectedSources.length > 0 ? selectedSources.map(sourceLabel).join('、') : '全部 Agent',
     tools: view.toolModelUsage,
   };

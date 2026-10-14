@@ -1,3 +1,4 @@
+import { dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ensureLocalRange,
@@ -45,12 +46,15 @@ const POLL_MS = 10_000;
 export function useDashboardData(
   rangeDays: number,
   selectedDate?: string | null,
+  dateRange?: DashboardDateRange | null,
 ) {
+  const rangeKey = dashboardRangeKey(rangeDays, dateRange);
+  const collectDays = dateRange ? Math.min(365, dateRangeLookback(dateRange) + rangeDays) : rangeDays;
   const mockEnabled = isMockDataEnabled();
   const cliBackend = isCliBackend();
   const [revision, setRevision] = useState(0);
   const ensuredMaxDaysRef = useRef(0);
-  const lastFetchedRangeDaysRef = useRef<number | null>(null);
+  const lastFetchedRangeKeyRef = useRef<string | null>(null);
   const lastRevisionRef = useRef<number | null>(null);
   const datasetCacheRef = useRef<UsageDataset | null>(null);
   const cachedDailyDaysRef = useRef(0);
@@ -77,18 +81,18 @@ export function useDashboardData(
 
   useEffect(() => {
     let cancelled = false;
-    const fetchDays = resolveDashboardFetchDays(rangeDays, selectedDate);
+    const fetchDays = resolveDashboardFetchDays(rangeDays, selectedDate, new Date(), dateRange);
 
-    const needsEnsure = cliBackend && rangeDays > ensuredMaxDaysRef.current;
+    const needsEnsure = cliBackend && collectDays > ensuredMaxDaysRef.current;
     const isEmpty = (data: DashboardMockData) => data === emptyDashboardData;
     const isRangeDrivenRefresh =
-      lastFetchedRangeDaysRef.current != null &&
-      lastFetchedRangeDaysRef.current !== rangeDays;
+      lastFetchedRangeKeyRef.current != null &&
+      lastFetchedRangeKeyRef.current !== rangeKey;
     const revisionChanged = lastRevisionRef.current !== revision;
     lastRevisionRef.current = revision;
     const hourlyAlreadyCovered =
       datasetCacheRef.current != null &&
-      lastFetchedRangeDaysRef.current === rangeDays &&
+      lastFetchedRangeKeyRef.current === rangeKey &&
       cachedHourlyDaysRef.current >= fetchDays.hourlyDays &&
       !needsEnsure;
     if (!revisionChanged && hourlyAlreadyCovered) {
@@ -97,7 +101,7 @@ export function useDashboardData(
       };
     }
     const isHourlyExpansion =
-      lastFetchedRangeDaysRef.current === rangeDays &&
+      lastFetchedRangeKeyRef.current === rangeKey &&
       datasetCacheRef.current != null &&
       cachedDailyDaysRef.current >= fetchDays.dailyDays &&
       cachedHourlyDaysRef.current < fetchDays.hourlyDays &&
@@ -132,7 +136,7 @@ export function useDashboardData(
     const applyResult = (next: DashboardDataState) => {
       startTransition(() => {
         if (cancelled) return;
-        lastFetchedRangeDaysRef.current = rangeDays;
+        lastFetchedRangeKeyRef.current = rangeKey;
         rangeFetchInFlightRef.current = false;
         dataRef.current = next.data;
         setState(next);
@@ -142,11 +146,11 @@ export function useDashboardData(
     const run = async () => {
       try {
         if (needsEnsure) {
-          await ensureLocalRange(rangeDays);
+          await ensureLocalRange(collectDays, Boolean(dateRange));
           if (cancelled) return;
           ensuredMaxDaysRef.current = Math.max(
             ensuredMaxDaysRef.current,
-            rangeDays,
+            collectDays,
           );
           datasetCacheRef.current = null;
           cachedDailyDaysRef.current = 0;
@@ -155,6 +159,8 @@ export function useDashboardData(
         }
 
         const canReuseDaily =
+          !dateRange &&
+          lastFetchedRangeKeyRef.current?.startsWith('last:') &&
           datasetCacheRef.current != null &&
           cachedDailyDaysRef.current >= fetchDays.dailyDays &&
           !needsEnsure &&
@@ -177,7 +183,7 @@ export function useDashboardData(
 
         const hasUsageRows = dataset.dailyRows.length > 0;
         if (hasUsageRows) {
-          const fingerprint = fingerprintUsageDataset(dataset, rangeDays);
+          const fingerprint = fingerprintUsageDataset(dataset, rangeDays, dateRange);
           const prior = dataRef.current;
           if (
             fingerprint === lastFingerprintRef.current &&
@@ -185,7 +191,7 @@ export function useDashboardData(
           ) {
             startTransition(() => {
               if (cancelled) return;
-              lastFetchedRangeDaysRef.current = rangeDays;
+              lastFetchedRangeKeyRef.current = rangeKey;
               rangeFetchInFlightRef.current = false;
               setState((current) => {
                 if (
@@ -211,7 +217,7 @@ export function useDashboardData(
           }
           lastFingerprintRef.current = fingerprint;
           applyResult({
-            data: buildDashboardDataFromDataset(dataset, rangeDays),
+            data: buildDashboardDataFromDataset(dataset, rangeDays, dateRange),
             source: 'api',
             loading: false,
             refreshing: false,
@@ -222,7 +228,7 @@ export function useDashboardData(
         }
 
         const emptyMessage = '当前时间范围暂无用量记录';
-        lastFingerprintRef.current = `empty|${rangeDays}`;
+        lastFingerprintRef.current = `empty|${rangeKey}`;
         if (mockEnabled) {
           applyResult({
             data: withClippedTodayHourly(dashboardMockData),
@@ -277,7 +283,7 @@ export function useDashboardData(
     return () => {
       cancelled = true;
     };
-  }, [rangeDays, selectedDate, revision, mockEnabled, cliBackend]);
+  }, [rangeKey, rangeDays, selectedDate, dateRange, collectDays, revision, mockEnabled, cliBackend]);
 
   useEffect(() => {
     if (!isCliBackend()) return;
@@ -306,6 +312,7 @@ export function useDashboardData(
 
   return {
     ...state,
+    refreshing: state.refreshing || (lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey),
     reload,
   };
 }

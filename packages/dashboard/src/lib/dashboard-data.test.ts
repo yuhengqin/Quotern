@@ -14,6 +14,7 @@ import {
   projectDashboardForDate,
 } from './dashboard-data.ts';
 import { buildToolModelUsage } from './dashboard-mock-data.ts';
+import { buildVisibleMetricTrends } from './usage-filter.ts';
 
 function datasetWithDays(
   dailyRows: UsageDataset['dailyRows'],
@@ -36,6 +37,47 @@ function datasetWithDays(
     ...extras,
   };
 }
+
+test('custom historical range includes both endpoints and excludes later usage', () => {
+  const dataset = datasetWithDays([
+    { date: '2026-03-01', tokens: 5, costUsd: 0.5, models: {} },
+    { date: '2026-03-02', tokens: 10, costUsd: 1, models: {} },
+    { date: '2026-03-03', tokens: 20, costUsd: 2, models: {} },
+    { date: '2026-03-04', tokens: 99, costUsd: 9, models: {} },
+  ]);
+  const view = buildDashboardDataFromDataset(dataset, 2, { start: '2026-03-02', end: '2026-03-03' });
+  assert.equal(view.summary.totalTokens, 30);
+  assert.deepEqual(view.rangeDailyUsage.map((row) => row.date), ['2026-03-02', '2026-03-03']);
+});
+
+test('custom historical single day fills all 24 hours and compares the preceding day', () => {
+  const dataset = datasetWithDays([
+    { date: '2026-03-01', tokens: 10, costUsd: 1, models: {} },
+    { date: '2026-03-02', tokens: 20, costUsd: 2, models: {} },
+  ], { hourlyRows: [{ date: '2026-03-02', hour: 23, source: 'codex', tokens: 20, costUsd: 2, inputTokens: 20, outputTokens: 0, cachedInputTokens: 0 }] });
+  const view = buildDashboardDataFromDataset(dataset, 1, { start: '2026-03-02', end: '2026-03-02' });
+  assert.equal(view.todayHourlyUsage.length, 24);
+  assert.equal(view.todayHourlyUsage[23].totalTokens, 20);
+  assert.equal(view.metricTrends.totalTokens?.changePct, 100);
+});
+
+test('custom comparison stays hidden when collection only covers part of the previous period', () => {
+  const dataset = datasetWithDays([
+    { date: '2026-01-01', tokens: 10, costUsd: 1, models: {} },
+    { date: '2026-03-01', tokens: 20, costUsd: 2, models: {} },
+  ]);
+  dataset.summary.statsSince = '2026-01-01';
+  const view = buildDashboardDataFromDataset(dataset, 90, { start: '2026-03-01', end: '2026-05-29' });
+  assert.equal(view.metricTrends.totalTokens, null);
+  const visible = buildVisibleMetricTrends({
+    currentDailyRows: view.rangeDailyUsage, currentHourlyRows: [],
+    heatmapDailyRows: view.heatmapDailyUsage, heatmapDays: view.heatmapDays,
+    hourlyApiRows: [], modelRows: [], toolRows: [], selectedSources: [],
+    rangeDays: 90, hourly: false, currentDate: '2026-05-29',
+    availableFromDate: view.availableFromDate,
+  });
+  assert.equal(visible.totalTokens, null);
+});
 
 test('today range stays zero when only yesterday has usage', () => {
   const today = localDateNow();

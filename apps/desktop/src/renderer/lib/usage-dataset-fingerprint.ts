@@ -1,3 +1,4 @@
+import { dashboardRangeKey, type DashboardDateRange } from './dashboard-date-range.js';
 import type { UsageDataset } from './api';
 
 /**
@@ -7,6 +8,7 @@ import type { UsageDataset } from './api';
 export function fingerprintUsageDataset(
   dataset: UsageDataset,
   rangeDays: number,
+  dateRange?: DashboardDateRange | null,
 ): string {
   const daily = dataset.dailyRows;
   const first = daily[0];
@@ -18,7 +20,9 @@ export function fingerprintUsageDataset(
 
   return [
     rangeDays,
+    dashboardRangeKey(rangeDays, dateRange),
     dataset.summary.totalTokens,
+    dataset.summary.statsSince,
     dataset.summary.todayTokens,
     Math.round(dataset.summary.totalCostUsd * 100),
     daily.length,

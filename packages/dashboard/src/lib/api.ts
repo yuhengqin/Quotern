@@ -1,3 +1,4 @@
+import type { DashboardDateRange } from './dashboard-date-range.ts';
 import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
 import type { PricingData } from 'quotern-core';
 import bundledPricing from 'quotern-core/pricing-data' with { type: 'json' };
@@ -249,30 +250,34 @@ export async function fetchSummary(): Promise<UsageSummary> {
   });
 }
 
-export async function fetchDaily(days = 90): Promise<DailyUsageResponse> {
+function dateRangeQuery(range?: DashboardDateRange): string {
+  return range ? `&fromDate=${encodeURIComponent(range.start)}&toDate=${encodeURIComponent(range.end)}` : '';
+}
+
+export async function fetchDaily(days = 90, range?: DashboardDateRange): Promise<DailyUsageResponse> {
   const { others } = apiPrefixes();
   return request<DailyUsageResponse>(
-    appendDeviceIdsQuery(`${others}usage-daily?days=${days}`),
+    appendDeviceIdsQuery(`${others}usage-daily?days=${days}${dateRangeQuery(range)}`),
     {
       headers: authHeaders(),
     },
   );
 }
 
-export async function fetchHourly(days = 1): Promise<HourlyUsageResponse> {
+export async function fetchHourly(days = 1, range?: DashboardDateRange): Promise<HourlyUsageResponse> {
   const { others } = apiPrefixes();
   return request<HourlyUsageResponse>(
-    appendDeviceIdsQuery(`${others}usage-hourly?days=${days}`),
+    appendDeviceIdsQuery(`${others}usage-hourly?days=${days}${dateRangeQuery(range)}`),
     {
       headers: authHeaders(),
     },
   );
 }
 
-export async function fetchModelBreakdown(days = 30): Promise<ModelBreakdownResponse> {
+export async function fetchModelBreakdown(days = 30, range?: DashboardDateRange): Promise<ModelBreakdownResponse> {
   const { others } = apiPrefixes();
   return request<ModelBreakdownResponse>(
-    appendDeviceIdsQuery(`${others}usage-model-breakdown?days=${days}`),
+    appendDeviceIdsQuery(`${others}usage-model-breakdown?days=${days}${dateRangeQuery(range)}`),
     { headers: authHeaders() },
   );
 }
@@ -417,17 +422,24 @@ export type UsageDatasetFetchDays =
       dailyDays: number;
       breakdownDays: number;
       hourlyDays?: number;
+      dailyRange?: DashboardDateRange;
+      hourlyRange?: DashboardDateRange;
+      breakdownRange?: DashboardDateRange;
     };
 
 function normalizeUsageDatasetDays(days: UsageDatasetFetchDays): {
   dailyDays: number;
   breakdownDays: number;
   hourlyDays: number;
+  dailyRange?: DashboardDateRange;
+  hourlyRange?: DashboardDateRange;
+  breakdownRange?: DashboardDateRange;
 } {
   if (typeof days === 'number') {
     return { dailyDays: days, breakdownDays: days, hourlyDays: days };
   }
   return {
+    ...days,
     dailyDays: days.dailyDays,
     breakdownDays: days.breakdownDays,
     hourlyDays: days.hourlyDays ?? days.breakdownDays,
@@ -452,17 +464,17 @@ export async function fetchUsageDataset(
     );
     hydrateActiveDeviceIds(resolveDeviceFilterUserKey());
   }
-  const { dailyDays, breakdownDays, hourlyDays } =
+  const { dailyDays, breakdownDays, hourlyDays, dailyRange, hourlyRange, breakdownRange } =
     normalizeUsageDatasetDays(days);
   const [summary, syncStatus, daily, hourly, models] = await Promise.all([
     fetchSummary(),
     fetchSyncStatusIfCli(),
-    fetchDaily(dailyDays),
-    fetchHourly(hourlyDays).catch(() => ({
+    fetchDaily(dailyDays, dailyRange),
+    fetchHourly(hourlyDays, hourlyRange).catch(() => ({
       hours: [],
       timeZone: 'Asia/Shanghai',
     })),
-    fetchModelBreakdown(breakdownDays),
+    fetchModelBreakdown(breakdownDays, breakdownRange),
   ]);
 
   return {
@@ -533,12 +545,13 @@ export interface EnsureLocalRangeResult {
 /** Expand local collect floor for today/7D/30D/90D and re-sync when needed. */
 export async function ensureLocalRange(
   days: number,
+  custom = false,
 ): Promise<EnsureLocalRangeResult> {
   const { others } = apiPrefixes();
   return request<EnsureLocalRangeResult>(`${others}ensure-local-range`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ days }),
+    body: JSON.stringify({ days, custom }),
   });
 }
 

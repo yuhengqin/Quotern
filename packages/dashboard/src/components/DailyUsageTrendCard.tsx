@@ -66,6 +66,7 @@ export function DailyUsageTrendCard({
   rows,
   dayScoped = false,
   rangeDays = 7,
+  rangeLabel,
 }: {
   className?: string;
   /** Compact tray layout; data, metrics and interactions remain unchanged. */
@@ -77,6 +78,7 @@ export function DailyUsageTrendCard({
   dayScoped?: boolean;
   /** Selected multi-day window; ignored in hourly / today mode. */
   rangeDays?: number;
+  rangeLabel?: string;
 }) {
   const gradientId = useId().replace(/:/g, '');
   const [metric, setMetric] = useState<TrendMetric>('tokens');
@@ -98,7 +100,7 @@ export function DailyUsageTrendCard({
     ? dayScoped
       ? '当日按小时的 Token 与费用趋势'
       : '今日按小时的 Token 与费用趋势'
-    : `最近 ${rangeDays} 天的 Token 与费用趋势`;
+    : `${rangeLabel ?? `最近 ${rangeDays} 天`}的 Token 与费用趋势`;
 
   return (
     <Card className={`${compact ? 'min-w-0 p-3' : 'h-full min-w-0'} overflow-hidden rounded-2xl ${className}`}>

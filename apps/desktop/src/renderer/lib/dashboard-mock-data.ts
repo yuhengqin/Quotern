@@ -161,6 +161,8 @@ export interface DashboardToolUsageInput {
 }
 
 export interface DashboardMockData {
+  /** Earliest calendar date covered by collection, for complete comparisons. */
+  availableFromDate?: string;
   hourlyUsage: DashboardHourlyUsageRow[];
   rangeDailyUsage: DashboardDailyUsageRow[];
   heatmapDailyUsage: DashboardDailyUsageRow[];

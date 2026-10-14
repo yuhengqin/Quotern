@@ -1,3 +1,6 @@
+import { addLocalDays } from 'quotern-core/timezone';
+import type { DashboardDateRange } from './dashboard-date-range.js';
+import { localDateAndHour } from 'quotern-core/timezone';
 import { parseDailyModelKey } from 'quotern-core/daily-model-key';
 import { normalizeProjectName } from 'quotern-core/project-label';
 import type {
@@ -23,12 +26,12 @@ import {
   type DashboardMockData,
   type DashboardUsageSummary,
   emptyDashboardData,
-} from './dashboard-mock-data.ts';
+} from './dashboard-mock-data.js';
 import {
   localDateDaysAgo,
   localDateNow,
   localHourNow,
-} from './stats-timezone.ts';
+} from './stats-timezone.js';
 import { buildSummaryFromRange } from './time-range.ts';
 
 const CHART_COLORS = [
@@ -111,6 +114,7 @@ export function withClippedTodayHourly(
 export function buildDashboardDataFromDataset(
   dataset: UsageDataset,
   rangeDays: number,
+  dateRange?: DashboardDateRange | null,
 ): DashboardMockData {
   if (dataset.dailyRows.length === 0) {
     return emptyDashboardData;
@@ -118,15 +122,19 @@ export function buildDashboardDataFromDataset(
 
   // Calendar window (Asia/Shanghai), not sparse-array slice — a day with no
   // usage is absent from dailyRows, so slice(-1) would wrongly pick yesterday.
-  const rangeEnd = localDateNow();
-  const rangeStart = localDateDaysAgo(rangeDays);
+  const rangeEnd = dateRange?.end ?? localDateNow();
+  const rangeStart = dateRange?.start ?? localDateDaysAgo(rangeDays);
   const selectedApiDays = dataset.dailyRows.filter(
     (row) => row.date >= rangeStart && row.date <= rangeEnd,
   );
 
-  const heatmapStart = localDateDaysAgo(HEATMAP_LOOKBACK_DAYS);
+  const comparisonStart = addLocalDays(rangeStart, -rangeDays);
+  const availableFromDate = /^\d{4}-\d{2}-\d{2}$/.test(dataset.summary.statsSince)
+    ? dataset.summary.statsSince : localDateAndHour(dataset.summary.statsSince).date;
+  const heatmapStart = dateRange && comparisonStart < localDateDaysAgo(HEATMAP_LOOKBACK_DAYS)
+    ? comparisonStart : localDateDaysAgo(HEATMAP_LOOKBACK_DAYS);
   const heatmapApiDays = dataset.dailyRows.filter(
-    (row) => row.date >= heatmapStart && row.date <= rangeEnd,
+    (row) => row.date >= heatmapStart && row.date <= localDateNow(),
   );
   const selectedModels = dataset.modelRows.filter((row) => row.tokens > 0);
   const rangeSummary = buildSummaryFromRange(
@@ -151,10 +159,11 @@ export function buildDashboardDataFromDataset(
   const todayHourlyUsage = buildFilledHourlyForDate(
     hourlyApiRows,
     rangeEnd,
-    localHourNow(),
+    rangeEnd === localDateNow() ? localHourNow() : 23,
   );
 
   return {
+    availableFromDate,
     summary,
     rangeDailyUsage: allDailyUsage,
     heatmapDailyUsage,

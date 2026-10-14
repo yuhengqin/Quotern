@@ -6,12 +6,13 @@ import {
   Label,
   ListBox,
   Select,
-  Tabs,
 } from '@heroui/react';
 import { FilterChromeActions } from '@/components/FilterChromeActions';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DashboardToolUsageRow } from '@/lib/dashboard-mock-data';
 import { sourceLabel } from '@/lib/tokens';
+import { DashboardDateRangePicker } from './DashboardDateRangePicker';
+import { formatDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 
 export type DashboardRange = 'today' | 'last-7-days' | 'last-30-days' | 'last-90-days';
 
@@ -29,14 +30,14 @@ const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
   { id: 'last-90-days', label: '90D' },
 ];
 
-const FILTER_CONTROL_HEIGHT = '!h-8 !min-h-8';
-
 export function DashboardFilter({
   value,
   onChange,
   tools,
   selectedTools,
   onToolsChange,
+  customRange = null,
+  onCustomRangeChange,
   disabled = false,
 }: {
   value: DashboardRange;
@@ -45,6 +46,8 @@ export function DashboardFilter({
   /** Empty = all available tools. */
   selectedTools: string[];
   onToolsChange: (sources: string[]) => void;
+  customRange?: DashboardDateRange | null;
+  onCustomRangeChange: (range: DashboardDateRange) => void;
   /** When true, ignore range/tool changes (e.g. while local range sync runs). */
   disabled?: boolean;
 }) {
@@ -54,38 +57,24 @@ export function DashboardFilter({
   );
 
   return (
-    <div className="mb-5 flex min-w-0 items-center gap-2" aria-label="筛选条件">
-      <div className="shrink-0 sm:hidden">
-        <RangeSelect
-          disabled={disabled}
-          value={value}
-          onChange={onChange}
-        />
+    <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label="筛选条件">
+      <div className="flex shrink-0 items-center rounded-full bg-surface-secondary p-0.5" role="group" aria-label="时间范围">
+        {RANGE_OPTIONS.map((option) => (
+          <Button
+            aria-pressed={!customRange && value === option.id}
+            className={`!h-6 !min-h-6 !min-w-0 rounded-full px-3 text-xs font-normal transition-none! ${!customRange && value === option.id ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
+            isDisabled={disabled}
+            key={option.id}
+            size="sm"
+            variant="ghost"
+            onPress={() => onChange(option.id)}
+          >{option.label}</Button>
+        ))}
+        <DashboardDateRangePicker value={customRange} initialDays={DASHBOARD_RANGE_DAYS[value]} disabled={disabled} onChange={onCustomRangeChange} />
       </div>
-      <Tabs
-        className="hidden w-fit shrink-0 text-center sm:block"
-        selectedKey={value}
-        onSelectionChange={(key) => {
-          if (disabled) return;
-          onChange(String(key) as DashboardRange);
-        }}
-      >
-        <Tabs.ListContainer>
-          <Tabs.List
-            aria-label="时间范围"
-            className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
-          >
-            {RANGE_OPTIONS.map((option) => (
-              <Tabs.Tab className="transition-none!" id={option.id} key={option.id}>
-                <span className="text-xs font-normal">{option.label}</span>
-                <Tabs.Indicator className="bg-accent transition-none!" />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
-      </Tabs>
+      {customRange && <span className="text-xs text-muted">{formatDashboardDateRange(customRange)}</span>}
 
-      {/* Always reserve the tools slot so Tabs don't shift when tools appear/vanish. */}
+      {/* Reserve the Agent slot so time controls stay stable as data changes. */}
       <div className="flex min-h-8 min-w-0 shrink-0 items-center">
         {availableTools.length > 0 ? (
           <ToolChannelSelect
@@ -103,48 +92,6 @@ export function DashboardFilter({
         <FilterChromeActions />
       </div>
     </div>
-  );
-}
-
-function RangeSelect({
-  disabled,
-  onChange,
-  value,
-}: {
-  disabled: boolean;
-  onChange: (value: DashboardRange) => void;
-  value: DashboardRange;
-}) {
-  return (
-    <Select
-      aria-label="时间范围"
-      className="min-w-0 max-w-[7.5rem] shrink text-xs"
-      isDisabled={disabled}
-      value={value}
-      variant="secondary"
-      onChange={(key) => {
-        if (disabled || key == null) return;
-        onChange(String(key) as DashboardRange);
-      }}
-    >
-      <Label className="sr-only">时间范围</Label>
-      <Select.Trigger
-        className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none ps-2.5 pe-7 !text-xs font-normal`}
-      >
-        <Select.Value className="min-w-0 max-w-20 !text-xs" />
-        <Select.Indicator className="size-3.5 text-muted" />
-      </Select.Trigger>
-      <Select.Popover className="w-50 rounded-xl bg-surface shadow-md" placement="bottom start">
-        <ListBox aria-label="时间范围">
-          {RANGE_OPTIONS.map((option) => (
-            <ListBox.Item id={option.id} key={option.id} textValue={option.label}>
-              {option.label}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-    </Select>
   );
 }
 

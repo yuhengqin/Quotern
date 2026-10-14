@@ -348,12 +348,13 @@ export async function runSync(
 export async function ensureLocalCollectRange(
   deps: LocalApiDeps,
   days: number,
+  custom = false,
 ): Promise<{
   expanded: boolean;
   config: TudConfig;
   sync: Awaited<ReturnType<typeof runSync>> | null;
 }> {
-  if (!isLocalRangeDays(days)) {
+  if (!isLocalRangeDays(days) && !(custom && Number.isInteger(days) && days >= 1 && days <= 365)) {
     throw new Error(`INVALID_RANGE_DAYS:${days}`);
   }
 

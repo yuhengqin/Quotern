@@ -12,6 +12,7 @@ import {
   aggregateHourly,
   aggregateModelBreakdown,
   aggregateUsageSummary,
+  resolveAggregateWindow,
 } from './aggregate.js';
 import { sealedDailyCachePath } from './paths.js';
 import { normalizeProjectName } from './project-label.js';
@@ -19,7 +20,6 @@ import { roundCostUsd } from './pricing/index.js';
 import {
   DEFAULT_STATS_TIMEZONE,
   localDateAndHour,
-  localDateDaysAgo,
   localDateNow,
 } from './timezone.js';
 import type {
@@ -395,8 +395,9 @@ export class AggregateCache {
     rows: QueueBucket[],
     days: number,
     statsSince: string,
+    bounds?: { fromDate?: string; toDate?: string },
   ): DailyUsageResponse {
-    const fromDate = localDateDaysAgo(days, this.timeZone);
+    const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
       /^\d{4}-\d{2}-\d{2}$/.test(statsSince)
@@ -405,7 +406,7 @@ export class AggregateCache {
 
     const out: DailyUsageRow[] = [];
     for (const [date, entry] of this.days) {
-      if (date < fromDate || date > today || date < statsDate || date >= today) {
+      if (date < fromDate || date > toDate || date < statsDate || date >= today) {
         continue;
       }
       out.push(entry.daily);
@@ -418,7 +419,7 @@ export class AggregateCache {
       this.timeZone,
       { fromDate: today, toDate: today },
     );
-    if (today >= fromDate && today >= statsDate) {
+    if (today >= fromDate && today <= toDate && today >= statsDate) {
       out.push(...todayAgg.days);
     }
 
@@ -430,8 +431,9 @@ export class AggregateCache {
     rows: QueueBucket[],
     days: number,
     statsSince: string,
+    bounds?: { fromDate?: string; toDate?: string },
   ): HourlyUsageResponse {
-    const fromDate = localDateDaysAgo(days, this.timeZone);
+    const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
       /^\d{4}-\d{2}-\d{2}$/.test(statsSince)
@@ -440,7 +442,7 @@ export class AggregateCache {
 
     const hours: HourlyUsageRow[] = [];
     for (const [date, entry] of this.days) {
-      if (date < fromDate || date < statsDate || date >= today) continue;
+      if (date < fromDate || date > toDate || date < statsDate || date >= today) continue;
       hours.push(...entry.hourly);
     }
 
@@ -451,7 +453,7 @@ export class AggregateCache {
       this.timeZone,
       { fromDate: today, toDate: today },
     );
-    if (today >= fromDate && today >= statsDate) {
+    if (today >= fromDate && today <= toDate && today >= statsDate) {
       hours.push(...todayAgg.hours);
     }
 
@@ -468,8 +470,9 @@ export class AggregateCache {
     rows: QueueBucket[],
     days: number,
     statsSince: string,
+    bounds?: { fromDate?: string; toDate?: string },
   ): ModelBreakdownResponse {
-    const fromDate = localDateDaysAgo(days, this.timeZone);
+    const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
       /^\d{4}-\d{2}-\d{2}$/.test(statsSince)
@@ -479,7 +482,7 @@ export class AggregateCache {
     const modelParts: SealedModelRow[] = [];
     const projectParts: SealedProjectRow[] = [];
     for (const [date, entry] of this.days) {
-      if (date < fromDate || date < statsDate || date >= today) continue;
+      if (date < fromDate || date > toDate || date < statsDate || date >= today) continue;
       modelParts.push(...entry.models);
       projectParts.push(...entry.projects);
     }
@@ -491,7 +494,7 @@ export class AggregateCache {
       this.timeZone,
       { fromDate: today, toDate: today },
     );
-    if (today >= fromDate && today >= statsDate) {
+    if (today >= fromDate && today <= toDate && today >= statsDate) {
       for (const m of todayBreakdown.models) {
         modelParts.push({
           model: m.model,

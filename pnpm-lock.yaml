@@ -40,6 +40,9 @@ importers:
       '@heroui/styles':
         specifier: 3.2.4
         version: 3.2.4(tailwind-merge@3.6.0)(tailwindcss@4.3.2)
+      '@internationalized/date':
+        specifier: 3.12.3
+        version: 3.12.3
       '@lobehub/icons':
         specifier: ^5.18.0
         version: 5.18.0(@lobehub/ui@5.43.1)(@types/react@19.2.17)(antd@6.6.3(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -187,6 +190,9 @@ importers:
       '@heroui/styles':
         specifier: 3.2.4
         version: 3.2.4(tailwind-merge@3.6.0)(tailwindcss@4.3.2)
+      '@internationalized/date':
+        specifier: 3.12.3
+        version: 3.12.3
       '@lobehub/icons-static-svg':
         specifier: ^1.94.0
         version: 1.94.0

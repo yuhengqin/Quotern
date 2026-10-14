@@ -11,6 +11,7 @@ import {
 } from '../aggregate.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
+import { localDateNow } from '../timezone.js';
 import {
   ensureLocalCollectRange,
   getHookStatus,
@@ -21,6 +22,19 @@ import {
 
 function ok<T>(data: T) {
   return { success: true as const, message: 'ok', data };
+}
+
+function readDateBounds(c: Context): { fromDate: string; toDate: string } | null | undefined {
+  const fromDate = c.req.query('fromDate');
+  const toDate = c.req.query('toDate');
+  if (fromDate === undefined && toDate === undefined) return undefined;
+  const valid = (date: string | undefined): date is string => {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+    const stamp = Date.parse(`${date}T00:00:00Z`);
+    return Number.isFinite(stamp) && new Date(stamp).toISOString().slice(0, 10) === date;
+  };
+  if (!valid(fromDate) || !valid(toDate) || fromDate > toDate || toDate > localDateNow()) return null;
+  return { fromDate, toDate };
 }
 
 export function createLocalApiApp(deps: LocalApiDeps): Hono {
@@ -54,30 +68,36 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.get('/functions/tud-account-usage-summary', summaryHandler);
 
   app.get('/functions/tud-usage-daily', async (c) => {
+    const bounds = readDateBounds(c);
+    if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 90));
     const statsSince = resolveLocalCollectSince(config);
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
-      return c.json(ok(deps.aggregateCache.getDaily(rows, days, statsSince)));
+      return c.json(ok(deps.aggregateCache.getDaily(rows, days, statsSince, bounds)));
     }
-    return c.json(ok(aggregateDaily(rows, days, statsSince)));
+    return c.json(ok(aggregateDaily(rows, days, statsSince, undefined, bounds)));
   });
 
   app.get('/functions/tud-usage-hourly', async (c) => {
+    const bounds = readDateBounds(c);
+    if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 1));
     const statsSince = resolveLocalCollectSince(config);
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
-      return c.json(ok(deps.aggregateCache.getHourly(rows, days, statsSince)));
+      return c.json(ok(deps.aggregateCache.getHourly(rows, days, statsSince, bounds)));
     }
-    return c.json(ok(aggregateHourly(rows, days, statsSince)));
+    return c.json(ok(aggregateHourly(rows, days, statsSince, undefined, bounds)));
   });
 
   app.get('/functions/tud-usage-model-breakdown', async (c) => {
+    const bounds = readDateBounds(c);
+    if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 30));
@@ -85,10 +105,10 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
       return c.json(
-        ok(deps.aggregateCache.getModelBreakdown(rows, days, statsSince)),
+        ok(deps.aggregateCache.getModelBreakdown(rows, days, statsSince, bounds)),
       );
     }
-    return c.json(ok(aggregateModelBreakdown(rows, days, statsSince)));
+    return c.json(ok(aggregateModelBreakdown(rows, days, statsSince, undefined, bounds)));
   });
 
   app.get('/functions/tud-sync-status', async (c) => {
@@ -133,14 +153,16 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.post('/functions/tud-ensure-local-range', async (c) => {
     let days = 7;
+    let custom = false;
     try {
-      const body = await c.req.json<{ days?: number }>();
+      const body = await c.req.json<{ days?: number; custom?: boolean }>();
       if (body?.days != null) days = Number(body.days);
+      custom = body?.custom === true;
     } catch {
       // empty body → default 7
     }
     try {
-      const result = await ensureLocalCollectRange(deps, days);
+      const result = await ensureLocalCollectRange(deps, days, custom);
       return c.json(
         ok({
           expanded: result.expanded,

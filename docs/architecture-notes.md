@@ -42,10 +42,11 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | `GET /functions/tud-usage-daily` | 按日统计，默认 90 天 |
 | `GET /functions/tud-usage-hourly` | 按小时展示，默认 1 天 |
 | `GET /functions/tud-usage-model-breakdown` | 模型与项目分布，默认 30 天 |
+| 上述三个统计端点的日期参数 | 可同时传 `fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD`，按北京时间包含两端；无参数时保留 `days` 语义，缺一端、无效日期、倒序或未来日期返回 400 |
 | `GET /functions/tud-sync-status` | 同步时间、来源和 Hook 状态 |
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
 | `POST /functions/tud-trigger-sync` | 可传 `{ source }`；省略或 `all` 为全量，未知来源返回 400 |
-| `POST /functions/tud-ensure-local-range` | 可传 `{ days }`；支持 1、7、30、90，按需扩展采集范围 |
+| `POST /functions/tud-ensure-local-range` | 可传 `{ days }`；支持 1、7、30、90；自定义范围传 `{ days, custom: true }`，支持 1–365 的整数，按需扩展采集范围 |
 | `GET /functions/tud-share-backgrounds` | 读取本机共享背景图库，返回图片 Data URL 和元数据 |
 | `POST /functions/tud-share-backgrounds` | `operation` 为 `add` / `remove` / `touch` / `import`；导入返回图库、已接收与待导入旧 ID，满额不自动覆盖 |
 

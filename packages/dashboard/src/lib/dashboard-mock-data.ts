@@ -278,6 +278,8 @@ export interface DashboardToolUsageInput {
 export const HEATMAP_LOOKBACK_DAYS = 365;
 
 export interface DashboardMockData {
+  /** Earliest calendar date covered by collection, for complete comparisons. */
+  availableFromDate?: string;
   hourlyUsage: DashboardHourlyUsageRow[];
   /** Selected range daily rows (multi-day token curve). */
   rangeDailyUsage: DashboardDailyUsageRow[];

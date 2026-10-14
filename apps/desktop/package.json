@@ -27,6 +27,7 @@
     "@gravity-ui/icons": "^2.20.0",
     "@heroui/react": "^3.2.4",
     "@heroui/styles": "^3.2.4",
+    "@internationalized/date": "3.12.3",
     "@lobehub/icons": "^5.18.0",
     "@lobehub/icons-static-svg": "^1.94.0",
     "@nivo/heatmap": "^0.99.0",

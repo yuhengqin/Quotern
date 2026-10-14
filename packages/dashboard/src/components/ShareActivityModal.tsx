@@ -7,6 +7,7 @@ import { OPEN_SHARE_EVENT } from '@/lib/shell-events';
 import { buildShareSnapshot, SHARE_RANGE_OPTIONS, type ShareFilters } from '../lib/share-snapshot';
 import { normalizeSourceId } from '../lib/usage-filter';
 import { MAX_SHARE_BACKGROUNDS } from '../lib/share-backgrounds';
+import { formatDashboardDateRange } from '@/lib/dashboard-date-range';
 import { ToolChannelSelect } from './DashboardFilter';
 import { getShareCardVariant, SHARE_CARD_VARIANTS, ShareCardCarousel, type ShareCardVariant } from './ShareCardCarousel';
 import { ShareCardActions } from './ShareCardActions';
@@ -61,9 +62,10 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   const [filters, setFilters] = useState<ShareFilters>(() => ({
     rangeDays: initial?.filters.rangeDays ?? 7,
     selectedDate: initial?.filters.selectedDate ?? null,
+    dateRange: initial?.filters.dateRange ?? null,
     selectedSources: [...new Set((initial?.filters.selectedSources ?? []).map(normalizeSourceId))],
   }));
-  const { data, loading, error, retry } = useShareData(initial, filters.rangeDays, filters.selectedDate);
+  const { data, loading, error, retry } = useShareData(initial, filters.rangeDays, filters.selectedDate, filters.dateRange);
   const preview = useMemo(() => data ? buildShareSnapshot(data, filters) : null, [data, filters]);
   const sources = [...new Set([
     ...(initial && !initial.loading && !initial.error ? initial.details?.sources ?? [] : []),
@@ -71,8 +73,9 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
     ...(preview?.tools.map((tool) => tool.source) ?? []),
   ].map(normalizeSourceId))];
   const inheritedDate = initial?.filters.selectedDate;
-  const rangeValue = filters.selectedDate ? `date:${filters.selectedDate}` : String(filters.rangeDays);
-  const rangeLabel = filters.selectedDate ?? SHARE_RANGE_OPTIONS.find((option) => option.days === filters.rangeDays)?.label;
+  const inheritedRange = initial?.filters.dateRange;
+  const rangeValue = filters.selectedDate ? `date:${filters.selectedDate}` : filters.dateRange ? 'custom' : String(filters.rangeDays);
+  const rangeLabel = filters.selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : SHARE_RANGE_OPTIONS.find((option) => option.days === filters.rangeDays)?.label);
   const disabled = loading || error !== null || !preview;
 
   return (
@@ -87,8 +90,9 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             onChange={(key) => {
               if (key == null) return;
               const selectedDate = String(key).startsWith('date:') ? inheritedDate ?? null : null;
-              const rangeDays = selectedDate ? initial!.filters.rangeDays : Number(key);
-              setFilters((current) => ({ ...current, rangeDays, selectedDate }));
+              const dateRange = String(key) === 'custom' || selectedDate ? inheritedRange ?? null : null;
+              const rangeDays = selectedDate || dateRange ? initial!.filters.rangeDays : Number(key);
+              setFilters((current) => ({ ...current, rangeDays, selectedDate, dateRange }));
             }}
           >
             <Label className="sr-only">日期范围</Label>
@@ -103,6 +107,9 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
                     {option.label}<ListBox.ItemIndicator />
                   </ListBox.Item>
                 ))}
+                {inheritedRange && <ListBox.Item id="custom" textValue={formatDashboardDateRange(inheritedRange)}>
+                  {formatDashboardDateRange(inheritedRange)}<ListBox.ItemIndicator />
+                </ListBox.Item>}
                 {inheritedDate && (
                   <ListBox.Item id={`date:${inheritedDate}`} textValue={inheritedDate}>
                     {inheritedDate}<ListBox.ItemIndicator />

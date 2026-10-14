@@ -302,6 +302,7 @@ export function buildVisibleMetricTrends(opts: {
   rangeDays: number;
   hourly: boolean;
   currentDate?: string;
+  availableFromDate?: string;
 }): DashboardMetricTrends {
   const current = summarizeTrendRows({
     dailyRows: opts.currentDailyRows,
@@ -309,6 +310,10 @@ export function buildVisibleMetricTrends(opts: {
     hourly: opts.hourly,
   });
   const currentDate = opts.currentDate ?? localDateNow();
+  const comparisonStart = addLocalDays(currentDate, -(opts.hourly ? 1 : 2 * opts.rangeDays - 1));
+  if (opts.availableFromDate && comparisonStart < opts.availableFromDate) {
+    return { inputTokens: null, outputTokens: null, totalTokens: null, totalCostUsd: null };
+  }
 
   if (opts.hourly) {
     const throughHour = Math.max(

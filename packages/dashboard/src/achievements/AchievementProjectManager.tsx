@@ -11,6 +11,7 @@ export function AchievementProjectManager() {
   const shown = projects.filter(item => item.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (filter === 'all' || filter === 'pending' && !item.confirmed && !item.ignored && !item.mergeInto || filter === 'ignored' && item.ignored || filter === 'active' && item.confirmed && !item.ignored && !item.mergeInto));
   const change = async (operation: Parameters<typeof updateProject>[0]) => { try { setError(null); await updateProject(operation); return true; } catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败，请重试'); return false; } };
   return <div>
+    <p className="mb-2 text-xs leading-5 text-muted">同一仓库的子目录与 worktree 合并累计，同一天跨 Agent 只计一次。</p>
     <p className="mb-3 text-xs leading-5 text-muted">普通工作目录需确认后才累计新的项目成就。重命名只改变显示；合并会按日期去重，可随时撤回。忽略目录后，已获得的徽章仍会保留。</p>
     <div className="mb-4 flex flex-wrap gap-2"><input type="search" aria-label="搜索项目设置" className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs" value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索项目或目录"/><select aria-label="筛选项目设置" value={filter} onChange={event => setFilter(event.target.value)} className="rounded-xl border border-border bg-surface px-3 py-2 text-xs"><option value="all">全部目录</option><option value="active">已确认项目</option><option value="pending">待确认</option><option value="ignored">已忽略</option></select></div>
     {error && <p role="alert" className="mb-3 text-xs text-danger">{error}</p>}

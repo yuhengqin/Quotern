@@ -102,9 +102,10 @@ function PricingList({ rows }: { rows: PricingCatalogRow[] }) {
           <Table.ScrollContainer className="h-full min-w-0">
             <Table.Content aria-label="模型价格表" className="h-full w-full overflow-y-auto">
               <Table.Header>
-                <Table.Column id="model" isRowHeader defaultWidth="1fr" minWidth={180}>模型</Table.Column>
-                <Table.Column id="inputOutput" defaultWidth="24%" minWidth={140}>输入 / 输出</Table.Column>
-                <Table.Column id="cache" defaultWidth="24%" minWidth={140}>缓存</Table.Column>
+                {/* Virtualized header rows have no layout height; fill each visible column. */}
+                <Table.Column className="bg-surface-secondary" id="model" isRowHeader defaultWidth="1fr" minWidth={180}>模型</Table.Column>
+                <Table.Column className="bg-surface-secondary" id="inputOutput" defaultWidth="24%" minWidth={140}>输入 / 输出</Table.Column>
+                <Table.Column className="bg-surface-secondary" id="cache" defaultWidth="24%" minWidth={140}>缓存</Table.Column>
               </Table.Header>
               <Table.Body items={rows}>
                 {(row) => (

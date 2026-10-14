@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Coins } from 'lucide-react';
 import {
@@ -65,14 +65,25 @@ export function FilterChromeActions() {
   return (
     <div className="flex items-center gap-1">
       <AutoUpdateAction className={primaryChromeBtn} />
-      <Link
-        to="/pricing"
-        search={{ q: '' }}
-        className="mr-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-secondary px-3 text-xs font-medium hover:bg-default focus-visible:outline-2 focus-visible:outline-accent"
-      >
-        <Coins className="size-3.5" aria-hidden />
-        模型价格
-      </Link>
+      <Tooltip closeDelay={80} delay={100}>
+        <Tooltip.Trigger
+          aria-label="模型价格"
+          className="button button--sm button--tertiary button--icon-only inline-flex size-8 min-h-8 min-w-8 shrink-0 p-0"
+          render={(props) => (
+            <Link
+              {...(props as ComponentPropsWithRef<'a'>)}
+              role="link"
+              to="/pricing"
+              search={{ q: '' }}
+            />
+          )}
+        >
+          <Coins className="size-4" aria-hidden />
+        </Tooltip.Trigger>
+        <Tooltip.Content placement="bottom">
+          <p>模型价格</p>
+        </Tooltip.Content>
+      </Tooltip>
       <ChromeAction
         icon={<LogoGithub className="size-4" />}
         label="GitHub 仓库"

@@ -1,0 +1,15 @@
+.achievement-shelf {
+  background: radial-gradient(ellipse at 78% 15%, #7c3aed55, transparent 50%), linear-gradient(120deg, #191324, #18172d 55%, #22213c);
+}
+.achievement-orbit {
+  position: absolute; width: 500px; height: 500px; border: 1px solid #c4b5fd12;
+  border-radius: 50%; right: -70px; top: -230px; transform: rotate(-30deg);
+  box-shadow: 0 0 0 55px #c4b5fd05, 0 0 0 110px #c4b5fd03;
+  pointer-events: none;
+}
+.achievement-progress { display: block; width: 100%; height: 5px; border: 0; overflow: hidden; border-radius: 8px; accent-color: var(--color-accent, #8b5cf6); }
+.achievement-progress::-webkit-progress-bar { background: color-mix(in srgb, currentColor 8%, transparent); border-radius: 8px; }
+.achievement-progress::-webkit-progress-value { background: var(--color-accent, #8b5cf6); border-radius: 8px; }
+.achievement-progress::-moz-progress-bar { background: var(--color-accent, #8b5cf6); border-radius: 8px; }
+.achievement-poster { font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: radial-gradient(ellipse at 85% 5%, #6d28d955, transparent 48%), linear-gradient(150deg, #17121f, #171b32); color: #f8f5ff; }
+@media (prefers-reduced-motion: reduce) { .achievement-page *, .achievement-page *::before, .achievement-page *::after { transition: none !important; animation: none !important; } }

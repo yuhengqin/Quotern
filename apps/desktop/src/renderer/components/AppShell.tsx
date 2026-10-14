@@ -23,6 +23,9 @@ import {
   type SettingsTabId,
 } from '@/lib/shell-events';
 import { ShareSnapshotProvider } from '../../../../../packages/dashboard/src/hooks/ShareSnapshotContext';
+import { AchievementProvider } from '../../../../../packages/dashboard/src/achievements/AchievementProvider';
+import { AchievementOverlays } from '../../../../../packages/dashboard/src/achievements/AchievementOverlays';
+import { updateAchievements } from '@/lib/api';
 
 /** Root shell: filter chrome actions + nested route outlet. */
 export function AppShell() {
@@ -85,6 +88,7 @@ export function AppShell() {
   return (
     <AppToastQueueProvider queue={toastQueue}>
       <ShareSnapshotProvider>
+        <AchievementProvider request={updateAchievements}>
         <div className="flex min-h-svh flex-col bg-background text-foreground">
         <AppToastProvider queue={toastQueue} />
         <AutoUpdateNotice toastQueue={toastQueue} />
@@ -135,6 +139,8 @@ export function AppShell() {
         <ShareActivityModal />
       </div>
         </div>
+        <AchievementOverlays />
+        </AchievementProvider>
       </ShareSnapshotProvider>
     </AppToastQueueProvider>
   );

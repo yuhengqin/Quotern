@@ -21,6 +21,7 @@ import {
   formatUsd,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { AchievementActivityLink } from '../../../../../packages/dashboard/src/achievements/AchievementEntry';
 
 interface DashboardOverviewCardProps {
   /** Ordered hourly or daily buckets for the selected dashboard range. */
@@ -194,6 +195,7 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
           onSelectDate={onSelectDate}
           selectedDate={selectedDate}
         />
+          <AchievementActivityLink />
       </div>
     </section>
   );

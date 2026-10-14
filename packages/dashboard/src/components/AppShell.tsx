@@ -7,6 +7,9 @@ import { BackendConfigModal } from './BackendConfigModal';
 import { ShareActivityModal } from './ShareActivityModal';
 import { ShareSnapshotProvider } from '@/hooks/ShareSnapshotContext';
 import { cn } from '@/lib/utils';
+import { AchievementProvider } from '../achievements/AchievementProvider';
+import { AchievementOverlays } from '../achievements/AchievementOverlays';
+import { updateAchievements } from '@/lib/api';
 
 /** Local usage panel; navigation never starts account or cloud flows. */
 export function AppShell() {
@@ -25,6 +28,7 @@ export function AppShell() {
   return (
     <AppToastProvider queue={toastQueue}>
       <ShareSnapshotProvider>
+        <AchievementProvider request={updateAchievements}>
         <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
           <Toast.Provider placement="top end" queue={toastQueue} />
           <div className={cn('relative min-h-0 flex-1 overflow-x-hidden overscroll-contain', pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto')}>
@@ -39,6 +43,8 @@ export function AppShell() {
             <ShareActivityModal />
           </div>
         </div>
+        <AchievementOverlays />
+        </AchievementProvider>
       </ShareSnapshotProvider>
     </AppToastProvider>
   );

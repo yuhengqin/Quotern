@@ -6,6 +6,7 @@ import {
   NodesRight,
 } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
+import { AchievementEntry } from '../achievements/AchievementEntry';
 import { AutoUpdateAction } from '@/components/AutoUpdateAction';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -68,6 +69,7 @@ export function FilterChromeActions() {
         label="GitHub 仓库"
         onPress={openGithubRepository}
       />
+      <AchievementEntry />
       <ChromeAction
         icon={<NodesRight className="size-4" />}
         label="分享"

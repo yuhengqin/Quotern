@@ -48,9 +48,9 @@ function PricePair({ row, cache = false }: { row: PricingCatalogRow; cache?: boo
   return (
     <div className="grid w-fit grid-cols-[2.5rem_minmax(9ch,max-content)] items-baseline gap-x-2 gap-y-1.5 whitespace-nowrap text-xs tabular-nums sm:text-sm">
       <span className="text-xs text-muted">{cache ? '缓存读' : '输入'}</span>
-      <span className="text-right font-mono">{formatPricingRate(cache ? row.cacheRead : row.input)}</span>
+      <span className="text-left font-mono">{formatPricingRate(cache ? row.cacheRead : row.input)}</span>
       <span className="text-xs text-muted">{cache ? '缓存写' : '输出'}</span>
-      <span className="text-right font-mono">{formatPricingRate(cache ? row.cacheWrite : row.output)}</span>
+      <span className="text-left font-mono">{formatPricingRate(cache ? row.cacheWrite : row.output)}</span>
     </div>
   );
 }

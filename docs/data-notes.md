@@ -69,7 +69,11 @@ input_tokens + output_tokens + cached_input_tokens
 
 会话数按来源和逻辑会话去重，总消息数只计用户与 AI 逻辑消息，排除工具、元数据及事件镜像。日期筛选只使用范围内的消息：跨天会话计一次，总时长是各会话范围内首末消息跨度之和；同时进行的会话分别累计。不具备完整消息元数据的来源显示覆盖不完整。
 
-活跃时长暂按回合估算，面板明确标注“估算”：各会话的消息按时间排序，以用户消息划分回合，将每轮首条到末条 AI 逻辑消息的跨度四舍五入到秒后累加。不计用户消息到首条 AI 记录的等待及两次提问间的空闲，但可能包含 AI 消息之间的工具执行或等待，不代表精确生成时长。每轮只有一条 AI 记录时跨度为 0，可能低估。跨日期筛选只使用范围内的记录，范围开始处的 AI 记录可形成一个截断回合；未覆盖的来源且没有可用会话时仍为 `null` 并显示“—”，已完整采集的空范围为 0。
+任务执行时长使用独立的工作事件时钟，不改变消息数、会话数或总时长。Codex 按 `turn_id` 配对任务，优先使用 `task_complete.duration_ms`，缺失时用任务开始与完成/取消事件的时间差；真实 turn UUID 的跨文件/继承副本只计一次，旧格式任务标签按会话隔离。进行中或缺少结束证据的任务不通过下一次 prompt 补全。任务时长包含 TTFT、思考和工具执行，不能将减去第一次 TTFT 后的数值称为纯生成时长。
+
+其他 Agent 以真实用户消息划分回合，累加用户消息到该轮最后工作事件的跨度，并明确标注“估算”。工作事件包括已核实的助手输出、思考、工具及步骤进展；排除设置、元数据、usage 与注入事件。OpenCode/ZCode 使用消息 created/completed 以及助手归属的 text/reasoning/tool part 时钟；Antigravity 使用 model 的 created/completed 时钟。估算可能包含排队等待。消息统计仍只计用户和 AI 逻辑消息。
+
+任务区间按本地日期窗口裁剪，跨午夜只累计窗口内的部分；总时长继续按范围内首末消息计算。接口 `taskSeconds` 提供任务时长，`taskTimingKind` 区分 recorded/estimated/mixed/empty/unavailable，附带估算与缺失计时的来源。旧 `activeSeconds` 保留原助手消息跨度估算以兼容接口，面板改用 `taskSeconds`。Schema 4 会独立补扫历史工作事件，保留原始日志已经删除的消息元数据；只持久化身份、事件类别和时钟，不保存正文。
 
 [local-metrics.ts](../packages/core/src/local-metrics.ts) 区分完整请求计数与已知下界：有完整证据时使用 `requestCount`；证据不足时 `requestCount` 可以为 `null`，`knownRequestCount` 使用已有证据或合法的 `conversation_count`。
 

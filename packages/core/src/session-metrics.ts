@@ -1,4 +1,5 @@
 import { DEFAULT_STATS_TIMEZONE, localDateAndHour } from './timezone.js';
+import { aggregateTaskTiming, type SessionTimingEvent, type TaskTimingMetrics } from './task-timing.js';
 
 /** Local accounting metadata only: no prompt, response or tool content. */
 export interface SessionMessage {
@@ -9,11 +10,11 @@ export interface SessionMessage {
   timestamp: string;
 }
 
-export interface SessionMetrics {
+export interface SessionMetrics extends TaskTimingMetrics {
   sessionCount: number;
   messageCount: number;
   durationSeconds: number;
-  /** Estimated assistant-record spans per turn; null when no session coverage is available. */
+  /** Legacy assistant-record span estimate. The task duration card uses taskSeconds. */
   activeSeconds: number | null;
   complete: boolean;
   missingSources: string[];
@@ -25,6 +26,7 @@ export interface SessionMetricOptions {
   sources?: readonly string[];
   missingSources?: readonly string[];
   timeZone?: string;
+  timingEvents?: readonly SessionTimingEvent[];
 }
 
 /** Assistant timestamps approximate a turn, including any tool waits between records. */
@@ -88,6 +90,7 @@ export function aggregateSessionMetrics(
   const missingSources = [...new Set(options.missingSources ?? [])]
     .filter((source) => !selected || selected.has(source)).sort();
   return {
+    ...aggregateTaskTiming([...unique.values()], options.timingEvents ?? [], options),
     sessionCount: sessions.size,
     messageCount,
     durationSeconds: Math.round(durationMs / 1000),

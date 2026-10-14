@@ -13,6 +13,7 @@ import { antigravityProjectFromPath, listAntigravityTranscripts } from './parser
 import { zcodeDbPath, isZcodeNativeMessage } from './parsers/zcode.js';
 import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
 import type { SessionMessage } from './session-metrics.js';
+import type { SessionTimingEvent } from './task-timing.js';
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' ? value as ObjectValue : {};
@@ -179,6 +180,55 @@ export function extractSessionMessage(source: string, record: ObjectValue, conte
   };
 }
 
+/** Whitelisted work events are separate from logical messages and their counts. */
+export function extractSessionTimingEvents(source: string, record: ObjectValue, context: SessionFileContext, message: CollectedSessionMessage | null): SessionTimingEvent[] {
+  const payload = object(record.payload), body = object(record.message), event = object(record.event);
+  const rawTime = record.timestamp ?? record.time ?? record.created_at ?? body.timestamp ?? payload.timestamp;
+  if (source === 'codex') {
+    if (record.type !== 'event_msg') return [];
+    const kind = payload.type === 'task_started' ? 'task-start' : payload.type === 'task_complete' ? 'task-end' : payload.type === 'turn_aborted' ? 'task-abort' : null;
+    const turnId = string(payload.turn_id);
+    const stamp = sessionTimestamp(record.timestamp ?? payload.completed_at ?? payload.started_at);
+    if (!kind || !turnId || !stamp) return [];
+    const started = sessionTimestamp(payload.started_at);
+    const durationMs = typeof payload.duration_ms === 'number' && Number.isFinite(payload.duration_ms) && payload.duration_ms >= 0 ? payload.duration_ms : undefined;
+    return [{ source, sessionId: context.sessionId, id: `${kind}:${turnId}`, kind, timestamp: stamp, turnId,
+      ...(started ? { startTimestamp: started } : {}), ...(durationMs !== undefined ? { durationMs } : {}) }];
+  }
+  const clock = object(Object.keys(body).length ? body.time : record.time);
+  if (message) {
+    const started = message.role === 'assistant' ? sessionTimestamp(clock.created ?? clock.start) : null;
+    return [{ source, sessionId: message.sessionId, id: `message:${message.id}`, kind: message.role === 'user' ? 'user' : 'activity', timestamp: message.timestamp,
+      ...(started ? { startTimestamp: started } : {}), ...(message.seq !== undefined ? { seq: message.seq } : {}) }];
+  }
+  let work = false;
+  if (source === 'claude') work = !record.isMeta && !record.isCompactSummary && (
+    ['assistant', 'tool_use', 'tool_result'].includes(string(record.type))
+    || (record.type === 'user' && Array.isArray(body.content) && body.content.some(b => object(b).type === 'tool_result'))
+  );
+  else if (source === 'kimi') work = record.type === 'context.append_loop_event'
+    && ['step.begin', 'step.end', 'content.part', 'tool.call', 'tool.result'].includes(string(event.type));
+  else if (source === 'dsh') work = ['assistant/message', 'assistant/attempt', 'step/start', 'step/end', 'tool/call', 'tool/result', 'turn/end'].includes(string(record.type));
+  else if (source === 'pi') work = record.type === 'message' && body.role === 'toolResult';
+  else if (source === 'antigravity') work = record.type === 'TOOL_RESULT';
+  if (!work) return [];
+  const stamp = sessionTimestamp(rawTime, source === 'kimi' && record.time !== undefined);
+  if (!stamp) return [];
+  return [{ source, sessionId: context.sessionId, id: hash([record.type, event.type, record.id ?? record.uuid, stamp]), kind: 'activity', timestamp: stamp,
+    ...(typeof record.seq === 'number' ? { seq: record.seq } : {}) }];
+}
+
+export function mergeSessionTimingEvent(previous: SessionTimingEvent | undefined, next: SessionTimingEvent): SessionTimingEvent {
+  if (!previous) return next;
+  if (next.kind === 'task-start' || next.kind === 'user') return previous.timestamp < next.timestamp ? previous : next;
+  if (next.kind === 'task-end' || next.kind === 'task-abort') {
+    if (previous.durationMs !== undefined && next.durationMs === undefined) return previous;
+    return next.timestamp >= previous.timestamp ? next : previous;
+  }
+  const startTimestamp = [previous.startTimestamp ?? previous.timestamp, next.startTimestamp ?? next.timestamp].sort()[0]!;
+  return { ...(next.timestamp >= previous.timestamp ? next : previous), startTimestamp };
+}
+
 function walkFiles(dir: string, accept: (path: string) => boolean, depth = 0): string[] {
   if (depth > 8 || !existsSync(dir)) return [];
   const entries = readdirSync(dir, { withFileTypes: true });
@@ -234,8 +284,10 @@ function databaseMessages(path: string, source: string): ObjectValue[] {
       const columns = new Set(queryDbJson(db, `PRAGMA table_info(${table})`).map((row) => row.name));
       const role = table === 'session_message' ? 'type' : "json_extract(data, '$.role')";
       const fallback = columns.has('time_created') ? ', time_created' : '';
+      const startClock = columns.has('time_created') ? "coalesce(json_extract(data, '$.time.created'), time_created)" : "json_extract(data, '$.time.created')";
       const provider = source === 'zcode' ? ", coalesce(json_extract(data, '$.providerID'), json_extract(data, '$.providerId')) AS providerID" : '';
       rows.push(...queryDbJson(db, `SELECT id, session_id AS sessionId, ${role} AS role,
+        ${startClock} AS startTimestamp,
         coalesce(json_extract(data, '$.time.completed'), json_extract(data, '$.time.created')${fallback}) AS timestamp${provider}
         FROM ${table} WHERE ${role} IN ('user', 'assistant')`));
     }
@@ -244,8 +296,34 @@ function databaseMessages(path: string, source: string): ObjectValue[] {
   });
 }
 
+function databaseWorkEvents(path: string, source: string, messages: readonly CollectedSessionMessage[]): SessionTimingEvent[] {
+  if (source !== 'opencode' && source !== 'zcode') return [];
+  const parents = new Map(messages.filter(m => m.role === 'assistant').map(m => [m.id, m]));
+  return readSqliteWithSnapshot(path, db => {
+    const tables = new Set(queryDbJson(db, "SELECT name FROM sqlite_master WHERE type='table'").map(row => row.name));
+    const result: SessionTimingEvent[] = [];
+    for (const table of ['part', 'session_part']) {
+      if (!tables.has(table)) continue;
+      const columns = new Set(queryDbJson(db, `PRAGMA table_info(${table})`).map(row => row.name));
+      const parentColumn = columns.has('message_id') ? 'message_id' : columns.has('assistant_message_id') ? 'assistant_message_id' : null;
+      if (!parentColumn || !columns.has('data') || !columns.has('id')) continue;
+      const rows = queryDbJson(db, `SELECT id, ${parentColumn} AS messageId, json_extract(data, '$.type') AS type,
+        coalesce(json_extract(data, '$.time.start'), json_extract(data, '$.state.time.start')) AS startTimestamp,
+        coalesce(json_extract(data, '$.time.end'), json_extract(data, '$.state.time.end')) AS timestamp
+        FROM ${table} WHERE json_extract(data, '$.type') IN ('text', 'reasoning', 'tool')`);
+      for (const row of rows) {
+        const parent = parents.get(String(row.messageId));
+        const start = sessionTimestamp(row.startTimestamp), end = sessionTimestamp(row.timestamp) ?? start;
+        if (!parent || !end) continue;
+        result.push({ source, sessionId: parent.sessionId, id: `part:${row.id}`, kind: 'activity', timestamp: end, ...(start ? { startTimestamp: start } : {}) });
+      }
+    }
+    return result;
+  });
+}
+
 /** Bounded protobuf decoding, selecting only source enum and timestamp. */
-export function antigravityStepMessage(hex: string): { role: 'user' | 'assistant'; timestamp: string } | null {
+export function antigravityStepMessage(hex: string, completedFirst = false): { role: 'user' | 'assistant'; timestamp: string } | null {
   type Field = number | Buffer;
   function decode(buf: Buffer): Map<number, Field[]> {
     const fields = new Map<number, Field[]>();
@@ -277,7 +355,7 @@ export function antigravityStepMessage(hex: string): { role: 'user' | 'assistant
   const source = fields.get(3)?.[0];
   const role = source === 4 ? 'user' : source === 2 ? 'assistant' : null;
   if (!role) return null;
-  for (const field of [1, 8]) {
+  for (const field of completedFirst ? [8, 1] : [1, 8]) {
     const bytes = fields.get(field)?.[0];
     if (!Buffer.isBuffer(bytes)) continue;
     const timestamp = decode(bytes);
@@ -289,20 +367,30 @@ export function antigravityStepMessage(hex: string): { role: 'user' | 'assistant
   return null;
 }
 
-export function readSessionSnapshot(input: SessionInput, source: string, context: SessionFileContext): CollectedSessionMessage[] {
+export function readSessionSnapshot(input: SessionInput, source: string, context: SessionFileContext, timings?: SessionTimingEvent[]): CollectedSessionMessage[] {
   const messages: CollectedSessionMessage[] = [];
   if (input.kind === 'sqlite') {
     for (const row of databaseMessages(input.path, source)) {
       if (source === 'antigravity') {
         const decoded = antigravityStepMessage(String(row.metadata));
-        if (decoded) messages.push({ source, sessionId: input.sessionId, id: String(row.idx), ...decoded });
+        if (decoded) {
+          const message = { source, sessionId: input.sessionId, id: String(row.idx), ...decoded };
+          messages.push(message);
+          const clocks = antigravityStepMessage(String(row.metadata), true);
+          timings?.push({ source, sessionId: message.sessionId, id: `message:${message.id}`, kind: message.role === 'user' ? 'user' : 'activity', timestamp: clocks?.timestamp ?? message.timestamp,
+            ...(message.role === 'assistant' ? { startTimestamp: message.timestamp } : {}) });
+        }
       } else {
         if (source === 'zcode' && row.role === 'assistant' && !isZcodeNativeMessage(row)) continue;
         const stamp = sessionTimestamp(row.timestamp);
         if (!stamp || !row.sessionId || !row.id) { context.incomplete = true; continue; }
         messages.push({ source, sessionId: String(row.sessionId), id: String(row.id), role: row.role as 'user' | 'assistant', timestamp: stamp });
+        const started = sessionTimestamp(row.startTimestamp);
+        timings?.push({ source, sessionId: String(row.sessionId), id: `message:${row.id}`, kind: row.role === 'user' ? 'user' : 'activity', timestamp: stamp,
+          ...(row.role === 'assistant' && started ? { startTimestamp: started } : {}) });
       }
     }
+    if (timings) timings.push(...databaseWorkEvents(input.path, source, messages));
     return messages;
   }
   const raw = input.kind === 'zstd' ? decodeDsh(readFileSync(input.path)) : readFileSync(input.path, 'utf8');
@@ -319,6 +407,7 @@ export function readSessionSnapshot(input: SessionInput, source: string, context
   for (const record of records) {
     const message = extractSessionMessage(source, record, context);
     if (message) messages.push(message);
+    timings?.push(...extractSessionTimingEvents(source, record, context, message));
   }
   return messages;
 }

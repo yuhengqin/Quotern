@@ -8,7 +8,9 @@ export function formatSessionDuration(seconds: number | null): string {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-export function sessionMetricValue(metrics: SessionMetrics | null, key: 'sessionCount' | 'messageCount' | 'durationSeconds' | 'activeSeconds'): number | null {
-  if (!metrics || (!metrics.complete && metrics.sessionCount === 0)) return null;
+export function sessionMetricValue(metrics: SessionMetrics | null, key: 'sessionCount' | 'messageCount' | 'durationSeconds' | 'activeSeconds' | 'taskSeconds'): number | null {
+  if (!metrics) return null;
+  if (key === 'taskSeconds') return metrics.taskSeconds ?? null;
+  if (!metrics.complete && metrics.sessionCount === 0) return null;
   return metrics[key];
 }

@@ -443,7 +443,7 @@ export function createApplyAfterSync(deps: {
     }
     // Skip Renderer poke when sync wrote nothing (unless forceNotify for round end).
     if (opts?.quiet) return;
-    if (written.length > 0 || opts?.forceNotify) {
+    if (written.length > 0 || results.some((result) => result.sessionsChanged) || opts?.forceNotify) {
       deps.onApplied?.();
     }
   };

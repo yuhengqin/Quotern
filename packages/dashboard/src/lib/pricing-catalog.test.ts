@@ -23,13 +23,14 @@ const rows: PricingCatalogRow[] = [
 ];
 
 describe('pricing catalog helpers', () => {
-  it('defaults to the highest input price first with stable model-name ties', () => {
-    assert.deepEqual(DEFAULT_PRICING_SORT, {
-      column: 'input',
-      direction: 'descending',
-    });
-    const result = filterAndSortPricingCatalog(rows, '', DEFAULT_PRICING_SORT);
-    assert.deepEqual(result.map((row) => row.model), ['Alpha', 'Beta', 'alpha-mini']);
+  it('defaults to the latest flagship and puts featured models before newer non-flagships', () => {
+    assert.deepEqual(DEFAULT_PRICING_SORT, { column: 'latest', direction: 'descending' });
+    const result = filterAndSortPricingCatalog([
+      { ...rows[0]!, model: 'new-mini', releaseDate: '2026-10-14' },
+      { ...rows[0]!, model: 'current-opus', releaseDate: '2026-09-22', featured: true },
+      { ...rows[0]!, model: 'current-sol', releaseDate: '2026-09-29', featured: true },
+    ], '', DEFAULT_PRICING_SORT);
+    assert.deepEqual(result.map((row) => row.model), ['current-sol', 'current-opus', 'new-mini']);
   });
 
   it('filters model names case-insensitively after trimming the query', () => {

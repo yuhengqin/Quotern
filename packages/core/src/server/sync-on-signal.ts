@@ -130,7 +130,7 @@ export function createSyncRunner(deps: {
                 bucketsWritten: result.bucketsWritten,
                 ...(result.error ? { error: result.error } : {}),
               });
-              if (result.writtenBuckets.length > 0) wroteAny = true;
+              if (result.writtenBuckets.length > 0 || result.sessionsChanged) wroteAny = true;
               // Apply quietly — one UI notify at end of the round if anything changed.
               if (deps.afterSync) {
                 await measureCpuPhase(

@@ -4,28 +4,22 @@ import { ArrowLeft, Xmark } from '@gravity-ui/icons';
 import { Button, ButtonGroup, Label, ListBox, ListLayout, SearchField, Select, Skeleton, Table, TableLayout, Virtualizer } from '@heroui/react';
 import { ModelProviderIcon } from '../components/ModelProviderIcon';
 import { StatusBanner } from '../components/StatusBanner';
+import { fetchModelBreakdown } from '../lib/api';
 import { fetchPricingCatalog, type PricingCatalogResponse, type PricingCatalogRow } from '../lib/pricing-data';
 import {
-  DEFAULT_PRICING_SORT, filterAndSortPricingCatalog, filterDirectPricingCatalog,
+  addPricingUsage, filterAndSortPricingCatalog, filterDirectPricingCatalog,
   formatPricingRate, getPricingChannel, getPricingModelName, getPricingProvider,
+  readPricingSort, writePricingSort, PRICING_SORT_OPTIONS,
   type PricingSortDescriptor, type PricingSortKey,
 } from '../lib/pricing-catalog';
 
-const SORT_OPTIONS: ReadonlyArray<{ column: PricingSortKey; label: string }> = [
-  { column: 'input', label: '输入价' }, { column: 'output', label: '输出价' },
-  { column: 'cacheRead', label: '缓存读取价' }, { column: 'cacheWrite', label: '缓存写入价' },
-  { column: 'model', label: '模型名称' },
-];
-const SORT_CHOICES = SORT_OPTIONS.flatMap((option) =>
-  (['ascending', 'descending'] as const).map((direction) => ({
-    ...option, direction, key: `${option.column}:${direction}`,
-    text: `${option.label}：${option.column === 'model'
-      ? direction === 'ascending' ? 'A → Z' : 'Z → A'
-      : direction === 'ascending' ? '低 → 高' : '高 → 低'}`,
-  })),
-);
+const SORT_CHOICES = PRICING_SORT_OPTIONS.map((option) => {
+  const [column, direction] = option.key.split(':') as [PricingSortKey, 'ascending' | 'descending'];
+  return { column, direction, key: option.key, text: option.label };
+});
 
-function ModelIdentity({ model }: { model: string }) {
+function ModelIdentity({ row, sort, hasUsage }: { row: PricingCatalogRow; sort: PricingSortDescriptor; hasUsage: boolean }) {
+  const { model } = row;
   const provider = getPricingProvider(model);
   const channel = getPricingChannel(model);
   return (
@@ -39,6 +33,11 @@ function ModelIdentity({ model }: { model: string }) {
           {channel && <span className="shrink-0 rounded bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">{channel}</span>}
         </div>
         <p className="mt-0.5 truncate text-xs text-muted" title={model}>{model}</p>
+        {sort.column === 'usage' && hasUsage
+          ? <p className="text-[10px] text-muted">近 30 天 {row.usageTokens?.toLocaleString('zh-CN') ?? 0} Token</p>
+          : sort.column === 'latest' && (row.featured || row.releaseDate)
+            ? <p className="text-[10px] text-muted">{row.featured ? '主推 · ' : ''}{row.releaseDate ?? '发布日期未收录'}</p>
+            : null}
       </div>
     </div>
   );
@@ -55,7 +54,7 @@ function PricePair({ row, cache = false }: { row: PricingCatalogRow; cache?: boo
   );
 }
 
-function PricingList({ rows }: { rows: PricingCatalogRow[] }) {
+function PricingList({ rows, sort, hasUsage }: { rows: PricingCatalogRow[]; sort: PricingSortDescriptor; hasUsage: boolean }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 639px)');
@@ -79,7 +78,7 @@ function PricingList({ rows }: { rows: PricingCatalogRow[] }) {
           {(row) => (
             <ListBox.Item id={row.model} textValue={row.model} className="!h-[124px] !items-stretch rounded-xl border border-border/70 bg-surface !p-3">
               <div className="flex min-w-0 flex-1 flex-col justify-between">
-                <ModelIdentity model={row.model} />
+                <ModelIdentity row={row} sort={sort} hasUsage={hasUsage} />
                 <div className="grid grid-cols-2 gap-5 border-t border-border/60 pt-2">
                   <PricePair row={row} /><PricePair row={row} cache />
                 </div>
@@ -106,7 +105,7 @@ function PricingList({ rows }: { rows: PricingCatalogRow[] }) {
               <Table.Body items={rows}>
                 {(row) => (
                   <Table.Row id={row.model}>
-                    <Table.Cell><ModelIdentity model={row.model} /></Table.Cell>
+                    <Table.Cell><ModelIdentity row={row} sort={sort} hasUsage={hasUsage} /></Table.Cell>
                     <Table.Cell><PricePair row={row} /></Table.Cell>
                     <Table.Cell><PricePair row={row} cache /></Table.Cell>
                   </Table.Row>
@@ -127,8 +126,10 @@ export function PricingPage() {
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
   const providerTriggerRef = useRef<HTMLButtonElement>(null);
-  const [sort, setSort] = useState<PricingSortDescriptor>(DEFAULT_PRICING_SORT);
+  const [sort, setSort] = useState<PricingSortDescriptor>(readPricingSort);
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
+  const [usage, setUsage] = useState<Awaited<ReturnType<typeof fetchModelBreakdown>>['models']>([]);
+  const [usageStatus, setUsageStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -150,7 +151,23 @@ export function PricingPage() {
     return () => { cancelled = true; };
   }, [retry]);
 
-  const directModels = useMemo(() => filterDirectPricingCatalog(catalog?.models ?? []), [catalog]);
+  useEffect(() => {
+    let cancelled = false;
+    setUsageStatus('loading');
+    void fetchModelBreakdown(30).then((data) => {
+      if (!cancelled) { setUsage(data.models); setUsageStatus('ready'); }
+    }).catch(() => {
+      if (!cancelled) { setUsage([]); setUsageStatus('error'); }
+    });
+    return () => { cancelled = true; };
+  }, [retry]);
+
+  const directModels = useMemo(() => addPricingUsage(filterDirectPricingCatalog(catalog?.models ?? []), usage, catalog?.matching), [catalog, usage]);
+  const hasUsage = directModels.some((row) => (row.usageTokens ?? 0) > 0);
+  const updateSort = (next: PricingSortDescriptor) => {
+    setSort(next);
+    writePricingSort(next);
+  };
   const providers = useMemo(() => {
     const unique = new Map<string, ReturnType<typeof getPricingProvider>>();
     for (const row of directModels) {
@@ -224,7 +241,7 @@ export function PricingPage() {
         </ButtonGroup>
         <Select aria-label="模型价格排序" value={sortKey} variant="secondary" onChange={(key) => {
           const choice = SORT_CHOICES.find((option) => option.key === key);
-          if (choice) setSort({ column: choice.column, direction: choice.direction });
+          if (choice) updateSort({ column: choice.column, direction: choice.direction });
         }} className="min-w-0 max-w-52 text-xs">
           <Label className="sr-only">模型价格排序</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs">
@@ -240,13 +257,17 @@ export function PricingPage() {
 
       {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
         <span role="status">{rows.length} / {directModels.length} 条定价记录</span>
+        {sort.column === 'usage' && <span>{usageStatus === 'loading' ? '用量加载中，暂按最新旗舰排序'
+          : usageStatus === 'error' ? '用量暂不可用，暂按最新旗舰排序'
+            : hasUsage ? '近 30 天 · 按 Token 用量排序' : '暂无近 30 天可匹配用量，暂按最新旗舰排序'}</span>}
+        {sort.column === 'latest' && <span>主推型号优先 · 按发布日期排序</span>}
         <span>{catalog.source === 'bundled' ? '内置价格表' : '已发布价格表'} · 更新于 {dateLabel}</span>
         <span>来源：<a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">models.dev</a> 与人工补充</span>
       </div>}
 
       {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
         : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry((value) => value + 1)}>重试</Button></div>
-          : <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}`} rows={rows} />}
+          : <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}`} rows={rows} sort={sort} hasUsage={hasUsage} />}
       <p className="shrink-0 text-[11px] text-muted">用于估算 Token 费用 · $0 表示零价，— 表示未提供定价</p>
     </section>
   );

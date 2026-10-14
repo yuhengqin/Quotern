@@ -1,5 +1,7 @@
 import type { PricingCatalogRow } from './pricing-data.ts';
 import { getModelProvider, type ModelProvider } from './model-provider.ts';
+import { isModelReleaseDate, resolvePricingModelId, type PricingData } from 'quotern-core/pricing-matcher';
+import type { ModelBreakdownRow } from './api.ts';
 
 export const PRICING_PAGE_SIZE = 100;
 
@@ -55,7 +57,7 @@ export function filterDirectPricingCatalog(rows: PricingCatalogRow[]): PricingCa
   return rows.filter((row) => !isGatewayPricingModel(row.model));
 }
 
-export type PricingSortKey = 'model' | 'input' | 'output' | 'cacheRead' | 'cacheWrite';
+export type PricingSortKey = 'latest' | 'usage' | 'model' | 'inputOutput' | 'cache' | 'input' | 'output' | 'cacheRead' | 'cacheWrite';
 
 export type PricingSortDirection = 'ascending' | 'descending';
 
@@ -65,9 +67,61 @@ export interface PricingSortDescriptor {
 }
 
 export const DEFAULT_PRICING_SORT: PricingSortDescriptor = {
-  column: 'input',
+  column: 'latest',
   direction: 'descending',
 };
+
+export const PRICING_SORT_STORAGE_KEY = 'quotern.pricing.sort.v1';
+
+export const PRICING_SORT_OPTIONS = [
+  { key: 'latest:descending', label: '最新旗舰' },
+  { key: 'usage:descending', label: '我的常用' },
+  { key: 'inputOutput:descending', label: '输入价：高 → 低' },
+  { key: 'inputOutput:ascending', label: '输入价：低 → 高' },
+  { key: 'model:ascending', label: '模型名称：A → Z' },
+  { key: 'model:descending', label: '模型名称：Z → A' },
+  { key: 'cache:descending', label: '缓存价：高 → 低' },
+  { key: 'cache:ascending', label: '缓存价：低 → 高' },
+] as const;
+
+export function readPricingSort(storage?: Pick<Storage, 'getItem'>): PricingSortDescriptor {
+  try {
+    const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
+    const saved = JSON.parse(target?.getItem(PRICING_SORT_STORAGE_KEY) ?? 'null') as PricingSortDescriptor | null;
+    if (saved && PRICING_SORT_OPTIONS.some(option => option.key === `${saved.column}:${saved.direction}`)) return saved;
+  } catch { /* Storage may be unavailable in a private or restricted window. */ }
+  return DEFAULT_PRICING_SORT;
+}
+
+export function writePricingSort(sort: PricingSortDescriptor, storage?: Pick<Storage, 'setItem'>): void {
+  try {
+    const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
+    target?.setItem(PRICING_SORT_STORAGE_KEY, JSON.stringify(sort));
+  } catch { /* The page remains usable without preference storage. */ }
+}
+
+export function addPricingUsage(
+  rows: PricingCatalogRow[],
+  usage: ModelBreakdownRow[],
+  matching?: Pick<PricingData, 'alias' | 'sourceAlias'>,
+): PricingCatalogRow[] {
+  const data: PricingData = { ...matching, exact: Object.fromEntries(rows.map(row => [row.model, {}])) };
+  const totals = new Map<string, number>();
+  for (const row of usage) {
+    if (!Number.isFinite(row.tokens) || row.tokens <= 0) continue;
+    const id = resolvePricingModelId(row.model, data, row.source);
+    if (id) totals.set(id, (totals.get(id) ?? 0) + row.tokens);
+  }
+  return rows.map(row => ({ ...row, usageTokens: totals.get(row.model) ?? 0 }));
+}
+
+function compareLatest(a: PricingCatalogRow, b: PricingCatalogRow): number {
+  const aDate = isModelReleaseDate(a.releaseDate) ? a.releaseDate : '';
+  const bDate = isModelReleaseDate(b.releaseDate) ? b.releaseDate : '';
+  return Number(Boolean(b.featured)) - Number(Boolean(a.featured))
+    || bDate.localeCompare(aDate)
+    || a.model.localeCompare(b.model);
+}
 
 /** The price source may include a provider namespace such as `azure/gpt-5.4`. */
 export function getPricingModelName(model: string): string {
@@ -86,20 +140,26 @@ export function filterAndSortPricingCatalog(
     : rows;
 
   return [...filtered].sort((a, b) => {
-    let comparison: number;
-    if (sort.column === 'model') {
-      comparison = getPricingModelName(a.model).localeCompare(getPricingModelName(b.model));
-    } else {
-      const left = a[sort.column];
-      const right = b[sort.column];
-      // Unavailable prices stay at the end even when sorting descending.
-      if (left == null && right != null) return 1;
-      if (right == null && left != null) return -1;
-      comparison = left == null || right == null ? 0 : left - right;
-    }
-    if (comparison !== 0) return sort.direction === 'descending' ? -comparison : comparison;
+    if (sort.column === 'latest') return compareLatest(a, b);
+    if (sort.column === 'usage') return (b.usageTokens ?? 0) - (a.usageTokens ?? 0) || compareLatest(a, b);
 
-    // Keep all sorts predictable when the displayed values are the same.
+    if (sort.column === 'model') {
+      const comparison = getPricingModelName(a.model).localeCompare(getPricingModelName(b.model));
+      if (comparison !== 0) return sort.direction === 'descending' ? -comparison : comparison;
+    } else {
+      const comparisons: Array<[number | null, number | null]> = sort.column === 'inputOutput'
+        ? [[a.input, b.input], [a.output, b.output]]
+        : sort.column === 'cache'
+          ? [[a.cacheRead, b.cacheRead], [a.cacheWrite, b.cacheWrite]]
+          : [[a[sort.column], b[sort.column]]];
+      for (const [left, right] of comparisons) {
+        if (left == null && right != null) return 1;
+        if (right == null && left != null) return -1;
+        if (left == null || right == null || left === right) continue;
+        const comparison = left - right;
+        return sort.direction === 'descending' ? -comparison : comparison;
+      }
+    }
     return a.model.localeCompare(b.model);
   });
 }

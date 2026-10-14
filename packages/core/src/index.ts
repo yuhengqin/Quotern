@@ -66,3 +66,4 @@ export * from './server/http-server.js';
 export * from './doctor.js';
 export * from './local-metrics.js';
 export * from './share-backgrounds.js';
+export type { SessionMetrics, SessionMessage } from './session-metrics.js';

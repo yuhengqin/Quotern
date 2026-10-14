@@ -1,4 +1,5 @@
 import type { PricingData } from 'quotern-core';
+import { isModelReleaseDate } from 'quotern-core/pricing-matcher';
 import bundledPricing from 'quotern-core/pricing-data' with { type: 'json' };
 
 export interface PricingCatalogRow {
@@ -7,6 +8,9 @@ export interface PricingCatalogRow {
   output: number | null;
   cacheRead: number | null;
   cacheWrite: number | null;
+  releaseDate?: string;
+  featured?: boolean;
+  usageTokens?: number;
 }
 
 export interface PricingCatalogResponse {
@@ -15,6 +19,7 @@ export interface PricingCatalogResponse {
   updatedAt: string | null;
   source: 'published' | 'bundled';
   models: PricingCatalogRow[];
+  matching?: Pick<PricingData, 'alias' | 'sourceAlias'>;
 }
 
 export const PRICING_CATALOG_URL =
@@ -25,7 +30,16 @@ export async function fetchPricingCatalog(): Promise<PricingCatalogResponse> {
   try {
     const res = await fetch(PRICING_CATALOG_URL, { signal: AbortSignal.timeout(3_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return pricingDataToCatalog(parsePricingData(await res.json()), 'published', res.headers.get('last-modified'));
+    const published = parsePricingData(await res.json());
+    const bundled = bundledPricing as PricingData;
+    const publishedAt = published._meta?.generated_at;
+    const bundledAt = bundled._meta?.generated_at;
+    if (typeof publishedAt === 'string' && typeof bundledAt === 'string'
+      && Number.isFinite(Date.parse(publishedAt)) && Number.isFinite(Date.parse(bundledAt))
+      && Date.parse(publishedAt) < Date.parse(bundledAt)) {
+      return pricingDataToCatalog(bundled, 'bundled', null);
+    }
+    return pricingDataToCatalog(published, 'published', res.headers.get('last-modified'));
   } catch {
     return pricingDataToCatalog(bundledPricing as PricingData, 'bundled', null);
   }
@@ -70,6 +84,14 @@ function pricingDataToCatalog(
       output: rates.output ?? null,
       cacheRead: rates.cache_read ?? null,
       cacheWrite: rates.cache_write ?? null,
+      ...(isModelReleaseDate(data.model_metadata?.[model]?.release_date)
+        ? { releaseDate: data.model_metadata![model]!.release_date } : {}),
+      ...(typeof data.model_metadata?.[model]?.featured === 'boolean'
+        ? { featured: data.model_metadata[model]!.featured } : {}),
     })).sort((a, b) => a.model.localeCompare(b.model)),
+    ...((data.alias || data.sourceAlias) ? { matching: {
+      ...(data.alias ? { alias: data.alias } : {}),
+      ...(data.sourceAlias ? { sourceAlias: data.sourceAlias } : {}),
+    } } : {}),
   };
 }

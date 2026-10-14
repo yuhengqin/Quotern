@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
+import { DashboardSessionCards } from '@/components/DashboardSessionCards';
+import type { SessionMetrics } from 'quotern-core';
 import {
   buildUsageMetricTrendValues,
   type UsageMetricTrendPoint,
@@ -27,6 +29,7 @@ interface DashboardOverviewCardProps {
   modelRows?: ModelBreakdownRow[];
   metricTrends: DashboardMetricTrends;
   summary: DashboardUsageSummary;
+  sessionMetrics?: SessionMetrics | null;
   selectedDate?: string | null;
   onSelectDate?: (date: string) => void;
   /** Local CLI/Desktop only: show request count + cache hit captions. */
@@ -41,6 +44,7 @@ export function DashboardOverviewCard({
   modelRows = [],
   metricTrends,
   summary,
+  sessionMetrics = null,
   selectedDate = null,
   onSelectDate,
   showLocalMetrics = false,
@@ -174,6 +178,8 @@ export function DashboardOverviewCard({
           </Card>
         ))}
       </div>
+
+      <DashboardSessionCards metrics={sessionMetrics} />
 
       <Card className="mt-4">
         <Card.Content>

@@ -5,9 +5,17 @@ export interface ModelPricingRates {
   cache_write?: number;
 }
 
+export interface PricingModelMetadata {
+  release_date?: string;
+  /** models.dev for synchronized dates; an announcement URL for manual corrections. */
+  release_date_source?: string;
+  featured?: boolean;
+}
+
 export interface PricingData {
   _meta?: Record<string, unknown>;
   exact: Record<string, ModelPricingRates>;
+  model_metadata?: Record<string, PricingModelMetadata>;
   alias?: Record<string, string>;
   fuzzy?: Array<{ match: string; ref: string }>;
   sourceAlias?: Record<string, Record<string, string>>;
@@ -75,6 +83,52 @@ function normalizeClaudeModel(model: string): string {
 const SOURCE_MODEL_NORMALIZERS: Record<string, (model: string) => string> = {
   claude: normalizeClaudeModel,
 };
+
+export function isModelReleaseDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}(?:-\d{2})?$/.test(value)) return false;
+  const date = new Date(`${value.length === 7 ? `${value}-01` : value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, value.length) === value;
+}
+
+/** Resolve identity for usage ranking, without cost-estimation fuzzy/default guesses. */
+export function resolvePricingModelId(model: string, data: PricingData, source?: string | null): string | null {
+  if (typeof model !== 'string' || !model.trim()) return null;
+  const keys = Object.keys(data.exact);
+  const exactId = (name: string): string | null => {
+    const lower = name.toLowerCase();
+    return keys.find(key => key.toLowerCase() === lower) ?? null;
+  };
+  const raw = model.trim();
+  const direct = exactId(raw);
+  if (direct) return direct;
+  // A gateway may retain the complete canonical provider/model path.
+  const hosted = keys.filter(key => key.includes('/') && raw.toLowerCase().endsWith(`/${key.toLowerCase()}`));
+  if (hosted.length === 1) return hosted[0]!;
+  const normalize = source ? SOURCE_MODEL_NORMALIZERS[source.toLowerCase()] : undefined;
+  const normalized = normalize ? normalize(raw) : raw;
+  const aliasFor = (table: Record<string, string> | undefined): string | null => {
+    if (!table || typeof table !== 'object') return null;
+    const entry = Object.entries(table).find(([key]) => key.toLowerCase() === normalized.toLowerCase());
+    return typeof entry?.[1] === 'string' ? exactId(entry[1]) : null;
+  };
+  const scoped = source && data.sourceAlias
+    ? Object.entries(data.sourceAlias).find(([key]) => key.toLowerCase() === source.toLowerCase())?.[1]
+    : undefined;
+  const alias = aliasFor(scoped) ?? aliasFor(data.alias);
+  if (alias) return alias;
+
+  // Effort modifiers do not change model identity; fast/flex/batch variants do.
+  const effortStripped = normalized.replace(/-(?:xhigh|high|medium|low)(?=-fast$|$)/i, '');
+  const candidates = [...new Set([normalized, buildDotRestoredModel(normalized), effortStripped, buildDotRestoredModel(effortStripped)].filter(Boolean))];
+  for (const candidate of candidates) {
+    const exact = exactId(candidate);
+    if (exact) return exact;
+    if (candidate.includes('/')) continue;
+    const matches = keys.filter(key => key.toLowerCase().endsWith(`/${candidate.toLowerCase()}`));
+    if (matches.length === 1) return matches[0]!;
+  }
+  return null;
+}
 
 function buildDotRestoredModel(model: string): string {
   const lower = model.toLowerCase();

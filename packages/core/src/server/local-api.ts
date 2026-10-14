@@ -8,7 +8,10 @@ import {
   aggregateDaily,
   aggregateHourly,
   aggregateModelBreakdown,
+  resolveAggregateWindow,
 } from '../aggregate.js';
+import { readSessionMetrics } from '../session-collector.js';
+import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
 import { localDateNow } from '../timezone.js';
@@ -66,6 +69,25 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.get('/functions/tud-usage-summary', summaryHandler);
   app.get('/functions/tud-account-usage-summary', summaryHandler);
+
+  app.get('/functions/tud-usage-sessions', async (c) => {
+    const bounds = readDateBounds(c);
+    if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
+    const rawSources = c.req.query('sources');
+    const sources = rawSources?.split(',').map((source) => normalizeSyncSource(source));
+    if (sources?.some((source) => !source)) return c.json({ success: false, message: 'INVALID_SOURCE', data: null }, 400);
+    const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 90));
+    const window = resolveAggregateWindow(days, resolveLocalCollectSince(deps.getConfig()), undefined, bounds);
+    const fromDate = window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
+    const usageSources = [...new Set(deps.bucketStore.getRows().filter((row) => {
+      const date = localDateAndHour(row.hour_start).date;
+      return date >= fromDate && date <= window.toDate && (row.total_tokens > 0 || row.conversation_count > 0);
+    }).map((row) => row.source))];
+    return c.json(ok(await readSessionMetrics(deps.dataDir, usageSources, {
+      fromDate, toDate: window.toDate,
+      ...(sources ? { sources: sources as string[] } : {}),
+    })));
+  });
 
   app.get('/functions/tud-usage-daily', async (c) => {
     const bounds = readDateBounds(c);

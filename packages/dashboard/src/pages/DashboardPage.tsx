@@ -18,6 +18,7 @@ import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useSessionMetrics } from '@/hooks/useSessionMetrics';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useShareSnapshot } from '@/hooks/ShareSnapshotContext';
 import { isCliBackend } from '@/lib/api';
@@ -81,6 +82,7 @@ export function DashboardPage() {
   const rangeDays = customRange ? dateRangeDays(customRange) : DASHBOARD_RANGE_DAYS[dataRange];
   const { data, error, loading, refreshing, reload, source } =
     useDashboardData(rangeDays, selectedDate, customRange);
+  const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
@@ -322,6 +324,7 @@ export function DashboardPage() {
             selectedDate={selectedDate}
             showLocalMetrics={isCliBackend()}
             summary={visibleSummary}
+            sessionMetrics={sessionMetrics}
           />
 
           <section

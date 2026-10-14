@@ -9,7 +9,16 @@ import type {
   LeaderboardResponse,
 } from 'quotern-core';
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
+import type { SessionMetrics } from 'quotern-core';
 import { appendDeviceIdsQuery } from './device-filter.ts';
+
+export async function fetchSessionMetrics(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<SessionMetrics> {
+  const { others } = apiPrefixes();
+  const query = new URLSearchParams({ days: String(days) });
+  if (range) { query.set('fromDate', range.start); query.set('toDate', range.end); }
+  if (sources.length) query.set('sources', sources.join(','));
+  return request<SessionMetrics>(`${others}usage-sessions?${query}`, { headers: authHeaders() });
+}
 
 export type {
   LeaderboardBoard,

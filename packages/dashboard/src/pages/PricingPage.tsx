@@ -125,7 +125,7 @@ export function PricingPage() {
   const initialQuery = typeof search.q === 'string' ? search.q : '';
   const [query, setQuery] = useState(initialQuery);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
-  const [providerFilter, setProviderFilter] = useState('all');
+  const [providerFilters, setProviderFilters] = useState<string[]>([]);
   const [sort, setSort] = useState<PricingSortDescriptor>(DEFAULT_PRICING_SORT);
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -159,12 +159,13 @@ export function PricingPage() {
     return [...unique.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [directModels]);
   const rows = useMemo(() => filterAndSortPricingCatalog(directModels, debouncedQuery, sort)
-    .filter((row) => providerFilter === 'all' || getPricingProvider(row.model).key === providerFilter),
-  [directModels, debouncedQuery, sort, providerFilter]);
+    .filter((row) => providerFilters.length === 0 || providerFilters.includes(getPricingProvider(row.model).key)),
+  [directModels, debouncedQuery, sort, providerFilters]);
   const updatedAt = catalog?.generatedAt ?? catalog?.updatedAt;
   const dateLabel = updatedAt && Number.isFinite(Date.parse(updatedAt))
     ? new Date(updatedAt).toISOString().slice(0, 10) : '未知';
-  const selectedProvider = providers.find((provider) => provider.key === providerFilter);
+  const providerLabel = providerFilters.length > 1 ? `已选 ${providerFilters.length} 家提供商`
+    : providers.find((provider) => provider.key === providerFilters[0])?.label ?? '全部提供商';
   const sortKey = `${sort.column}:${sort.direction}`;
 
   return (
@@ -186,12 +187,13 @@ export function PricingPage() {
             <SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder="搜索模型名称或 ID" /><SearchField.ClearButton />
           </SearchField.Group>
         </SearchField>
-        <Select aria-label="提供商筛选" value={providerFilter} variant="secondary" onChange={(key) => {
-          if (!Array.isArray(key)) setProviderFilter(key == null ? 'all' : String(key));
+        <Select aria-label="提供商筛选" selectionMode="multiple" value={providerFilters.length ? providerFilters : ['all']} variant="secondary" onChange={(keys) => {
+          if (Array.isArray(keys)) setProviderFilters(keys.includes('all') && providerFilters.length > 0
+            ? [] : keys.filter((key) => key !== 'all').map(String));
         }} className="min-w-0 max-w-52 text-xs">
           <Label className="sr-only">提供商筛选</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-52 !text-xs">
-            <Select.Value className="truncate">{() => selectedProvider?.label ?? '全部提供商'}</Select.Value><Select.Indicator />
+            <Select.Value className="truncate">{() => providerLabel}</Select.Value><Select.Indicator />
           </Select.Trigger>
           <Select.Popover className="w-60" placement="bottom start">
             <ListBox aria-label="提供商列表">
@@ -228,7 +230,7 @@ export function PricingPage() {
 
       {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
         : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry((value) => value + 1)}>重试</Button></div>
-          : <PricingList key={`${providerFilter}:${debouncedQuery}:${sortKey}`} rows={rows} />}
+          : <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}`} rows={rows} />}
       <p className="shrink-0 text-[11px] text-muted">用于估算 Token 费用 · $0 表示零价，— 表示未提供定价</p>
     </section>
   );

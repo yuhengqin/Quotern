@@ -23,6 +23,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./achievements": {
+      "types": "./dist/achievements/public.d.ts",
+      "import": "./dist/achievements/public.js"
+    },
     "./pricing-data": "./dist/pricing/pricing.json",
     "./pricing-matcher": {
       "types": "./dist/pricing/matcher.d.ts",

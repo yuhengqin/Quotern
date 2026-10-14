@@ -183,6 +183,6 @@ test('schema backfill preserves archived logical messages when their raw files a
   await writeFile(cache, JSON.stringify(previous));
   await unlink(file);
   await syncSessionSource(dir, 'claude', { inputs: [], complete: true });
-  assert.equal(JSON.parse(await readFile(cache, 'utf8')).version, 4);
+  assert.equal(JSON.parse(await readFile(cache, 'utf8')).version, 6);
   assert.equal((await readSessionMetrics(dir, ['claude'])).messageCount, 1);
 });

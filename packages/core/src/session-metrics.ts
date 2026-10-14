@@ -8,6 +8,11 @@ export interface SessionMessage {
   id: string;
   role: 'user' | 'assistant';
   timestamp: string;
+  /** Local-only path identity. Full project paths are never persisted here. */
+  projectId?: string;
+  projectLabel?: string;
+  projectKind?: import('./session-project.js').ProjectKind;
+  projectLegacyId?: string;
 }
 
 export interface SessionMetrics extends TaskTimingMetrics {

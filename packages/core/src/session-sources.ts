@@ -14,6 +14,7 @@ import { zcodeDbPath, isZcodeNativeMessage } from './parsers/zcode.js';
 import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
 import type { SessionMessage } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
+import { resolveSessionProject, type ProjectKind } from './session-project.js';
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' ? value as ObjectValue : {};
@@ -32,6 +33,10 @@ export interface SessionFileContext {
   kimiCanonicalAssistant?: boolean;
   legacyCodexMessages?: boolean;
   canonicalCodexMessages?: boolean;
+  projectId?: string;
+  projectLabel?: string;
+  projectKind?: ProjectKind;
+  projectLegacyId?: string;
 }
 
 export interface CollectedSessionMessage extends SessionMessage {
@@ -67,6 +72,14 @@ function humanContent(content: unknown): boolean {
 export function extractSessionMessage(source: string, record: ObjectValue, context: SessionFileContext): CollectedSessionMessage | null {
   context.recordIndex = (context.recordIndex ?? 0) + 1;
   const payload = object(record.payload);
+  if (source === 'claude' || source === 'codex') {
+    const raw = source === 'claude' ? string(record.cwd) : ['session_meta', 'turn_context'].includes(string(record.type)) ? string(payload.cwd) : '';
+    if (raw) {
+      const project = resolveSessionProject(raw);
+      delete context.projectId; delete context.projectLabel; delete context.projectKind; delete context.projectLegacyId;
+      if (project) Object.assign(context, project);
+    }
+  }
   let body = object(record.message);
   let role: unknown;
   let id: unknown;
@@ -176,6 +189,7 @@ export function extractSessionMessage(source: string, record: ObjectValue, conte
     source, sessionId: context.sessionId, role, timestamp: stamp,
     id: string(id) || hash([role, stamp, content]),
     replayKey,
+    ...(context.projectId ? { projectId: context.projectId, projectLabel: context.projectLabel, projectKind: context.projectKind, ...(context.projectLegacyId ? { projectLegacyId: context.projectLegacyId } : {}) } : {}),
     ...(typeof record.seq === 'number' ? { seq: record.seq } : {}),
   };
 }

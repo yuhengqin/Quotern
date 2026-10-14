@@ -11,6 +11,7 @@ import type {
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 import type { SessionMetrics } from 'quotern-core';
 import { appendDeviceIdsQuery } from './device-filter.ts';
+import type { AchievementSnapshot, AchievementOperation, AchievementNotice } from 'quotern-core/achievements';
 
 export async function fetchSessionMetrics(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<SessionMetrics> {
   const { others } = apiPrefixes();
@@ -18,6 +19,18 @@ export async function fetchSessionMetrics(days: number, range?: DashboardDateRan
   if (range) { query.set('fromDate', range.start); query.set('toDate', range.end); }
   if (sources.length) query.set('sources', sources.join(','));
   return request<SessionMetrics>(`${others}usage-sessions?${query}`, { headers: authHeaders() });
+}
+
+export async function fetchAchievements(): Promise<AchievementSnapshot> {
+  return request<AchievementSnapshot>(`${apiPrefixes().others}achievements`, { headers: authHeaders() });
+}
+
+export async function updateAchievements(operation: AchievementOperation): Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }> {
+  return request<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }>(`${apiPrefixes().others}achievements`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(operation),
+  });
 }
 
 export type {

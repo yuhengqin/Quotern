@@ -8,6 +8,7 @@
 @source "../../../../packages/dashboard/src/pages/PricingPage.tsx";
 @source "../../../../packages/dashboard/src/components/PricingMoreFilters.tsx";
 @source "../../../../packages/dashboard/src/components/ModelProviderIcon.tsx";
+@source "../../../../packages/dashboard/src/achievements";
 
 :root {
   --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;

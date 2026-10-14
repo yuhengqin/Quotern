@@ -20,6 +20,7 @@ import {
   formatUsd,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { AchievementActivityLink } from '../achievements/AchievementEntry';
 
 interface DashboardOverviewCardProps {
   /** Ordered hourly or daily buckets for the selected dashboard range. */
@@ -189,6 +190,7 @@ export function DashboardOverviewCard({
             onSelectDate={onSelectDate}
             selectedDate={selectedDate}
           />
+          <AchievementActivityLink />
         </Card.Content>
       </Card>
     </section>

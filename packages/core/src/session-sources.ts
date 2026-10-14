@@ -14,6 +14,8 @@ import { zcodeDbPath, isZcodeNativeMessage } from './parsers/zcode.js';
 import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
 import type { SessionMessage } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
+import { decodeEncodedProjectPath, normalizeProjectName } from './project-label.js';
+import { posix } from 'node:path';
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' ? value as ObjectValue : {};
@@ -32,6 +34,8 @@ export interface SessionFileContext {
   kimiCanonicalAssistant?: boolean;
   legacyCodexMessages?: boolean;
   canonicalCodexMessages?: boolean;
+  projectId?: string;
+  projectLabel?: string;
 }
 
 export interface CollectedSessionMessage extends SessionMessage {
@@ -67,6 +71,22 @@ function humanContent(content: unknown): boolean {
 export function extractSessionMessage(source: string, record: ObjectValue, context: SessionFileContext): CollectedSessionMessage | null {
   context.recordIndex = (context.recordIndex ?? 0) + 1;
   const payload = object(record.payload);
+  if (source === 'claude' || source === 'codex') {
+    const raw = source === 'claude' ? string(record.cwd) : ['session_meta', 'turn_context'].includes(string(record.type)) ? string(payload.cwd) : '';
+    if (raw) {
+      const path = decodeEncodedProjectPath(raw).replace(/\\/g, '/');
+      const absolute = /^(?:[a-z]:\/|\/)/i.test(path);
+      const label = normalizeProjectName(path);
+      if (absolute && label !== 'unknown') {
+        const normalized = posix.normalize(path).replace(/\/+$/, '');
+        const identity = /^[a-z]:\//i.test(normalized) || path.startsWith('//') ? normalized.toLowerCase() : normalized;
+        context.projectId = createHash('sha256').update(identity).digest('hex');
+        context.projectLabel = label;
+      } else {
+        delete context.projectId; delete context.projectLabel;
+      }
+    }
+  }
   let body = object(record.message);
   let role: unknown;
   let id: unknown;
@@ -176,6 +196,7 @@ export function extractSessionMessage(source: string, record: ObjectValue, conte
     source, sessionId: context.sessionId, role, timestamp: stamp,
     id: string(id) || hash([role, stamp, content]),
     replayKey,
+    ...(context.projectId ? { projectId: context.projectId, projectLabel: context.projectLabel } : {}),
     ...(typeof record.seq === 'number' ? { seq: record.seq } : {}),
   };
 }

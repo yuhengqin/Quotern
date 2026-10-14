@@ -11,7 +11,7 @@ import {
 import { aggregateSessionMetrics, type SessionMetricOptions, type SessionMetrics } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
 
-const VERSION = 4;
+const VERSION = 5;
 interface FileSnapshot {
   complete: boolean;
   size: number;
@@ -39,7 +39,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
     const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+    if (![3, 4, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
     cache.set(path, { stamp, value });
     return value;
   } catch { return null; }
@@ -195,11 +195,11 @@ export async function syncSessionSource(
   } finally { await release(); }
 }
 
-export async function readSessionMetrics(
+export async function readSessionHistory(
   dataDir: string,
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
-): Promise<SessionMetrics> {
+): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; missingSources: string[] }> {
   const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
   const sources = new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))]);
   const messages: CollectedSessionMessage[] = [];
@@ -216,5 +216,14 @@ export async function readSessionMetrics(
     const inRange = aggregateSessionMetrics(result.messages, options).sessionCount > 0;
     if ((usageSources.includes(source) || options.sources?.includes(source) || inRange) && (!result.complete || (usageSources.includes(source) && result.messages.length === 0))) missingSources.push(source);
   }
+  return { messages, timingEvents, missingSources };
+}
+
+export async function readSessionMetrics(
+  dataDir: string,
+  usageSources: readonly string[],
+  options: SessionMetricOptions = {},
+): Promise<SessionMetrics> {
+  const { messages, timingEvents, missingSources } = await readSessionHistory(dataDir, usageSources, options);
   return aggregateSessionMetrics(messages, { ...options, missingSources, timingEvents });
 }

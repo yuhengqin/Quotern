@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
+import { registerAchievementsApi } from './achievements-api.js';
 
 import type { LocalApiDeps } from './state.js';
 import {
@@ -53,6 +54,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   };
   app.use('*', cors());
   registerShareBackgroundApi(app, deps.dataDir);
+  registerAchievementsApi(app, deps.dataDir);
 
   app.get('/health', (c) => c.json({ ok: true }));
 

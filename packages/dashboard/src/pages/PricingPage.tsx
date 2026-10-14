@@ -46,15 +46,11 @@ function ModelIdentity({ model }: { model: string }) {
 
 function PricePair({ row, cache = false }: { row: PricingCatalogRow; cache?: boolean }) {
   return (
-    <div className="flex flex-col gap-1.5 text-xs tabular-nums sm:text-sm">
-      <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
-        <span className="text-xs text-muted">{cache ? '缓存读' : '输入'}</span>
-        <span className="font-mono">{formatPricingRate(cache ? row.cacheRead : row.input)}</span>
-      </div>
-      <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
-        <span className="text-xs text-muted">{cache ? '缓存写' : '输出'}</span>
-        <span className="font-mono">{formatPricingRate(cache ? row.cacheWrite : row.output)}</span>
-      </div>
+    <div className="grid w-fit grid-cols-[2.5rem_minmax(9ch,max-content)] items-baseline gap-x-2 gap-y-1.5 whitespace-nowrap text-xs tabular-nums sm:text-sm">
+      <span className="text-xs text-muted">{cache ? '缓存读' : '输入'}</span>
+      <span className="text-right font-mono">{formatPricingRate(cache ? row.cacheRead : row.input)}</span>
+      <span className="text-xs text-muted">{cache ? '缓存写' : '输出'}</span>
+      <span className="text-right font-mono">{formatPricingRate(cache ? row.cacheWrite : row.output)}</span>
     </div>
   );
 }
@@ -104,8 +100,8 @@ function PricingList({ rows }: { rows: PricingCatalogRow[] }) {
               <Table.Header>
                 {/* Virtualized header rows have no layout height; fill each visible column. */}
                 <Table.Column className="bg-surface-secondary" id="model" isRowHeader defaultWidth="1fr" minWidth={180}>模型</Table.Column>
-                <Table.Column className="bg-surface-secondary" id="inputOutput" defaultWidth="24%" minWidth={140}>输入 / 输出</Table.Column>
-                <Table.Column className="bg-surface-secondary" id="cache" defaultWidth="24%" minWidth={140}>缓存</Table.Column>
+                <Table.Column className="bg-surface-secondary" id="inputOutput" defaultWidth="24%" minWidth={160}>输入 / 输出</Table.Column>
+                <Table.Column className="bg-surface-secondary" id="cache" defaultWidth="24%" minWidth={160}>缓存</Table.Column>
               </Table.Header>
               <Table.Body items={rows}>
                 {(row) => (

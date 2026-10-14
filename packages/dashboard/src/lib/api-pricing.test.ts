@@ -33,3 +33,27 @@ for (const failure of ['network', 'http', 'invalid-json', 'invalid-rates'] as co
     assert.equal(catalog.updatedAt, null);
   });
 }
+
+it('retains release metadata and source-specific aliases in the catalog', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
+    exact: { 'test/new': { input: 2, output: 4 }, 'test/invalid': { input: 1, output: 2 } },
+    model_metadata: { 'test/new': { release_date: '2026-09-29', featured: true }, 'test/invalid': { release_date: '2026-02-30', featured: false } },
+    sourceAlias: { codex: { auto: 'test/new' } },
+  })));
+  const result = await fetchPricingCatalog();
+  const row = result.models.find(row => row.model === 'test/new');
+  assert.ok(row);
+  assert.equal(row.releaseDate, '2026-09-29');
+  assert.equal(row.featured, true);
+  assert.equal(result.models.find(row => row.model === 'test/invalid')?.releaseDate, undefined);
+  assert.deepEqual(result.matching, { sourceAlias: { codex: { auto: 'test/new' } } });
+});
+
+it('keeps a newer bundled catalog instead of replacing it with an older published table', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
+    _meta: { generated_at: '2000-01-01T00:00:00.000Z' }, exact: { 'obsolete-only': { input: 1, output: 1 } },
+  })));
+  const result = await fetchPricingCatalog();
+  assert.ok(result.models.some(row => row.model === 'openai/gpt-6.1-sol'));
+  assert.equal(result.models.some(row => row.model === 'obsolete-only'), false);
+});

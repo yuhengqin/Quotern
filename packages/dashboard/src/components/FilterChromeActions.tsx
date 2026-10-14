@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowsRotateRight,
   Gear,
   LogoGithub,
   NodesRight,
+  TagDollar,
 } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { useAppToastQueue } from '@/components/AppToastContext';
@@ -31,6 +33,7 @@ function openGithubRepository(): void {
  * Public web shows share + theme; CLI also shows refresh / settings.
  */
 export function FilterChromeActions() {
+  const navigate = useNavigate();
   const toastQueue = useAppToastQueue();
   const cliBackend = isCliBackend();
   const [busy, setBusy] = useState(false);
@@ -70,6 +73,7 @@ export function FilterChromeActions() {
 
   return (
     <div className="flex items-center gap-1">
+      <ChromeAction icon={<TagDollar className="size-4" />} label="模型价格" onPress={() => { void navigate({ to: '/pricing' }); }} />
       <ChromeAction
         icon={<LogoGithub className="size-4" />}
         label="GitHub 仓库"

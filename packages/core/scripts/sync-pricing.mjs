@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { mergePricingModelMetadata } from './pricing-metadata.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRICING_PATH = join(__dirname, '..', 'src', 'pricing', 'pricing.json');
@@ -172,6 +173,7 @@ async function main() {
   const next = {
     ...current,
     exact,
+    model_metadata: mergePricingModelMetadata(current.model_metadata, catalog, exact),
     _meta: {
       ...(current._meta ?? {}),
       generated_at: `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,

@@ -30,7 +30,7 @@ import togetherIcon from '@lobehub/icons-static-svg/icons/together-color.svg';
 import zaiIcon from '@lobehub/icons-static-svg/icons/zai.svg';
 import yiIcon from '@lobehub/icons-static-svg/icons/yi-color.svg';
 import zhipuIcon from '@lobehub/icons-static-svg/icons/zhipu-color.svg';
-import type { ModelProvider } from '@/lib/model-provider';
+import type { ModelProvider } from '../lib/model-provider';
 
 // These SVGs use `currentColor`. Since they are rendered through <img>, the
 // external SVG cannot inherit the surrounding text color, so invert them in

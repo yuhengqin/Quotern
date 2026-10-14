@@ -20,17 +20,17 @@ const rows: PricingCatalogRow[] = [
 ];
 
 describe('pricing catalog helpers', () => {
-  it('defaults to the highest input/output price first', () => {
-    assert.deepEqual(DEFAULT_PRICING_SORT, {
-      column: 'inputOutput',
-      direction: 'descending',
-    });
-    const result = filterAndSortPricingCatalog(rows, '', DEFAULT_PRICING_SORT);
-    assert.deepEqual(result.map((row) => row.model), ['Beta', 'Alpha', 'alpha-mini']);
+  it('puts current flagships ahead of newer non-flagships by default', () => {
+    const result = filterAndSortPricingCatalog([
+      { ...rows[0]!, model: 'new-mini', releaseDate: '2026-10-14' },
+      { ...rows[0]!, model: 'current-opus', releaseDate: '2026-09-22', featured: true },
+      { ...rows[0]!, model: 'current-sol', releaseDate: '2026-09-29', featured: true },
+    ], '', DEFAULT_PRICING_SORT);
+    assert.deepEqual(result.map((row) => row.model), ['current-sol', 'current-opus', 'new-mini']);
   });
 
   it('filters model names case-insensitively after trimming the query', () => {
-    const result = filterAndSortPricingCatalog(rows, '  ALPHA ', DEFAULT_PRICING_SORT);
+    const result = filterAndSortPricingCatalog(rows, '  ALPHA ', { column: 'inputOutput', direction: 'descending' });
     assert.deepEqual(result.map((row) => row.model), ['Alpha', 'alpha-mini']);
   });
 
@@ -67,5 +67,25 @@ describe('pricing catalog helpers', () => {
     assert.equal(getPageCount(101), 2);
     assert.deepEqual(getPricingPage(rows, 2, 2).map((row) => row.model), ['Alpha']);
     assert.deepEqual(getPaginationItems(10, 5), [1, 'ellipsis', 4, 5, 6, 'ellipsis', 10]);
+  });
+
+  it('keeps missing and invalid release dates at the end of their group', () => {
+    const result = filterAndSortPricingCatalog([
+      { ...rows[0]!, model: 'a-unknown', featured: true },
+      { ...rows[0]!, model: 'b-invalid', featured: true, releaseDate: '2026-02-30' },
+      { ...rows[0]!, model: 'z-known', featured: true, releaseDate: '2026-09' },
+      { ...rows[0]!, model: 'new-mini', releaseDate: '2026-10-14' },
+    ], '', DEFAULT_PRICING_SORT);
+    assert.deepEqual(result.map((row) => row.model), ['z-known', 'a-unknown', 'b-invalid', 'new-mini']);
+  });
+
+  it('sorts recent usage first and falls back to flagship ordering for unused models', () => {
+    const result = filterAndSortPricingCatalog([
+      { ...rows[0]!, model: 'current-opus', featured: true, releaseDate: '2026-09-22', usageTokens: 50 },
+      { ...rows[0]!, model: 'common-sol', releaseDate: '2026-09-29', usageTokens: 200 },
+      { ...rows[0]!, model: 'old-unused', releaseDate: '2024-01-01' },
+      { ...rows[0]!, model: 'new-unused', releaseDate: '2026-10-14' },
+    ], '', { column: 'usage', direction: 'descending' });
+    assert.deepEqual(result.map((row) => row.model), ['common-sol', 'current-opus', 'new-unused', 'old-unused']);
   });
 });

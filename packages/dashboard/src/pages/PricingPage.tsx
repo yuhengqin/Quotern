@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   Button,
   Label,
@@ -12,21 +13,27 @@ import {
   Virtualizer,
   type SortDescriptor,
 } from '@heroui/react';
-import { ModelProviderIcon } from '@/components/ModelProviderIcon';
-import { StatusBanner } from '@/components/StatusBanner';
+import { ModelProviderIcon } from '../components/ModelProviderIcon';
+import { StatusBanner } from '../components/StatusBanner';
 import {
+  fetchModelBreakdown,
   fetchPricingCatalog,
+  type ModelBreakdownRow,
   type PricingCatalogResponse,
-} from '@/lib/api';
-import { getModelProvider } from '@/lib/model-provider';
+} from '../lib/api';
+import { formatTokens } from '../lib/format';
+import { getModelProvider } from '../lib/model-provider';
 import {
-  DEFAULT_PRICING_SORT,
+  PRICING_SORT_OPTIONS,
+  addPricingUsage,
   filterAndSortPricingCatalog,
   filterDirectPricingCatalog,
   getPricingModelName,
+  readPricingSort,
+  writePricingSort,
   type PricingSortDescriptor,
   type PricingSortKey,
-} from '@/lib/pricing-catalog';
+} from '../lib/pricing-catalog';
 
 const FILTER_CONTROL_HEIGHT = '!h-8 !min-h-8';
 const SEARCH_DEBOUNCE_MS = 160;
@@ -50,6 +57,33 @@ const SORTABLE_COLUMNS: ReadonlySet<PricingSortKey> = new Set([
   'cache',
 ]);
 
+function PricingModelInfo({ row, sort, hasUsage }: {
+  row: PricingCatalogResponse['models'][number];
+  sort: PricingSortDescriptor;
+  hasUsage: boolean;
+}) {
+  const byUsage = sort.column === 'usage' && hasUsage;
+  const basis = byUsage
+    ? row.usageTokens ? `近 30 天 ${formatTokens(row.usageTokens)} Token` : '近 30 天未使用'
+    : row.releaseDate ? `发布于 ${row.releaseDate}` : '发布日期未收录';
+  return (
+    <span className="min-w-0">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate font-mono text-sm font-medium text-foreground" title={row.model}>
+          {getPricingModelName(row.model)}
+        </span>
+        {row.featured && !byUsage && (sort.column === 'latest' || sort.column === 'usage') ? (
+          <span className="shrink-0 rounded bg-accent-soft px-1 py-0.5 text-[11px] leading-none text-accent-soft-foreground">主推</span>
+        ) : null}
+      </span>
+      <span className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 text-[11px] text-muted">
+        {row.model.includes('/') ? <span className="max-w-full truncate" title={row.model}>{row.model}</span> : null}
+        <span className="whitespace-nowrap tabular-nums">{basis}</span>
+      </span>
+    </span>
+  );
+}
+
 function formatPrice(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '$0';
   return `$${new Intl.NumberFormat('en-US', {
@@ -67,7 +101,7 @@ function ModelSearchField({ onQueryChange }: { onQueryChange: (value: string) =>
 
   return (
     <SearchField
-      className="min-w-0 flex-1 text-xs sm:max-w-80"
+      className="min-w-0 basis-full flex-1 text-xs sm:basis-auto sm:max-w-80"
       variant="secondary"
       onChange={setValue}
     >
@@ -89,6 +123,7 @@ function PricingTableSkeleton() {
       <div aria-label="价格筛选条件" className="flex min-w-0 flex-wrap items-center gap-2">
         <Skeleton className="h-8 w-full rounded-xl sm:w-80" />
         <Skeleton className="h-8 w-28 rounded-xl" />
+        <Skeleton className="h-8 w-32 rounded-xl" />
       </div>
       <div aria-label="模型价格加载中" className="space-y-3">
         {Array.from({ length: 8 }, (_, index) => (
@@ -184,10 +219,10 @@ function useIsMobile() {
   return isMobile;
 }
 
-function MobilePricingList({ rows }: { rows: PricingCatalogResponse['models'] }) {
+function MobilePricingList({ rows, sort, hasUsage }: { rows: PricingCatalogResponse['models']; sort: PricingSortDescriptor; hasUsage: boolean }) {
   if (rows.length === 0) {
     return (
-      <div className="flex h-[calc(100vh-145px)] min-h-48 flex-col items-center justify-center gap-1 text-center">
+      <div className="flex h-[calc(100dvh-260px)] min-h-48 flex-col items-center justify-center gap-1 text-center">
         <p className="text-sm font-medium">没有匹配的模型</p>
         <p className="text-xs text-muted">请尝试其他关键词</p>
       </div>
@@ -202,7 +237,8 @@ function MobilePricingList({ rows }: { rows: PricingCatalogResponse['models'] })
       >
         <ListBox
           aria-label="模型价格列表"
-          className="box-border h-[calc(100vh-145px)] w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto !p-0"
+          className="box-border h-[calc(100dvh-260px)] w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto !p-0"
+          dependencies={[sort.column, hasUsage]}
           items={rows}
           selectionMode="none"
         >
@@ -216,20 +252,11 @@ function MobilePricingList({ rows }: { rows: PricingCatalogResponse['models'] })
               textValue={`${getPricingModelName(row.model)} ${row.model}`}
             >
               <div className="flex min-w-0 flex-1 flex-col justify-between">
-                <div className="flex h-9 min-w-0 shrink-0 items-center gap-2">
+                <div className="flex min-h-12 min-w-0 shrink-0 items-center gap-2">
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-surface-secondary">
                     <ModelProviderIcon provider={provider} size={20} />
                   </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-mono text-sm font-medium text-foreground">
-                      {getPricingModelName(row.model)}
-                    </span>
-                    {row.model.includes('/') ? (
-                      <span className="block truncate text-xs text-muted" title={row.model}>
-                        {row.model}
-                      </span>
-                    ) : null}
-                  </span>
+                  <PricingModelInfo row={row} sort={sort} hasUsage={hasUsage} />
                 </div>
                 <div className="grid min-w-0 grid-cols-2 gap-x-2 gap-y-1 border-t border-border/60 pt-2">
                   <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs tabular-nums">
@@ -263,16 +290,7 @@ function MobilePricingList({ rows }: { rows: PricingCatalogResponse['models'] })
   );
 }
 
-const MOBILE_SORT_OPTIONS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'inputOutput:descending', label: '输入价格：从高到低' },
-  { key: 'inputOutput:ascending', label: '输入价格：从低到高' },
-  { key: 'model:ascending', label: '模型名称：A → Z' },
-  { key: 'model:descending', label: '模型名称：Z → A' },
-  { key: 'cache:descending', label: '缓存价格：从高到低' },
-  { key: 'cache:ascending', label: '缓存价格：从低到高' },
-];
-
-function MobileSortSelect({
+function PricingSortSelect({
   onChange,
   value,
 }: {
@@ -283,13 +301,13 @@ function MobileSortSelect({
   return (
     <Select
       aria-label="模型价格排序"
-      className="min-w-0 max-w-[9rem] shrink-0 text-xs sm:hidden"
+      className="min-w-0 max-w-44 shrink-0 text-xs"
       value={selectedKey}
       variant="secondary"
       onChange={(key) => {
         if (key == null || Array.isArray(key)) return;
         const [column, direction] = String(key).split(':');
-        if (!SORTABLE_COLUMNS.has(column as PricingSortKey)) return;
+        if (!PRICING_SORT_OPTIONS.some(option => option.key === String(key))) return;
         if (direction !== 'ascending' && direction !== 'descending') return;
         onChange({
           column: column as PricingSortKey,
@@ -298,15 +316,15 @@ function MobileSortSelect({
       }}
     >
       <Label className="sr-only">模型价格排序</Label>
-      <Select.Trigger className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[9rem] ps-2.5 pe-7 !text-xs`}>
+      <Select.Trigger className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-44 ps-2.5 pe-7 !text-xs`}>
         <Select.Value className="truncate !text-xs">
-          {() => MOBILE_SORT_OPTIONS.find((option) => option.key === selectedKey)?.label ?? '排序'}
+          {() => PRICING_SORT_OPTIONS.find((option) => option.key === selectedKey)?.label ?? '排序'}
         </Select.Value>
         <Select.Indicator className="size-3.5 text-muted" />
       </Select.Trigger>
       <Select.Popover className="w-52 rounded-xl bg-surface shadow-md" placement="bottom start">
         <ListBox aria-label="模型价格排序选项">
-          {MOBILE_SORT_OPTIONS.map((option) => (
+          {PRICING_SORT_OPTIONS.map((option) => (
             <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
               {option.label}
               <ListBox.ItemIndicator />
@@ -318,15 +336,26 @@ function MobileSortSelect({
   );
 }
 
-export function PricingPage() {
+export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: typeof fetchModelBreakdown }) {
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
   const [query, setQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState('');
-  const [sortDescriptor, setSortDescriptor] = useState(DEFAULT_PRICING_SORT);
+  const [sortDescriptor, setSortDescriptor] = useState(readPricingSort);
+  const [usage, setUsage] = useState<ModelBreakdownRow[]>([]);
+  const [usageStatus, setUsageStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    let cancelled = false;
+    setUsageStatus('loading');
+    void loadUsage(30)
+      .then(data => { if (!cancelled) { setUsage(data.models); setUsageStatus('ready'); } })
+      .catch(() => { if (!cancelled) { setUsage([]); setUsageStatus('error'); } });
+    return () => { cancelled = true; };
+  }, [loadUsage, retryVersion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -355,9 +384,10 @@ export function PricingPage() {
   }, [retryVersion]);
 
   const directModels = useMemo(
-    () => filterDirectPricingCatalog(catalog?.models ?? []),
-    [catalog?.models],
+    () => addPricingUsage(filterDirectPricingCatalog(catalog?.models ?? []), usage, catalog?.matching),
+    [catalog?.models, catalog?.matching, usage],
   );
+  const hasUsage = directModels.some(row => (row.usageTokens ?? 0) > 0);
 
   const providerOptions = useMemo(() => {
     const providers = new Map<string, ReturnType<typeof getModelProvider>>();
@@ -380,9 +410,13 @@ export function PricingPage() {
       }),
     [directModels, providerFilter, query, sortDescriptor],
   );
+  const updateSort = (next: PricingSortDescriptor) => {
+    setSortDescriptor(next);
+    writePricingSort(next);
+  };
   const handleSortChange = (next: SortDescriptor) => {
     if (!SORTABLE_COLUMNS.has(next.column as PricingSortKey)) return;
-    setSortDescriptor({
+    updateSort({
       column: next.column as PricingSortKey,
       direction: next.direction,
     });
@@ -411,6 +445,13 @@ export function PricingPage() {
 
   return (
     <section className="space-y-3">
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">模型价格</h1>
+          <p className="mt-1 text-xs text-muted">API 参考价 · USD / 百万 Token</p>
+        </div>
+        <Link className="shrink-0 py-1 text-xs text-muted hover:text-foreground" to="/dashboard">← 返回用量</Link>
+      </header>
       <div
         aria-label="价格筛选条件"
         className="flex w-full min-w-0 flex-wrap items-center gap-2"
@@ -421,22 +462,31 @@ export function PricingPage() {
           value={providerFilter}
           onChange={handleProviderChange}
         />
-        <MobileSortSelect onChange={setSortDescriptor} value={sortDescriptor} />
+        <PricingSortSelect onChange={updateSort} value={sortDescriptor} />
       </div>
 
-      {isMobile ? <MobilePricingList rows={rows} /> : <Virtualizer
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted" role="status" aria-live="polite">
+        <span>{rows.length} / {directModels.length} 条定价记录</span>
+        <span>{sortDescriptor.column === 'usage'
+          ? usageStatus === 'loading' ? '用量加载中，暂按最新旗舰排序'
+            : usageStatus === 'error' ? '用量暂不可用，暂按最新旗舰排序'
+              : hasUsage ? '近 30 天 · 按 Token 用量排序' : '暂无近 30 天可匹配用量，暂按最新旗舰排序'
+          : sortDescriptor.column === 'latest' ? '当前主推型号优先 · 按发布日期排序' : null}</span>
+      </div>
+
+      {isMobile ? <MobilePricingList rows={rows} sort={sortDescriptor} hasUsage={hasUsage} /> : <Virtualizer
         layout={TableLayout}
         layoutOptions={{
           headingHeight: TABLE_HEADER_HEIGHT,
-          rowHeight: 68,
+          rowHeight: 76,
         }}
       >
         <Table className="table-size-small w-full min-w-0">
           <Table.ScrollContainer className="min-w-0 overflow-x-hidden">
             <Table.Content
               aria-label="模型价格表"
-              className="h-[calc(100vh-145px)] w-full min-w-0 overflow-x-hidden overflow-y-auto"
-              sortDescriptor={sortDescriptor}
+              className="h-[calc(100dvh-230px)] min-h-48 w-full min-w-0 overflow-x-hidden overflow-y-auto"
+              sortDescriptor={SORTABLE_COLUMNS.has(sortDescriptor.column) ? sortDescriptor : undefined}
               onSortChange={handleSortChange}
             >
               <Table.Header className="h-8 w-full">
@@ -482,6 +532,7 @@ export function PricingPage() {
                 </Table.Column>
               </Table.Header>
               <Table.Body
+                dependencies={[sortDescriptor.column, hasUsage]}
                 items={rows}
                 renderEmptyState={() => (
                   <div className="flex min-h-48 flex-col items-center justify-center gap-1 text-center">
@@ -500,19 +551,7 @@ export function PricingPage() {
                           <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-surface/70 sm:size-9">
                             <ModelProviderIcon provider={provider} size={20} />
                           </span>
-                          <span className="min-w-0">
-                            <span
-                              className="block truncate font-mono text-sm font-medium text-foreground"
-                              title={row.model}
-                            >
-                              {getPricingModelName(row.model)}
-                            </span>
-                            {row.model.includes('/') ? (
-                              <span className="mt-0.5 block truncate text-xs text-muted" title={row.model}>
-                                {row.model}
-                              </span>
-                            ) : null}
-                          </span>
+                          <PricingModelInfo row={row} sort={sortDescriptor} hasUsage={hasUsage} />
                         </div>
                       </Table.Cell>
                       <Table.Cell>
@@ -551,6 +590,7 @@ export function PricingPage() {
           </Table.ScrollContainer>
         </Table>
       </Virtualizer>}
+      <p className="text-[11px] text-muted">用于估算 Token 费用 · $0 表示零价，— 表示未提供定价</p>
     </section>
   );
 }

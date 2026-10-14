@@ -1,6 +1,7 @@
 import type { DashboardDateRange } from './dashboard-date-range.ts';
 import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
 import type { PricingData } from 'quotern-core';
+import { isModelReleaseDate } from 'quotern-core/pricing-matcher';
 import bundledPricing from 'quotern-core/pricing-data' with { type: 'json' };
 import type {
   LeaderboardMetric,
@@ -190,6 +191,9 @@ export interface PricingCatalogRow {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  releaseDate?: string;
+  featured?: boolean;
+  usageTokens?: number;
 }
 
 export interface PricingCatalogResponse {
@@ -197,6 +201,7 @@ export interface PricingCatalogResponse {
   generatedAt: string | null;
   updatedAt: string | null;
   models: PricingCatalogRow[];
+  matching?: Pick<PricingData, 'alias' | 'sourceAlias'>;
 }
 
 export interface UsageDataset {
@@ -305,6 +310,13 @@ export async function fetchPricingCatalog(): Promise<PricingCatalogResponse> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const pricingData = parsePricingData(await res.json());
+    const bundled = bundledPricing as PricingData;
+    const remoteDate = pricingData._meta?.generated_at;
+    const bundledDate = bundled._meta?.generated_at;
+    if (typeof remoteDate === 'string' && typeof bundledDate === 'string'
+      && Number.isFinite(Date.parse(remoteDate)) && Date.parse(remoteDate) < Date.parse(bundledDate)) {
+      return pricingDataToCatalog(bundled, null);
+    }
     return pricingDataToCatalog(pricingData, res.headers.get('last-modified'));
   } catch {
     return pricingDataToCatalog(bundledPricing as PricingData, null);
@@ -342,7 +354,7 @@ function pricingDataToCatalog(
 ): PricingCatalogResponse {
   return {
     units: 'usd_per_million_tokens',
-    generatedAt: null,
+    generatedAt: typeof data._meta?.generated_at === 'string' ? data._meta.generated_at : null,
     updatedAt,
     models: Object.entries(data.exact)
       .map(([model, rates]) => ({
@@ -351,8 +363,16 @@ function pricingDataToCatalog(
         output: rates.output ?? 0,
         cacheRead: rates.cache_read ?? 0,
         cacheWrite: rates.cache_write ?? 0,
+        ...(isModelReleaseDate(data.model_metadata?.[model]?.release_date)
+          ? { releaseDate: data.model_metadata![model]!.release_date } : {}),
+        ...(typeof data.model_metadata?.[model]?.featured === 'boolean'
+          ? { featured: data.model_metadata[model]!.featured } : {}),
       }))
       .sort((a, b) => a.model.localeCompare(b.model)),
+    ...((data.alias || data.sourceAlias) ? { matching: {
+      ...(data.alias ? { alias: data.alias } : {}),
+      ...(data.sourceAlias ? { sourceAlias: data.sourceAlias } : {}),
+    } } : {}),
   };
 }
 

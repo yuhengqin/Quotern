@@ -1,556 +1,238 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearch } from '@tanstack/react-router';
+import { ArrowLeft } from '@gravity-ui/icons';
+import { Button, Label, ListBox, ListLayout, SearchField, Select, Skeleton, Table, TableLayout, Virtualizer } from '@heroui/react';
+import { ModelProviderIcon } from '../components/ModelProviderIcon';
+import { StatusBanner } from '../components/StatusBanner';
+import { fetchPricingCatalog, type PricingCatalogResponse, type PricingCatalogRow } from '../lib/pricing-data';
 import {
-  Button,
-  Label,
-  ListBox,
-  ListLayout,
-  SearchField,
-  Select,
-  Skeleton,
-  Table,
-  TableLayout,
-  Virtualizer,
-  type SortDescriptor,
-} from '@heroui/react';
-import { ModelProviderIcon } from '@/components/ModelProviderIcon';
-import { StatusBanner } from '@/components/StatusBanner';
-import {
-  fetchPricingCatalog,
-  type PricingCatalogResponse,
-} from '@/lib/api';
-import { getModelProvider } from '@/lib/model-provider';
-import {
-  DEFAULT_PRICING_SORT,
-  filterAndSortPricingCatalog,
-  filterDirectPricingCatalog,
-  getPricingModelName,
-  type PricingSortDescriptor,
-  type PricingSortKey,
-} from '@/lib/pricing-catalog';
+  DEFAULT_PRICING_SORT, filterAndSortPricingCatalog, filterDirectPricingCatalog,
+  formatPricingRate, getPricingChannel, getPricingModelName, getPricingProvider,
+  type PricingSortDescriptor, type PricingSortKey,
+} from '../lib/pricing-catalog';
 
-const FILTER_CONTROL_HEIGHT = '!h-8 !min-h-8';
-const SEARCH_DEBOUNCE_MS = 160;
-const TABLE_HEADER_HEIGHT = 32;
-const TABLE_COLUMN_WIDTHS = {
-  // Percentages keep the three-column grid aligned on narrow screens while
-  // still giving the price columns predictable space on desktop.
-  inputOutput: '24%',
-  cache: '18%',
-  modelMin: 104,
-} as const;
+const SORT_OPTIONS: ReadonlyArray<{ column: PricingSortKey; label: string }> = [
+  { column: 'input', label: '输入价' }, { column: 'output', label: '输出价' },
+  { column: 'cacheRead', label: '缓存读取价' }, { column: 'cacheWrite', label: '缓存写入价' },
+  { column: 'model', label: '模型名称' },
+];
+const SORT_CHOICES = SORT_OPTIONS.flatMap((option) =>
+  (['ascending', 'descending'] as const).map((direction) => ({
+    ...option, direction, key: `${option.column}:${direction}`,
+    text: `${option.label}：${option.column === 'model'
+      ? direction === 'ascending' ? 'A → Z' : 'Z → A'
+      : direction === 'ascending' ? '低 → 高' : '高 → 低'}`,
+  })),
+);
 
-const TABLE_COLUMN_MIN_WIDTHS = {
-  inputOutput: 112,
-  cache: 96,
-} as const;
-
-const SORTABLE_COLUMNS: ReadonlySet<PricingSortKey> = new Set([
-  'model',
-  'inputOutput',
-  'cache',
-]);
-
-function formatPrice(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0';
-  return `$${new Intl.NumberFormat('en-US', {
-    maximumSignificantDigits: 6,
-  }).format(value)}`;
-}
-
-function ModelSearchField({ onQueryChange }: { onQueryChange: (value: string) => void }) {
-  const [value, setValue] = useState('');
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => onQueryChange(value), SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [onQueryChange, value]);
-
+function ModelIdentity({ model }: { model: string }) {
+  const provider = getPricingProvider(model);
+  const channel = getPricingChannel(model);
   return (
-    <SearchField
-      className="min-w-0 flex-1 text-xs sm:max-w-80"
-      variant="secondary"
-      onChange={setValue}
-    >
-      <Label className="sr-only">模糊查询模型</Label>
-      <SearchField.Group
-        className={`${FILTER_CONTROL_HEIGHT} focus-within:!border-border focus-within:!outline-none focus-within:!ring-0 focus-within:!shadow-none`}
-      >
-        <SearchField.SearchIcon />
-        <SearchField.Input className="!text-xs" placeholder="模糊查询模型" />
-        <SearchField.ClearButton />
-      </SearchField.Group>
-    </SearchField>
-  );
-}
-
-function PricingTableSkeleton() {
-  return (
-    <section className="space-y-3">
-      <div aria-label="价格筛选条件" className="flex min-w-0 flex-wrap items-center gap-2">
-        <Skeleton className="h-8 w-full rounded-xl sm:w-80" />
-        <Skeleton className="h-8 w-28 rounded-xl" />
+    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-surface">
+        <ModelProviderIcon provider={provider} size={20} />
+      </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-mono text-sm font-medium" title={model}>{getPricingModelName(model)}</span>
+          {channel && <span className="shrink-0 rounded bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">{channel}</span>}
+        </div>
+        <p className="mt-0.5 truncate text-xs text-muted" title={model}>{model}</p>
       </div>
-      <div aria-label="模型价格加载中" className="space-y-3">
-        {Array.from({ length: 8 }, (_, index) => (
-          <Skeleton className="h-11 w-full rounded-lg" key={index} />
-        ))}
-      </div>
-    </section>
+    </div>
   );
 }
 
-function getProviderOptionKey(provider: ReturnType<typeof getModelProvider>): string {
-  return `${provider.icon}:${provider.label.toLocaleLowerCase()}`;
-}
-
-function ProviderSelect({
-  onChange,
-  options,
-  value,
-}: {
-  onChange: (value: string | null) => void;
-  options: readonly ReturnType<typeof getModelProvider>[];
-  value: string;
-}) {
-  const selected = options.find((provider) => provider.key === value);
-
+function PricePair({ row, cache = false }: { row: PricingCatalogRow; cache?: boolean }) {
   return (
-    <Select
-      aria-label="供应商筛选"
-      className="min-w-0 max-w-36 shrink-0 text-xs sm:max-w-52"
-      value={value || 'all'}
-      variant="secondary"
-      onChange={(key) => {
-        onChange(key == null || Array.isArray(key) ? null : String(key));
-      }}
-    >
-      <Label className="sr-only">供应商筛选</Label>
-      <Select.Trigger
-        className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-36 items-center leading-none ps-2.5 pe-7 !text-xs font-normal sm:max-w-52 sm:ps-3 sm:pe-8`}
-      >
-        <Select.Value className="min-w-0 max-w-24 !text-xs sm:max-w-40">
-          {() =>
-            selected ? (
-              <span className="flex min-w-0 items-center gap-1.5">
-                <ModelProviderIcon provider={selected} size={14} />
-                <span className="truncate">{selected.label}</span>
-              </span>
-            ) : (
-              '全部供应商'
-            )
-          }
-        </Select.Value>
-        <Select.Indicator className="size-3.5 text-muted" />
-      </Select.Trigger>
-      <Select.Popover className="w-52 rounded-xl bg-surface shadow-md" placement="bottom start">
-        <ListBox aria-label="供应商列表">
-          <ListBox.Item id="all" textValue="全部供应商">
-            全部供应商
-            <ListBox.ItemIndicator />
-          </ListBox.Item>
-          {options.map((provider) => (
-            <ListBox.Item
-              className="gap-2! rounded-lg px-1.5 py-1 text-xs"
-              id={provider.key}
-              key={provider.key}
-              textValue={provider.label}
-            >
-              <span className="flex size-5 shrink-0 items-center justify-center">
-                <ModelProviderIcon provider={provider} size={14} />
-              </span>
-              <span className="min-w-0 flex-1 truncate">{provider.label}</span>
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-    </Select>
+    <div className="flex flex-col gap-1.5 text-xs tabular-nums sm:text-sm">
+      <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
+        <span className="text-xs text-muted">{cache ? '缓存读' : '输入'}</span>
+        <span className="font-mono">{formatPricingRate(cache ? row.cacheRead : row.input)}</span>
+      </div>
+      <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
+        <span className="text-xs text-muted">{cache ? '缓存写' : '输出'}</span>
+        <span className="font-mono">{formatPricingRate(cache ? row.cacheWrite : row.output)}</span>
+      </div>
+    </div>
   );
 }
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
-  );
-
+function PricingList({ rows }: { rows: PricingCatalogRow[] }) {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 639px)');
-    const handleChange = () => setIsMobile(mediaQuery.matches);
-    handleChange();
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    const media = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
   }, []);
 
-  return isMobile;
-}
+  if (rows.length === 0) return (
+    <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-1 text-center">
+      <p className="text-sm font-medium">没有匹配的模型</p>
+      <p className="text-xs text-muted">请尝试其他关键词或提供商</p>
+    </div>
+  );
 
-function MobilePricingList({ rows }: { rows: PricingCatalogResponse['models'] }) {
-  if (rows.length === 0) {
-    return (
-      <div className="flex h-[calc(100vh-145px)] min-h-48 flex-col items-center justify-center gap-1 text-center">
-        <p className="text-sm font-medium">没有匹配的模型</p>
-        <p className="text-xs text-muted">请尝试其他关键词</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden pb-2">
-      <Virtualizer
-        layout={ListLayout}
-        layoutOptions={{ gap: 4, rowHeight: 132 }}
-      >
-        <ListBox
-          aria-label="模型价格列表"
-          className="box-border h-[calc(100vh-145px)] w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto !p-0"
-          items={rows}
-          selectionMode="none"
-        >
-        {(row) => {
-          const provider = getModelProvider(row.model);
-
-          return (
-            <ListBox.Item
-              className="box-border !h-[128px] !min-h-0 !w-full min-w-0 max-w-full !items-stretch rounded-xl border border-border/70 bg-surface !p-3 shadow-[rgba(0,0,0,0.08)_0px_1px_4px,rgba(0,0,0,0.04)_0px_0px_0px_1px] outline-none data-[focus-visible=true]:border-border data-[hovered=true]:bg-surface-secondary"
-              id={row.model}
-              textValue={`${getPricingModelName(row.model)} ${row.model}`}
-            >
+  if (isMobile) return (
+    <div className="min-h-0 flex-1 overflow-hidden">
+      <Virtualizer layout={ListLayout} layoutOptions={{ gap: 8, rowHeight: 132 }}>
+        <ListBox aria-label="模型价格列表" className="h-full overflow-x-hidden overflow-y-auto !p-0" items={rows} selectionMode="none">
+          {(row) => (
+            <ListBox.Item id={row.model} textValue={row.model} className="!h-[124px] !items-stretch rounded-xl border border-border/70 bg-surface !p-3">
               <div className="flex min-w-0 flex-1 flex-col justify-between">
-                <div className="flex h-9 min-w-0 shrink-0 items-center gap-2">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-surface-secondary">
-                    <ModelProviderIcon provider={provider} size={20} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-mono text-sm font-medium text-foreground">
-                      {getPricingModelName(row.model)}
-                    </span>
-                    {row.model.includes('/') ? (
-                      <span className="block truncate text-xs text-muted" title={row.model}>
-                        {row.model}
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="grid min-w-0 grid-cols-2 gap-x-2 gap-y-1 border-t border-border/60 pt-2">
-                  <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs tabular-nums">
-                    <span className="text-xs text-muted">输入</span>
-                    <span>{formatPrice(row.input)}</span>
-                    <span className="text-xs text-muted">/M</span>
-                  </span>
-                  <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs tabular-nums">
-                    <span className="text-xs text-muted">输出</span>
-                    <span>{formatPrice(row.output)}</span>
-                    <span className="text-xs text-muted">/M</span>
-                  </span>
-                  <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs tabular-nums">
-                    <span className="text-xs text-muted">缓存读</span>
-                    <span>{row.cacheRead > 0 ? formatPrice(row.cacheRead) : '-'}</span>
-                    <span className="text-xs text-muted">/M</span>
-                  </span>
-                  <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs tabular-nums">
-                    <span className="text-xs text-muted">缓存写</span>
-                    <span>{row.cacheWrite > 0 ? formatPrice(row.cacheWrite) : '-'}</span>
-                    <span className="text-xs text-muted">/M</span>
-                  </span>
+                <ModelIdentity model={row.model} />
+                <div className="grid grid-cols-2 gap-5 border-t border-border/60 pt-2">
+                  <PricePair row={row} /><PricePair row={row} cache />
                 </div>
               </div>
             </ListBox.Item>
-          );
-        }}
+          )}
         </ListBox>
+      </Virtualizer>
+    </div>
+  );
+
+  return (
+    <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/60">
+      <Virtualizer layout={TableLayout} layoutOptions={{ headingHeight: 36, rowHeight: 72 }}>
+        <Table className="table-size-small h-full w-full">
+          <Table.ScrollContainer className="h-full min-w-0">
+            <Table.Content aria-label="模型价格表" className="h-full w-full overflow-y-auto">
+              <Table.Header>
+                <Table.Column id="model" isRowHeader defaultWidth="1fr" minWidth={180}>模型</Table.Column>
+                <Table.Column id="inputOutput" defaultWidth="24%" minWidth={140}>输入 / 输出</Table.Column>
+                <Table.Column id="cache" defaultWidth="24%" minWidth={140}>缓存</Table.Column>
+              </Table.Header>
+              <Table.Body items={rows}>
+                {(row) => (
+                  <Table.Row id={row.model}>
+                    <Table.Cell><ModelIdentity model={row.model} /></Table.Cell>
+                    <Table.Cell><PricePair row={row} /></Table.Cell>
+                    <Table.Cell><PricePair row={row} cache /></Table.Cell>
+                  </Table.Row>
+                )}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
       </Virtualizer>
     </div>
   );
 }
 
-const MOBILE_SORT_OPTIONS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'inputOutput:descending', label: '输入价格：从高到低' },
-  { key: 'inputOutput:ascending', label: '输入价格：从低到高' },
-  { key: 'model:ascending', label: '模型名称：A → Z' },
-  { key: 'model:descending', label: '模型名称：Z → A' },
-  { key: 'cache:descending', label: '缓存价格：从高到低' },
-  { key: 'cache:ascending', label: '缓存价格：从低到高' },
-];
-
-function MobileSortSelect({
-  onChange,
-  value,
-}: {
-  onChange: (sort: PricingSortDescriptor) => void;
-  value: PricingSortDescriptor;
-}) {
-  const selectedKey = `${value.column}:${value.direction}`;
-  return (
-    <Select
-      aria-label="模型价格排序"
-      className="min-w-0 max-w-[9rem] shrink-0 text-xs sm:hidden"
-      value={selectedKey}
-      variant="secondary"
-      onChange={(key) => {
-        if (key == null || Array.isArray(key)) return;
-        const [column, direction] = String(key).split(':');
-        if (!SORTABLE_COLUMNS.has(column as PricingSortKey)) return;
-        if (direction !== 'ascending' && direction !== 'descending') return;
-        onChange({
-          column: column as PricingSortKey,
-          direction,
-        });
-      }}
-    >
-      <Label className="sr-only">模型价格排序</Label>
-      <Select.Trigger className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[9rem] ps-2.5 pe-7 !text-xs`}>
-        <Select.Value className="truncate !text-xs">
-          {() => MOBILE_SORT_OPTIONS.find((option) => option.key === selectedKey)?.label ?? '排序'}
-        </Select.Value>
-        <Select.Indicator className="size-3.5 text-muted" />
-      </Select.Trigger>
-      <Select.Popover className="w-52 rounded-xl bg-surface shadow-md" placement="bottom start">
-        <ListBox aria-label="模型价格排序选项">
-          {MOBILE_SORT_OPTIONS.map((option) => (
-            <ListBox.Item id={option.key} key={option.key} textValue={option.label}>
-              {option.label}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-    </Select>
-  );
-}
-
 export function PricingPage() {
+  const search = useSearch({ strict: false }) as { q?: string };
+  const initialQuery = typeof search.q === 'string' ? search.q : '';
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
+  const [providerFilter, setProviderFilter] = useState('all');
+  const [sort, setSort] = useState<PricingSortDescriptor>(DEFAULT_PRICING_SORT);
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryVersion, setRetryVersion] = useState(0);
-  const [query, setQuery] = useState('');
-  const [providerFilter, setProviderFilter] = useState('');
-  const [sortDescriptor, setSortDescriptor] = useState(DEFAULT_PRICING_SORT);
-  const isMobile = useIsMobile();
+  const [retry, setRetry] = useState(0);
 
+  useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query), 160);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    void fetchPricingCatalog().then((data) => {
+      if (!cancelled) setCatalog(data);
+    }).catch((reason: unknown) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : '模型价格加载失败');
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [retry]);
 
-    void fetchPricingCatalog()
-      .then((data) => {
-        if (!cancelled) {
-          setCatalog(data);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (!cancelled) {
-          setCatalog(null);
-          setError(reason instanceof Error ? reason.message : '模型价格加载失败');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [retryVersion]);
-
-  const directModels = useMemo(
-    () => filterDirectPricingCatalog(catalog?.models ?? []),
-    [catalog?.models],
-  );
-
-  const providerOptions = useMemo(() => {
-    const providers = new Map<string, ReturnType<typeof getModelProvider>>();
+  const directModels = useMemo(() => filterDirectPricingCatalog(catalog?.models ?? []), [catalog]);
+  const providers = useMemo(() => {
+    const unique = new Map<string, ReturnType<typeof getPricingProvider>>();
     for (const row of directModels) {
-      const provider = getModelProvider(row.model);
-      const optionKey = getProviderOptionKey(provider);
-      if (!providers.has(optionKey)) {
-        providers.set(optionKey, { ...provider, key: optionKey });
-      }
+      const provider = getPricingProvider(row.model);
+      unique.set(provider.key, provider);
     }
-
-    return [...providers.values()].sort((a, b) => a.label.localeCompare(b.label));
+    return [...unique.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [directModels]);
-
-  const rows = useMemo(
-    () =>
-      filterAndSortPricingCatalog(directModels, query, sortDescriptor).filter((row) => {
-        if (!providerFilter) return true;
-        return getProviderOptionKey(getModelProvider(row.model)) === providerFilter;
-      }),
-    [directModels, providerFilter, query, sortDescriptor],
-  );
-  const handleSortChange = (next: SortDescriptor) => {
-    if (!SORTABLE_COLUMNS.has(next.column as PricingSortKey)) return;
-    setSortDescriptor({
-      column: next.column as PricingSortKey,
-      direction: next.direction,
-    });
-  };
-
-  const handleQueryChange = useCallback((value: string) => {
-    setQuery(value);
-  }, []);
-
-  const handleProviderChange = (key: string | null) => {
-    setProviderFilter(key == null || key === 'all' ? '' : key);
-  };
-
-  if (loading) return <PricingTableSkeleton />;
-
-  if (error) {
-    return (
-      <div className="flex min-h-64 flex-col items-center justify-center gap-5 text-center">
-        <StatusBanner description={error} title="模型价格加载失败" tone="error" />
-        <Button onPress={() => setRetryVersion((value) => value + 1)} variant="outline">
-          重试
-        </Button>
-      </div>
-    );
-  }
+  const rows = useMemo(() => filterAndSortPricingCatalog(directModels, debouncedQuery, sort)
+    .filter((row) => providerFilter === 'all' || getPricingProvider(row.model).key === providerFilter),
+  [directModels, debouncedQuery, sort, providerFilter]);
+  const updatedAt = catalog?.generatedAt ?? catalog?.updatedAt;
+  const dateLabel = updatedAt && Number.isFinite(Date.parse(updatedAt))
+    ? new Date(updatedAt).toISOString().slice(0, 10) : '未知';
+  const selectedProvider = providers.find((provider) => provider.key === providerFilter);
+  const sortKey = `${sort.column}:${sort.direction}`;
 
   return (
-    <section className="space-y-3">
-      <div
-        aria-label="价格筛选条件"
-        className="flex w-full min-w-0 flex-wrap items-center gap-2"
-      >
-        <ModelSearchField onQueryChange={handleQueryChange} />
-        <ProviderSelect
-          options={providerOptions}
-          value={providerFilter}
-          onChange={handleProviderChange}
-        />
-        <MobileSortSelect onChange={setSortDescriptor} value={sortDescriptor} />
+    <section className="flex h-[calc(100dvh-7rem)] min-h-96 flex-col gap-4">
+      <header className="flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">模型价格</h1>
+          <p className="mt-1 text-xs text-muted">API 参考价 · USD / 百万 Token</p>
+        </div>
+        <Link to="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-muted hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent">
+          <ArrowLeft className="size-3.5" />返回用量
+        </Link>
+      </header>
+
+      <div aria-label="价格筛选条件" className="flex shrink-0 flex-wrap items-center gap-2">
+        <SearchField aria-label="搜索模型名称或 ID" value={query} onChange={setQuery} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-80">
+          <Label className="sr-only">搜索模型名称或 ID</Label>
+          <SearchField.Group className="!h-8 !min-h-8">
+            <SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder="搜索模型名称或 ID" /><SearchField.ClearButton />
+          </SearchField.Group>
+        </SearchField>
+        <Select aria-label="提供商筛选" value={providerFilter} variant="secondary" onChange={(key) => {
+          if (!Array.isArray(key)) setProviderFilter(key == null ? 'all' : String(key));
+        }} className="min-w-0 max-w-52 text-xs">
+          <Label className="sr-only">提供商筛选</Label>
+          <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-52 !text-xs">
+            <Select.Value className="truncate">{() => selectedProvider?.label ?? '全部提供商'}</Select.Value><Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover className="w-60" placement="bottom start">
+            <ListBox aria-label="提供商列表">
+              <ListBox.Item id="all" textValue="全部提供商">全部提供商<ListBox.ItemIndicator /></ListBox.Item>
+              {providers.map((provider) => (
+                <ListBox.Item id={provider.key} key={provider.key} textValue={provider.label} className="text-xs">
+                  <ModelProviderIcon provider={provider} size={16} /><span>{provider.label}</span><ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+        <Select aria-label="模型价格排序" value={sortKey} variant="secondary" onChange={(key) => {
+          const choice = SORT_CHOICES.find((option) => option.key === key);
+          if (choice) setSort({ column: choice.column, direction: choice.direction });
+        }} className="min-w-0 max-w-52 text-xs">
+          <Label className="sr-only">模型价格排序</Label>
+          <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs">
+            <Select.Value>{() => SORT_CHOICES.find((choice) => choice.key === sortKey)?.text}</Select.Value><Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover className="w-56" placement="bottom start">
+            <ListBox aria-label="排序选项">{SORT_CHOICES.map((choice) => (
+              <ListBox.Item id={choice.key} key={choice.key} textValue={choice.text} className="text-xs">{choice.text}<ListBox.ItemIndicator /></ListBox.Item>
+            ))}</ListBox>
+          </Select.Popover>
+        </Select>
       </div>
 
-      {isMobile ? <MobilePricingList rows={rows} /> : <Virtualizer
-        layout={TableLayout}
-        layoutOptions={{
-          headingHeight: TABLE_HEADER_HEIGHT,
-          rowHeight: 68,
-        }}
-      >
-        <Table className="table-size-small w-full min-w-0">
-          <Table.ScrollContainer className="min-w-0 overflow-x-hidden">
-            <Table.Content
-              aria-label="模型价格表"
-              className="h-[calc(100vh-145px)] w-full min-w-0 overflow-x-hidden overflow-y-auto"
-              sortDescriptor={sortDescriptor}
-              onSortChange={handleSortChange}
-            >
-              <Table.Header className="h-8 w-full">
-                <Table.Column
-                  allowsSorting
-                  className="align-middle px-1.5! py-2! sm:px-3!"
-                  defaultWidth="1fr"
-                  id="model"
-                  isRowHeader
-                  minWidth={TABLE_COLUMN_WIDTHS.modelMin}
-                >
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader className="h-full !gap-1 items-center" sortDirection={sortDirection}>
-                      模型
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column
-                  allowsSorting
-                  defaultWidth={TABLE_COLUMN_WIDTHS.inputOutput}
-                  id="inputOutput"
-                  minWidth={TABLE_COLUMN_MIN_WIDTHS.inputOutput}
-                  className="align-middle !min-w-0 !px-1.5 !py-2 sm:!px-3"
-                >
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader className="h-full !gap-1 items-center" sortDirection={sortDirection}>
-                      输入 / 输出
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-                <Table.Column
-                  allowsSorting
-                  className="align-middle !min-w-0 !px-1.5 !py-2 sm:!px-3"
-                  defaultWidth={TABLE_COLUMN_WIDTHS.cache}
-                  id="cache"
-                  minWidth={TABLE_COLUMN_MIN_WIDTHS.cache}
-                >
-                  {({ sortDirection }) => (
-                    <Table.SortableColumnHeader className="h-full !gap-1 items-center" sortDirection={sortDirection}>
-                      缓存
-                    </Table.SortableColumnHeader>
-                  )}
-                </Table.Column>
-              </Table.Header>
-              <Table.Body
-                items={rows}
-                renderEmptyState={() => (
-                  <div className="flex min-h-48 flex-col items-center justify-center gap-1 text-center">
-                    <p className="text-sm font-medium">没有匹配的模型</p>
-                    <p className="text-xs text-muted">请尝试其他关键词</p>
-                  </div>
-                )}
-              >
-                {(row) => {
-                  const provider = getModelProvider(row.model);
+      {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        <span role="status">{rows.length} / {directModels.length} 条定价记录</span>
+        <span>{catalog.source === 'bundled' ? '内置价格表' : '已发布价格表'} · 更新于 {dateLabel}</span>
+        <span>来源：<a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">models.dev</a> 与人工补充</span>
+      </div>}
 
-                  return (
-                    <Table.Row id={row.model}>
-                      <Table.Cell>
-                        <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-surface/70 sm:size-9">
-                            <ModelProviderIcon provider={provider} size={20} />
-                          </span>
-                          <span className="min-w-0">
-                            <span
-                              className="block truncate font-mono text-sm font-medium text-foreground"
-                              title={row.model}
-                            >
-                              {getPricingModelName(row.model)}
-                            </span>
-                            {row.model.includes('/') ? (
-                              <span className="mt-0.5 block truncate text-xs text-muted" title={row.model}>
-                                {row.model}
-                              </span>
-                            ) : null}
-                          </span>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex flex-col items-start gap-1.5">
-                          <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-sm tabular-nums">
-                            <span className="text-xs text-muted">输入</span>
-                            <span>{formatPrice(row.input)}</span>
-                            <span className="text-xs text-muted">/M</span>
-                          </span>
-                          <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-sm tabular-nums">
-                            <span className="text-xs text-muted">输出</span>
-                            <span>{formatPrice(row.output)}</span>
-                            <span className="text-xs text-muted">/M</span>
-                          </span>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="flex flex-col items-start gap-1.5">
-                          <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-sm tabular-nums">
-                            <span className="text-xs text-muted">缓存读</span>
-                            <span>{row.cacheRead > 0 ? formatPrice(row.cacheRead) : '-'}</span>
-                            <span className="text-xs text-muted">/M</span>
-                          </span>
-                          <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-sm tabular-nums">
-                            <span className="text-xs text-muted">缓存写</span>
-                            <span>{row.cacheWrite > 0 ? formatPrice(row.cacheWrite) : '-'}</span>
-                            <span className="text-xs text-muted">/M</span>
-                          </span>
-                        </div>
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                }}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
-      </Virtualizer>}
+      {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
+        : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry((value) => value + 1)}>重试</Button></div>
+          : <PricingList key={`${providerFilter}:${debouncedQuery}:${sortKey}`} rows={rows} />}
+      <p className="shrink-0 text-[11px] text-muted">用于估算 Token 费用 · $0 表示零价，— 表示未提供定价</p>
     </section>
   );
 }

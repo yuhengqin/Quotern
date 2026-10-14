@@ -11,6 +11,9 @@ import {
   getPaginationItems,
   getPricingModelName,
   getPricingPage,
+  getPricingProvider,
+  getPricingChannel,
+  formatPricingRate,
 } from './pricing-catalog.ts';
 
 const rows: PricingCatalogRow[] = [
@@ -20,13 +23,13 @@ const rows: PricingCatalogRow[] = [
 ];
 
 describe('pricing catalog helpers', () => {
-  it('defaults to the highest input/output price first', () => {
+  it('defaults to the highest input price first with stable model-name ties', () => {
     assert.deepEqual(DEFAULT_PRICING_SORT, {
-      column: 'inputOutput',
+      column: 'input',
       direction: 'descending',
     });
     const result = filterAndSortPricingCatalog(rows, '', DEFAULT_PRICING_SORT);
-    assert.deepEqual(result.map((row) => row.model), ['Beta', 'Alpha', 'alpha-mini']);
+    assert.deepEqual(result.map((row) => row.model), ['Alpha', 'Beta', 'alpha-mini']);
   });
 
   it('filters model names case-insensitively after trimming the query', () => {
@@ -54,12 +57,43 @@ describe('pricing catalog helpers', () => {
     );
   });
 
-  it('sorts paired price columns and uses model name as a stable tiebreaker', () => {
+  it('sorts output prices independently of input prices', () => {
     const result = filterAndSortPricingCatalog(rows, '', {
-      column: 'inputOutput',
+      column: 'output',
       direction: 'descending',
     });
-    assert.deepEqual(result.map((row) => row.model), ['Beta', 'Alpha', 'alpha-mini']);
+    assert.deepEqual(result.map((row) => row.model), ['Beta', 'alpha-mini', 'Alpha']);
+  });
+
+  it('keeps unknown rates last in either direction and preserves zero as a price', () => {
+    const samples = [
+      { ...rows[0], model: 'unknown', cacheRead: null },
+      { ...rows[0], model: 'free', cacheRead: 0 },
+      { ...rows[0], model: 'paid', cacheRead: 1 },
+    ];
+    assert.deepEqual(filterAndSortPricingCatalog(samples, '', {
+      column: 'cacheRead', direction: 'ascending',
+    }).map((row) => row.model), ['free', 'paid', 'unknown']);
+    assert.deepEqual(filterAndSortPricingCatalog(samples, '', {
+      column: 'cacheRead', direction: 'descending',
+    }).map((row) => row.model), ['paid', 'free', 'unknown']);
+    assert.equal(formatPricingRate(null), '—');
+    assert.equal(formatPricingRate(0), '$0');
+    assert.equal(formatPricingRate(0.04), '$0.04');
+  });
+
+  it('groups model families and regional channels under the supplying company', () => {
+    assert.equal(getPricingProvider('openai/gpt-5.3-codex').key, 'openai');
+    assert.equal(getPricingProvider('anthropic/claude-sonnet-4').key, 'anthropic');
+    assert.equal(getPricingProvider('moonshotai/kimi-k2').key, 'moonshot');
+    assert.equal(getPricingProvider('moonshotai-cn/kimi-k2').key, 'moonshot');
+    assert.equal(getPricingProvider('alibaba-cn/qwen-plus').key, 'alibaba');
+    assert.equal(getPricingProvider('xiaomi/mimo-v2').key, 'xiaomi');
+    assert.equal(getPricingProvider('zai/glm-5').key, 'zhipu');
+    assert.equal(getPricingProvider('zhipuai/glm-5').key, 'zhipu');
+    assert.equal(getPricingChannel('alibaba-cn/qwen-plus'), '中国');
+    assert.equal(getPricingChannel('alibaba/qwen-plus'), '国际');
+    assert.equal(getPricingChannel('openai/gpt-5'), null);
   });
 
   it('uses 100 rows per page and creates compact page links', () => {

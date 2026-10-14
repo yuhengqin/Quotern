@@ -1,4 +1,5 @@
-import type { PricingCatalogRow } from './api.ts';
+import type { PricingCatalogRow } from './pricing-data.ts';
+import { getModelProvider, type ModelProvider } from './model-provider.ts';
 
 export const PRICING_PAGE_SIZE = 100;
 
@@ -54,7 +55,7 @@ export function filterDirectPricingCatalog(rows: PricingCatalogRow[]): PricingCa
   return rows.filter((row) => !isGatewayPricingModel(row.model));
 }
 
-export type PricingSortKey = 'model' | 'inputOutput' | 'cache';
+export type PricingSortKey = 'model' | 'input' | 'output' | 'cacheRead' | 'cacheWrite';
 
 export type PricingSortDirection = 'ascending' | 'descending';
 
@@ -64,7 +65,7 @@ export interface PricingSortDescriptor {
 }
 
 export const DEFAULT_PRICING_SORT: PricingSortDescriptor = {
-  column: 'inputOutput',
+  column: 'input',
   direction: 'descending',
 };
 
@@ -85,22 +86,73 @@ export function filterAndSortPricingCatalog(
     : rows;
 
   return [...filtered].sort((a, b) => {
-    const comparisons =
-      sort.column === 'model'
-        ? [getPricingModelName(a.model).localeCompare(getPricingModelName(b.model))]
-        : sort.column === 'inputOutput'
-          ? [a.input - b.input, a.output - b.output]
-          : [a.cacheRead - b.cacheRead, a.cacheWrite - b.cacheWrite];
-
-    for (const comparison of comparisons) {
-      if (comparison !== 0) {
-        return sort.direction === 'descending' ? -comparison : comparison;
-      }
+    let comparison: number;
+    if (sort.column === 'model') {
+      comparison = getPricingModelName(a.model).localeCompare(getPricingModelName(b.model));
+    } else {
+      const left = a[sort.column];
+      const right = b[sort.column];
+      // Unavailable prices stay at the end even when sorting descending.
+      if (left == null && right != null) return 1;
+      if (right == null && left != null) return -1;
+      comparison = left == null || right == null ? 0 : left - right;
     }
+    if (comparison !== 0) return sort.direction === 'descending' ? -comparison : comparison;
 
     // Keep all sorts predictable when the displayed values are the same.
     return a.model.localeCompare(b.model);
   });
+}
+
+const PRICING_PROVIDERS: Record<string, Omit<ModelProvider, 'key'>> = {
+  anthropic: { label: 'Anthropic（Claude）', icon: 'claude' },
+  openai: { label: 'OpenAI', icon: 'openai' },
+  google: { label: 'Google', icon: 'google' },
+  alibaba: { label: 'Alibaba（Qwen）', icon: 'alibaba' },
+  moonshot: { label: 'Moonshot（Kimi）', icon: 'moonshot' },
+  minimax: { label: 'MiniMax', icon: 'minimax' },
+  deepseek: { label: 'DeepSeek', icon: 'deepseek' },
+  mistral: { label: 'Mistral', icon: 'mistral' },
+  xai: { label: 'xAI', icon: 'grok' },
+  zhipu: { label: 'Zhipu AI（智谱）', icon: 'zhipu' },
+  bytedance: { label: 'ByteDance（Doubao）', icon: 'doubao' },
+  xiaomi: { label: 'Xiaomi（MiMo）', icon: 'unknown' },
+  meta: { label: 'Meta', icon: 'meta' },
+  tencent: { label: 'Tencent', icon: 'hunyuan' },
+  stepfun: { label: 'StepFun', icon: 'stepfun' },
+  cursor: { label: 'Cursor', icon: 'unknown' },
+  inclusionai: { label: 'Ant Group（Ling）', icon: 'unknown' },
+  meituan: { label: 'Meituan（LongCat）', icon: 'unknown' },
+  sapiens: { label: 'Sapiens', icon: 'unknown' },
+};
+
+const PRICING_PROVIDER_ALIASES: Record<string, string> = {
+  'alibaba-cn': 'alibaba', 'minimax-cn': 'minimax',
+  moonshotai: 'moonshot', 'moonshotai-cn': 'moonshot',
+  zai: 'zhipu', zhipuai: 'zhipu', volcengine: 'bytedance',
+  claude: 'anthropic', codex: 'openai', kimi: 'moonshot', qwen: 'alibaba',
+  grok: 'xai', hunyuan: 'tencent', doubao: 'bytedance',
+};
+
+/** Price catalogs identify the supplier by namespace, rather than the Agent or family. */
+export function getPricingProvider(model: string): ModelProvider {
+  const namespace = model.includes('/') ? model.split('/')[0].toLowerCase() : getModelProvider(model).key;
+  const key = PRICING_PROVIDER_ALIASES[namespace] ?? namespace;
+  const provider = PRICING_PROVIDERS[key];
+  if (provider) return { key, ...provider };
+  return { key, label: namespace === 'unknown' ? '其他提供商' : namespace, icon: 'unknown' };
+}
+
+export function getPricingChannel(model: string): string | null {
+  const namespace = model.split('/')[0].toLowerCase();
+  if (namespace.endsWith('-cn') || namespace === 'zhipuai') return '中国';
+  if (['alibaba', 'minimax', 'moonshotai', 'zai'].includes(namespace)) return '国际';
+  return null;
+}
+
+export function formatPricingRate(value: number | null): string {
+  if (value == null || !Number.isFinite(value) || value < 0) return '—';
+  return `$${new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 }).format(value)}`;
 }
 
 export function getPageCount(totalItems: number, pageSize = PRICING_PAGE_SIZE): number {

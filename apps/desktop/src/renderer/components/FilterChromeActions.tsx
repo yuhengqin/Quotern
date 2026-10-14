@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
+import { Coins } from 'lucide-react';
 import {
   ArrowsRotateRight,
   Gear,
@@ -63,6 +65,14 @@ export function FilterChromeActions() {
   return (
     <div className="flex items-center gap-1">
       <AutoUpdateAction className={primaryChromeBtn} />
+      <Link
+        to="/pricing"
+        search={{ q: '' }}
+        className="mr-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-secondary px-3 text-xs font-medium hover:bg-default focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        <Coins className="size-3.5" aria-hidden />
+        模型价格
+      </Link>
       <ChromeAction
         icon={<LogoGithub className="size-4" />}
         label="GitHub 仓库"

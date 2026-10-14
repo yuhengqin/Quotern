@@ -1,4 +1,5 @@
 import { memo, useId, useMemo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { createPortal } from 'react-dom';
 import { Card } from '@heroui/react';
 import { CHART_TOOLTIP_SURFACE_CLASSNAME } from '@/components/ChartPrimitives';
@@ -54,13 +55,16 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
   const hasScrollableRows = chart.rows.length > MAX_VISIBLE_TOOL_ROWS;
   return (
     <Card className="min-w-0 overflow-hidden rounded-2xl">
-      <Card.Header className="flex-row items-start gap-3 pb-0">
+      <Card.Header className="flex-row items-start justify-between gap-3 pb-0">
         <div className="min-w-0">
           <Card.Title id={headingId}>Agent 与模型用量</Card.Title>
           <Card.Description className="mt-1">
             按 Agent 比较总 Token
           </Card.Description>
         </div>
+        <Link to="/pricing" search={{ q: '' }} className="shrink-0 rounded px-1 py-1 text-xs text-muted underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent">
+          查看价格
+        </Link>
       </Card.Header>
 
       <Card.Content className="pt-2">

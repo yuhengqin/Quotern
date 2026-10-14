@@ -1,7 +1,7 @@
 import type { DashboardDateRange } from './dashboard-date-range.ts';
 import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
-import type { PricingData } from 'quotern-core';
-import bundledPricing from 'quotern-core/pricing-data' with { type: 'json' };
+export { fetchPricingCatalog } from './pricing-data.ts';
+export type { PricingCatalogRow, PricingCatalogResponse } from './pricing-data.ts';
 import type {
   LeaderboardMetric,
   LeaderboardOverviewResponse,
@@ -175,21 +175,6 @@ export interface ModelBreakdownResponse {
   projects: ProjectBreakdownRow[];
 }
 
-export interface PricingCatalogRow {
-  model: string;
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-}
-
-export interface PricingCatalogResponse {
-  units: string;
-  generatedAt: string | null;
-  updatedAt: string | null;
-  models: PricingCatalogRow[];
-}
-
 export interface UsageDataset {
   summary: UsageSummary;
   dailyRows: DailyUsageRow[];
@@ -280,71 +265,6 @@ export async function fetchModelBreakdown(days = 30, range?: DashboardDateRange)
     appendDeviceIdsQuery(`${others}usage-model-breakdown?days=${days}${dateRangeQuery(range)}`),
     { headers: authHeaders() },
   );
-}
-
-const PRICING_CATALOG_URL =
-  'https://raw.githubusercontent.com/yuhengqin/Quotern/main/packages/core/src/pricing/pricing.json';
-
-/**
- * Read Quotern's published price table, falling back to the bundled table
- * when the repository is unavailable. This public request needs no credentials.
- */
-export async function fetchPricingCatalog(): Promise<PricingCatalogResponse> {
-  try {
-    const res = await fetch(PRICING_CATALOG_URL, {
-      signal: AbortSignal.timeout(3_000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const pricingData = parsePricingData(await res.json());
-    return pricingDataToCatalog(pricingData, res.headers.get('last-modified'));
-  } catch {
-    return pricingDataToCatalog(bundledPricing as PricingData, null);
-  }
-}
-
-function parsePricingData(raw: unknown): PricingData {
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('模型价格数据格式错误：响应必须是对象');
-  }
-
-  const exact = (raw as { exact?: unknown }).exact;
-  if (exact === null || typeof exact !== 'object' || Array.isArray(exact)) {
-    throw new Error('模型价格数据格式错误：exact 必须是对象');
-  }
-
-  for (const [model, value] of Object.entries(exact)) {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error(`模型价格数据格式错误：exact.${model} 必须是对象`);
-    }
-    for (const key of ['input', 'output', 'cache_read', 'cache_write'] as const) {
-      const rate = (value as Record<string, unknown>)[key];
-      if (rate !== undefined && (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0)) {
-        throw new Error(`模型价格数据格式错误：exact.${model}.${key} 必须是非负数字`);
-      }
-    }
-  }
-
-  return raw as PricingData;
-}
-
-function pricingDataToCatalog(
-  data: PricingData,
-  updatedAt: string | null,
-): PricingCatalogResponse {
-  return {
-    units: 'usd_per_million_tokens',
-    generatedAt: null,
-    updatedAt,
-    models: Object.entries(data.exact)
-      .map(([model, rates]) => ({
-        model,
-        input: rates.input ?? 0,
-        output: rates.output ?? 0,
-        cacheRead: rates.cache_read ?? 0,
-        cacheWrite: rates.cache_write ?? 0,
-      }))
-      .sort((a, b) => a.model.localeCompare(b.model)),
-  };
 }
 
 export async function fetchLeaderboard(

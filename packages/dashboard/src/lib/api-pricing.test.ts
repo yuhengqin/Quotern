@@ -13,23 +13,40 @@ it('loads public Quotern prices without sending dashboard credentials', async (t
   const init = fetchMock.mock.calls[0].arguments[1] as RequestInit | undefined;
   assert.equal(new Headers(init?.headers).has('Authorization'), false);
   assert.deepEqual(catalog.models, [
-    { model: 'test-model', input: 2, output: 4, cacheRead: 0, cacheWrite: 0 },
+    { model: 'test-model', input: 2, output: 4, cacheRead: null, cacheWrite: null },
   ]);
   assert.equal(catalog.updatedAt, 'Tue, 13 Oct 2026 00:00:00 GMT');
+  assert.equal(catalog.source, 'published');
 });
 
-for (const failure of ['network', 'http', 'invalid-json', 'invalid-rates'] as const) {
+it('preserves free rates, missing rates and the price-table generation date', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
+    _meta: { generated_at: '2026-10-09T00:00:00.000Z' },
+    exact: { free: { input: 0, cache_read: 0 }, unknown: {} },
+  })));
+  const catalog = await fetchPricingCatalog();
+  assert.equal(catalog.generatedAt, '2026-10-09T00:00:00.000Z');
+  assert.deepEqual(catalog.models, [
+    { model: 'free', input: 0, output: null, cacheRead: 0, cacheWrite: null },
+    { model: 'unknown', input: null, output: null, cacheRead: null, cacheWrite: null },
+  ]);
+});
+
+for (const failure of ['network', 'http', 'invalid-json', 'invalid-rates', 'empty-catalog'] as const) {
   it(`shows bundled prices when the remote catalog has a ${failure} failure`, async (t) => {
     t.mock.method(globalThis, 'fetch', async () => {
       if (failure === 'network') throw new TypeError('offline');
       if (failure === 'http') return new Response(null, { status: 404 });
       if (failure === 'invalid-json') return new Response('not JSON');
+      if (failure === 'empty-catalog') return new Response(JSON.stringify({ exact: {} }));
       return new Response(JSON.stringify({ exact: { bad: { input: -1 } } }));
     });
     const catalog = await fetchPricingCatalog();
     assert.equal(catalog.units, 'usd_per_million_tokens');
     assert.ok(catalog.models.length > 0);
-    assert.ok(catalog.models.some((row) => row.input > 0 && row.output > 0));
+    assert.ok(catalog.models.some((row) => (row.input ?? 0) > 0 && (row.output ?? 0) > 0));
     assert.equal(catalog.updatedAt, null);
+    assert.equal(catalog.source, 'bundled');
+    assert.match(catalog.generatedAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
   });
 }

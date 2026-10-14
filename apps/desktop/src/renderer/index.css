@@ -5,6 +5,7 @@
 @source "../../../../packages/dashboard/src/components/ShareCardCarousel.tsx";
 @source "../../../../packages/dashboard/src/components/ShareBackgroundPicker.tsx";
 @source "../../../../packages/dashboard/src/components/ShareActivityModal.tsx";
+@source "../../../../packages/dashboard/src/pages/PricingPage.tsx";
 
 :root {
   --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;

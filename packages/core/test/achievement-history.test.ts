@@ -1,10 +1,46 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { extractSessionMessage, type SessionFileContext } from '../src/session-sources.js';
 import { syncSessionSource } from '../src/session-collector.js';
+
+const projectMessage = (cwd: string) => extractSessionMessage('claude', { type: 'user', uuid: 'u', timestamp: '2026-10-14T00:00:00Z', cwd, message: { content: 'hello' } }, { sessionId: 's' }) as unknown as Record<string, unknown>;
+
+test('project roots unify repository subdirectories and linked worktrees without merging independent clones', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-project-roots-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const repo = join(dir, 'one', 'app'), other = join(dir, 'two', 'app'), worktree = join(dir, 'branch');
+  await mkdir(join(repo, '.git', 'worktrees', 'branch'), { recursive: true });
+  await mkdir(join(repo, 'packages', 'core'), { recursive: true });
+  await mkdir(join(other, '.git'), { recursive: true });
+  await mkdir(join(worktree, 'src'), { recursive: true });
+  await writeFile(join(repo, 'packages', 'core', 'package.json'), '{}');
+  await writeFile(join(worktree, '.git'), 'gitdir: ' + join(repo, '.git', 'worktrees', 'branch') + '\n');
+  await writeFile(join(repo, '.git', 'worktrees', 'branch', 'commondir'), '../..\n');
+  const root = projectMessage(repo), child = projectMessage(join(repo, 'packages', 'core')), linked = projectMessage(join(worktree, 'src'));
+  assert.equal(child.projectId, root.projectId);
+  assert.equal(linked.projectId, root.projectId);
+  assert.equal(linked.projectLabel, 'app');
+  assert.equal(child.projectKind, 'repository');
+  assert.match(String(child.projectLegacyId), /^[a-f0-9]{64}$/);
+  assert.notEqual(projectMessage(other).projectId, root.projectId);
+  assert.equal(JSON.stringify(child).includes(repo.replace(/\\/g, '\\\\')), false);
+});
+
+test('non-repository project roots use explicit manifests while ordinary working directories need confirmation', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-project-manifest-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const root = join(dir, 'research');
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "research"\n');
+  const project = projectMessage(join(root, 'src'));
+  assert.equal(project.projectId, projectMessage(root).projectId);
+  assert.equal(project.projectLabel, 'research');
+  assert.equal(project.projectKind, 'manifest');
+  assert.equal(projectMessage(dir).projectKind, 'unconfirmed');
+});
 
 test('raw cwd identity preserves literal percent names and unifies Windows extended and UNC paths', () => {
   const extract = (cwd: string) => extractSessionMessage('claude', { type: 'user', uuid: 'u', timestamp: '2026-10-14T00:00:00Z', cwd, message: { content: 'hello' } }, { sessionId: 's' }) as unknown as Record<string, unknown>;

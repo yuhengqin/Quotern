@@ -41,3 +41,15 @@ test('project active dates use hashed identities instead of merging equal displa
   ], [], now);
   assert.deepEqual(facts.projects.map(p => [p.id, p.dates]), [[first, ['2026-10-12']], [second, ['2026-10-13']]]);
 });
+
+test('repository aliases absorb legacy folder evidence and deduplicate project dates across Agents', () => {
+  const root = 'a'.repeat(64), legacy = 'b'.repeat(64);
+  const facts = buildAchievementFacts([], [
+    { ...message('u', '2026-10-12T00:00:00Z'), projectId: root, projectLabel: 'app', projectKind: 'repository', projectLegacyId: legacy },
+    { ...message('v', '2026-10-12T00:01:00Z', 'claude'), projectId: legacy, projectLabel: 'core' },
+    { ...message('w', '2026-10-13T00:00:00Z', 'claude'), projectId: legacy, projectLabel: 'core' },
+  ], [], now);
+  assert.equal(facts.projects.length, 1);
+  assert.equal(facts.projects[0]!.id, root);
+  assert.deepEqual(facts.projects[0]!.dates, ['2026-10-12', '2026-10-13']);
+});

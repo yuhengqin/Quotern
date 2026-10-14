@@ -89,3 +89,44 @@ test('independent processes can only claim the same achievement notification onc
   const results = await Promise.all([child(), child(), child(), child()]);
   assert.equal(results.filter(ids => ids.length > 0).length, 1);
 });
+
+test('unconfirmed directories require confirmation; rename, ignore and restore persist without losing earned badges', async t => {
+  const dir = await directory(t), id = 'a'.repeat(64);
+  const facts = { ...initialFacts(), projects: [{ id, label: 'Admin', kind: 'unconfirmed', dates: Array.from({ length: 30 }, (_, i) => '2026-09-' + String(i + 1).padStart(2, '0')) }] } as AchievementFacts;
+  const store = new AchievementStore(dir, async () => facts);
+  assert.equal((await store.read()).earned.some(item => item.family === 'project'), false);
+  await store.update({ operation: 'project', id, confirmed: true, name: '论文资料' } as any);
+  const confirmed = await new AchievementStore(dir, async () => facts).read();
+  assert.equal(confirmed.earned.find(item => item.family === 'project')!.scopeLabel, '论文资料');
+  await store.update({ operation: 'project', id, ignored: true } as any);
+  const ignored = await store.read();
+  assert.equal(ignored.earned.some(item => item.family === 'project'), true);
+  assert.equal((ignored as any).projects.find((item: any) => item.id === id).ignored, true);
+  await store.update({ operation: 'project', id, ignored: false } as any);
+  assert.equal((await store.read() as any).projects[0].ignored, false);
+});
+
+test('project merging unions dates and can be undone; aliases keep old showcase and notification state', async t => {
+  const dir = await directory(t), root = 'a'.repeat(64), child = 'b'.repeat(64), other = 'c'.repeat(64);
+  const dates = Array.from({ length: 30 }, (_, i) => '2026-09-' + String(i + 1).padStart(2, '0'));
+  let facts: AchievementFacts = { ...initialFacts(), projects: [{ id: child, label: 'src', dates }] };
+  const store = new AchievementStore(dir, async () => facts);
+  await store.read();
+  await store.update({ operation: 'project', id: child, confirmed: true } as any);
+  await store.update({ operation: 'seen', ids: ['project-' + child + '-30'] });
+  await store.update({ operation: 'preferences', showcaseIds: ['project-' + child + '-30'] });
+  facts = { ...facts, projects: [{ id: root, label: 'app', dates, kind: 'repository', aliases: [child] }, { id: other, label: 'app', dates, kind: 'repository' }] as any };
+  const migrated = await store.read();
+  assert.deepEqual(migrated.preferences.showcaseIds, ['project-' + root + '-30']);
+  assert.equal(migrated.unreadIds.includes('project-' + root + '-30'), false);
+  assert.equal((await store.update({ operation: 'claim-notice' })).notice!.ids.includes('project-' + root + '-30'), false);
+  await store.update({ operation: 'project', id: other, mergeInto: root } as any);
+  const merged = await store.read();
+  assert.equal(merged.earned.filter(item => item.family === 'project').length, 1);
+  assert.equal(merged.progress.find(item => item.id === 'project-' + root + '-30')!.value, 30);
+  await store.update({ operation: 'project', id: other, mergeInto: null, name: '另一个 app' } as any);
+  const restored = await store.read();
+  assert.equal(restored.earned.filter(item => item.family === 'project').length, 2);
+  assert.equal(restored.earned.find(item => item.scope === other)!.scopeLabel, '另一个 app');
+  await assert.rejects(store.update({ operation: 'project', id: root, mergeInto: other } as any).then(() => store.update({ operation: 'project', id: other, mergeInto: root } as any)), /循环/);
+});

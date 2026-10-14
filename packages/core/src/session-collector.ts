@@ -10,8 +10,9 @@ import {
 } from './session-sources.js';
 import { aggregateSessionMetrics, type SessionMetricOptions, type SessionMetrics } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
+import { clearProjectResolutionCache } from './session-project.js';
 
-const VERSION = 5;
+const VERSION = 6;
 interface FileSnapshot {
   complete: boolean;
   size: number;
@@ -39,7 +40,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
     const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, 4, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+    if (![3, 4, 5, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
     cache.set(path, { stamp, value });
     return value;
   } catch { return null; }
@@ -119,6 +120,7 @@ export async function syncSessionSource(
   discovered?: { inputs: SessionInput[]; complete: boolean },
 ): Promise<boolean> {
   if (!validSource(source)) throw new Error('invalid_session_source');
+  clearProjectResolutionCache();
   const discovery = discovered ?? await discoverSessionInputs(source);
   // Unsupported sources have no input adapter. Their presence is reported by
   // readSessionMetrics using the actual usage sources, without creating files.

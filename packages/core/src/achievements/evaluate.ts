@@ -73,7 +73,7 @@ export function evaluateAchievements(facts: AchievementFacts): AchievementEvalua
   const projects = facts.projects.length ? facts.projects : [{ id: 'pending', label: '', dates: [] }];
   for (const project of projects) for (const [index, target] of [30, 100].entries()) {
     const dates = [...new Set(project.dates)].filter(date => date <= facts.today).sort();
-    add({ id: 'project-' + project.id + '-' + target, family: 'project', groupId: 'project-' + project.id, title: target === 30 ? '项目长跑' : '百日共筑', description: '同一项目累计 ' + target + ' 天有逻辑会话消息。依据路径哈希识别，当前覆盖 Claude/Codex，不合并同名目录。', target, value: dates.length, unit: '天', tier: index + 1, eligible: dates.length >= target, achievedOn: dates[target - 1] ?? null, ...(project.id !== 'pending' ? { scope: project.id, scopeLabel: project.label, privateScope: true } : {}) });
+    add({ id: 'project-' + project.id + '-' + target, family: 'project', groupId: 'project-' + project.id, title: target === 30 ? '项目长跑' : '百日共筑', description: '同一项目累计 ' + target + ' 天有逻辑会话消息。按仓库或已确认的项目根目录归属，同一天跨 Agent 只计一次；当前覆盖 Claude/Codex。', target, value: dates.length, unit: '天', tier: index + 1, eligible: dates.length >= target, achievedOn: dates[target - 1] ?? null, ...(project.id !== 'pending' ? { scope: project.id, scopeLabel: project.label, privateScope: true } : {}) });
   }
 
   let bestMonth = '', bestMonthDays: string[] = [];

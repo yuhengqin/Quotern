@@ -33,7 +33,20 @@ export function buildAchievementFacts(rows: readonly QueueBucket[], messages: re
     if (!previous || Date.parse(previous.timestamp) < stamp) unique.set(key, message);
   }
   const sessions = new Map<string, AchievementSession>();
-  const projects = new Map<string, { label: string; dates: Set<string> }>();
+  const projects = new Map<string, { label: string; dates: Set<string>; kind: AchievementProject['kind']; aliases: Set<string> }>();
+  const aliases = new Map<string, string>();
+  const evidence = new Map<string, SessionMessage>();
+  for (const message of unique.values()) {
+    if (!message.projectId || !message.projectLabel) continue;
+    const previous = evidence.get(message.projectId);
+    if (!previous || message.projectKind === 'repository' || previous.projectKind === undefined) evidence.set(message.projectId, message);
+    if (message.projectLegacyId && message.projectLegacyId !== message.projectId && /^[a-f0-9]{64}$/.test(message.projectLegacyId)) aliases.set(message.projectLegacyId, message.projectId);
+  }
+  const canonicalId = (id: string) => {
+    const visited = new Set<string>();
+    while (aliases.has(id) && !visited.has(id)) { visited.add(id); id = aliases.get(id)!; }
+    return id;
+  };
   for (const message of unique.values()) {
     const key = JSON.stringify([message.source, message.sessionId]);
     const session = sessions.get(key) ?? { source: message.source, id: message.sessionId, firstAt: message.timestamp, lastAt: message.timestamp, durationSeconds: 0 };
@@ -42,9 +55,12 @@ export function buildAchievementFacts(rows: readonly QueueBucket[], messages: re
     session.durationSeconds = Math.round((Date.parse(session.lastAt) - Date.parse(session.firstAt)) / 1000);
     sessions.set(key, session);
     if (message.projectId && /^[a-f0-9]{64}$/.test(message.projectId) && message.projectLabel) {
-      const project = projects.get(message.projectId) ?? { label: message.projectLabel.slice(0, 160), dates: new Set<string>() };
+      const id = canonicalId(message.projectId), meta = evidence.get(id) ?? message;
+      const project = projects.get(id) ?? { label: meta.projectLabel!.slice(0, 160), kind: meta.projectKind ?? 'unconfirmed', dates: new Set<string>(), aliases: new Set<string>() };
       project.dates.add(localDateAndHour(message.timestamp, timeZone).date);
-      projects.set(message.projectId, project);
+      if (message.projectId !== id) project.aliases.add(message.projectId);
+      if (message.projectLegacyId && message.projectLegacyId !== id) project.aliases.add(message.projectLegacyId);
+      projects.set(id, project);
     }
   }
   const dayRows = [...days.values()].sort((a, b) => a.date.localeCompare(b.date)).map(day => ({
@@ -52,7 +68,7 @@ export function buildAchievementFacts(rows: readonly QueueBucket[], messages: re
     sources: Object.fromEntries(Object.entries(day.sources).filter(([, tokens]) => tokens > 0)),
   })).filter(day => day.tokens > 0 || day.costUsd > 0);
   const sessionRows = [...sessions.values()].sort((a, b) => a.firstAt.localeCompare(b.firstAt) || a.source.localeCompare(b.source) || a.id.localeCompare(b.id));
-  const projectRows: AchievementProject[] = [...projects].map(([id, project]) => ({ id, label: project.label, dates: [...project.dates].sort() })).sort((a, b) => a.id.localeCompare(b.id));
+  const projectRows: AchievementProject[] = [...projects].map(([id, project]) => ({ id, label: project.label, kind: project.kind, aliases: [...project.aliases].sort(), dates: [...project.dates].sort() })).sort((a, b) => a.id.localeCompare(b.id));
   const starts = [dayRows[0]?.date, sessionRows[0] ? localDateAndHour(sessionRows[0].firstAt, timeZone).date : undefined].filter((date): date is string => Boolean(date)).sort();
   return { observedAt, today, timeZone, coverageFromDate: starts[0] ?? null, days: dayRows, sessions: sessionRows, projects: projectRows, missingSessionSources: [...new Set(missingSessionSources)].sort() };
 }

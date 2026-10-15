@@ -3,10 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quotern 桌面宠物</title>
     <style>
       html, body, #pet-root { width: 100%; height: 100%; margin: 0; padding: 0; background: transparent !important; overflow: hidden; }
       body { user-select: none; -webkit-user-select: none; cursor: pointer; }
-      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+      /* Clawd's SVG has infinite 16-second action loops. Shortening their duration
+         makes them repeat thousands of times per second when Windows animations are off. */
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
     </style>
   </head>
   <body>

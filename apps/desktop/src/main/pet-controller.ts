@@ -415,7 +415,6 @@ export class PetController {
   private handleCommand(event: Electron.IpcMainEvent, raw: unknown): void {
     if (!this.window || event.sender !== this.window.webContents || typeof raw !== 'string') return;
     if (raw === 'context-menu') this.showContextMenu();
-    else if (raw === 'open-dashboard') this.options.showMainWindow();
     else if (raw === 'sync') void this.triggerSync();
     else if (raw === 'hide') this.setSettingsFromMenu({ visible: false });
     else if (raw === 'drag-left' || raw === 'drag-right') this.startDrag(raw === 'drag-left' ? 'left' : 'right');

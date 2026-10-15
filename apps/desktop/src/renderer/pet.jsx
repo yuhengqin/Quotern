@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   buildQuipPool,
@@ -234,6 +234,9 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  */
 function PetClawd({ state, size, leanX }) {
   const [svgHtml, setSvgHtml] = useState("");
+  // React compares the prop object by identity. Reusing it keeps an unchanged
+  // SVG in the DOM, so cursor/usage updates cannot restart its CSS timeline.
+  const svgMarkup = useMemo(() => ({ __html: svgHtml }), [svgHtml]);
   const containerRef = useRef(null);
   const eyeWrapsRef = useRef([]);
   const leanRef = useRef(leanX);
@@ -287,7 +290,7 @@ function PetClawd({ state, size, leanX }) {
         justifyContent: "center",
         overflow: "hidden",
       }}
-      dangerouslySetInnerHTML={{ __html: svgHtml }}
+      dangerouslySetInnerHTML={svgMarkup}
     />
   );
 }
@@ -934,7 +937,6 @@ function Pet() {
       onPointerMove={onMouseMove}
       onPointerUp={onMouseUp}
       onPointerCancel={onPointerCancel}
-      onDoubleClick={() => post('pet:open-dashboard')}
       onContextMenu={onContextMenu}
       style={{
         width: "100%",

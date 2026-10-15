@@ -35,7 +35,6 @@ export type PetCatalogRequest =
 
 export type PetCommand =
   | 'context-menu'
-  | 'open-dashboard'
   | 'sync'
   | 'drag-left'
   | 'drag-right'

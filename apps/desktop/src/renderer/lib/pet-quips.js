@@ -1,13 +1,13 @@
 /**
  * Localized "quip" pools for the floating desktop pet's speak-on-tap bubble,
- * ported 1:1 from the macOS app (TokenTrackerBar/Utilities/Strings.swift). Kept as
+ * adapted from the macOS app (TokenTrackerBar/Utilities/Strings.swift). Kept as
  * a standalone data module — like Strings.swift — rather than the dashboard copy
  * registry, because the pet is a minimal standalone entry without the i18n provider.
  * (Exception, review 563: the new Ark Agent Plan rows resolve their provider name
  * and window labels through copy() so they stay in sync with the Limits page.)
  *
- * Full macOS parity: `buildQuipPool` reproduces the macOS companion's `quipPool`
- * ordering 1:1 — today data (tokens + cost + tier) → 7d/30d rolling → heatmap
+ * `buildQuipPool` follows the macOS companion's `quipPool` ordering — today data
+ * (tokens + cost + tier) → 7d/30d rolling → heatmap
  * streak/active days → top models → conversation count → personality. The native host
  * now pushes ALL of these figures (window.__ttPetStats), the same ones macOS reads from
  * its DashboardViewModel, so the Windows pet is no longer limited to today's numbers.
@@ -32,7 +32,7 @@ const QUIPS = {
     heavy: ["🚀 Heavy usage today!", "🖨️ Token machine goes brrr"],
     massive: ["🤯 MASSIVE day!", "🔥 Token counter on fire!"],
     personality: [
-      "👆 Tap me for more!", "📋 I count so you don't have to", "✨ Every token tells a story",
+      "📋 I count so you don't have to", "✨ Every token tells a story",
       "🤝 Your AI spending buddy", "👋 Hey there~",
     ],
   },
@@ -46,7 +46,7 @@ const QUIPS = {
     busy: ["🔥 今天很忙！", "⚡ 状态正佳！"],
     heavy: ["🚀 今天用量很高！", "🖨️ Token 机器启动"],
     massive: ["🤯 今天用量爆表！", "🔥 Token 计数器燃起来了！"],
-    personality: ["👆 点我查看更多！", "📋 我来帮你计数", "✨ 每个 token 都有故事", "🤝 你的 AI 花费伙伴", "👋 你好呀~"],
+    personality: ["📋 我来帮你计数", "✨ 每个 token 都有故事", "🤝 你的 AI 花费伙伴", "👋 你好呀~"],
   },
   "zh-TW": {
     empty: [
@@ -58,7 +58,7 @@ const QUIPS = {
     busy: ["🔥 今天很忙！", "⚡ 狀態正佳！"],
     heavy: ["🚀 今天用量很高！", "🖨️ Token 機器啟動"],
     massive: ["🤯 今天用量爆表！", "🔥 Token 計數器燃起來了！"],
-    personality: ["👆 點我檢視更多！", "📋 我來幫你計數", "✨ 每個 token 都有故事", "🤝 你的 AI 花費夥伴", "👋 你好呀~"],
+    personality: ["📋 我來幫你計數", "✨ 每個 token 都有故事", "🤝 你的 AI 花費夥伴", "👋 你好呀~"],
   },
   "ja": {
     empty: [
@@ -70,7 +70,7 @@ const QUIPS = {
     busy: ["🔥 忙しい一日！", "⚡ 絶好調！"],
     heavy: ["🚀 今日は使用量が多い！", "🖨️ トークンマシン全開"],
     massive: ["🤯 爆発的な一日！", "🔥 トークンカウンター炎上中！"],
-    personality: ["👆 タップして詳細表示！", "📋 数えるのは私にお任せ", "✨ どのトークンにも物語がある", "🤝 あなたの AI 支出の相棒", "👋 やあ~"],
+    personality: ["📋 数えるのは私にお任せ", "✨ どのトークンにも物語がある", "🤝 あなたの AI 支出の相棒", "👋 やあ~"],
   },
   "ko": {
     empty: [
@@ -82,7 +82,7 @@ const QUIPS = {
     busy: ["🔥 바쁜 하루!", "⚡ 물 올랐어요!"],
     heavy: ["🚀 오늘 사용량 많네요!", "🖨️ 토큰 머신 풀가동"],
     massive: ["🤯 폭발적인 하루!", "🔥 토큰 카운터 불났어요!"],
-    personality: ["👆 더 보려면 탭하세요!", "📋 세는 건 제가 할게요", "✨ 모든 토큰엔 이야기가 있죠", "🤝 당신의 AI 지출 친구", "👋 안녕하세요~"],
+    personality: ["📋 세는 건 제가 할게요", "✨ 모든 토큰엔 이야기가 있죠", "🤝 당신의 AI 지출 친구", "👋 안녕하세요~"],
   },
 };
 
@@ -561,7 +561,7 @@ export function formatPetLimitSummary(locale, reading, displayMode = "used") {
 }
 
 /**
- * Build the full tap-quip pool for the given locale — a faithful port of the macOS
+ * Build the full tap-quip pool for the given locale — adapted from the macOS
  * companion's `quipPool` (ClawdCompanionView.swift): today data → 7d/30d rolling →
  * heatmap streak/active → top models → conversations → personality. The caller rotates
  * through the returned list by index on each tap (matching macOS `quipIndex`), so the

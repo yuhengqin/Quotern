@@ -1,0 +1,222 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PetCatalogEntry } from '../../main/pet-core';
+import type { PetCatalogRequest, PetSettingPatch, PetState } from '../../shared/pet';
+// These two renderers are shared with the standalone pet page copied from TokenTracker.
+// @ts-expect-error The upstream JSX module has no TypeScript declarations.
+import { BotAnimated } from '../ui/foundation/BotAnimated.jsx';
+// @ts-expect-error The upstream JSX module has no TypeScript declarations.
+import { PetAtlasAnimated } from '../ui/foundation/PetAtlasAnimated.jsx';
+
+const PREVIEW_STATES = [
+  { id: 'idle-living', label: '平静', clawd: 'idle/living.svg' },
+  { id: 'working-thinking', label: '思考', clawd: 'working/thinking.svg' },
+  { id: 'working-juggling', label: '多任务', clawd: 'working/juggling.svg' },
+  { id: 'working-wizard', label: '连续使用', clawd: 'working/wizard.svg' },
+  { id: 'happy', label: '庆祝', clawd: 'happy.svg' },
+  { id: 'sleeping', label: '休息', clawd: 'sleep/sleeping.svg' },
+] as const;
+
+const COLORS = [
+  ['auto', '自动', 'linear-gradient(135deg, #1e293b 50%, #f8fafc 50%)'],
+  ['bleu', '蓝', '#4889d8'],
+  ['turquoise', '青', '#36b8b1'],
+  ['vert', '绿', '#61b682'],
+  ['ambre', '琥珀', '#e1a654'],
+  ['rose', '粉', '#dc7ba6'],
+  ['violet', '紫', '#9b79ce'],
+] as const;
+
+function spriteUrl(path: string): string {
+  return `quotern-pet://builtin/${path}`;
+}
+
+function PetPreview({ pet, state, color }: { pet: PetCatalogEntry; state: string; color: string }) {
+  const [lookDirectionIndex, setLookDirectionIndex] = useState<number | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const clawdPath = PREVIEW_STATES.find(item => item.id === state)?.clawd ?? 'idle/living.svg';
+  return (
+    <div
+      className="flex h-48 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800"
+      onPointerMove={(event) => {
+        if (pet.spriteVersionNumber !== 2 || !boxRef.current) return;
+        const bounds = boxRef.current.getBoundingClientRect();
+        const dx = event.clientX - (bounds.left + bounds.width / 2);
+        const dy = event.clientY - (bounds.top + bounds.height / 2);
+        setLookDirectionIndex(Math.round(((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360) / 22.5) % 16);
+      }}
+      onPointerLeave={() => setLookDirectionIndex(null)}
+    >
+      <div ref={boxRef} className="flex h-36 w-36 items-center justify-center">
+        {pet.id === 'clawd' ? (
+          <img alt="Clawd 预览" src={spriteUrl(`clawd/${clawdPath}`)} className="h-32 w-32 object-contain" />
+        ) : pet.id === 'bot' ? (
+          <BotAnimated state={state} color={color} size={164} />
+        ) : (
+          <PetAtlasAnimated character={pet.id} pet={pet} state={state} size={144} lookDirectionIndex={lookDirectionIndex} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function PetSettingsCard() {
+  const [state, setState] = useState<PetState | null>(null);
+  const [previewState, setPreviewState] = useState<string>('idle-living');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [url, setUrl] = useState('');
+  const [codexPets, setCodexPets] = useState<PetCatalogEntry[] | null>(null);
+  const [selectedCodex, setSelectedCodex] = useState<string[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    const unsubscribe = window.tud.pet.onState(next => { if (live) setState(next); });
+    void window.tud.pet.getState().then(next => { if (live) setState(next); }).catch(e => {
+      if (live) setError(e instanceof Error ? e.message : '无法加载桌面宠物设置');
+    });
+    return () => { live = false; unsubscribe(); };
+  }, []);
+
+  const selected = useMemo(() => state?.catalog.find(pet => pet.id === state.settings.character) ?? state?.catalog[0], [state]);
+
+  const update = async (patch: PetSettingPatch) => {
+    setBusy(true); setError(null); setNotice(null);
+    try { setState(await window.tud.pet.setSettings(patch)); }
+    catch (e) { setError(e instanceof Error ? e.message : '更新宠物设置失败'); }
+    finally { setBusy(false); }
+  };
+
+  const catalog = async (request: PetCatalogRequest, success: string) => {
+    setBusy(true); setError(null); setNotice(null);
+    try {
+      const result = await window.tud.pet.catalog(request);
+      if (!result.ok) throw new Error(result.error || '宠物操作失败');
+      if (request.action === 'list-codex') {
+        setCodexPets(Array.isArray(result.data) ? result.data as PetCatalogEntry[] : []);
+        setSelectedCodex([]);
+      } else if (!(result.data && typeof result.data === 'object' && 'canceled' in result.data)) {
+        setNotice(success);
+        setCodexPets(null);
+        setSelectedCodex([]);
+        setState(await window.tud.pet.getState());
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : '宠物操作失败'); }
+    finally { setBusy(false); }
+  };
+
+  if (!state) return error
+    ? <div role="alert" className="text-sm text-danger">桌面宠物暂不可用：{error.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')}</div>
+    : <div className="text-sm text-muted">正在加载桌面宠物设置…</div>;
+
+  return (
+    <section className="rounded-xl border border-default-200 bg-content1 p-4 text-left dark:border-default-100/20" aria-label="桌面宠物设置">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">桌面宠物</h3>
+          <p className="mt-1 text-xs text-muted">悬浮在桌面上，随本机用量变化表情。单击看短句，拖动调整位置，右键打开菜单。</p>
+        </div>
+        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-foreground">
+          <input type="checkbox" checked={state.settings.visible} disabled={busy} onChange={event => void update({ visible: event.target.checked })} />
+          显示
+        </label>
+      </div>
+
+      {error && <p role="alert" className="mt-3 text-xs text-danger">{error.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')}</p>}
+      {notice && <p role="status" className="mt-3 text-xs text-success">{notice}</p>}
+
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {state.catalog.map(pet => (
+          <div key={pet.id} className="relative">
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={state.settings.character === pet.id}
+              onClick={() => void update({ character: pet.id })}
+              className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${state.settings.character === pet.id ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
+            >
+              <span className="truncate">{pet.displayName}</span>
+              {pet.spriteVersionNumber === 2 && <span className="ml-auto text-[9px] opacity-60">V2</span>}
+            </button>
+            {(pet.custom || ['sprout', 'byte', 'ember'].includes(pet.id)) && (
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={`移除 ${pet.displayName}`}
+                title={`移除 ${pet.displayName}`}
+                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border bg-content1 text-xs text-muted hover:text-danger focus-visible:outline-2 focus-visible:outline-accent"
+                onClick={() => void catalog({ action: 'remove', id: pet.id }, `已移除 ${pet.displayName}`)}
+              >×</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {selected && (
+        <div className="mt-4">
+          <PetPreview pet={selected} state={previewState} color={state.settings.botColor} />
+          <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-6" aria-label="预览动作">
+            {PREVIEW_STATES.map(item => (
+              <button type="button" key={item.id} aria-pressed={previewState === item.id} onClick={() => setPreviewState(item.id)}
+                className={`rounded-md px-1 py-1.5 text-[11px] focus-visible:outline-2 focus-visible:outline-accent ${previewState === item.id ? 'bg-accent/15 font-semibold text-foreground' : 'text-muted hover:bg-default-100'}`}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+        <span className="mr-1 text-muted">大小</span>
+        {([['small', '小'], ['medium', '中'], ['large', '大']] as const).map(([value, label]) => (
+          <button type="button" key={value} disabled={busy} aria-pressed={state.settings.size === value} onClick={() => void update({ size: value })}
+            className={`rounded-md border px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-accent ${state.settings.size === value ? 'border-accent bg-accent/10' : 'border-default-200 dark:border-default-100/20'}`}>{label}</button>
+        ))}
+      </div>
+
+      {selected?.id === 'bot' && (
+        <div className="mt-4 flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Bot 颜色">
+          <span className="mr-1 text-xs text-muted">Bot 颜色</span>
+          {COLORS.map(([value, label, background]) => (
+            <button type="button" role="radio" key={value} aria-label={label} aria-checked={state.settings.botColor === value} title={label} disabled={busy}
+              onClick={() => void update({ botColor: value })}
+              className={`h-6 w-6 rounded-full border-2 focus-visible:outline-2 focus-visible:outline-accent ${state.settings.botColor === value ? 'border-foreground scale-110' : 'border-transparent'}`}
+              style={{ background }} />
+          ))}
+        </div>
+      )}
+
+      <div className="mt-5 border-t border-default-200 pt-4 dark:border-default-100/20">
+        <h4 className="text-xs font-semibold text-foreground">导入角色</h4>
+        <p className="mt-1 text-xs text-muted">支持 <button type="button" className="underline" onClick={() => void window.tud.openExternal('https://codex-pets.net')}>codex-pets.net</button> 的标准 ZIP，以及本机已有的 Codex 宠物。</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={() => void catalog({ action: 'import-zip' }, '宠物已导入')} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">导入 ZIP</button>
+          <button type="button" disabled={busy} onClick={() => void catalog({ action: 'list-codex' }, '')} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">从 Codex 导入</button>
+          <button type="button" disabled={busy} onClick={() => void catalog({ action: 'restore-builtins' }, '已恢复内置角色')} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">恢复内置角色</button>
+        </div>
+        <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); if (url.trim()) void catalog({ action: 'install-url', url: url.trim() }, '宠物已导入'); }}>
+          <input type="text" aria-label="codex-pets.net 宠物地址或 ID" placeholder="codex-pets.net 宠物地址或 ID" value={url} disabled={busy} onChange={event => setUrl(event.target.value)} className="min-w-0 flex-1 rounded-md border border-default-200 bg-content1 px-2 py-1.5 text-xs dark:border-default-100/20" />
+          <button type="submit" disabled={busy || !url.trim()} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50 dark:border-default-100/20">从链接导入</button>
+        </form>
+        {codexPets && (
+          <div className="mt-3 rounded-lg border border-default-200 p-3 text-xs dark:border-default-100/20">
+            <p className="font-medium">本机 Codex 宠物</p>
+            {codexPets.length === 0 ? <p className="mt-2 text-muted">没有找到可导入的宠物。</p> : (
+              <>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {codexPets.map(pet => (
+                    <label key={pet.id} className="flex items-center gap-2">
+                      <input type="checkbox" checked={selectedCodex.includes(pet.id)} disabled={busy} onChange={() => setSelectedCodex(current => current.includes(pet.id) ? current.filter(id => id !== pet.id) : [...current, pet.id])} />
+                      <span className="truncate">{pet.displayName}</span>
+                    </label>
+                  ))}
+                </div>
+                <button type="button" disabled={busy || selectedCodex.length === 0} onClick={() => void catalog({ action: 'import-codex', ids: selectedCodex }, '已导入 Codex 宠物')} className="mt-3 rounded-md bg-accent px-3 py-1.5 text-accent-foreground disabled:opacity-50">导入所选</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

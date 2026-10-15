@@ -27,6 +27,7 @@ import {
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
 import { StatusBanner } from '@/components/StatusBanner';
+import { PetSettingsCard } from '@/components/PetSettingsCard';
 import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
 import { SUBSCRIPTION_CHANNELS } from '../../shared/subscription-channels';
 
@@ -152,6 +153,7 @@ function SubscriptionChannelSettings() {
 function AppSettingsPanel() {
   const cliMode = true;
   const isMac = window.tud?.platform === 'darwin';
+  const isWindows = window.tud?.platform === 'win32';
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [openAtLogin, setOpenAtLogin] = useState(true);
   const [autostartLoading, setAutostartLoading] = useState(true);
@@ -415,6 +417,8 @@ function AppSettingsPanel() {
           )}
         </div>
       )}
+
+      {isWindows && <PetSettingsCard />}
 
       <AutoUpdateSettings />
 

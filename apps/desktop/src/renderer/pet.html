@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      html, body, #pet-root { width: 100%; height: 100%; margin: 0; padding: 0; background: transparent !important; overflow: hidden; }
+      body { user-select: none; -webkit-user-select: none; cursor: pointer; }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+    </style>
+  </head>
+  <body>
+    <div id="pet-root"></div>
+    <script type="module" src="/pet-entry.js"></script>
+  </body>
+</html>

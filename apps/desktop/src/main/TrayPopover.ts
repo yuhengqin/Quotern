@@ -51,6 +51,8 @@ export interface TrayPopoverOptions {
   openSettings: () => void;
   /** Same as in-app「同步数据」→ POST tud-trigger-sync. */
   triggerSync: () => void;
+  /** Windows desktop pet toggle. */
+  togglePet?: () => void;
   /** Initial popover window background, kept in sync with the app theme. */
   theme: DesktopWindowTheme;
 }
@@ -94,6 +96,10 @@ function buildTrayMenu(options: TrayPopoverOptions): Menu {
       label: '同步数据',
       click: () => options.triggerSync(),
     },
+    ...(!isMac && options.togglePet ? [{
+      label: '显示/隐藏桌面宠物',
+      click: () => options.togglePet?.(),
+    }] : []),
     {
       label: '设置',
       click: () => options.openSettings(),

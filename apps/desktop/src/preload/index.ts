@@ -48,6 +48,17 @@ import type { DeepSeekSubscriptionSnapshot } from '../shared/deepseek-subscripti
 import type { OpenCodeSubscriptionSnapshot } from '../shared/opencode-subscription';
 import type { TraeSubscriptionSnapshot } from '../shared/trae-subscription';
 import type { WorkBuddySubscriptionSnapshot } from '../shared/workbuddy-subscription';
+import {
+  PET_CATALOG_CHANNEL,
+  PET_COMMAND_CHANNEL,
+  PET_EVENT_CHANNEL,
+  PET_GET_CHANNEL,
+  PET_SET_CHANNEL,
+  PET_STATE_CHANNEL,
+  type PetCatalogRequest,
+  type PetSettingPatch,
+  type PetState,
+} from '../shared/pet';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
 const DATA_SYNCED_CHANNEL = 'tud:data-synced';
@@ -100,6 +111,24 @@ const tudApi = {
   close: () => ipcRenderer.send('window:close'),
   showMainWindow: () => ipcRenderer.send('window:show'),
   quit: () => ipcRenderer.send('app:quit'),
+
+  pet: {
+    getState: (): Promise<PetState> => ipcRenderer.invoke(PET_GET_CHANNEL),
+    setSettings: (patch: PetSettingPatch): Promise<PetState> => ipcRenderer.invoke(PET_SET_CHANNEL, patch),
+    catalog: (request: PetCatalogRequest): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
+      ipcRenderer.invoke(PET_CATALOG_CHANNEL, request),
+    command: (command: string): void => ipcRenderer.send(PET_COMMAND_CHANNEL, command),
+    onState: (callback: (state: PetState) => void) => {
+      const listener = (_event: unknown, state: PetState) => callback(state);
+      ipcRenderer.on(PET_STATE_CHANNEL, listener);
+      return () => ipcRenderer.removeListener(PET_STATE_CHANNEL, listener);
+    },
+    onEvent: (callback: (event: { type: string; detail?: unknown }) => void) => {
+      const listener = (_event: unknown, value: { type: string; detail?: unknown }) => callback(value);
+      ipcRenderer.on(PET_EVENT_CHANNEL, listener);
+      return () => ipcRenderer.removeListener(PET_EVENT_CHANNEL, listener);
+    },
+  },
 
   getAutoUpdateState: (): Promise<AutoUpdateState> =>
     ipcRenderer.invoke(AUTO_UPDATE_GET_STATE_CHANNEL),

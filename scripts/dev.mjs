@@ -143,7 +143,9 @@ async function run() {
     }
     if (mode === 'desktop') {
       const cwd = join(root, 'apps/desktop');
-      services.push(launch('electron-vite', process.execPath, [toolBin(cwd, 'electron-vite', 'bin/electron-vite.js'), 'dev', '--host', '127.0.0.1'], cwd));
+      // electron-vite 5 reads the renderer host from electron.vite.config.ts;
+      // its dev CLI has no --host option (unlike the standalone Vite CLI).
+      services.push(launch('electron-vite', process.execPath, [toolBin(cwd, 'electron-vite', 'bin/electron-vite.js'), 'dev'], cwd));
     }
     for (const child of services) child.on('exit', (code) => { if (!closing) void shutdown(code ?? 1); });
     await update({ status: 'running' });

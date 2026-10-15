@@ -64,6 +64,8 @@ import { createMainWindowLauncher } from './main-window-launcher';
 import { restoreNativeTrapHandler } from './native-crash-signals';
 import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
+import { PetController } from './pet-controller';
+import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
 import {
   DEFAULT_DATA_DIR,
@@ -74,6 +76,7 @@ import {
 } from 'quotern-core';
 
 configureQuoternAppIdentity(app);
+registerPetAssetScheme();
 restoreNativeTrapHandler();
 
 type Theme = DesktopWindowTheme;
@@ -163,6 +166,7 @@ function applyResolvedTheme(next: Theme): void {
     desktopWindow.setThemeBackground(currentTheme);
   }
   setPopoverTheme(currentTheme);
+  petController?.setDark(next === 'dark');
 }
 
 /** Push the full theme state to every window: mode drives the selector
@@ -223,6 +227,7 @@ function registerShareCardIpc(): void {
 
 let disposeTrayUsageSync: (() => void) | null = null;
 let onPowerResumeListener: (() => void) | null = null;
+let petController: PetController | null = null;
 let trayUsageRefreshGeneration = 0;
 
 async function refreshTrayUsage(): Promise<void> {
@@ -452,6 +457,22 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeOpenCodeSubscriptionIpc = registerOpenCodeSubscriptionIpc();
     disposeTraeSubscriptionIpc = registerTraeSubscriptionIpc();
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
+    if (process.platform === 'win32') {
+      petController = new PetController({
+        showMainWindow,
+        openSettings: () => void openSettings({ tab: 'app' }),
+        getDark: () => currentTheme === 'dark',
+      });
+      try {
+        await petController.initialize();
+      } catch (error) {
+        console.error('[tud-desktop] failed to initialize desktop pet:', error);
+        try { petController.dispose(); } catch (disposeError) {
+          console.error('[tud-desktop] failed to dispose desktop pet:', disposeError);
+        }
+        petController = null;
+      }
+    }
     try {
       await initAutostartOnLaunch();
     } catch (err) {
@@ -471,6 +492,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       openSettings: () => openSettings(),
       triggerSync,
       theme: currentTheme,
+      togglePet: () => petController?.toggle(),
     });
 
     try {
@@ -554,6 +576,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     unregisterOpenExternalIpc();
     unregisterAutostartIpc();
     disposeTrayPopover();
+    petController?.dispose();
+    petController = null;
     disposeTrayUsageSync?.();
     disposeTrayUsageSync = null;
     if (onPowerResumeListener) {

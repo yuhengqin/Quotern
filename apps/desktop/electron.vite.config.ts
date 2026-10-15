@@ -43,6 +43,7 @@ export default defineConfig({
           'quotern-core',
           'electron-updater',
           'hono',
+          'yauzl',
         ],
       }),
     ],
@@ -74,6 +75,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
+          pet: resolve(__dirname, 'src/renderer/pet.html'),
         },
       },
     },

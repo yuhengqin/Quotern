@@ -5,6 +5,7 @@ import {
   clampPetBounds,
   normalizePetSettings,
   petDockTarget,
+  petPointerRegion,
   petWindowSize,
   toPetStats,
 } from './pet-core.js';
@@ -32,19 +33,41 @@ test('pet stays on the selected display after size or display changes', () => {
 test('right edge docking leaves a reachable handle and undocks on hover', () => {
   const work = { x: 100, y: 20, width: 1000, height: 700 };
   const size = petWindowSize('small');
-  const resting = { x: work.x + work.width - size.width - 12, y: 300 };
   const sprite = Math.min(size.width, size.height - 138) - 8;
   const inset = (size.width - sprite) / 2;
+  const resting = { x: work.x + work.width - inset - sprite + 12, y: 300 };
+  assert.deepEqual(petDockTarget({ x: work.x + work.width - size.width - 12, y: 300 }, size, work, false), {
+    x: work.x + work.width - size.width - 12,
+    y: 300,
+    docked: false,
+  });
   assert.deepEqual(petDockTarget(resting, size, work, false), {
     x: work.x + work.width - inset - 30,
     y: 300,
     docked: true,
   });
   assert.deepEqual(petDockTarget(resting, size, work, true), {
-    x: work.x + work.width - inset - sprite,
+    x: work.x + work.width - size.width,
     y: 300,
     docked: true,
   });
+});
+
+test('revealed pet stays out while the pointer crosses transparent space near the screen edge', () => {
+  const work = { x: 0, y: 0, width: 1920, height: 1040 };
+  const size = petWindowSize('medium');
+  const revealed = { x: work.width - size.width, y: 500, ...size };
+  const spriteY = revealed.y + 190;
+  const gapPoint = { x: work.width - 12, y: spriteY };
+  assert.deepEqual(petPointerRegion(gapPoint, revealed, work, 138, true, true), {
+    overSprite: false,
+    hovering: true,
+  });
+  const tucked = { ...revealed, x: petDockTarget(revealed, size, work, false, true).x };
+  assert.equal(petPointerRegion(gapPoint, tucked, work, 138, true, false).hovering, true);
+  const sliding = { ...revealed, x: Math.round((revealed.x + tucked.x) / 2) };
+  assert.equal(petPointerRegion(gapPoint, sliding, work, 138, true, true).hovering, true);
+  assert.equal(petPointerRegion({ x: work.width - 12, y: 100 }, revealed, work, 138, true, true).hovering, false);
 });
 
 test('stats use real daily, model, and complete session evidence', () => {

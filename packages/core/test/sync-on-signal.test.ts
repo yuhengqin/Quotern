@@ -203,3 +203,32 @@ test('watchRuntimeSignals runSyncOverride bypasses in-process createSyncRunner',
     stop();
   }
 });
+
+test('watchRuntimeSignals reports active status across overlapping sync callers', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-activity-'));
+  const config = baseConfig(dir);
+  const active: boolean[] = [];
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const { stop, runSync } = watchRuntimeSignals({
+    dataDir: dir,
+    getConfig: () => config,
+    loadConfig: async () => ({ dir, config }),
+    refreshFromDisk: async () => {},
+    isOwner: () => true,
+    runSyncOverride: async () => { await pending; return []; },
+    onSyncActivity: value => { active.push(value); },
+  });
+  try {
+    const first = runSync('poll');
+    const second = runSync('manual');
+    assert.deepEqual(active, [true]);
+    finish();
+    await Promise.all([first, second]);
+    assert.deepEqual(active, [true, false]);
+  } finally {
+    finish();
+    stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

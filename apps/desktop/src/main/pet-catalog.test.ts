@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -35,5 +35,27 @@ test('a custom pet can be removed and imported again with the same ID', async ()
     assert.ok((await catalog.list()).some(pet => pet.id === 'custom-sprout'));
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('importable Codex pets expose a preview atlas and can be imported', async () => {
+  const temp = await mkdtemp(path.join(tmpdir(), 'quotern-codex-pet-'));
+  try {
+    const source = path.join(temp, 'codex-pets');
+    const petDir = path.join(source, 'custom-sprout');
+    await mkdir(petDir, { recursive: true });
+    const atlas = readFileSync('src/renderer/public/pets/sprout/spritesheet.webp');
+    const manifest = Buffer.from(JSON.stringify({ id: 'custom-sprout', displayName: 'Custom Sprout', description: 'Test', spritesheetPath: 'spritesheet.webp' }));
+    await Promise.all([
+      writeFile(path.join(petDir, 'pet.json'), manifest),
+      writeFile(path.join(petDir, 'spritesheet.webp'), atlas),
+    ]);
+    const catalog = new PetCatalog(path.join(temp, 'installed'), source);
+    assert.equal((await catalog.listCodex())[0]?.assetUrl, 'quotern-pet://codex/custom-sprout/spritesheet.webp');
+    await catalog.importCodex(['custom-sprout']);
+    assert.equal((await catalog.listCodex()).length, 0);
+    assert.ok((await catalog.list()).some(pet => pet.id === 'custom-sprout'));
+  } finally {
+    await rm(temp, { recursive: true, force: true });
   }
 });

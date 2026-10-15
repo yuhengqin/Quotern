@@ -48,6 +48,7 @@ import {
 } from './sync-worker-host';
 
 export type LocalRuntimeSyncListener = () => void;
+export type LocalRuntimeSyncActivityListener = (active: boolean) => void;
 
 type LocalApiApp = ReturnType<typeof createLocalApiApp>;
 
@@ -78,6 +79,8 @@ let reArmPoll: ((delayMs?: number) => void) | null = null;
 let lastSyncDoneAt = 0;
 let lastForegroundPokeAt = 0;
 const syncListeners = new Set<LocalRuntimeSyncListener>();
+const syncActivityListeners = new Set<LocalRuntimeSyncActivityListener>();
+let syncActive = false;
 let lastCorruptRecovery: CorruptConfigRecovery | undefined;
 let quitting = false;
 let ensureInFlight: Promise<{
@@ -196,6 +199,14 @@ function notifySynced(): void {
     } catch {
       // Ignore listener errors so one bad subscriber cannot break sync.
     }
+  }
+}
+
+function publishSyncActivity(active: boolean): void {
+  if (syncActive === active) return;
+  syncActive = active;
+  for (const listener of syncActivityListeners) {
+    try { listener(active); } catch { /* one observer cannot interrupt another */ }
   }
 }
 
@@ -400,6 +411,7 @@ async function startLocalRuntimeUnlocked(): Promise<{
     isOwner: () => runtime?.role === 'owner',
     loadConfig,
     runSyncOverride,
+    onSyncActivity: publishSyncActivity,
   });
   syncWatcherStop = stop;
   runSyncFn = runSync;
@@ -590,6 +602,7 @@ export async function stopLocalRuntime(): Promise<void> {
     syncWatcherStop = null;
   }
   runSyncFn = null;
+  publishSyncActivity(false);
   reArmPoll = null;
   stopSyncWorker();
   pollBackoff.reset();
@@ -611,6 +624,15 @@ export function onLocalRuntimeSynced(listener: LocalRuntimeSyncListener): () => 
   return () => {
     syncListeners.delete(listener);
   };
+}
+
+export function onLocalRuntimeSyncActivity(listener: LocalRuntimeSyncActivityListener): () => void {
+  syncActivityListeners.add(listener);
+  return () => { syncActivityListeners.delete(listener); };
+}
+
+export function isLocalRuntimeSyncing(): boolean {
+  return syncActive;
 }
 
 export function isLocalRuntimeReady(): boolean {

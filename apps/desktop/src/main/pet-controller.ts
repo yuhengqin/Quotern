@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localDateNow } from 'quotern-core/timezone';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
-import { localApiRequest, onLocalRuntimeSynced } from './local-runtime';
+import { isLocalRuntimeSyncing, localApiRequest, onLocalRuntimeSyncActivity, onLocalRuntimeSynced } from './local-runtime';
 import { PetCatalog } from './pet-catalog';
 import { collectPetLimits } from './pet-limits';
 import { readCodexSubscription } from './codex-subscription';
@@ -29,10 +29,12 @@ import {
   PET_BUBBLE_BAND,
   PET_ID_RE,
   petDockTarget,
+  petPointerRegion,
   petSpriteRect,
   petWindowSize,
   toPetStats,
   type PetSettings,
+  type PetCatalogEntry,
   type Point,
 } from './pet-core';
 import {
@@ -50,6 +52,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CURSOR_POLL_MS = 50;
 const IDLE_SLEEP_MS = 60_000;
+const EDGE_ANIMATION_MS = 200;
 const DATA_REFRESH_MS = 60_000;
 const LIMIT_REFRESH_MS = 5 * 60_000;
 
@@ -81,8 +84,9 @@ export class PetController {
   private window: BrowserWindow | null = null;
   private basePosition: Point | null = null;
   private docked = false;
-  private dragging: { cursor: Point; position: Point } | null = null;
+  private dragging: { cursor: Point; position: Point; direction: 'left' | 'right' } | null = null;
   private cursorTimer: ReturnType<typeof setInterval> | null = null;
+  private edgeTimer: ReturnType<typeof setInterval> | null = null;
   private dataTimer: ReturnType<typeof setInterval> | null = null;
   private limitTimer: ReturnType<typeof setInterval> | null = null;
   private lastCursor: Point | null = null;
@@ -94,10 +98,12 @@ export class PetController {
   private lastStatsDate = '';
   private settingsQueue: Promise<unknown> = Promise.resolve();
   private unsubscribeSync: (() => void) | null = null;
+  private unsubscribeSyncActivity: (() => void) | null = null;
   private readonly onDisplaysChanged = () => this.normalizePosition();
 
   constructor(private readonly options: {
-    showMainWindow: () => void;
+    toggleMainWindow: () => void;
+    isMainWindowVisible: () => boolean;
     openSettings: () => void;
     getDark: () => boolean;
   }) {}
@@ -147,7 +153,12 @@ export class PetController {
     return this.basePosition;
   }
 
-  private applyBounds(): void {
+  private stopEdgeAnimation(): void {
+    if (this.edgeTimer) clearInterval(this.edgeTimer);
+    this.edgeTimer = null;
+  }
+
+  private applyBounds(animated = false): void {
     const w = this.window;
     if (!w || w.isDestroyed()) return;
     const size = this.currentSize();
@@ -156,7 +167,22 @@ export class PetController {
     const position = this.docked
       ? petDockTarget(base, size, work, this.state.hover, true, this.state.bubbleBand)
       : { ...base };
-    w.setBounds({ x: Math.round(position.x), y: Math.round(position.y), ...size }, false);
+    const target = { x: Math.round(position.x), y: Math.round(position.y), ...size };
+    const startX = w.getBounds().x;
+    this.stopEdgeAnimation();
+    if (!animated || !this.docked || Math.abs(startX - target.x) < 1) {
+      w.setBounds(target, false);
+      return;
+    }
+    const startedAt = Date.now();
+    const tick = () => {
+      if (w.isDestroyed() || !w.isVisible()) { this.stopEdgeAnimation(); return; }
+      const t = Math.min(1, (Date.now() - startedAt) / EDGE_ANIMATION_MS);
+      const eased = t * (2 - t);
+      w.setBounds({ ...target, x: Math.round(startX + (target.x - startX) * eased) }, false);
+      if (t >= 1) this.stopEdgeAnimation();
+    };
+    this.edgeTimer = setInterval(tick, 16);
   }
 
   private normalizePosition(): void {
@@ -232,6 +258,11 @@ export class PetController {
   private setVisible(visible: boolean): void {
     if (!visible) {
       this.stopCursorTimer();
+      this.stopEdgeAnimation();
+      if (this.dragging) {
+        this.dragging = null;
+        this.emitPetEvent('pet:drag-end');
+      }
       this.state.hover = false;
       this.state.miniMode = this.docked;
       this.window?.hide();
@@ -281,21 +312,16 @@ export class PetController {
       this.emitPetEvent('pet:sleep', { phase: 'sleeping' });
     }
     const bounds = w.getBounds();
-    const sprite = petSpriteRect(bounds, this.state.bubbleBand);
-    const inSprite = cursor.x >= bounds.x + sprite.x && cursor.x < bounds.x + sprite.x + sprite.width
-      && cursor.y >= bounds.y + sprite.y && cursor.y < bounds.y + sprite.y + sprite.height;
     const work = this.currentWorkArea();
-    const inEdgeHandle = this.docked && this.state.hover
-      && cursor.x >= work.x + work.width - 35 && cursor.x <= work.x + work.width
-      && cursor.y >= bounds.y + sprite.y && cursor.y < bounds.y + sprite.y + sprite.height;
-    const hover = inSprite || inEdgeHandle || this.dragging !== null;
+    const region = petPointerRegion(cursor, bounds, work, this.state.bubbleBand, this.docked, this.state.hover);
+    const hover = region.hovering || this.dragging !== null;
     if (this.state.hover !== hover) {
       this.state.hover = hover;
-      this.state.miniMode = this.docked && !hover;
-      if (this.docked && !this.dragging) this.applyBounds();
+      if (this.docked && !this.dragging) this.applyBounds(true);
       this.broadcast();
     }
-    w.setIgnoreMouseEvents(!inSprite && !this.dragging, { forward: true });
+    if (!this.edgeTimer) w.setIgnoreMouseEvents(!region.overSprite && !this.dragging, { forward: true });
+    const sprite = petSpriteRect(bounds, this.state.bubbleBand);
     const centerX = bounds.x + sprite.x + sprite.width / 2;
     const centerY = bounds.y + sprite.y + sprite.height / 2;
     const angle = (Math.atan2(cursor.x - centerX, centerY - cursor.y) * 180 / Math.PI + 360) % 360;
@@ -336,7 +362,7 @@ export class PetController {
     if (!w || w.isDestroyed()) return;
     const size = this.settings.size;
     const menu = Menu.buildFromTemplate([
-      { label: '打开 Quotern', click: this.options.showMainWindow },
+      { label: this.options.isMainWindowVisible() ? '关闭 Quotern' : '打开 Quotern', click: this.options.toggleMainWindow },
       { label: '同步数据', click: () => void this.triggerSync() },
       { type: 'separator' },
       { label: '大小', submenu: (['small', 'medium', 'large'] as const).map((value, index) => ({
@@ -360,12 +386,13 @@ export class PetController {
 
   private startDrag(direction: 'left' | 'right'): void {
     if (!this.window || this.window.isDestroyed()) return;
+    this.stopEdgeAnimation();
     if (this.docked) {
       this.docked = false;
       this.basePosition = { x: this.window.getBounds().x, y: this.window.getBounds().y };
       this.state.miniMode = false;
     }
-    this.dragging = { cursor: screen.getCursorScreenPoint(), position: this.ensureBasePosition() };
+    this.dragging = { cursor: screen.getCursorScreenPoint(), position: this.ensureBasePosition(), direction };
     this.emitPetEvent('pet:drag-state', direction === 'left' ? 'running-left' : 'running-right');
   }
 
@@ -379,10 +406,19 @@ export class PetController {
       x: this.dragging.position.x + now.x - this.dragging.cursor.x,
       y: this.dragging.position.y + now.y - this.dragging.cursor.y,
     };
-    this.basePosition = {
+    const nextPosition = {
       x: Math.round(Math.max(work.x - size.width + 40, Math.min(raw.x, work.x + work.width - 40))),
       y: Math.round(Math.max(work.y, Math.min(raw.y, work.y + work.height - size.height))),
     };
+    const deltaX = nextPosition.x - this.ensureBasePosition().x;
+    if (Math.abs(deltaX) >= 1) {
+      const direction = deltaX < 0 ? 'left' : 'right';
+      if (direction !== this.dragging.direction) {
+        this.dragging.direction = direction;
+        this.emitPetEvent('pet:drag-state', direction === 'left' ? 'running-left' : 'running-right');
+      }
+    }
+    this.basePosition = nextPosition;
     this.applyBounds();
   }
 
@@ -394,7 +430,7 @@ export class PetController {
     this.docked = target.docked;
     this.state.miniMode = this.docked;
     this.state.hover = false;
-    this.applyBounds();
+    this.applyBounds(this.docked);
     this.emitPetEvent('pet:drag-end');
     this.broadcast();
     void this.savePosition();
@@ -424,15 +460,13 @@ export class PetController {
   }
 
   private async triggerSync(): Promise<void> {
-    this.state.syncing = true;
-    this.broadcast();
     try {
       const response = await localApiRequest('/functions/tud-trigger-sync', { method: 'POST', body: '{}' });
       if (response.status !== 200) throw new Error(`LOCAL_API_${response.status}`);
     } catch (error) {
       console.error('[tud-desktop] pet sync failed:', error);
     }
-    finally { this.state.syncing = false; this.broadcast(); void this.refreshData(); }
+    finally { void this.refreshData(); }
   }
 
   private async refreshData(): Promise<void> {
@@ -516,16 +550,17 @@ export class PetController {
   private async handleCatalog(request: PetCatalogRequest): Promise<unknown> {
     if (!request || typeof request !== 'object') throw new Error('无效的宠物操作');
     if (request.action === 'list-codex') return this.catalog.listCodex();
+    let importedPet: PetCatalogEntry | undefined;
     if (request.action === 'import-zip') {
       const result = await dialog.showOpenDialog({ title: '导入桌面宠物', properties: ['openFile'], filters: [{ name: '宠物 ZIP', extensions: ['zip'] }] });
       if (result.canceled || !result.filePaths[0]) return { canceled: true };
       const file = result.filePaths[0];
       const fs = await import('node:fs/promises');
       if ((await fs.stat(file)).size > 12 * 1024 * 1024) throw new Error('宠物 ZIP 超过 12 MB');
-      await this.catalog.installZip(await fs.readFile(file));
+      importedPet = await this.catalog.installZip(await fs.readFile(file));
     } else if (request.action === 'install-url') {
       if (typeof request.url !== 'string') throw new Error('无效的下载地址');
-      await this.catalog.installFromUrl(request.url);
+      importedPet = await this.catalog.installFromUrl(request.url);
     } else if (request.action === 'import-codex') {
       await this.catalog.importCodex(request.ids);
     } else if (request.action === 'remove') {
@@ -538,7 +573,7 @@ export class PetController {
     this.state.catalog = await this.catalog.list();
     if (!this.state.catalog.some(pet => pet.id === this.settings.character)) await this.setSettings({ character: 'clawd' });
     this.broadcast();
-    return { catalog: this.state.catalog };
+    return { catalog: this.state.catalog, pet: importedPet };
   }
 
   async initialize(): Promise<void> {
@@ -548,10 +583,12 @@ export class PetController {
     this.state.settings = { ...this.settings };
     this.state.dark = this.options.getDark();
     this.state.locale = app.getLocale();
+    this.state.syncing = isLocalRuntimeSyncing();
     this.state.catalog = await this.catalog.list();
     if (!this.state.catalog.some(pet => pet.id === this.settings.character)) this.settings.character = 'clawd';
     this.basePosition = this.settings.position;
     this.docked = this.settings.docked;
+    this.state.miniMode = this.docked;
     this.catalog.registerAssetProtocol();
     ipcMain.removeHandler(PET_GET_CHANNEL);
     ipcMain.handle(PET_GET_CHANNEL, () => this.state);
@@ -568,6 +605,10 @@ export class PetController {
     screen.on('display-removed', this.onDisplaysChanged);
     screen.on('display-metrics-changed', this.onDisplaysChanged);
     this.unsubscribeSync = onLocalRuntimeSynced(() => void this.refreshData());
+    this.unsubscribeSyncActivity = onLocalRuntimeSyncActivity(active => {
+      this.state.syncing = active;
+      this.broadcast();
+    });
     this.dataTimer = setInterval(() => void this.refreshData(), DATA_REFRESH_MS);
     this.limitTimer = setInterval(() => void this.refreshLimits(), LIMIT_REFRESH_MS);
     if (this.settings.visible) this.setVisible(true);
@@ -586,12 +627,15 @@ export class PetController {
 
   dispose(): void {
     this.stopCursorTimer();
+    this.stopEdgeAnimation();
     if (this.dataTimer) clearInterval(this.dataTimer);
     this.dataTimer = null;
     if (this.limitTimer) clearInterval(this.limitTimer);
     this.limitTimer = null;
     this.unsubscribeSync?.();
     this.unsubscribeSync = null;
+    this.unsubscribeSyncActivity?.();
+    this.unsubscribeSyncActivity = null;
     screen.removeListener('display-added', this.onDisplaysChanged);
     screen.removeListener('display-removed', this.onDisplaysChanged);
     screen.removeListener('display-metrics-changed', this.onDisplaysChanged);

@@ -39,6 +39,8 @@ export interface SignalSyncDeps {
    * not used in this process; the caller is responsible for applying results.
    */
   runSyncOverride?: (reason: string, source?: string) => Promise<SyncResult[]>;
+  /** Reports all sync rounds, including notify.signal and manual calls. */
+  onSyncActivity?: (active: boolean) => void;
 }
 
 /**
@@ -197,7 +199,7 @@ export function watchRuntimeSignals(
   deps: SignalSyncDeps,
   debounceMs = 400,
 ): { stop: () => void; runSync: (reason: string, source?: string) => Promise<SyncResult[]> } {
-  const runSync =
+  const collect =
     deps.runSyncOverride ??
     createSyncRunner({
       dataDir: deps.dataDir,
@@ -212,6 +214,21 @@ export function watchRuntimeSignals(
       },
       syncAllFn: deps.syncAllFn,
     }).runSync;
+
+  let activeCallers = 0;
+  const runSync = async (reason: string, source?: string): Promise<SyncResult[]> => {
+    activeCallers++;
+    if (activeCallers === 1) {
+      try { deps.onSyncActivity?.(true); } catch { /* observers cannot interrupt collection */ }
+    }
+    try { return await collect(reason, source); }
+    finally {
+      activeCallers--;
+      if (activeCallers === 0) {
+        try { deps.onSyncActivity?.(false); } catch { /* observers cannot interrupt collection */ }
+      }
+    }
+  };
 
   const stop = watchSyncSignals(
     deps.dataDir,

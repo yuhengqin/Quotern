@@ -161,10 +161,12 @@ async function readZip(buffer: Buffer): Promise<{ manifest: Buffer; atlas: Buffe
 export class PetCatalog {
   private readonly root: string;
   private readonly hiddenPath: string;
+  private readonly codexRoot: string;
 
-  constructor(root?: string) {
+  constructor(root?: string, codexRoot?: string) {
     this.root = root ?? path.join(app.getPath('userData'), 'pets');
     this.hiddenPath = path.join(this.root, '.hidden-builtins.json');
+    this.codexRoot = codexRoot ?? path.join(homedir(), '.codex', 'pets');
   }
 
   private petPath(id: string): string {
@@ -174,8 +176,7 @@ export class PetCatalog {
     return target;
   }
 
-  private async safeInstalledPath(id: string): Promise<string> {
-    const dir = this.petPath(id);
+  private async checkedPetDirectory(dir: string): Promise<string> {
     const directory = await lstat(dir);
     if (!directory.isDirectory() || directory.isSymbolicLink()) throw new Error('宠物目录无效');
     for (const name of ['pet.json', 'spritesheet.webp']) {
@@ -183,6 +184,17 @@ export class PetCatalog {
       if (!entry.isFile() || entry.isSymbolicLink()) throw new Error('宠物文件无效');
     }
     return dir;
+  }
+
+  private async safeInstalledPath(id: string): Promise<string> {
+    return this.checkedPetDirectory(this.petPath(id));
+  }
+
+  private async safeCodexPath(id: string): Promise<string> {
+    if (!PET_ID_RE.test(id)) throw new Error('无效的 Codex 宠物 ID');
+    const dir = path.resolve(this.codexRoot, id);
+    if (path.dirname(dir) !== path.resolve(this.codexRoot)) throw new Error('无效的 Codex 宠物目录');
+    return this.checkedPetDirectory(dir);
   }
 
   private async hiddenIds(): Promise<Set<string>> {
@@ -259,16 +271,17 @@ export class PetCatalog {
   }
 
   async listCodex(): Promise<PetCatalogEntry[]> {
-    const source = path.join(homedir(), '.codex', 'pets');
     let ids: string[];
-    try { ids = await readdir(source); } catch { return []; }
+    try { ids = await readdir(this.codexRoot); } catch { return []; }
     const installed = new Set((await this.list()).map(pet => pet.id));
     const candidates = await Promise.all(ids.filter(id => PET_ID_RE.test(id) && !installed.has(id)).map(async id => {
       try {
-        const dir = path.join(source, id);
+        const dir = await this.safeCodexPath(id);
         const [manifestBuffer, atlas] = await Promise.all([readFile(path.join(dir, 'pet.json')), readFile(path.join(dir, 'spritesheet.webp'))]);
         const manifest = validatePetPackage(manifestBuffer, atlas);
-        return manifest.id === id ? { ...manifest, custom: true } : null;
+        return manifest.id === id
+          ? { ...manifest, custom: true, assetUrl: `${PET_ASSET_SCHEME}://codex/${id}/spritesheet.webp` }
+          : null;
       } catch { return null; }
     }));
     return candidates.filter((pet): pet is NonNullable<typeof pet> => pet !== null);
@@ -280,7 +293,7 @@ export class PetCatalog {
     if (ids.some(id => !allowed.has(id))) throw new Error('所选 Codex 宠物不可导入');
     const results: PetCatalogEntry[] = [];
     for (const id of ids) {
-      const dir = path.join(homedir(), '.codex', 'pets', id);
+      const dir = await this.safeCodexPath(id);
       const [manifest, atlas] = await Promise.all([readFile(path.join(dir, 'pet.json')), readFile(path.join(dir, 'spritesheet.webp'))]);
       results.push(await this.installBuffers(manifest, atlas));
     }
@@ -323,9 +336,10 @@ export class PetCatalog {
         } catch { return new Response(null, { status: 404 }); }
       }
       const match = /^\/([a-z0-9-]+)\/spritesheet\.webp$/.exec(url.pathname);
-      if (url.hostname !== 'asset' || !match || !PET_ID_RE.test(match[1]!)) return new Response(null, { status: 404 });
+      if (!match || !PET_ID_RE.test(match[1]!) || (url.hostname !== 'asset' && url.hostname !== 'codex')) return new Response(null, { status: 404 });
       try {
-        const file = path.join(await this.safeInstalledPath(match[1]!), 'spritesheet.webp');
+        const dir = url.hostname === 'codex' ? await this.safeCodexPath(match[1]!) : await this.safeInstalledPath(match[1]!);
+        const file = path.join(dir, 'spritesheet.webp');
         const body = await readFile(file);
         return new Response(new Uint8Array(body), { status: 200, headers: { 'Content-Type': 'image/webp', 'Access-Control-Allow-Origin': '*' } });
       } catch { return new Response(null, { status: 404 }); }

@@ -59,9 +59,16 @@ function PetPreview({ pet, state, color }: { pet: PetCatalogEntry; state: string
   );
 }
 
+function PetCardSprite({ pet, color }: { pet: PetCatalogEntry; color: string }) {
+  if (pet.id === 'clawd') return <img src={spriteUrl('clawd/idle/living.svg')} alt="" className="h-10 w-10 object-contain" />;
+  if (pet.id === 'bot') return <BotAnimated state="idle-living" color={color} size={44} />;
+  return <PetAtlasAnimated character={pet.id} pet={pet} state="idle-living" size={44} />;
+}
+
 export function PetSettingsCard() {
   const [state, setState] = useState<PetState | null>(null);
   const [previewState, setPreviewState] = useState<string>('idle-living');
+  const [autoRotatePreview, setAutoRotatePreview] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -77,6 +84,17 @@ export function PetSettingsCard() {
     });
     return () => { live = false; unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    if (!autoRotatePreview) return;
+    const timer = window.setInterval(() => {
+      setPreviewState(current => {
+        const index = PREVIEW_STATES.findIndex(item => item.id === current);
+        return PREVIEW_STATES[(index + 1) % PREVIEW_STATES.length]!.id;
+      });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [autoRotatePreview]);
 
   const selected = useMemo(() => state?.catalog.find(pet => pet.id === state.settings.character) ?? state?.catalog[0], [state]);
 
@@ -99,7 +117,13 @@ export function PetSettingsCard() {
         setNotice(success);
         setCodexPets(null);
         setSelectedCodex([]);
-        setState(await window.tud.pet.getState());
+        const imported = result.data && typeof result.data === 'object' && 'pet' in result.data
+          ? result.data.pet as PetCatalogEntry | undefined
+          : undefined;
+        setState(imported?.id
+          ? await window.tud.pet.setSettings({ character: imported.id })
+          : await window.tud.pet.getState());
+        if (imported?.id) setUrl('');
       }
     } catch (e) { setError(e instanceof Error ? e.message : '宠物操作失败'); }
     finally { setBusy(false); }
@@ -135,6 +159,7 @@ export function PetSettingsCard() {
               onClick={() => void update({ character: pet.id })}
               className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${state.settings.character === pet.id ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
             >
+              <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden"><PetCardSprite pet={pet} color={state.settings.botColor} /></span>
               <span className="truncate">{pet.displayName}</span>
               {pet.spriteVersionNumber === 2 && <span className="ml-auto text-[9px] opacity-60">V2</span>}
             </button>
@@ -157,7 +182,7 @@ export function PetSettingsCard() {
           <PetPreview pet={selected} state={previewState} color={state.settings.botColor} />
           <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-6" aria-label="预览动作">
             {PREVIEW_STATES.map(item => (
-              <button type="button" key={item.id} aria-pressed={previewState === item.id} onClick={() => setPreviewState(item.id)}
+              <button type="button" key={item.id} aria-pressed={previewState === item.id} onClick={() => { setAutoRotatePreview(false); setPreviewState(item.id); }}
                 className={`rounded-md px-1 py-1.5 text-[11px] focus-visible:outline-2 focus-visible:outline-accent ${previewState === item.id ? 'bg-accent/15 font-semibold text-foreground' : 'text-muted hover:bg-default-100'}`}>
                 {item.label}
               </button>
@@ -205,8 +230,9 @@ export function PetSettingsCard() {
               <>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {codexPets.map(pet => (
-                    <label key={pet.id} className="flex items-center gap-2">
+                    <label key={pet.id} className="flex items-center gap-2 rounded-lg border border-default-200 p-2 dark:border-default-100/20">
                       <input type="checkbox" checked={selectedCodex.includes(pet.id)} disabled={busy} onChange={() => setSelectedCodex(current => current.includes(pet.id) ? current.filter(id => id !== pet.id) : [...current, pet.id])} />
+                      <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden"><PetCardSprite pet={pet} color={state.settings.botColor} /></span>
                       <span className="truncate">{pet.displayName}</span>
                     </label>
                   ))}

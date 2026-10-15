@@ -459,7 +459,15 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
     if (process.platform === 'win32') {
       petController = new PetController({
-        showMainWindow,
+        toggleMainWindow: () => {
+          const window = getMainWindow();
+          if (window?.isVisible() && !window.isMinimized()) window.close();
+          else showMainWindow();
+        },
+        isMainWindowVisible: () => {
+          const window = getMainWindow();
+          return Boolean(window?.isVisible() && !window.isMinimized());
+        },
         openSettings: () => void openSettings({ tab: 'app' }),
         getDark: () => currentTheme === 'dark',
       });

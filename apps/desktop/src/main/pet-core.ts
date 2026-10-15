@@ -89,14 +89,43 @@ export function petDockTarget(
   alreadyDocked = false,
   bubbleBand = PET_BUBBLE_BAND,
 ): Point & { docked: boolean } {
-  const nearEdge = point.x + size.width >= work.x + work.width - EDGE_DOCK_THRESHOLD;
-  if (!nearEdge && !alreadyDocked) return { ...point, docked: false };
   const sprite = petSpriteRect(size, bubbleBand);
+  const nearEdge = point.x + sprite.x + sprite.width >= work.x + work.width - EDGE_DOCK_THRESHOLD;
+  if (!nearEdge && !alreadyDocked) return { ...point, docked: false };
   return {
-    x: Math.round(work.x + work.width - sprite.x - (hovering ? sprite.width : PET_EDGE_PEEK)),
+    x: Math.round(work.x + work.width - (hovering ? size.width : sprite.x + PET_EDGE_PEEK)),
     y: point.y,
     docked: true,
   };
+}
+
+export function petPointerRegion(
+  cursor: Point,
+  bounds: Rect,
+  work: Rect,
+  bubbleBand: number,
+  docked: boolean,
+  revealed: boolean,
+): { overSprite: boolean; hovering: boolean } {
+  const sprite = petSpriteRect(bounds, bubbleBand);
+  const pad = Math.max(8, sprite.width * 0.08);
+  const insideY = cursor.y >= bounds.y + sprite.y - pad
+    && cursor.y < bounds.y + sprite.y + sprite.height + pad;
+  const overSprite = insideY
+    && cursor.x >= bounds.x + sprite.x - pad
+    && cursor.x < bounds.x + sprite.x + sprite.width + pad;
+  if (!docked) return { overSprite, hovering: overSprite };
+
+  // The revealed sprite ends well before the screen edge because the bubble
+  // needs a wider transparent host. Keep that gap in the hover region so moving
+  // from the peek strip toward the sprite cannot tuck it away mid-move.
+  const targetLeft = revealed
+    ? work.x + work.width - bounds.width
+    : work.x + work.width - sprite.x - PET_EDGE_PEEK;
+  const hovering = insideY
+    && cursor.x >= targetLeft + sprite.x - pad
+    && cursor.x <= work.x + work.width;
+  return { overSprite, hovering };
 }
 
 interface Summary { todayTokens?: number; todayCostUsd?: number; totalTokens?: number; totalCostUsd?: number }

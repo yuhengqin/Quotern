@@ -5,7 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from '../../shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime } from './SubscriptionUsageCard';
-import { commonQuotaResetAt, quotaDisplayDetails, quotaForecasts, quotaPaceDescription, quotaPaceLabel, quotaWindowLabel, sortQuotaWindows } from '../lib/quota-presentation';
+import { commonQuotaResetAt, quotaDisplayDetails, quotaForecasts, quotaPaceDescription, quotaPaceLabel, quotaTrendWindows, quotaWindowLabel, sortQuotaWindows } from '../lib/quota-presentation';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { label: string; dotClassName: string }> = {
   operational: { label: '服务正常', dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
@@ -29,17 +29,17 @@ function duration(until: number) {
   return minutes < 60 ? `${minutes} 分钟` : minutes < 1440 ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ''}` : `${Math.ceil(minutes / 1440)} 天`;
 }
 
-function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecasts: Map<string, number>) {
+function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecasts: Map<string, number>, trendWindows: Set<string>) {
   if (provider.stale || provider.status !== 'ready') return null;
   const rows = provider.windows.filter(window => window.analysisEligible !== false)
     .map(window => ({ window, analysis: provider.analyses[window.id] })).filter(row => row.analysis);
   const eta = rows.filter(row => forecasts.has(row.window.id))
     .sort((a, b) => forecasts.get(a.window.id)! - forecasts.get(b.window.id)!)[0];
   const row = eta ?? rows.find(row => row.analysis.paceDifference !== null)
-    ?? (showTrend ? rows.find(row => row.analysis.trend.length >= 3) : undefined);
+    ?? (showTrend ? rows.find(row => trendWindows.has(row.window.id) && row.analysis.trend.length >= 3) : undefined);
   if (!row) return null;
   const text = eta ? `预计约 ${duration(row.analysis.etaAt!)}后耗尽` : quotaPaceLabel(row.analysis) ?? '最近 6 小时额度趋势';
-  return { text, label: quotaWindowLabel(provider.id, row.window), description: eta ? null : quotaPaceDescription(row.window, row.analysis), warning: Boolean(eta), trend: showTrend && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
+  return { text, label: quotaWindowLabel(provider.id, row.window), description: eta ? null : quotaPaceDescription(row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
 }
 
 export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProviderState; preferences: QuotaPreferences }) {
@@ -97,7 +97,8 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   const windows = sortQuotaWindows(provider.windows);
   const details = quotaDisplayDetails(provider.id, provider.details);
   const forecasts = quotaForecasts(provider.id, provider.windows, provider.analyses, Date.now() / 1000);
-  const summary = quotaSummary(provider, preferences.showSparkline, forecasts);
+  const trendWindows = quotaTrendWindows(provider.id, provider.windows);
+  const summary = quotaSummary(provider, preferences.showSparkline, forecasts, trendWindows);
   const commonReset = commonQuotaResetAt(provider.windows);
   const message = provider.status === 'custom-provider' ? '自定义模型无法获取配额'
     : provider.status === 'expired' ? '登录已过期，请重新登录'
@@ -189,7 +190,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
                   {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
                   {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} />}
                   <div className="flex flex-col gap-5">
-                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={provider.id} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline} stale={provider.stale} hideReset={commonReset !== null} detailed />)}
+                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={provider.id} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale} hideReset={commonReset !== null} detailed />)}
                     {details.map(detail => <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
                   </div>
                   {(message || error) && <p role="status" className="text-sm text-muted">{error ?? message}</p>}

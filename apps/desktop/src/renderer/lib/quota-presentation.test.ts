@@ -3,7 +3,7 @@ import test from 'node:test';
 import type { QuotaAnalysis, QuotaProviderState, QuotaWindow } from '../../shared/quota';
 import { normalizeQuotaSnapshot } from '../../shared/quota-analysis';
 import { mapGrokBilling } from '../../shared/grok-subscription';
-import { commonQuotaResetAt, quotaDisplayDetails, quotaForecasts, sortQuotaWindows } from './quota-presentation';
+import { commonQuotaResetAt, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows } from './quota-presentation';
 
 const window = (id: string, resetsAt: number | null, timeKind?: 'reset' | 'expiry'): QuotaWindow => ({ id, label: id, usedPercent: 40, resetsAt, timeKind });
 
@@ -86,4 +86,33 @@ test('only merges explicitly unlimited Copilot chat and completions, preserving 
   assert.equal(select('copilot', [details[0]]).length, 1);
   assert.equal(select('cursor', details).length, 2);
   assert.deepEqual(details.map(d => d.label), ['Chat', '内联建议']);
+});
+
+test('selects only the shortest cycle in one pool, independently of history availability', () => {
+  const windows = [period('monthly', '月限额', null), period('weekly', '7d', 604800), period('daily', '日限额', 86400), period('five-hour', '5h', 18000)];
+  assert.deepEqual([...quotaTrendWindows('kimi', windows)], ['five-hour']);
+  assert.deepEqual([...quotaTrendWindows('kimi', windows.slice(0, 3))], ['daily']);
+  assert.deepEqual([...quotaTrendWindows('kimi', windows.slice(0, 2))], ['weekly']);
+  assert.deepEqual([...quotaTrendWindows('kimi', windows.slice(0, 1))], ['monthly']);
+  assert.deepEqual(windows.map(w => w.id), ['monthly', 'weekly', 'daily', 'five-hour']);
+});
+
+test('keeps independent model pools and Codex feature pools separate for trends', () => {
+  const models = ['pro', 'flash', 'sonnet'].map(id => ({ ...period(id, '模型额度', 18000), groupLabel: id }));
+  assert.deepEqual([...quotaTrendWindows('antigravity', models)], ['pro', 'flash', 'sonnet']);
+  assert.deepEqual([...quotaTrendWindows('cursor', [period('cursorModels', 'Cursor', null), period('otherModels', 'Other', null)])], ['cursorModels', 'otherModels']);
+  const windows = [period('account:604800', '7d', 604800), period('account:18000', '5h', 18000),
+    { ...period('feature:review:604800', '7d', 604800), groupLabel: 'Review' },
+    { ...period('feature:review:18000', '5h', 18000), groupLabel: 'Review' },
+    { ...period('model:opus:weekly', '7d', 604800), groupLabel: 'Opus' }];
+  assert.deepEqual([...quotaTrendWindows('codex', windows)], ['account:18000', 'feature:review:18000', 'model:opus:weekly']);
+});
+
+test('uses actual cycle duration and does not hide eligible tied or unknown independent pools', () => {
+  const windows = [period('a', '5h', 5400), period('b', '2h', 7200), { ...period('balance', '余额', null), analysisEligible: false }];
+  assert.deepEqual([...quotaTrendWindows('codex', windows)], ['a']);
+  assert.deepEqual([...quotaTrendWindows('codex', [period('a', '5h', 18000), period('b', '5h', 18000)])], ['a', 'b']);
+  assert.deepEqual([...quotaTrendWindows('grok', [period('billing', '周期', null), period('session', '5h', 18000)])], ['session']);
+  assert.deepEqual([...quotaTrendWindows('grok', [period('billing', '周期', null)])], ['billing']);
+  assert.deepEqual([...quotaTrendWindows('kimi', [])], []);
 });

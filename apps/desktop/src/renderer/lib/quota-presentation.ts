@@ -21,13 +21,27 @@ export function sortQuotaWindows(windows: QuotaWindow[]): QuotaWindow[] {
   return windows.map(window => periodOrder(window) === null ? window : sorted[index++]);
 }
 
-function forecastScope(providerId: string, window: QuotaWindow): string {
+function quotaScope(providerId: string, window: QuotaWindow): string {
   if (window.timeKind === 'expiry') return window.id;
   if (providerId === 'codex' && window.id.startsWith('feature:')) return window.id.slice(0, window.id.lastIndexOf(':'));
   if (window.groupLabel || window.id.startsWith('model:')) return window.id;
   if (providerId === 'grok' && ['session', 'daily', 'weekly', 'monthly', 'billing'].includes(window.id)) return 'account';
   if (periodOrder(window) !== null && ['codex', 'claude', 'kimi', 'grok', 'zcode', 'minimax', 'opencode'].includes(providerId)) return 'account';
   return window.id;
+}
+
+export function quotaTrendWindows(providerId: string, windows: QuotaWindow[]): Set<string> {
+  const eligible = windows.filter(window => window.analysisEligible !== false);
+  const length = (window: QuotaWindow) => Number.isFinite(window.durationSeconds) && window.durationSeconds! > 0
+    ? window.durationSeconds! : periodOrder(window) ?? Number.POSITIVE_INFINITY;
+  const shortest = new Map<string, number>();
+  for (const window of eligible) {
+    const scope = quotaScope(providerId, window);
+    shortest.set(scope, Math.min(shortest.get(scope) ?? Number.POSITIVE_INFINITY, length(window)));
+  }
+  // Select before checking samples: missing short-cycle history must not fall
+  // back to a longer cycle. Unknown independent pools keep their own trend.
+  return new Set(eligible.filter(window => length(window) === shortest.get(quotaScope(providerId, window))).map(window => window.id));
 }
 
 /** Keep the first forecast that can occur before a related reset or limit blocks use. */
@@ -37,9 +51,9 @@ export function quotaForecasts(providerId: string, windows: QuotaWindow[], analy
   for (const window of eligible) {
     const at = analyses[window.id]?.etaAt;
     if (!at || !Number.isFinite(at) || at <= now || window.usedPercent >= 100 || !window.resetsAt || at >= window.resetsAt) continue;
-    const scope = forecastScope(providerId, window);
+    const scope = quotaScope(providerId, window);
     const order = periodOrder(window) ?? (providerId === 'grok' && window.id === 'billing' ? Number.POSITIVE_INFINITY : null);
-    const blocked = eligible.some(other => forecastScope(providerId, other) === scope && (
+    const blocked = eligible.some(other => quotaScope(providerId, other) === scope && (
       other.usedPercent >= 100 || (other.resetsAt !== null && other.resetsAt <= at)
       || (other.resetsAt === null && periodOrder(other) !== null && order !== null && periodOrder(other)! < order)
     ));

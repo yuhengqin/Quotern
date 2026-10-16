@@ -1,4 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { DEFAULT_QUOTA_PREFERENCES, type QuotaPreferences, type QuotaProfile, type QuotaSample } from '../shared/quota.js';
 import { isSubscriptionChannelVisibility } from '../shared/subscription-channels.js';
@@ -42,6 +44,26 @@ export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferenc
     : key === 'paceModel' ? ['uniform', 'workdays', 'automatic'].includes(value as string)
     : key === 'channels' ? isSubscriptionChannelVisibility(value)
       : key === 'profiles' ? validQuotaProfiles(value) : false);
+}
+
+/** Validate new/retargeted entries without making old duplicate settings unreadable. */
+export function assertQuotaProfileDirectories(next: readonly QuotaProfile[], previous: readonly QuotaProfile[]): void {
+  const canonical = (directory: string) => {
+    let resolved = path.resolve(directory);
+    try { resolved = realpathSync.native(resolved); } catch { /* Readers report missing/unreadable directories. */ }
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  const defaultDirectory = (provider: QuotaProfile['provider']) => {
+    const configured = (provider === 'codex' ? process.env.CODEX_HOME : process.env.CLAUDE_CONFIG_DIR)?.trim();
+    return canonical(configured === '~' ? homedir() : configured?.startsWith('~/') ? path.join(homedir(), configured.slice(2)) : configured || path.join(homedir(), `.${provider}`));
+  };
+  for (const profile of next) {
+    const old = previous.find(item => item.id === profile.id);
+    if (old?.provider === profile.provider && old.directory === profile.directory && (!profile.enabled || old.enabled)) continue;
+    const directory = canonical(profile.directory);
+    if (directory === defaultDirectory(profile.provider)) throw new Error('QUOTA_DEFAULT_DIRECTORY');
+    if (next.some(item => item.id !== profile.id && item.provider === profile.provider && canonical(item.directory) === directory)) throw new Error('QUOTA_DUPLICATE_DIRECTORY');
+  }
 }
 export async function openQuotaStore(directory: string): Promise<QuotaStore> {
   let preferences = structuredClone(DEFAULT_QUOTA_PREFERENCES), history: QuotaHistory = {};

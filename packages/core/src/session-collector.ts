@@ -12,8 +12,9 @@ import { aggregateSessionMetrics, type SessionMetricOptions, type SessionMetrics
 import type { SessionTimingEvent } from './task-timing.js';
 import { clearProjectResolutionCache } from './session-project.js';
 import { extractSessionObservation, mergeSessionObservation, type SessionObservation } from './session-observation.js';
+import { extractSessionTitle, sessionTitleKey, type SessionTitle } from './session-titles.js';
 
-const VERSION = 8;
+const VERSION = 9;
 interface FileSnapshot {
   complete: boolean;
   size: number;
@@ -25,6 +26,7 @@ interface FileSnapshot {
   messages: Record<string, CollectedSessionMessage>;
   timings?: Record<string, SessionTimingEvent>;
   observations?: Record<string, SessionObservation>;
+  titles?: Record<string, SessionTitle>;
 }
 interface SourceSnapshot {
   version: number;
@@ -42,7 +44,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
     const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, 4, 5, 6, 7, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+    if (![3, 4, 5, 6, 7, 8, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
     cache.set(path, { stamp, value });
     return value;
   } catch { return null; }
@@ -152,6 +154,7 @@ export async function syncSessionSource(
         const messages = append ? { ...old!.messages } : {};
         const timings = append ? { ...old!.timings } : {};
         const observations = append ? { ...old!.observations } : {};
+        const titles: Record<string, SessionTitle> = append ? { ...old!.titles } : {};
         const addObservation = (event: SessionObservation) => {
           const key = JSON.stringify([event.sessionId, event.id]);
           observations[key] = mergeSessionObservation(observations[key], event);
@@ -168,6 +171,8 @@ export async function syncSessionSource(
             let record: Record<string, unknown>;
             try { record = JSON.parse(line) as Record<string, unknown>; } catch { fileComplete = false; continue; }
             const message = extractSessionMessage(source, record, context);
+            const named = extractSessionTitle(source, record, context.sessionId);
+            if (named && named.value.priority >= (titles[named.sessionId]?.priority ?? 0)) titles[named.sessionId] = named.value;
             if (message) messages[JSON.stringify([message.sessionId, message.id])] = message;
             const observation = extractSessionObservation(source, record, context);
             if (observation) addObservation(observation);
@@ -183,7 +188,7 @@ export async function syncSessionSource(
         }
         fileComplete = fileComplete && !context.incomplete && (source !== 'kimi' || context.kimiContext === true);
         if (source === 'codex' && context.legacyCodexMessages && !context.canonicalCodexMessages) fileComplete = false;
-        next.files[input.path] = { complete: fileComplete, size, mtimeMs, ino: st.ino, offset, guard: input.kind === 'jsonl' ? await prefixGuard(input.path, offset) : '', context, messages, timings, observations };
+        next.files[input.path] = { complete: fileComplete, size, mtimeMs, ino: st.ino, offset, guard: input.kind === 'jsonl' ? await prefixGuard(input.path, offset) : '', context, messages, timings, observations, titles };
         dirty = true;
       } catch {
         // A locked DB, incomplete JSON snapshot or temporary read error keeps
@@ -203,7 +208,7 @@ export async function syncSessionSource(
     const before = previous ? materialize(previous) : null;
     const after = materialize(next);
     const changed = !before || before.complete !== after.complete || JSON.stringify(before.messages) !== JSON.stringify(after.messages) || JSON.stringify(before.timings) !== JSON.stringify(after.timings)
-      || JSON.stringify(Object.values(previous?.files ?? {}).map(file => file.observations)) !== JSON.stringify(Object.values(next.files).map(file => file.observations));
+      || JSON.stringify(Object.values(previous?.files ?? {}).map(file => [file.observations, file.titles])) !== JSON.stringify(Object.values(next.files).map(file => [file.observations, file.titles]));
     await saveSource(path, next);
     return changed;
   } finally { await release(); }
@@ -213,12 +218,13 @@ export async function readSessionHistory(
   dataDir: string,
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
-): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; missingSources: string[] }> {
+): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; titles: Map<string, SessionTitle>; missingSources: string[] }> {
   const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
   const sources = new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))]);
   const messages: CollectedSessionMessage[] = [];
   const timingEvents: SessionTimingEvent[] = [];
   const observations = new Map<string, SessionObservation>();
+  const titles = new Map<string, SessionTitle>();
   const missingSources: string[] = [];
   for (const source of sources) {
     if (!validSource(source)) continue;
@@ -228,6 +234,10 @@ export async function readSessionHistory(
     const result = materialize(stored);
     messages.push(...result.messages);
     timingEvents.push(...result.timings);
+    for (const file of Object.values(stored.files)) for (const [id, value] of Object.entries(file.titles ?? {})) {
+      const key = sessionTitleKey(source, id);
+      if (value.priority >= (titles.get(key)?.priority ?? 0)) titles.set(key, value);
+    }
     for (const file of Object.values(stored.files)) for (const event of Object.values(file.observations ?? {})) {
       const key = JSON.stringify([event.source, event.sessionId, event.id]);
       observations.set(key, mergeSessionObservation(observations.get(key), event));
@@ -235,7 +245,7 @@ export async function readSessionHistory(
     const inRange = aggregateSessionMetrics(result.messages, options).sessionCount > 0;
     if ((usageSources.includes(source) || options.sources?.includes(source) || inRange) && (!result.complete || (usageSources.includes(source) && result.messages.length === 0))) missingSources.push(source);
   }
-  return { messages, timingEvents, observations: [...observations.values()], missingSources };
+  return { messages, timingEvents, observations: [...observations.values()], titles, missingSources };
 }
 
 export async function readSessionMetrics(

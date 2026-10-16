@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syncSessionSource, readSessionHistory } from '../src/session-collector.js';
@@ -22,6 +22,7 @@ test('session ledger persists final call snapshots, retries safely and serves fi
   const input = join(directory, 'claude.jsonl');
   const event = (input_tokens: number) => ({ type: 'assistant', sessionId: 'fixture-session', requestId: 'request-a', timestamp: '2026-10-16T04:00:00Z', message: { id: 'm', role: 'assistant', model: 'fixture-model', content: [{ type: 'text', text: 'PROMPT_NEVER_STORE' }], usage: { input_tokens, output_tokens: 5 } } });
   await writeFile(input, [event(10), event(25), { type: 'system', subtype: 'compact_boundary', sessionId: 'fixture-session', timestamp: '2026-10-16T04:01:00Z', compactMetadata: {} }].map(value => JSON.stringify(value)).join('\n') + '\n');
+  await appendFile(input, JSON.stringify({ type: 'custom-title', sessionId: 'fixture-session', customTitle: '  修复\n导出功能  ' }) + '\n');
   const discovered = { complete: true, inputs: [{ path: input, sessionId: 'fixture-session', kind: 'jsonl' as const }] };
   assert.equal(await syncSessionSource(directory, 'claude', discovered), true);
   assert.equal(await syncSessionSource(directory, 'claude', discovered), false);
@@ -35,6 +36,10 @@ test('session ledger persists final call snapshots, retries safely and serves fi
   const response = await app.request('/functions/tud-session-activity?fromDate=2026-10-16&toDate=2026-10-16&sources=claude');
   assert.equal(response.status, 200);
   const result = (await response.json()).data;
+  assert.equal(result.sessions[0].sessionTitle, '修复 导出功能');
+  await appendFile(input, JSON.stringify({ type: 'ai-title', sessionId: 'fixture-session', aiTitle: '自动名称' }) + '\n');
+  await syncSessionSource(directory, 'claude', discovered);
+  assert.equal((await (await app.request('/functions/tud-session-activity?fromDate=2026-10-16&toDate=2026-10-16&sources=claude')).json()).data.sessions[0].sessionTitle, '修复 导出功能');
   assert.equal(result.sessions[0].tokens, 30); assert.equal(result.otherTokens, 1); assert.equal(result.sessions[0].context.usedTokens, null);
   assert.equal((await app.request('/functions/tud-session-activity?sources=unknown')).status, 400);
   assert.equal((await app.request('/functions/tud-session-activity?fromDate=broken&toDate=2026-10-16')).status, 400);

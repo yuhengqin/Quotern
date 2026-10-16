@@ -46,7 +46,11 @@ export function registerQuotaApi(parent: Hono, quota?: LocalQuotaRuntime): void 
     }
     if (c.req.param('operation') === 'preferences') {
       if (!validQuotaPatch(input)) return c.json(failure('QUOTA_INVALID_PREFERENCES'), 400);
-      return c.json(ok(await quota!.setPreferences(input)));
+      try { return c.json(ok(await quota!.setPreferences(input))); }
+      catch (error) {
+        if (error instanceof Error && ['QUOTA_DEFAULT_DIRECTORY', 'QUOTA_DUPLICATE_DIRECTORY'].includes(error.message)) return c.json(failure(error.message), 400);
+        throw error;
+      }
     }
     return c.json(failure('QUOTA_INVALID_OPERATION'), 404);
   });

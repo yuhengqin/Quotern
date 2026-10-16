@@ -95,3 +95,20 @@ test('invalid and future timestamps are excluded; quota share is never claimed',
   const result = aggregateSessionActivity([event], [], { fromDate: '2026-10-16', toDate: '2026-10-16', totalTokens: 0 });
   assert.equal(result.sessions.length, 0);
 });
+
+test('Codex billing uses recorded auth and plan evidence without guessing from missing limits', () => {
+  const read = (auth: string, rateLimits?: unknown, provider = 'openai') => {
+    const context: ObservationContext = { sessionId: 'billing' };
+    extractSessionObservation('codex', { type: 'session_meta', payload: { model_provider: provider } }, context);
+    extractSessionObservation('codex', { type: 'turn_context', payload: { auth_mode: auth } }, context);
+    return extractSessionObservation('codex', { type: 'event_msg', timestamp: '2026-10-16T04:00:00Z', payload: { type: 'token_count', rate_limits: rateLimits, info: { last_token_usage: { input_tokens: 12 } } } }, context)!.billing.mode;
+  };
+  assert.equal(read('chatgpt'), 'subscription');
+  assert.equal(read('', { plan_type: 'pro' }), 'subscription');
+  assert.equal(read('', { plan_type: 'api_key' }), 'api');
+  assert.equal(read('api_key', { plan_type: 'pro' }), 'api');
+  assert.equal(read('', { primary: { used_percent: 20 } }), 'unknown');
+  assert.equal(read('', { plan_type: 'future-plan' }), 'unknown');
+  assert.equal(read('', { plan_type: 'pro' }, 'custom-proxy'), 'unknown');
+  assert.equal(read(''), 'unknown');
+});

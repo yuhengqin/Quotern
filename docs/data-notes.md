@@ -71,9 +71,13 @@ input_tokens + output_tokens + cached_input_tokens
 
 Schema 8 增加独立用量事件与上下文观察，首批支持 Claude、Codex、OpenCode、Pi、OMP，不改变既有消息计数或 Token 桶。Claude 按调用覆盖流式快照；Codex 与既有 parser 保持相同的 per-call / 累计差额及 cache-write 别名口径，按父子继承前缀排除回放。OpenCode SQL 只投影用量、模型、provider、费用和时钟，计入 compaction 调用但不把它计作逻辑消息。旧缓存继续可读并重扫仍存在的日志，已删除的原始日志无法恢复会话用量归属。
 
+Schema 9 保存 Claude 的命名元数据，custom-title 优先于 ai-title。会话活动接口另外读取 Codex session_index.jsonl 的 thread_name、最新 state 数据库的 threads.name，以及 OpenCode session.title；独立改名无需 Token 日志追加即可生效。Codex 不读取可能包含提示词的 title / first_user_message 列，所有来源都不截取聊天正文生成标题。标题清理控制字符并限制为 200 字符；只挂到已聚合出的会话。界面以会话名称为主、项目为副标题，缺名时使用 Agent 和短会话 ID。首页保留 6 条，全量会话在弹窗内按名称、项目、模型、ID 搜索并按 Agent 筛选，每页 12 条。
+
 `GET /functions/tud-session-activity` 使用与主面板相同的日期及 Agent 筛选，返回最近活动、上下文、逐会话 Token 与按事件计费归属。上下文容量只采用来源明确记录的数字，最近请求输入标为估计；Claude 压缩后采用 postTokens，没有该数字时清除旧占用，显示压缩后用量未知。最近活动不证明 Agent 正在执行。贡献名为“本机 Token 消耗占比”，保留未归属 Token；会话与桶口径不一致时明确标记并用两者较大的总量作为分母。
 
 provider 和认证类型分别保留；普通 OpenAI/Anthropic 名称不能证明订阅。会话内切换渠道时逐事件归属，不把整段会话算给最后一个服务。来源记录费用、按当前价格估算、混合/缺失分别标注；Claude cost-state 的会话费用覆盖同范围请求估价，部分模型金额未知时保持不完整。来源金额不等于实际账单。账号仅保留本地不可逆关联键，有相同账号证据时关联额度 profile 名称，不用当前登录状态反推旧会话付费方式。不提供会话级缓存诊断。
+
+Codex 的明确 chatgpt 认证标记，或 OpenAI 来源事件中已知的 rate_limits.plan_type，可作为订阅/API 证据；显式认证优先，缺少限额或不认识的套餐值仍保持未知。列表省略重复的未知渠道字样，展开后说明缺少认证/套餐证据；计费汇总仍保留未知桶。
 
 任务执行时长使用独立的工作事件时钟，不改变消息数、会话数或总时长。Codex 按 `turn_id` 配对任务，优先使用 `task_complete.duration_ms`，缺失时用任务开始与完成/取消事件的时间差；真实 turn UUID 的跨文件/继承副本只计一次，旧格式任务标签按会话隔离。进行中或缺少结束证据的任务不通过下一次 prompt 补全。任务时长包含 TTFT、思考和工具执行，不能将减去第一次 TTFT 后的数值称为纯生成时长。
 

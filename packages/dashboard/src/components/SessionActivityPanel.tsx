@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Tabs } from '@heroui/react';
+import { Button, Card, Input, Label, Modal, Tabs, TextField } from '@heroui/react';
 import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { sourceLabel } from '@/lib/tokens';
 import { isCliBackend } from '@/lib/api';
 import type { DashboardDateRange } from '@/lib/dashboard-date-range';
 import { ProviderIcon } from './ProviderIcon';
+import { filterSessionActivity, sessionActivityPage } from '../lib/session-activity';
 
 const number = (value: number) => new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 const serviceLabel = (value: string) => ({ unknown: '归属未知', mixed: '多个计费渠道', openai: 'OpenAI', anthropic: 'Anthropic', xai: 'xAI', opencode: 'OpenCode' }[value] ?? value);
@@ -49,39 +50,63 @@ export function SessionActivityViews({ snapshot }: { snapshot: SessionActivitySn
     <Tabs.Panel id="billing" className="pt-3">
       <div className="flex flex-col divide-y divide-separator">
         {snapshot.billing.map(row => <div key={`${row.service}|${row.mode}|${row.accountRef ?? ''}`} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
-          <div className="min-w-0"><p className="text-sm font-medium">{serviceLabel(row.service)}</p><p className="text-xs text-muted">{modeLabel(row.mode)}{row.accountLabel ? ` · ${row.accountLabel}` : row.accountRef ? ` · 账号 ${row.accountRef.slice(0, 6)}` : ''}</p></div>
+          <div className="min-w-0"><p className="text-sm font-medium">{serviceLabel(row.service)}</p><p className="text-xs text-muted">{[row.mode !== 'unknown' ? modeLabel(row.mode) : '', row.accountLabel ?? (row.accountRef ? `账号 ${row.accountRef.slice(0, 6)}` : '')].filter(Boolean).join(' · ')}</p></div>
           <div className="text-right text-xs tabular-nums"><p>{number(row.tokens)} Token</p><p className="text-muted">{money(row)}</p></div>
         </div>)}
         {!snapshot.billing.length && <p className="py-4 text-sm text-muted">当前范围没有计费归属记录</p>}
       </div>
-      <p className="mt-3 text-[11px] text-muted">渠道与认证类型以来源记录为准；来源记录金额和价格估算均不等同实际账单。</p>
+      <p className="mt-3 text-[11px] text-muted">渠道与认证类型以来源记录为准；缺少认证或套餐证据时保留未知。来源记录金额和价格估算均不等同实际账单。</p>
     </Tabs.Panel>
     {(snapshot.missingSources.length > 0 || snapshot.tokenTotalMismatch) && <p className="mt-3 text-[11px] text-muted">{snapshot.missingSources.length ? `会话用量覆盖不完整：${snapshot.missingSources.map(sourceLabel).join('、')}。` : ''}{snapshot.tokenTotalMismatch ? '会话记录与汇总记录口径存在差异，占比使用两者中较大的 Token 总量。' : ''}</p>}
   </Tabs>;
 }
 
 function SessionList({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {
-  const [limit, setLimit] = useState(6);
+  const [open, setOpen] = useState(false);
   if (!rows.length) return <p className="py-4 text-sm text-muted">当前范围没有可读取的会话</p>;
   return <>
-    <div className="divide-y divide-separator">
-      {rows.slice(0, limit).map(row => <details key={`${row.source}:${row.sessionId}`} className="group py-1">
+    <SessionRows rows={rows.slice(0, 6)} contribution={contribution} />
+    {rows.length > 6 && <Button className="mt-2 h-7 text-xs" size="sm" variant="ghost" aria-haspopup="dialog" aria-expanded={open} onPress={() => setOpen(true)}>查看全部 {rows.length} 个会话</Button>}
+    <SessionBrowser rows={rows} contribution={contribution} open={open} onOpenChange={setOpen} />
+  </>;
+}
+
+function SessionBrowser({ rows, contribution, open, onOpenChange }: { rows: SessionActivity[]; contribution: boolean; open: boolean; onOpenChange(open: boolean): void }) {
+  const [query, setQuery] = useState(''), [source, setSource] = useState('all'), [page, setPage] = useState(1);
+  const filtered = useMemo(() => filterSessionActivity(rows, query, source), [rows, query, source]);
+  const result = sessionActivityPage(filtered, page);
+  return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label="全部会话" className="w-full max-w-4xl">
+    <Modal.CloseTrigger aria-label="关闭全部会话" /><Modal.Header><Modal.Heading>全部会话</Modal.Heading><p className="text-xs text-muted">当前筛选范围 · 按{contribution ? '消耗贡献' : '最近活动'}排序</p></Modal.Header>
+    <Modal.Body className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <TextField className="min-w-40 flex-1" value={query} onChange={value => { setQuery(value); setPage(1); }}><Label>搜索会话</Label><Input placeholder="名称、项目、模型或会话 ID" type="search" /></TextField>
+        <label className="flex flex-col gap-1 text-xs">Agent<select value={source} onChange={event => { setSource(event.target.value); setPage(1); }} className="rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm outline-offset-2 focus-visible:outline-accent"><option value="all">全部 Agent</option>{[...new Set(rows.map(row => row.source))].sort().map(value => <option key={value} value={value}>{sourceLabel(value)}</option>)}</select></label>
+      </div>
+      <p role="status" className="text-xs text-muted">共 {filtered.length} 个会话</p>
+      {filtered.length ? <SessionRows rows={result.rows} contribution={contribution} /> : <p className="py-8 text-center text-sm text-muted">没有匹配的会话</p>}
+    </Modal.Body>
+    <Modal.Footer className="items-center justify-between gap-3"><p className="text-xs tabular-nums text-muted">第 {result.page} / {result.pages} 页</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => setPage(result.page - 1)}>上一页</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => setPage(result.page + 1)}>下一页</Button></div></Modal.Footer>
+  </Modal.Dialog></Modal.Container></Modal.Backdrop>;
+}
+
+function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {
+  return <div className="divide-y divide-separator">
+      {rows.map(row => <details key={`${row.source}:${row.sessionId}`} className="group py-1">
         <summary className="grid min-w-0 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.6fr)_auto]">
-          <div className="flex min-w-0 items-center gap-2.5"><ProviderIcon provider={row.source} size={20} /><div className="min-w-0"><p className="truncate text-sm font-medium" title={row.projectLabel}>{row.projectLabel}</p><p className="truncate text-[11px] text-muted">{sourceLabel(row.source)} · {row.model === 'unknown' ? '模型未记录' : row.model} · {age(row.lastActivityAt)}</p></div></div>
+          <div className="flex min-w-0 items-center gap-2.5"><ProviderIcon provider={row.source} size={20} /><div className="min-w-0"><p className="truncate text-sm font-medium" title={row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId}`}>{row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId.slice(-8)}`}</p><p className="truncate text-[11px] text-muted" title={row.projectLabel}>{row.projectLabel} · {row.model === 'unknown' ? '模型未记录' : row.model} · {age(row.lastActivityAt)}</p></div></div>
           <div className="hidden min-w-0 sm:block"><ContextReading row={row} /></div>
-          <div className="shrink-0 text-right text-xs tabular-nums"><p>{row.tokens === null ? '用量未记录' : `${number(row.tokens)} Token`}</p><p className="text-[11px] text-muted">{contribution && row.sharePercent !== null ? `${row.sharePercent.toFixed(1)}%` : serviceLabel(row.billing.service)}</p></div>
+          <div className="shrink-0 text-right text-xs tabular-nums"><p>{row.tokens === null ? '用量未记录' : `${number(row.tokens)} Token`}</p><p className="text-[11px] text-muted">{contribution && row.sharePercent !== null ? `${row.sharePercent.toFixed(1)}%` : row.billing.service !== 'unknown' ? serviceLabel(row.billing.service) : ''}</p></div>
         </summary>
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
           <div className="sm:hidden"><ContextReading row={row} /></div>
           <p>{serviceLabel(row.billing.service)} · {modeLabel(row.billing.mode)}{row.billing.accountLabel ? ` · ${row.billing.accountLabel}` : row.billing.accountRef ? ` · 账号 ${row.billing.accountRef.slice(0, 6)}` : ''}</p>
+          {row.billing.mode === 'unknown' && <p>来源未记录足够的认证或套餐信息，暂不能确定计费方式。</p>}
           <p>{money(row)}</p>
           <p>最近活动：{new Date(row.lastActivityAt).toLocaleString('zh-CN')}；会话 {row.sessionId}</p>
           {row.context && <p>{row.context.kind === 'post-compaction' ? '压缩后记录' : row.context.kind === 'request-input' ? '最近请求输入估计' : '来源记录的上下文快照'} · {new Date(row.context.observedAt).toLocaleString('zh-CN')}{Date.now() - Date.parse(row.context.observedAt) > 900000 ? ' · 读数较早' : ''}</p>}
         </div>
       </details>)}
-    </div>
-    {rows.length > 6 && <Button className="mt-2 h-7 text-xs" size="sm" variant="ghost" onPress={() => setLimit(limit === 6 ? rows.length : 6)}>{limit === 6 ? `查看全部 ${rows.length} 个会话` : '收起'}</Button>}
-  </>;
+    </div>;
 }
 
 function ContextReading({ row }: { row: SessionActivity }) {

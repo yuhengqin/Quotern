@@ -6,12 +6,34 @@ import { DEFAULT_QUOTA_PREFERENCES } from '../src/quota/shared/quota.js';
 import { markQuotaIdentity } from '../src/quota/readers/quota-identity.js';
 import { markQuotaEvidence, quotaEvidence, selectQuotaObservation, observationsFromOMPRows, createOMPQuotaObservationReader } from '../src/quota/readers/quota-observations.js';
 import { createCodexSubscriptionReader } from '../src/quota/readers/codex-subscription.js';
+import path from 'node:path';
 
 test('profiles validate bounded ids, native providers and absolute directories', () => {
   const profile = { id: 'work', provider: 'codex', label: '工作', directory: '/tmp/work', enabled: true };
   assert.equal(validQuotaPatch({ profiles: [profile] }), true);
   for (const invalid of [{ ...profile, directory: 'relative' }, { ...profile, provider: 'unknown' }, { ...profile, id: '../escape' }, { ...profile, accessToken: 'secret' }]) assert.equal(validQuotaPatch({ profiles: [invalid] }), false);
   assert.equal(validQuotaPatch({ profiles: [profile, profile] }), false);
+});
+
+test('saving new profiles rejects duplicate directories before persisting but allows legacy removal', async () => {
+  let saves = 0;
+  const first = { id: 'one', provider: 'codex' as const, label: '个人', directory: path.resolve('fixture-profile'), enabled: true };
+  const manager = new QuotaManager({ readers: [], store: { preferences: { ...structuredClone(DEFAULT_QUOTA_PREFERENCES), profiles: [first] }, history: {}, notice: null, async savePreferences() { saves++; }, async saveHistory() {} }, notify() {} });
+  await assert.rejects(manager.setPreferences({ profiles: [first, { ...first, id: 'two', directory: path.join(first.directory, 'nested', '..') }] }), /QUOTA_DUPLICATE_DIRECTORY/);
+  assert.equal(saves, 0);
+  assert.equal(manager.getState().preferences.profiles?.length, 1);
+  await manager.setPreferences({ profiles: [] });
+  assert.equal(saves, 1);
+  manager.dispose();
+});
+
+test('default credential directories cannot be registered as additional profiles', async () => {
+  const previous = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = path.resolve('fixture-default-codex');
+  const manager = new QuotaManager({ readers: [], store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history: {}, notice: null, async savePreferences() {}, async saveHistory() {} }, notify() {} });
+  try {
+    await assert.rejects(manager.setPreferences({ profiles: [{ id: 'duplicate', provider: 'codex', label: '工作', directory: process.env.CODEX_HOME, enabled: true }] }), /QUOTA_DEFAULT_DIRECTORY/);
+  } finally { manager.dispose(); if (previous === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previous; }
 });
 
 test('same provider profiles have unique state ids and independent refreshes', async () => {

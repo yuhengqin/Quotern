@@ -14,6 +14,7 @@ import {
 } from '../aggregate.js';
 import { readSessionMetrics, readSessionHistory } from '../session-collector.js';
 import { aggregateSessionActivity } from '../session-observation.js';
+import { attachSessionTitles } from '../session-titles.js';
 import { computeTokens } from '../pricing/index.js';
 import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
@@ -120,6 +121,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
     c.header('Cache-Control', 'no-store');
     const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
+    await attachSessionTitles(snapshot.sessions, history.titles);
     const labels = new Map<string, Set<string>>();
     for (const provider of (deps.getQuotaState?.() ?? deps.quota?.getState())?.providers ?? []) if (provider.provenance?.accountRef) {
       const names = labels.get(provider.provenance.accountRef) ?? new Set<string>();

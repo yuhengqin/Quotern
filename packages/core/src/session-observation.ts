@@ -66,9 +66,10 @@ function timestamp(v: unknown): string | null {
 
 /** Provider/auth fields are evidence; model names and zero costs are not. */
 function billing(provider: string, auth: string, account: string): SessionBilling {
+  auth = auth.toLowerCase();
   const aliases: Record<string, string> = { 'openai-codex': 'openai', 'anthropic-oauth': 'anthropic', 'xai-oauth': 'xai', 'opencode-go': 'opencode' };
   const service = /^[a-z0-9][a-z0-9._-]{0,79}$/i.test(provider) ? aliases[provider] ?? provider : 'unknown';
-  const mode = ['oauth', 'oauth_token', 'claude.ai', 'subscription'].includes(auth) ? 'subscription'
+  const mode = ['chatgpt', 'oauth', 'oauth_token', 'claude.ai', 'subscription'].includes(auth) ? 'subscription'
     : ['api', 'api_key', 'apikey'].includes(auth) ? 'api'
       : Object.hasOwn(aliases, provider) ? 'subscription' : 'unknown';
   return { service, mode, accountRef: account || null, evidence: service === 'unknown' && mode === 'unknown' ? 'unknown' : 'recorded' };
@@ -109,6 +110,14 @@ export function extractSessionObservation(source: string, record: Obj, context: 
     const event = payload.type === 'token_count' ? payload : obj(payload.msg);
     if (event.type !== 'token_count') return null;
     const info = obj(event.info), total = obj(info.total_token_usage), last = obj(info.last_token_usage);
+    // A plan recorded alongside this call is positive evidence. Missing windows
+    // are not evidence of API billing, and current login state cannot label history.
+    if (!auth && ['openai', 'openai-codex'].includes(provider)) {
+      const rate = obj(event.rate_limits ?? info.rate_limits);
+      const plan = text(rate.plan_type).toLowerCase();
+      if (['free', 'go', 'plus', 'pro', 'team', 'business', 'enterprise', 'edu', 'education'].includes(plan)) auth = 'subscription';
+      else if (['api', 'api_key', 'apikey'].includes(plan)) auth = 'api';
+    }
     if (!Object.keys(total).length && !Object.keys(last).length) return null;
     model = text(info.model) || model;
     const keys = ['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'reasoning_output_tokens', 'total_tokens'];
@@ -201,6 +210,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
 }
 
 export interface SessionActivity {
+  sessionTitle?: string;
   source: string; sessionId: string; projectLabel: string; model: string; lastActivityAt: string;
   tokens: number | null; sharePercent: number | null; costUsd: number | null;
   costKind: 'recorded' | 'estimated' | 'mixed' | 'unknown'; billing: SessionBilling;

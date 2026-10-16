@@ -28,7 +28,7 @@ export function useQuotaState() {
   }, []);
   const save = useCallback(async (patch: QuotaPreferencePatch) => {
     try { const next = await window.tud.quota.setPreferences(patch); setState(next); setError(null); }
-    catch { setError('额度设置保存失败，已保留原设置'); throw new Error('额度设置保存失败'); }
+    catch (cause) { setError('额度设置保存失败，已保留原设置'); throw cause; }
   }, []);
   return { state, error, save };
 }

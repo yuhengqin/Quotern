@@ -40,7 +40,7 @@ export function useQuotaState() {
     try {
       const next = await request<QuotaState>('/functions/tud-quota/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch), signal: AbortSignal.timeout(30000) });
       if (active.current && current === version.current) { setState(next); setError(null); }
-    } catch { if (active.current) setError('额度设置保存失败，已保留原设置'); throw new Error('额度设置保存失败'); }
+    } catch (cause) { if (active.current) setError('额度设置保存失败，已保留原设置'); throw cause; }
     finally { pending.current--; }
   }, []);
   return { state, error, refresh: load, save };

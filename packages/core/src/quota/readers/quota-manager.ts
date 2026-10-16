@@ -4,7 +4,7 @@ import type { QuotaPreferences, QuotaPreferencePatch, QuotaProfile, QuotaProvide
 import type { SubscriptionChannelId } from '../shared/subscription-channels.js';
 import { quotaIdentity, quotaEvidence } from './quota-identity.js';
 import { quotaReadRetryAfter } from './quota-fetch-state.js';
-import { validQuotaPatch, pruneQuotaHistory, type QuotaStore } from './quota-store.js';
+import { validQuotaPatch, pruneQuotaHistory, assertQuotaProfileDirectories, type QuotaStore } from './quota-store.js';
 
 export interface QuotaReader {
   id: SubscriptionChannelId; label: string; interval: number; read(): Promise<unknown>; statusUrl?: string;
@@ -212,6 +212,7 @@ export class QuotaManager {
     const pending = this.settingsQueue.then(async () => {
       if (this.disposed) throw new Error('额度服务已退出');
       const next = { ...this.preferences, ...patch, channels: { ...this.preferences.channels, ...patch.channels } };
+      if (patch.profiles) assertQuotaProfileDirectories(patch.profiles, this.preferences.profiles ?? []);
       try { await this.deps.store.savePreferences(next); }
       catch { this.notice = '额度设置保存失败，已保留原设置。'; this.emit(); throw new Error(this.notice); }
       const changedAlerts = next.thresholdAlerts !== this.preferences.thresholdAlerts || next.resetAlerts !== this.preferences.resetAlerts;

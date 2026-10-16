@@ -4,6 +4,22 @@ export function isQuotaStatusOnly(provider: Pick<QuotaProviderState, 'windows' |
   return provider.windows.length === 0 && provider.details.length === 0 && provider.resetCredits === null;
 }
 
+/** Collapse successful observations only; failed/unknown sources remain visible. */
+export function distinctQuotaAllowances(providers: QuotaProviderState[]): QuotaProviderState[] {
+  const selected = new Map<string, QuotaProviderState>();
+  const key = (row: QuotaProviderState) => row.status === 'ready' && !row.stale && !isQuotaStatusOnly(row) && row.provenance?.identityVerified && row.provenance.accountRef
+    ? `${row.providerId ?? row.id}:${row.provenance.accountRef}` : row.id;
+  const preferred = (next: QuotaProviderState, old: QuotaProviderState) => {
+    if (next.fetchedAt !== old.fetchedAt) return (next.fetchedAt ?? 0) > (old.fetchedAt ?? 0);
+    return next.provenance?.source === 'native' && old.provenance?.source !== 'native';
+  };
+  for (const row of providers) {
+    const id = key(row), previous = selected.get(id);
+    if (!previous || preferred(row, previous)) selected.set(id, row);
+  }
+  return [...selected.values()];
+}
+
 /** Nominal month length is used only for presentation order, never for analysis. */
 function periodOrder(window: QuotaWindow): number | null {
   if (window.timeKind === 'expiry' || window.analysisEligible === false) return null;

@@ -56,6 +56,7 @@ pnpm dev:cli:ui
 | `cli.json` / `api.json` / `ui.json` / `desktop.json` | 会话 ID、worktree、分支、命令、supervisor PID、直接子进程 PID、开始 / 结束时间、状态、代理和日志位置 |
 | `*.lock/owner.json` | runtime / UI 资源归属；重复启动拒绝抢占 |
 | `*.guard/owner.json` | 资源锁获取、恢复、释放共用的短期互斥；记录检查进程 PID 和开始时间 |
+| `jobs/<sessionId>.json` | Windows Job 已清空的完成凭据；由独立监视进程原子发布，缺失不代表已经退出 |
 | `data/` | 配置、`tud.pid`、heartbeat、采集队列、游标、缓存、图片和运行日志 |
 | `config-home/` | 开发设备身份 sidecar |
 | `electron/` | 独立 Electron userData / sessionData、偏好和浏览器存储 |
@@ -72,11 +73,14 @@ pnpm dev:cli:ui
 ## 退出与异常恢复
 
 - 正常退出使用本会话终端的 Ctrl+C。启动器只清理自己创建的子进程树，CLI 优先经自己的 IPC 清理并确认，再由 supervisor 终止所属进程树；确认清理完成后记录结束状态并释放自己的资源锁。POSIX 检查所属进程组，避免父进程退出后遗漏后代。
-- Windows 服务父进程意外先退出时，无法仅凭其 PID 安全定位所有剩余后代；此时记录 `cleanup-required`、保留归属锁并报错，不宣称已经清理完成，也不扩大扫描和停止范围。
+- Windows 启动器在启动任何构建或服务之前，通过独立 Node 宿主和隐藏的 Windows PowerShell 监视进程建立会话专属 Job Object。监视进程先固定原 supervisor 的内核句柄，再与仍存活的 supervisor 握手；确认 supervisor 已加入 Job、监视进程未加入后才允许启动服务。PowerShell 或 Job 建立失败时不会启动构建和服务。
+- Windows 正常退出在停止派生新进程并完成所属子进程的清理后，查询 Job，确认只剩 supervisor 才释放锁。服务父进程意外退出时不按死 PID 扩大停止范围；若 Job 仍有其他成员或查询失败，记录 `cleanup-required` 并保留锁。
 - 禁止按端口批量结束进程、按 `node` / `electron` / `vite` 进程名清理，或调用系统 `service stop` 腾端口。端口相同、目录相似、PID 文件存在，都不足以证明归属。
 - `dev:status` 不会停止进程或自动修复。`supervisorAlive` 仅表示 PID 是否存在，不能单独证明原会话仍在运行，也不能排除 PID 重用。
-- 下次 `pnpm dev:*` 遇到残留资源锁时会尝试只读检查并自动恢复：锁和会话记录的 sessionId、mode、PID、worktree、开始时间必须匹配，supervisor 和记录的所有子 PID 均须不存在。已记录正常清理完成的 `stopped` 会话可直接恢复；仍存在的 PID 即使可能被复用也保守拦截。
-- Windows 异常退出会话还须通过两次完整 CIM 进程检查：对会话开始后创建的所有进程追溯祖先，发现已知后代、祖先缺失、疑似父 PID 复用、时间缺失或查询失败，均保留锁并给出原因。即使孤儿可能属于其他任务，也不自动放行。检查不杀任何进程，也不以端口空闲作为清锁依据。CIM 不是冻结的进程树，两次检查降低枚举期间的变化风险，并不等同于操作系统级的进程生命周期保证。
+- 下次 `pnpm dev:*` 遇到残留资源锁时会尝试只读检查并自动恢复：锁和会话记录的 sessionId、mode、PID、worktree、开始时间必须匹配，supervisor 和记录的所有子 PID 均须不存在；仍存在的 PID 即使可能被复用也保守拦截。旧版本已记录正常清理完成且没有 Job 元数据的 `stopped` 会话可直接恢复。
+- 新 Windows 会话的监视进程在 supervisor 退出后继续观察，仅在原 supervisor 句柄已结束且 Job 活跃进程数为零时，将完成凭据写入临时文件并原子发布。恢复必须核对凭据的会话身份、Job 名称和随机 proofToken；即使会话已标记 `stopped`，崩溃遗留的锁也须有该凭据。监视进程失踪、查询失败、凭据缺失或损坏均不代表成功；恢复不会扫描整机孤儿、停止进程或以端口空闲作为清锁依据。
+- Job 默认继承覆盖普通进程创建方式产生的本会话后代，独立宿主在 supervisor 加入 Job 之前创建；本方案不主动设置 `KILL_ON_JOB_CLOSE` 或允许后代 breakaway。外层终端 / Codex / Node 的 Job 限制仍然有效，可能在主管退出时清理所属后代或监视进程；监视进程被清理而未发布凭据时保留锁。通过 WMI、计划任务或已有外部服务代为创建的进程不属于这里的普通后代继承保证。Job 机制见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)。
+- 旧 Windows 异常会话没有 Job 归属和完成凭据，保留锁并提示一次人工核验恢复，不能用新机制反推旧进程归属。
 - 非 Windows 平台对异常退出会话仍保留锁：现有异步子进程记录无法证明进程组列表完整。无法自动恢复时，先人工核对会话记录、进程命令行和后代归属；确认全部结束后才可删除对应残留锁。未知、缺失、损坏或不匹配的记录不会自动接管。
 - 同一资源锁的获取、恢复和释放通过 `*.guard/` 串行执行，清理前再次核对记录，避免并发启动误删新锁。若检查过程本身崩溃留下 guard，等待约 24 秒后会提示人工核对；guard 不自动回收。不要删除正在使用的 guard / `config.lock` 或清空整个 `.quotern-dev/`。
 

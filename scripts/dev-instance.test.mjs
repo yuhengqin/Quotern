@@ -7,8 +7,8 @@ import http from 'node:http';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import { createDevSession as createSession, readDevStatus } from './dev-instance.mjs';
-import { windowsProcessEvidence } from './dev-processes.mjs';
 
 const ownedSessions = new Map();
 async function createDevSession(...args) {
@@ -207,27 +207,44 @@ test('concurrent recovery has one winner and cannot remove its new locks', async
   }
 });
 
-test('Windows recovers a dead abnormal session only after full system inspection', {
+test('Windows legacy abnormal sessions require explicit recovery evidence', {
   skip: process.platform !== 'win32', timeout: 30000,
 }, async (t) => {
   const { root } = await staleDesktop(t, { status: 'running' });
+  await assert.rejects(createDevSession(root, 'desktop', {}), /Job|进程归属/);
+});
+
+test('completed Windows Job evidence recovers its session without inspecting unrelated orphans', {
+  skip: process.platform !== 'win32',
+}, async (t) => {
+  const tracker = { kind: 'windows-job-v1', jobName: 'Local\\QuoternDev-old-desktop', proofToken: randomUUID() };
+  const { root, dir, record } = await staleDesktop(t, { status: 'cleanup-required', processTracker: tracker });
+  await mkdir(join(dir, 'jobs'));
+  await writeFile(join(dir, 'jobs/old-desktop.json'), JSON.stringify({
+    kind: tracker.kind, jobName: tracker.jobName, proofToken: tracker.proofToken,
+    sessionId: record.sessionId, mode: record.mode, pid: record.pid, worktree: record.worktree, startedAt: record.startedAt, status: 'ended',
+  }));
   const session = await createDevSession(root, 'desktop', {});
   assert.notEqual(session.record.sessionId, 'old-desktop');
 });
 
-test('Windows process evidence rejects orphaned descendants, reused ancestors and incomplete snapshots', () => {
-  const record = { pid: 900, startedAt: '2026-01-01T00:00:00Z', children: [{ pid: 901 }] };
-  const oldRoot = { pid: 10, parentPid: 4, startedAt: '2025-12-31T23:00:00Z' };
-  const processRow = (pid, parentPid, startedAt = '2026-01-01T00:00:01Z') => ({ pid, parentPid, startedAt });
-  assert.equal(windowsProcessEvidence(record, [oldRoot, processRow(11, 10)]), null);
-  for (const rows of [
-    [oldRoot, processRow(902, 901)], // direct child died, grandchild remains
-    [oldRoot, processRow(904, 903)], // both supervisor and intermediate ancestors died
-    [oldRoot, processRow(904, 903), processRow(903, 10, '2026-01-01T00:00:02Z')], // reused parent PID
-    [oldRoot, processRow(901, 10)], // reused child PID still blocks
-    [oldRoot, processRow(12, 10, null)],
-    [],
-  ]) assert.ok(windowsProcessEvidence(record, rows));
+test('tracked locks reject missing, corrupt and mismatched receipts even when marked stopped', {
+  skip: process.platform !== 'win32',
+}, async (t) => {
+  const tracker = { kind: 'windows-job-v1', jobName: 'Local\\QuoternDev-old-desktop', proofToken: randomUUID() };
+  const { root, dir, record } = await staleDesktop(t, { processTracker: tracker });
+  await assert.rejects(createDevSession(root, 'desktop', {}), /Job.*凭据/);
+  await mkdir(join(dir, 'jobs'));
+  const path = join(dir, 'jobs/old-desktop.json');
+  await writeFile(path, '{"status":');
+  await assert.rejects(createDevSession(root, 'desktop', {}), /凭据无法读取/);
+  const proof = { ...tracker, sessionId: record.sessionId, mode: record.mode, pid: record.pid,
+    worktree: record.worktree, startedAt: record.startedAt, status: 'ended' };
+  for (const patch of [{ proofToken: randomUUID() }, { sessionId: 'other' }, { mode: 'api' }, { status: 'ready' }]) {
+    await writeFile(path, JSON.stringify({ ...proof, ...patch }));
+    await assert.rejects(createDevSession(root, 'desktop', {}), /凭据.*不匹配/);
+  }
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
 });
 
 test('unknown lock contents are preserved instead of recursively removed', async (t) => {

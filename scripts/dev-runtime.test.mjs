@@ -6,8 +6,20 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { createDevSession } from './dev-instance.mjs';
+import { once } from 'node:events';
 
 const source = join(dirname(fileURLToPath(import.meta.url)), '..');
+function alive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+}
+async function guardianExited(root, mode) {
+  if (process.platform !== 'win32') return;
+  let record;
+  try { record = JSON.parse(await readFile(join(root, `.quotern-dev/${mode}.json`), 'utf8')); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  if (record.processTracker?.guardianPid) await until(() => !alive(record.processTracker.guardianPid), 'Job observer exited', 10000);
+}
 async function until(check, description, timeout = 25000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -26,11 +38,12 @@ async function start(t) {
     await until(() => child.exitCode != null || child.signalCode != null, 'supervisor cleanup', 10000);
     assert.equal(child.exitCode, 0);
   };
-  t.after(async () => { await stop(); await rm(root, { recursive: true, force: true }); });
+  t.after(async () => { await stop(); await guardianExited(root, 'cli'); await rm(root, { recursive: true, force: true }); });
   await mkdir(join(root, 'scripts'));
   await cp(join(source, 'scripts/dev.mjs'), join(root, 'scripts/dev.mjs'));
   await cp(join(source, 'scripts/dev-instance.mjs'), join(root, 'scripts/dev-instance.mjs'));
   await cp(join(source, 'scripts/dev-processes.mjs'), join(root, 'scripts/dev-processes.mjs'));
+  for (const file of ['dev-windows-job.mjs', 'dev-windows-job.ps1', 'dev-windows-job-host.mjs']) await cp(join(source, 'scripts', file), join(root, 'scripts', file));
   await writeFile(join(root, 'package.json'), '{"name":"quotern-dev-fixture","type":"module","private":true}');
   await mkdir(join(root, 'packages/cli'), { recursive: true });
   await cp(join(source, 'packages/cli/bin'), join(root, 'packages/cli/bin'), { recursive: true });
@@ -79,6 +92,10 @@ async function configAt(port) {
 
 test('real CLI/Vite instances proxy private identities and stopping one leaves the other serving', { timeout: 60000 }, async (t) => {
   const a = await start(t);
+  if (process.platform === 'win32') {
+    const record = JSON.parse(await readFile(join(a.root, '.quotern-dev/cli.json'), 'utf8'));
+    assert.equal(record.processTracker?.kind, 'windows-job-v1');
+  }
   const b = await start(t);
   assert.notEqual(a.config.apiPort, b.config.apiPort);
   assert.notEqual(a.config.uiPort, b.config.uiPort);
@@ -101,11 +118,12 @@ test('real CLI/Vite instances proxy private identities and stopping one leaves t
   assert.equal(stopped.exitCode, 0);
 });
 
-test('a Windows service parent that exits early cannot release ownership of possibly live descendants', {
+test('Windows Job refuses live detached descendants and permits recovery only after its process tree ends', {
   skip: process.platform !== 'win32', timeout: 20000,
 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'quotern-dev-orphan-'));
   let grandchildPid;
+  let unrelatedPid;
   let supervisor;
   t.after(async () => {
     if (supervisor?.connected) supervisor.send({ type: 'quotern-dev-stop' });
@@ -113,39 +131,142 @@ test('a Windows service parent that exits early cannot release ownership of poss
       const killer = spawn('taskkill.exe', ['/PID', String(grandchildPid), '/F'], { windowsHide: true, stdio: 'ignore' });
       await new Promise((resolve) => killer.once('exit', resolve));
     }
+    if (unrelatedPid && alive(unrelatedPid)) process.kill(unrelatedPid);
+    await guardianExited(root, 'api');
     await rm(root, { recursive: true, force: true });
   });
-  await mkdir(join(root, 'scripts'));
-  await mkdir(join(root, 'packages/cli/bin'), { recursive: true });
-  for (const file of ['dev.mjs', 'dev-instance.mjs', 'dev-processes.mjs']) await cp(join(source, 'scripts', file), join(root, 'scripts', file));
-  await writeFile(join(root, 'package.json'), '{"type":"module"}');
-  const builder = join(root, 'builder.cjs');
-  await writeFile(builder, 'process.exit(0)');
-  await writeFile(join(root, 'packages/cli/bin/quotern.js'), `
+  const runner = `
     import { spawn } from 'node:child_process';
-    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true, detached: true });
-    child.unref();
-    console.log(JSON.stringify({ fixtureGrandchild: child.pid }));
-    setTimeout(() => process.exit(0), 100);
-  `);
-  supervisor = spawn(process.execPath, [join(root, 'scripts/dev.mjs'), 'api'], {
-    windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, npm_execpath: builder },
+    import { once } from 'node:events';
+    import { createDevSession } from ${JSON.stringify(new URL('./dev-instance.mjs', import.meta.url).href)};
+    import { startWindowsJob } from ${JSON.stringify(new URL('./dev-windows-job.mjs', import.meta.url).href)};
+    const session = await createDevSession(process.argv[1], 'api', {});
+    const job = await startWindowsJob(session);
+    const child = spawn(process.execPath, ['-e', \`const {spawn}=require('node:child_process');
+      const orphan=spawn(process.execPath,['-e','setInterval(() => {},1000)'],{stdio:'ignore',detached:true,windowsHide:true});
+      console.log(orphan.pid);orphan.unref();setTimeout(()=>process.exit(0),100);\`], {
+      detached: true, windowsHide: true, stdio: ['ignore','pipe','pipe'],
+    });
+    let output=''; child.stdout.on('data',data=>output+=data);
+    await once(child,'exit');
+    await session.update({status:'cleanup-required',children:[{name:'fixture-parent',pid:child.pid}]});
+    console.log(JSON.stringify({fixtureGrandchild:Number(output.trim()),childrenEnded:await job.childrenEnded(100)}));
+    process.on('message',()=>process.exit(0));
+  `;
+  supervisor = spawn(process.execPath, ['--input-type=module', '-e', runner, root], {
+    windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
   let output = '';
+  let childrenEnded;
   supervisor.stdout.on('data', (data) => {
     output += data;
     const match = output.match(/"fixtureGrandchild":(\d+)/);
     if (match) grandchildPid = Number(match[1]);
+    if (match) childrenEnded = JSON.parse(output.trim()).childrenEnded;
   });
   supervisor.stderr.resume();
-  await until(() => supervisor.exitCode != null, 'early service exit', 10000);
-  assert.ok(grandchildPid);
+  await until(() => grandchildPid, 'tracked detached orphan ready', 10000);
+  assert.equal(childrenEnded, false);
+  assert.doesNotThrow(() => process.kill(grandchildPid, 0));
+  const unrelatedParent = spawn(process.execPath, ['-e', `const {spawn}=require('node:child_process');
+    const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore',windowsHide:true,detached:true});
+    console.log(child.pid);child.unref();setTimeout(()=>process.exit(0),100);`], {
+    detached: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let unrelatedOutput = '';
+  unrelatedParent.stdout.on('data', (data) => { unrelatedOutput += data; });
+  await once(unrelatedParent, 'exit');
+  unrelatedPid = Number(unrelatedOutput.trim());
+  assert.ok(unrelatedPid && alive(unrelatedPid));
   const record = JSON.parse(await readFile(join(root, '.quotern-dev/api.json'), 'utf8'));
+  await assert.rejects(readFile(join(root, `.quotern-dev/jobs/${record.sessionId}.json`)), { code: 'ENOENT' });
+  supervisor.kill('SIGKILL');
+  await until(() => supervisor.exitCode != null || supervisor.signalCode != null, 'supervisor killed', 10000);
+  assert.ok(grandchildPid);
   assert.equal(record.status, 'cleanup-required');
   const lease = JSON.parse(await readFile(join(root, '.quotern-dev/runtime.lock/owner.json'), 'utf8'));
   assert.equal(lease.sessionId, record.sessionId);
-  assert.doesNotThrow(() => process.kill(grandchildPid, 0));
-  await assert.rejects(createDevSession(root, 'api', {}), /后代|子进程|祖先|系统进程/);
+  // Some Node/libuv versions also kill descendants through an outer Job when
+  // their supervisor exits. The observer must handle either OS outcome.
+  if (alive(grandchildPid)) {
+    await assert.rejects(createDevSession(root, 'api', {}), /后代|子进程|Job/);
+    assert.equal(JSON.parse(await readFile(join(root, '.quotern-dev/runtime.lock/owner.json'), 'utf8')).sessionId, record.sessionId);
+    process.kill(grandchildPid);
+  }
+  grandchildPid = undefined;
+  await until(async () => {
+    try { return JSON.parse(await readFile(join(root, `.quotern-dev/jobs/${record.sessionId}.json`), 'utf8')).status === 'ended'; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  }, 'Job empty receipt');
+  await guardianExited(root, 'api');
+  const recovered = await createDevSession(root, 'api', {});
+  assert.notEqual(recovered.record.sessionId, record.sessionId);
+  assert.ok(alive(unrelatedPid), 'unrelated orphan was neither blocked on nor stopped');
+  await recovered.close();
+});
+
+test('losing the Windows Job observer never authorizes stale lock recovery', {
+  skip: process.platform !== 'win32', timeout: 20000,
+}, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'quotern-job-observer-loss-'));
+  const runner = `
+    import { createDevSession } from ${JSON.stringify(new URL('./dev-instance.mjs', import.meta.url).href)};
+    import { startWindowsJob } from ${JSON.stringify(new URL('./dev-windows-job.mjs', import.meta.url).href)};
+    const session=await createDevSession(process.argv[1],'api',{});
+    await startWindowsJob(session);
+    process.on('message',()=>{});
+    process.send(session.record);
+  `;
+  const supervisor = spawn(process.execPath, ['--input-type=module', '-e', runner, root], {
+    windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+  });
+  supervisor.stderr.resume();
+  let guardianPid;
+  t.after(async () => {
+    if (supervisor.exitCode == null && supervisor.signalCode == null) { supervisor.kill('SIGKILL'); await once(supervisor, 'exit'); }
+    if (guardianPid && alive(guardianPid)) process.kill(guardianPid);
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  const [record] = await once(supervisor, 'message', { signal: AbortSignal.timeout(10000) });
+  guardianPid = record.processTracker.guardianPid;
+  process.kill(guardianPid);
+  await until(() => !alive(guardianPid), 'observer terminated');
+  supervisor.kill('SIGKILL');
+  await once(supervisor, 'exit');
+  await assert.rejects(readFile(join(root, `.quotern-dev/jobs/${record.sessionId}.json`)), { code: 'ENOENT' });
+  await assert.rejects(createDevSession(root, 'api', {}), /监视进程异常|退出凭据/);
   assert.equal(JSON.parse(await readFile(join(root, '.quotern-dev/runtime.lock/owner.json'), 'utf8')).sessionId, record.sessionId);
-  assert.doesNotThrow(() => process.kill(grandchildPid, 0));
+});
+
+test('stopping during Windows Job setup cannot start a build after releasing ownership', {
+  skip: process.platform !== 'win32', timeout: 20000,
+}, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'quotern-job-stop-setup-'));
+  await mkdir(join(root, 'scripts'));
+  for (const file of ['dev.mjs', 'dev-instance.mjs', 'dev-processes.mjs', 'dev-windows-job.mjs', 'dev-windows-job.ps1', 'dev-windows-job-host.mjs']) {
+    await cp(join(source, 'scripts', file), join(root, 'scripts', file));
+  }
+  await writeFile(join(root, 'package.json'), '{"type":"module"}');
+  const builder = join(root, 'builder.cjs');
+  const marker = join(root, 'build-started');
+  await writeFile(builder, `require('node:fs').writeFileSync(${JSON.stringify(marker)},'unexpected build')`);
+  const supervisor = spawn(process.execPath, [join(root, 'scripts/dev.mjs'), 'api'], {
+    cwd: root, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], env: { ...process.env, npm_execpath: builder },
+  });
+  let stderr = '';
+  supervisor.stderr.on('data', (data) => { stderr += data; });
+  t.after(async () => {
+    if (supervisor.exitCode == null && supervisor.signalCode == null) { supervisor.kill('SIGKILL'); await once(supervisor, 'exit'); }
+    await guardianExited(root, 'api');
+    await rm(root, { recursive: true, force: true });
+  });
+  await until(async () => {
+    try { return JSON.parse(await readFile(join(root, '.quotern-dev/api.json'), 'utf8')).processTracker; }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+  }, 'Job setup persisted');
+  supervisor.send({ type: 'quotern-dev-stop' });
+  await once(supervisor, 'exit', { signal: AbortSignal.timeout(10000) });
+  assert.equal(supervisor.exitCode, 0, stderr);
+  await assert.rejects(readFile(marker), { code: 'ENOENT' });
+  await assert.rejects(readFile(join(root, '.quotern-dev/runtime.lock/owner.json')), { code: 'ENOENT' });
 });

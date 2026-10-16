@@ -29,10 +29,13 @@ function duration(until: number) {
 }
 
 function windowLabel(window: QuotaWindow) {
+  const labels: Record<string, string> = { '月度额度': '月限额', '每日额度': '日限额', 'Opus 周限额': 'Opus 模型周限额' };
   const period = /^(\d+(?:\.\d+)?)\s*([hd])$/i.exec(window.label);
   const label = period ? period[1] === '7' && period[2].toLowerCase() === 'd' ? '周限额'
-    : `${period[1]} ${period[2].toLowerCase() === 'h' ? '小时' : '天'}额度` : window.label;
-  return [window.groupLabel, label].filter(Boolean).join(' ');
+    : `${period[1]} ${period[2].toLowerCase() === 'h' ? '小时' : '天'}限额`
+    : (labels[window.label]
+      ?? window.label.replace(/^(\d+(?:\.\d+)?)\s*小时额度$/, '$1 小时限额'));
+  return /^opus$/i.test(window.groupLabel ?? '') ? `Opus 模型${label}` : [window.groupLabel, label].filter(Boolean).join(' ');
 }
 
 function paceLabel(analysis: QuotaAnalysis) {
@@ -110,7 +113,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
     : provider.status === 'expired' ? '登录已过期，请重新登录'
       : provider.stale ? '读数可能已过期'
         : provider.message ?? (provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 100) ? '额度已用尽'
-          : provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 90) ? '额度接近上限' : compact ? '暂未提供可展示的额度读数' : null);
+          : compact ? '暂未提供可展示的额度读数' : null);
   const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
   const busy = provider.refreshing || refreshing;
   const lastQuery = provider.queriedAt ?? provider.fetchedAt;

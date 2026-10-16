@@ -1,4 +1,5 @@
 import { mergeLocalEvidence } from '../local-metrics.js';
+import { mergeTokenQuality } from '../token-quality.js';
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -106,6 +107,9 @@ export function sumTokenTotals(a: TokenTotals, b: TokenTotals): TokenTotals {
     ...(a.local_metrics || b.local_metrics
       ? { local_metrics: mergeLocalEvidence(a.local_metrics, b.local_metrics) }
       : {}),
+    ...(a.token_quality || b.token_quality
+      ? { token_quality: mergeTokenQuality(a.token_quality, b.token_quality) }
+      : {}),
   };
 }
 
@@ -172,6 +176,7 @@ export function bucketsFromState(
     total_tokens: b.total_tokens,
     conversation_count: b.conversation_count,
     ...(b.local_metrics ? { local_metrics: b.local_metrics } : {}),
+    ...(b.token_quality ? { token_quality: b.token_quality } : {}),
   }));
   return alignUnknownIntoDominant(buckets);
 }

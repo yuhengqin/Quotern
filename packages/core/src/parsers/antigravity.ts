@@ -304,6 +304,7 @@ async function parseAntigravityFile(opts: {
         reasoning_output_tokens: reasoningTokens,
         total_tokens: total,
         conversation_count: 1,
+        token_quality: 'estimated',
       };
       accumulateBucket(
         bucketState,

@@ -3,7 +3,8 @@ import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { DashboardSessionCards } from '@/components/DashboardSessionCards';
-import type { SessionMetrics } from 'quotern-core';
+import type { SessionMetrics, UsageReport } from 'quotern-core';
+import { CostExplanationLabel } from '@/components/CostExplanationLabel';
 import {
   buildUsageMetricTrendValues,
   type UsageMetricTrendPoint,
@@ -35,6 +36,9 @@ interface DashboardOverviewCardProps {
   onSelectDate?: (date: string) => void;
   /** Local CLI/Desktop only: show request count + cache hit captions. */
   showLocalMetrics?: boolean;
+  costReport?: UsageReport | null;
+  costExplanationLoading?: boolean;
+  costExplanationError?: boolean;
 }
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
@@ -49,6 +53,9 @@ export function DashboardOverviewCard({
   selectedDate = null,
   onSelectDate,
   showLocalMetrics = false,
+  costReport = null,
+  costExplanationLoading = false,
+  costExplanationError = false,
 }: DashboardOverviewCardProps) {
   const metricTrendValues = useMemo(
     () => buildUsageMetricTrendValues(metricTrendRows),
@@ -61,18 +68,24 @@ export function DashboardOverviewCard({
     ? cacheHitRateFromSummary(summary)
     : null;
   const reserveCaption = showLocalMetrics;
+  const showCostTrend = !showLocalMetrics || (costReport !== null && costReport.filters.sources.length === 0 && costReport.summary.costExplanation.unpricedTokens === 0);
   const metrics = [
     {
       id: 'cost',
       label: '预估费用',
-      value: summary.totalCostUsd,
+      value: costReport?.summary.knownCostUsd ?? summary.totalCostUsd,
       format: formatUsd,
       exactFormat: formatUsd,
-      caption: null as string | null,
+      caption:
+        costReport && costReport.summary.costExplanation.unpricedTokens > 0
+          ? '部分用量未计价'
+          : costReport && costReport.summary.costExplanation.defaultPricedTokens > 0
+            ? '含默认价格估算'
+            : null as string | null,
       trend: {
-        comparison: metricTrends.totalCostUsd,
+        comparison: showCostTrend ? metricTrends.totalCostUsd : null,
         display: 'percent' as const,
-        values: metricTrendValues.costUsd,
+        values: showCostTrend ? metricTrendValues.costUsd : [],
       },
     },
     {
@@ -134,7 +147,13 @@ export function DashboardOverviewCard({
           >
             <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
               <div className="flex h-5 min-w-0 items-center justify-between gap-2">
-                {metric.id === 'total-tokens' ? (
+                {metric.id === 'cost' && showLocalMetrics ? (
+                  <CostExplanationLabel
+                    report={costReport}
+                    loading={costExplanationLoading}
+                    error={costExplanationError}
+                  />
+                ) : metric.id === 'total-tokens' ? (
                   <TotalTokenLabel
                     showRequestHelp={showLocalMetrics}
                     summary={summary}
@@ -157,12 +176,22 @@ export function DashboardOverviewCard({
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
                 <div className="min-w-0">
-                  <NestedAnimatedValue
-                    exactFormat={metric.exactFormat}
-                    format={metric.format}
-                    label={metric.label}
-                    value={metric.value}
-                  />
+                  {metric.id === 'cost' && showLocalMetrics && !costReport ? (
+                    <div aria-label={costExplanationLoading ? '预估费用加载中' : '预估费用暂不可用'} className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-muted">
+                      —
+                    </div>
+                  ) : metric.id === 'cost' && costReport && costReport.summary.tokens > 0 && costReport.summary.costExplanation.unpricedTokens >= costReport.summary.tokens ? (
+                    <div aria-label="预估费用未知" className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums" title="未知">
+                      未知
+                    </div>
+                  ) : (
+                    <NestedAnimatedValue
+                      exactFormat={metric.exactFormat}
+                      format={metric.format}
+                      label={metric.label}
+                      value={metric.value}
+                    />
+                  )}
                   {reserveCaption ? (
                     <p className="mt-0.5 h-4 truncate text-[10px] leading-4 text-muted tabular-nums">
                       {metric.caption ?? '\u00a0'}

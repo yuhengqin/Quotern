@@ -1,4 +1,5 @@
 import { mergeLocalEvidence, localEvidence } from '../local-metrics.js';
+import { mergeTokenQuality } from '../token-quality.js';
 import type { QueueBucket } from '../types.js';
 
 export const UNKNOWN_MODEL = 'unknown';
@@ -27,6 +28,9 @@ function addBucketTotals(a: QueueBucket, b: QueueBucket): QueueBucket {
     conversation_count: a.conversation_count + b.conversation_count,
     ...(a.local_metrics || b.local_metrics
       ? { local_metrics: mergeLocalEvidence(a.local_metrics, b.local_metrics) }
+      : {}),
+    ...(a.token_quality || b.token_quality
+      ? { token_quality: mergeTokenQuality(a.token_quality, b.token_quality) }
       : {}),
     ...(a.reported_cost_usd != null || b.reported_cost_usd != null
       ? {

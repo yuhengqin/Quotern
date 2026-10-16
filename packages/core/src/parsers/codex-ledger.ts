@@ -22,6 +22,7 @@ import { toUtcHalfHourStart } from '../queue/keys.js';
 import { UNKNOWN_MODEL } from '../queue/align-unknown.js';
 import { accumulateBucket, computeTotalTokens, type BucketAccumulator } from './shared.js';
 import { queryDbJson, readSqliteWithSnapshot, sqliteTableExists } from './sqlite.js';
+import { logicalCodexPath } from './codex-log-reader.js';
 
 export const CODEX_LEDGER_COLLECTOR = 'codex-ledger';
 
@@ -215,6 +216,8 @@ export function loadCodexLedgerThreads(opts: LoadCodexLedgerOptions): LoadCodexL
 
 export interface ReconcileCodexLedgerOptions {
   ledgerTotals: Record<string, { tokens: number }>;
+  ledgerReadings?: Record<string, number>;
+  onGap?: (sessionId: string, gap: number) => void;
   jsonlEmitted: number;
   jsonlLifetime: number | null;
   jsonlObserved: number;
@@ -236,7 +239,7 @@ function scanForThread(
   scans: ReadonlyMap<string, CodexRolloutScan>,
 ): CodexRolloutScan {
   if (thread.rolloutPath) {
-    const byPath = scans.get(basename(thread.rolloutPath));
+    const byPath = scans.get(basename(logicalCodexPath(thread.rolloutPath)));
     if (byPath) return byPath;
   }
   if (thread.id) {
@@ -261,6 +264,8 @@ export function reconcileCodexLedgerThread(
 ): boolean {
   const seen = Object.prototype.hasOwnProperty.call(opts.ledgerTotals, thread.id);
   const previous = opts.ledgerTotals[thread.id]?.tokens ?? 0;
+  const lastLedger = opts.ledgerReadings ? opts.ledgerReadings[thread.id] : previous;
+  if (opts.ledgerReadings) opts.ledgerReadings[thread.id] = thread.tokensUsed;
   const lifetimeFloor = opts.jsonlLifetime ?? 0;
 
   // Upgrade: this rollout was counted before ledger watermarks existed.
@@ -272,7 +277,7 @@ export function reconcileCodexLedgerThread(
     return false;
   }
 
-  const isReset = thread.tokensUsed > 0 && thread.tokensUsed < previous;
+  const isReset = thread.tokensUsed > 0 && lastLedger !== undefined && thread.tokensUsed < lastLedger;
   const budget = isReset ? thread.tokensUsed : Math.max(0, thread.tokensUsed - previous);
   let gap: number;
   if (isReset) {
@@ -307,6 +312,7 @@ export function reconcileCodexLedgerThread(
         ...body,
         total_tokens: computeTotalTokens(body),
         conversation_count: previous === 0 || isReset ? 1 : 0,
+        token_quality: 'ledger',
       };
       accumulateBucket(
         opts.bucketState,
@@ -318,6 +324,7 @@ export function reconcileCodexLedgerThread(
         CODEX_LEDGER_COLLECTOR,
       );
       wrote = true;
+      opts.onGap?.(thread.id, gap);
     }
   }
 
@@ -328,6 +335,8 @@ export function reconcileCodexLedgerThread(
 export interface ApplyCodexLedgerOptions {
   dbMtimes: Record<string, number>;
   ledgerTotals: Record<string, { tokens: number }>;
+  ledgerReadings?: Record<string, number>;
+  onGap?: (sessionId: string, gap: number) => void;
   /** Rollout basenames present in the file cursor before this round. */
   priorRolloutNames: ReadonlySet<string>;
   /** Keyed by rollout basename. */
@@ -363,10 +372,12 @@ export function applyCodexLedger(opts: ApplyCodexLedgerOptions): ApplyCodexLedge
   if (!loaded.error) {
     for (const thread of loaded.threads) {
       const scan = scanForThread(thread, opts.scans);
-      const rolloutName = thread.rolloutPath ? basename(thread.rolloutPath) : '';
+      const rolloutName = thread.rolloutPath ? basename(logicalCodexPath(thread.rolloutPath)) : '';
       if (
         reconcileCodexLedgerThread(thread, {
           ledgerTotals: opts.ledgerTotals,
+          ledgerReadings: opts.ledgerReadings,
+          onGap: opts.onGap,
           jsonlEmitted: scan.emitted,
           jsonlLifetime: scan.lifetime,
           jsonlObserved: scan.observed,

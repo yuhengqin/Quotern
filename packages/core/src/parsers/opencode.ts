@@ -41,6 +41,7 @@ export function normalizeOpencodeTokens(
     output_tokens: output,
     reasoning_output_tokens: reasoning,
     total_tokens: total,
+    token_quality: 'recorded',
     local_metrics: localEvidence(
       0,
       false,
@@ -153,6 +154,7 @@ function ingestMessage(
     {
       ...delta,
       conversation_count: 1,
+      token_quality: 'recorded',
       local_metrics: localEvidence(
         messageKey && !prev ? 1 : 0,
         !!messageKey,

@@ -37,6 +37,8 @@ export interface LookupResult {
   hit: boolean;
   source: string;
   value: ModelPricingRates | null;
+  matchedModel?: string;
+  table?: 'overlay' | 'builtin';
 }
 
 const SUFFIX_STRIP_PATTERNS = [
@@ -141,12 +143,12 @@ function buildDotRestoredModel(model: string): string {
 function lookupExactCaseInsensitive(
   table: Record<string, ModelPricingRates>,
   model: string,
-): ModelPricingRates | null {
+): { key: string; value: ModelPricingRates } | null {
   if (!table || !model) return null;
-  if (table[model]) return table[model];
+  if (table[model]) return { key: model, value: table[model]! };
   const lower = model.toLowerCase();
   for (const key of Object.keys(table)) {
-    if (key.toLowerCase() === lower) return table[key]!;
+    if (key.toLowerCase() === lower) return { key, value: table[key]! };
   }
   return null;
 }
@@ -154,12 +156,12 @@ function lookupExactCaseInsensitive(
 function lookupContainedExactCaseInsensitive(
   table: Record<string, ModelPricingRates>,
   model: string,
-): ModelPricingRates | null {
+): { key: string; value: ModelPricingRates } | null {
   if (!table || !model) return null;
   const lower = model.toLowerCase();
   const keys = Object.keys(table).sort((a, b) => b.length - a.length);
   for (const key of keys) {
-    if (lower.includes(key.toLowerCase())) return table[key]!;
+    if (lower.includes(key.toLowerCase())) return { key, value: table[key]! };
   }
   return null;
 }
@@ -204,17 +206,19 @@ export function lookupPricing(
 
   const resolveRef = (ref: string): LookupResult | null => {
     const value = resolveExactRate(ref, exact, extra);
-    return value ? { hit: true, source: 'alias', value } : null;
+    return value ? { hit: true, source: 'alias', value, matchedModel: ref } : null;
   };
 
   // 1. exact
   if (exact[lookupModel]) {
-    return { hit: true, source: 'exact', value: exact[lookupModel]! };
+    return { hit: true, source: 'exact', value: exact[lookupModel]!, matchedModel: lookupModel };
   }
   const dotExact = lookupExactCaseInsensitive(exact, dotForm);
-  if (dotExact) return { hit: true, source: 'exact-dot', value: dotExact };
+  if (dotExact) return { hit: true, source: 'exact-dot', value: dotExact.value, matchedModel: dotExact.key };
   const containedExact = lookupContainedExactCaseInsensitive(exact, dotForm);
-  if (containedExact) return { hit: true, source: 'exact-contained', value: containedExact };
+  if (containedExact) {
+    return { hit: true, source: 'exact-contained', value: containedExact.value, matchedModel: containedExact.key };
+  }
 
   // 2. source-scoped alias
   if (source && data.sourceAlias?.[source.toLowerCase()]?.[lookupModel]) {
@@ -232,7 +236,7 @@ export function lookupPricing(
   // 4. suffix strip (reasoning-effort suffixes: -high / -low / -fast …)
   const stripped = stripReasoningSuffix(lookupModel);
   if (stripped !== lookupModel && exact[stripped]) {
-    return { hit: true, source: 'suffix-strip', value: exact[stripped]! };
+    return { hit: true, source: 'suffix-strip', value: exact[stripped]!, matchedModel: stripped };
   }
 
   // 5. provider-prefix strip — exact table is the source of truth, so an
@@ -252,7 +256,7 @@ export function lookupPricing(
       }
     }
   }
-  if (best) return { hit: true, source: 'prefix-strip', value: exact[best]! };
+  if (best) return { hit: true, source: 'prefix-strip', value: exact[best]!, matchedModel: best };
 
   // 6. fuzzy
   if (Array.isArray(data.fuzzy)) {
@@ -262,7 +266,7 @@ export function lookupPricing(
       if (!rate) continue;
       const needle = match.toLowerCase();
       if (lower.includes(needle) || (dotForm && dotForm.includes(needle))) {
-        return { hit: true, source: 'fuzzy', value: rate };
+        return { hit: true, source: 'fuzzy', value: rate, matchedModel: ref };
       }
     }
   }
@@ -271,7 +275,7 @@ export function lookupPricing(
   for (const key of getSortedKeys(exact)) {
     const keyLower = key.toLowerCase();
     if (lower.includes(keyLower) || (dotForm && dotForm.includes(keyLower))) {
-      return { hit: true, source: 'fuzzy-litellm', value: exact[key]! };
+      return { hit: true, source: 'fuzzy-litellm', value: exact[key]!, matchedModel: key };
     }
   }
 
@@ -291,15 +295,19 @@ export function lookupPricingStacked(
     const remote = lookupPricing(model, overlay, source, {
       resolveExactExtra: builtin.exact,
     });
-    if (remote.hit) return remote;
+    if (remote.hit) {
+      const usesBuiltinRate = remote.matchedModel !== undefined &&
+        !Object.prototype.hasOwnProperty.call(overlay.exact, remote.matchedModel);
+      return { ...remote, table: usesBuiltinRate ? 'builtin' : 'overlay' };
+    }
   }
 
   const local = lookupPricing(model, builtin, source);
-  if (local.hit) return local;
+  if (local.hit) return { ...local, table: 'builtin' };
 
   const fallback = overlay?.default ?? builtin.default;
   if (fallback) {
-    return { hit: true, source: 'default', value: fallback };
+    return { hit: true, source: 'default', value: fallback, table: overlay?.default ? 'overlay' : 'builtin' };
   }
 
   return { hit: false, source: 'miss', value: null };

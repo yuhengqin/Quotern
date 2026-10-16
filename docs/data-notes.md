@@ -44,6 +44,12 @@ Codex JSONL 提供拆分明细，线程数据库提供生命周期累计量。[c
 
 证据：[账本补差测试](../packages/core/test/codex-ledger.test.ts)。
 
+Codex 计量读取 `sessions` 和 `archived_sessions` 中的 `.jsonl` / `.jsonl.zst`。同目录双副本优先普通文件，共用逻辑路径；游标偏移始终指向解压后的字节。格式切换或归档移动依赖事件身份去重，损坏压缩文件报错且不提交半轮游标。消息/会话元数据采集仍沿用独立的普通 JSONL 入口，本次没有扩大其压缩归档覆盖范围。
+
+独立 compaction 通过 `token_usage_record.response_id` 和 `compacted.compaction_response_id` 配对；仅匹配标记的用量进入统计，状态跨扫描保存。最新请求已被推进的 `token_count` 覆盖时不另加一次；独立用量不改变普通累计差分的基线。首次升级会重放旧文件前缀补识别 compaction，已记录普通事件不重复输出。
+
+compaction 与账本采取保守重叠口径：账本先补出差额时，可将该额度分配给同线程待配对请求；标记晚到只输出剩余量，部分剩余仍标为账本补齐，不能恢复精确输入/输出/请求数。旧游标升级也用已记账本水位超过普通用量的部分抵扣。账本没有 response ID，无法证明差额属于哪个请求；在请求记录出现之前已经补出的差额，以及旧数据无法恢复的关联，是这一口径的限制。账本实际读数与“普通用量 + 独立 compaction + 补差”的水位分别保存，避免把账本暂时落后误判为重置。
+
 数据源目录支持范围要逐个确认。当前 [WorkBuddy parser](../packages/core/src/parsers/workbuddy.ts) 读取单个 `WORKBUDDY_HOME`（默认 `~/.workbuddy`）及其 `workbuddy.db`，没有同时合并两个安装目录的逻辑。其他 Agent 的多目录支持不能直接类推到 WorkBuddy。
 
 ## Token 总量与展示拆分
@@ -96,6 +102,12 @@ input_tokens + output_tokens + cached_input_tokens
 `auto`、`composer` 等名称要按来源解释，不能仅凭宽泛子串猜成另一供应商的模型。更新价格时保留人工条目并核对覆盖表行为，详见 [pricing.test.ts](../packages/core/test/pricing.test.ts)。
 
 价格覆盖表在启动时先读磁盘缓存，再请求一次 Quotern 仓库中的 `packages/core/src/pricing/pricing.json`；失败保留可用缓存或内置表。浏览器价格页使用同一地址，网络不可用、仓库无法公开读取或响应无效时展示内置价格表。`ttlMs` 配置存在不代表定时轮询已经启用。覆盖表变化后需要重建聚合费用，展示值是当前计价结果，不是冻结的历史发票。
+
+费用卡的说明按当前日期和 Agent 筛选读取 `/functions/tud-usage-report`，展示来源报告金额、费率估算、默认价格占比、未计价 Token、匹配模型/方式和表来源。价格日期来自表内发布时间元数据，缺少时明确显示未知，不使用进程加载时间。已有费用数值算法保持不变；报表另提供 `costUsd=null` 和 `knownCostUsd` 区分不完整价格与已知小计。
+
+本地费用卡金额与说明共用报表的已计价小计，加载或失败时显示占位，全部未计价时显示“未知”。Agent 筛选后的旧趋势数据按 Token 占比分摊费用，不能作为各模型费率汇总，因此费用卡不再用该比例生成筛选后的金额、迷你趋势和比较徽标；其他趋势图仍沿用原有口径。异步说明绑定筛选条件及概览数据版本，刷新或快速切回旧筛选时不会展示过期报告。
+
+桶的可选 `token_quality` 独立记录 `recorded`（日志字段）、`estimated`（文本估算）、`ledger`（无完整拆分的补差）或 `mixed`。仅在解析器有明确证据的入口标记，缺字段的旧记录在报表中归 `unknown`；合并不同来源或已知与未知证据时归 `mixed`，不事后猜测明细比例。
 
 价格页默认“最新旗舰”，并保存用户的排序选择。`pricing.json` 的 `model_metadata` 按定价 ID 保存 `release_date`、`release_date_source` 和人工维护的 `featured`；`pnpm sync:pricing` 同步 models.dev 的首次发布日期并保留主推标记。手动校正日期时把 `release_date_source` 改为官方公告链接，同步会保留该日期；新型号替代旧型号时需要撤销旧条目的主推标记，同一个型号只选一个主要版本。主推模型排在前面，各组按发布日期降序，未知或无效日期排在所属组末尾。发布日期与价格表更新时间含义不同，不得相互代替；已发布远端表比内置表旧时，页面保留较新的内置表。
 

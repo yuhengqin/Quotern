@@ -19,6 +19,7 @@ import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useCostExplanation } from '@/hooks/useCostExplanation';
 import { useSessionMetrics } from '@/hooks/useSessionMetrics';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { projectDashboardForDate } from '@/lib/dashboard-data';
@@ -94,6 +95,7 @@ export function DashboardPage() {
   const { data, error, loading, refreshing, reload } =
     useDashboardData(rangeDays, selectedDate, customRange);
   const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing);
+  const costExplanation = useCostExplanation(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing && range === dataRange, data);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
@@ -344,6 +346,9 @@ export function DashboardPage() {
         <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
+            costReport={costExplanation.report}
+            costExplanationLoading={costExplanation.loading}
+            costExplanationError={costExplanation.error}
             belowMetrics={
               <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />
             }

@@ -28,6 +28,16 @@ pnpm build:desktop:win
 
 ## 测试
 
+### 订阅卡片 Desktop mock 预览
+
+先启动本地 `quota-mock-preview.mjs`，再在 worktree 根运行 `corepack pnpm dev:desktop:quota`。默认连接 `http://127.0.0.1:5173/?scene=mixed`，mock 健康接口必须声明当前 checkout；其他端口可通过当前命令环境中的 `QUOTERN_QUOTA_PREVIEW_URL` 指定本机根地址。
+
+此入口使用真实 `DesktopWindow` 与订阅卡片，但不启动 Core 采集、订阅读取器、宠物、通知或更新服务；preload 仅提供窗口控件。浏览器 profile 位于 `.quotern-dev/electron/quota-preview`，与普通开发和正式数据分开；打包环境或非隔离启动会拒绝运行。
+
+本次 mock 源码及场景说明位于 `C:/Users/Admin/.codex/visualizations/2026/10/16/01a1438e-e643-7760-9601-be32cca26e3e`。默认 12 张卡同时展示正常、接近上限、耗尽、登录失效、读取失败、无历史、日限额最短、最短周期采样不足及独立模型池；下拉菜单仍可统一切换场景。刷新只更新虚构读数的查询时间。
+
+### 自动化检查
+
 使用 Node.js 22.13+（测试会加载 `node:sqlite`），先在仓库根安装依赖并构建 Core：
 
 ```bash

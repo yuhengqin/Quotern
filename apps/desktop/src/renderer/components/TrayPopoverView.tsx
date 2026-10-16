@@ -441,7 +441,7 @@ export function TrayPopoverView() {
 
       <div className="tray-popover__body">
         <div ref={contentRef} className="px-4 pb-4">
-          <SubscriptionUsageGrid className="mb-3 grid-cols-1 gap-2.5" />
+          <SubscriptionUsageGrid className="mb-3 gap-2.5" singleColumn />
           {loading ? (
             <div className="relative isolate min-h-40">
               <DashboardRangeSyncOverlay visible />

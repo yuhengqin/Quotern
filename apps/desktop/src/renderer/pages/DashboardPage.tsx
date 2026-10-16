@@ -345,7 +345,7 @@ export function DashboardPage() {
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
             belowMetrics={
-              <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />
+              <SubscriptionUsageGrid className="mt-4 gap-2.5" />
             }
             heatmapDays={visibleHeatmapDays}
             metricTrendPeriodLabel={metricTrendPeriodLabel}

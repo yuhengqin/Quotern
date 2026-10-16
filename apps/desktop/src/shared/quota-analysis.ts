@@ -45,7 +45,7 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
   const displayLabel = id === 'zcode' && raw.provider === 'bigmodel' ? 'ZCode CN' : id === 'zcode' && raw.provider === 'zai' ? 'ZCode Global' : id === 'minimax' && raw.region === 'mainland' ? 'MiniMax CN' : label;
   return { id, label: displayLabel, status: typeof raw.status === 'string' ? raw.status : 'unavailable',
     planLabel: typeof raw.planLabel === 'string' ? raw.planLabel : null,
-    fetchedAt: timestamp(raw.fetchedAt), stale: raw.stale === true,
+    fetchedAt: timestamp(raw.fetchedAt), queriedAt: null, stale: raw.stale === true,
     message: typeof raw.message === 'string' ? raw.message : null, windows, details,
     resetCredits: finite(raw.resetCredits) && raw.resetCredits >= 0 ? raw.resetCredits : null,
     refreshing: false, nextRefreshAt: null, analyses: {}, service: null };

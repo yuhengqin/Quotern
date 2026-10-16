@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QuotaManager, type QuotaNotification } from './quota-manager';
 import { markQuotaIdentity } from './quota-identity';
-import { DEFAULT_QUOTA_PREFERENCES } from '../shared/quota';
+import { DEFAULT_QUOTA_PREFERENCES, type QuotaSample } from '../shared/quota';
 
 const start = 1800000000;
 function fixture() {
@@ -144,5 +144,62 @@ test('expiration timestamps never promise a reset in threshold notifications', a
   await manager.refresh('manual');
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].resetsAt, null);
+  manager.dispose();
+});
+
+test('query completion time advances for cached and failed reads without changing valid sample time', async () => {
+  let time = start, fail = false;
+  const history: Record<string, QuotaSample[]> = {};
+  const manager = new QuotaManager({ now: () => time, monotonic: () => time * 1000,
+    readers: [{ id: 'codex', label: 'Codex', interval: 180, read: async () => markQuotaIdentity(fail
+      ? { status: 'unavailable', message: 'offline' }
+      : { status: 'ready', fetchedAt: start, fiveHour: { usedPercent: 60, resetsAt: start + 18000 } }, 'one') }],
+    store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history, notice: null,
+      savePreferences: async () => {}, saveHistory: async () => {} }, notify: () => {} });
+  assert.equal(manager.getState().providers[0].queriedAt, null);
+  await manager.refresh('manual');
+  assert.equal(manager.getState().providers[0].queriedAt, start);
+  time += 15;
+  await manager.refresh('manual');
+  let provider = manager.getState().providers[0];
+  assert.equal(provider.queriedAt, time);
+  assert.equal(provider.fetchedAt, start);
+  assert.equal(Object.values(history)[0].length, 1);
+  fail = true; time += 15;
+  await manager.refresh('manual');
+  provider = manager.getState().providers[0];
+  assert.equal(provider.queriedAt, time);
+  assert.equal(provider.fetchedAt, start);
+  assert.equal(provider.stale, true);
+  assert.equal(Object.values(history)[0].length, 1);
+  manager.dispose();
+});
+
+test('a manual refresh after a completed request is not silently skipped by the background debounce', async () => {
+  const f = fixture();
+  await f.manager.refresh('manual');
+  f.set({ time: start + 1 });
+  await f.manager.refresh('manual');
+  assert.equal(f.calls(), 2);
+  f.manager.dispose();
+});
+
+test('concurrent manual refreshes share the request and publish its completion time', async () => {
+  let time = start, calls = 0, finish!: (value: unknown) => void;
+  const manager = new QuotaManager({ now: () => time, monotonic: () => time * 1000,
+    readers: [{ id: 'codex', label: 'Codex', interval: 180, read: () => {
+      calls++; return new Promise(resolve => { finish = resolve; });
+    } }],
+    store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history: {}, notice: null,
+      savePreferences: async () => {}, saveHistory: async () => {} }, notify: () => {} });
+  const first = manager.refresh('manual');
+  const second = manager.refresh('manual');
+  assert.equal(calls, 1);
+  assert.equal(manager.getState().providers[0].queriedAt, null);
+  time += 5;
+  finish(markQuotaIdentity({ status: 'ready', fetchedAt: start,
+    fiveHour: { usedPercent: 60, resetsAt: start + 18000 } }, 'one'));
+  await Promise.all([first, second]);
+  assert.equal(manager.getState().providers[0].queriedAt, time);
   manager.dispose();
 });

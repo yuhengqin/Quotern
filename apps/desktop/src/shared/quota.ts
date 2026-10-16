@@ -34,6 +34,8 @@ export interface QuotaProviderState {
   status: string;
   planLabel: string | null;
   fetchedAt: number | null;
+  /** Latest completed reader query, including cached readings and failures. */
+  queriedAt: number | null;
   stale: boolean;
   message: string | null;
   windows: QuotaWindow[];

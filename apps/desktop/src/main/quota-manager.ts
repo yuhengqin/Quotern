@@ -104,7 +104,7 @@ export class QuotaManager {
     if (slot.pending) return slot.pending;
     const mono = this.mono();
     if (slot.attempted !== null) {
-      if (mono - slot.attempted < 10000) return Promise.resolve();
+      if (reason !== 'manual' && mono - slot.attempted < 10000) return Promise.resolve();
       if (reason !== 'manual' && mono < slot.blockedUntil) return Promise.resolve();
       if (reason === 'periodic' && mono - slot.attempted < this.interval(slot) * 1000) return Promise.resolve();
       if (reason === 'interaction' && mono - slot.attempted < Math.min(slot.reader.interval, 60) * 1000) return Promise.resolve();
@@ -118,6 +118,7 @@ export class QuotaManager {
       catch { raw = { status: 'temporarily-unavailable', message: '暂时无法读取额度，请稍后重试' }; }
       if (this.disposed || this.paused || generation !== this.generation || slotGeneration !== slot.generation || !this.enabled(slot)) return;
       const normalized = normalizeQuotaSnapshot(slot.reader.id, slot.reader.label, raw);
+      normalized.queriedAt = this.now();
       const identity = quotaIdentity(raw);
       if (normalized.stale && !identity) {
         // An old reader may retain data without proving its account. Never promote it
@@ -132,7 +133,7 @@ export class QuotaManager {
         const retry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : Math.min(1800, 120 * 2 ** Math.min(slot.failures - 1, 4)));
         slot.blockedUntil = Math.max(slot.blockedUntil, this.mono() + Math.max(1, Math.min(3600, retry)) * 1000);
         if (identity && identity === slot.identity && !normalized.windows.length && !normalized.details.length && slot.state.fetchedAt !== null) {
-          slot.state = { ...slot.state, stale: true, message: normalized.message, refreshing: true, analyses: {} };
+          slot.state = { ...slot.state, queriedAt: normalized.queriedAt, stale: true, message: normalized.message, refreshing: true, analyses: {} };
           return;
         }
       } else { slot.failures = 0; slot.blockedUntil = 0; }

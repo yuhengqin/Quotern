@@ -20,7 +20,7 @@ function clock(at: number) { return new Date(at * 1000).toLocaleTimeString('zh-C
 function queryDate(at: number, now = new Date()) {
   const date = new Date(at * 1000);
   return date.toDateString() === now.toDateString()
-    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
     : date.toLocaleDateString('zh-CN');
 }
 function duration(until: number) {
@@ -113,6 +113,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
           : provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 90) ? '额度接近上限' : compact ? '暂未提供可展示的额度读数' : null);
   const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
   const busy = provider.refreshing || refreshing;
+  const lastQuery = provider.queriedAt ?? provider.fetchedAt;
   const refresh = async () => {
     try { setError(null); setRefreshing(true); await window.tud.quota.refresh(provider.id); }
     catch { setError('刷新失败，请稍后重试'); }
@@ -201,7 +202,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
                   {compact && provider.status === 'expired' && <p className="text-xs text-muted">请在 {provider.label} 客户端重新登录，再刷新这里的额度。</p>}
                   {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">当前使用自定义模型服务，无法读取官方订阅额度。</p>}
                   <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
-                    <div className="flex flex-wrap justify-between gap-2"><dt>最近查询</dt><dd>{provider.fetchedAt ? queryDate(provider.fetchedAt) : busy ? '正在查询' : '暂无记录'}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>最近查询</dt><dd>{lastQuery !== null ? queryDate(lastQuery) : busy ? '正在查询' : '暂无记录'}</dd></div>
                   </dl>
                 </Modal.Body>
                 <Modal.Footer>

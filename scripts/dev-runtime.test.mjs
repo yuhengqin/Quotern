@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createDevSession } from './dev-instance.mjs';
 
 const source = join(dirname(fileURLToPath(import.meta.url)), '..');
 async function until(check, description, timeout = 25000) {
@@ -29,6 +30,7 @@ async function start(t) {
   await mkdir(join(root, 'scripts'));
   await cp(join(source, 'scripts/dev.mjs'), join(root, 'scripts/dev.mjs'));
   await cp(join(source, 'scripts/dev-instance.mjs'), join(root, 'scripts/dev-instance.mjs'));
+  await cp(join(source, 'scripts/dev-processes.mjs'), join(root, 'scripts/dev-processes.mjs'));
   await writeFile(join(root, 'package.json'), '{"name":"quotern-dev-fixture","type":"module","private":true}');
   await mkdir(join(root, 'packages/cli'), { recursive: true });
   await cp(join(source, 'packages/cli/bin'), join(root, 'packages/cli/bin'), { recursive: true });
@@ -115,13 +117,14 @@ test('a Windows service parent that exits early cannot release ownership of poss
   });
   await mkdir(join(root, 'scripts'));
   await mkdir(join(root, 'packages/cli/bin'), { recursive: true });
-  for (const file of ['dev.mjs', 'dev-instance.mjs']) await cp(join(source, 'scripts', file), join(root, 'scripts', file));
+  for (const file of ['dev.mjs', 'dev-instance.mjs', 'dev-processes.mjs']) await cp(join(source, 'scripts', file), join(root, 'scripts', file));
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
   const builder = join(root, 'builder.cjs');
   await writeFile(builder, 'process.exit(0)');
   await writeFile(join(root, 'packages/cli/bin/quotern.js'), `
     import { spawn } from 'node:child_process';
-    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true, detached: true });
+    child.unref();
     console.log(JSON.stringify({ fixtureGrandchild: child.pid }));
     setTimeout(() => process.exit(0), 100);
   `);
@@ -141,4 +144,8 @@ test('a Windows service parent that exits early cannot release ownership of poss
   assert.equal(record.status, 'cleanup-required');
   const lease = JSON.parse(await readFile(join(root, '.quotern-dev/runtime.lock/owner.json'), 'utf8'));
   assert.equal(lease.sessionId, record.sessionId);
+  assert.doesNotThrow(() => process.kill(grandchildPid, 0));
+  await assert.rejects(createDevSession(root, 'api', {}), /后代|子进程|祖先|系统进程/);
+  assert.equal(JSON.parse(await readFile(join(root, '.quotern-dev/runtime.lock/owner.json'), 'utf8')).sessionId, record.sessionId);
+  assert.doesNotThrow(() => process.kill(grandchildPid, 0));
 });

@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import net from 'node:net';
 import http from 'node:http';
 import test from 'node:test';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createDevSession as createSession, readDevStatus } from './dev-instance.mjs';
+import { windowsProcessEvidence } from './dev-processes.mjs';
 
 const ownedSessions = new Map();
 async function createDevSession(...args) {
@@ -147,4 +150,154 @@ test('a published API lease cannot authorize an unrelated server on its port', a
   const api = await createDevSession(root, 'api', {});
   await listener(t, api.config.apiPort);
   await assert.rejects(createDevSession(root, 'ui', {}), /API.*标识|API.*就绪/);
+});
+
+async function staleDesktop(t, patch = {}) {
+  const root = await fixture(t);
+  const startedAt = new Date().toISOString();
+  const child = spawn(process.execPath, ['-e', ''], { windowsHide: true });
+  await once(child, 'exit');
+  const record = {
+    sessionId: 'old-desktop', mode: 'desktop', pid: child.pid, worktree: root,
+    startedAt, status: 'stopped', children: [], stoppedAt: new Date().toISOString(), exitCode: 0,
+    ...patch,
+  };
+  const dir = join(root, '.quotern-dev');
+  for (const name of ['runtime', 'desktop-ui']) {
+    await mkdir(join(dir, `${name}.lock`), { recursive: true });
+    await writeFile(join(dir, `${name}.lock/owner.json`), JSON.stringify(record));
+  }
+  await writeFile(join(dir, 'desktop.json'), JSON.stringify(record));
+  return { root, dir, record };
+}
+
+test('confirmed stopped session locks are recovered on the next desktop launch', async (t) => {
+  const { root, dir } = await staleDesktop(t);
+  const session = await createDevSession(root, 'desktop', {});
+  assert.notEqual(session.record.sessionId, 'old-desktop');
+  for (const name of ['runtime', 'desktop-ui']) {
+    const owner = JSON.parse(await readFile(join(dir, `${name}.lock/owner.json`), 'utf8'));
+    assert.equal(owner.sessionId, session.record.sessionId);
+  }
+});
+
+test('recovery refuses a live recorded child and preserves the old locks', async (t) => {
+  const { root, dir } = await staleDesktop(t, { children: [{ name: 'electron-vite', pid: process.pid }] });
+  await assert.rejects(createDevSession(root, 'desktop', {}), /子进程|归属/);
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+});
+
+test('recovery refuses mismatched or incomplete session evidence', async (t) => {
+  const { root, dir, record } = await staleDesktop(t);
+  await writeFile(join(dir, 'desktop.json'), JSON.stringify({ ...record, sessionId: 'different' }));
+  await assert.rejects(createDevSession(root, 'desktop', {}), /归属|记录/);
+  await rm(join(dir, 'desktop.json'));
+  await assert.rejects(createDevSession(root, 'desktop', {}), /归属|记录/);
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+});
+
+test('concurrent recovery has one winner and cannot remove its new locks', async (t) => {
+  const { root, dir } = await staleDesktop(t);
+  const results = await Promise.allSettled(Array.from({ length: 6 }, () => createDevSession(root, 'desktop', {})));
+  const winners = results.filter((result) => result.status === 'fulfilled');
+  assert.equal(winners.length, 1);
+  for (const name of ['runtime', 'desktop-ui']) {
+    assert.equal(JSON.parse(await readFile(join(dir, `${name}.lock/owner.json`), 'utf8')).sessionId,
+      winners[0].value.record.sessionId);
+  }
+});
+
+test('Windows recovers a dead abnormal session only after full system inspection', {
+  skip: process.platform !== 'win32', timeout: 30000,
+}, async (t) => {
+  const { root } = await staleDesktop(t, { status: 'running' });
+  const session = await createDevSession(root, 'desktop', {});
+  assert.notEqual(session.record.sessionId, 'old-desktop');
+});
+
+test('Windows process evidence rejects orphaned descendants, reused ancestors and incomplete snapshots', () => {
+  const record = { pid: 900, startedAt: '2026-01-01T00:00:00Z', children: [{ pid: 901 }] };
+  const oldRoot = { pid: 10, parentPid: 4, startedAt: '2025-12-31T23:00:00Z' };
+  const processRow = (pid, parentPid, startedAt = '2026-01-01T00:00:01Z') => ({ pid, parentPid, startedAt });
+  assert.equal(windowsProcessEvidence(record, [oldRoot, processRow(11, 10)]), null);
+  for (const rows of [
+    [oldRoot, processRow(902, 901)], // direct child died, grandchild remains
+    [oldRoot, processRow(904, 903)], // both supervisor and intermediate ancestors died
+    [oldRoot, processRow(904, 903), processRow(903, 10, '2026-01-01T00:00:02Z')], // reused parent PID
+    [oldRoot, processRow(901, 10)], // reused child PID still blocks
+    [oldRoot, processRow(12, 10, null)],
+    [],
+  ]) assert.ok(windowsProcessEvidence(record, rows));
+});
+
+test('unknown lock contents are preserved instead of recursively removed', async (t) => {
+  const { root, dir } = await staleDesktop(t);
+  await writeFile(join(dir, 'runtime.lock/unexpected'), 'keep');
+  await assert.rejects(createDevSession(root, 'desktop', {}), /未知内容/);
+  assert.equal(await readFile(join(dir, 'runtime.lock/unexpected'), 'utf8'), 'keep');
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+});
+
+function sessionProcess(t, root) {
+  const source = `
+    import { createDevSession } from ${JSON.stringify(new URL('./dev-instance.mjs', import.meta.url).href)};
+    try {
+      const session = await createDevSession(process.argv[1], 'desktop', {});
+      process.on('message', async () => { await session.close(); process.disconnect(); });
+      process.send({ state: 'acquired', sessionId: session.record.sessionId });
+    } catch (error) {
+      process.send({ state: 'refused', message: error.message }, () => process.disconnect());
+    }
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', source, root], {
+    windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (data) => { stderr += data; });
+  const exited = once(child, 'exit');
+  const ready = once(child, 'message', { signal: AbortSignal.timeout(15000) }).then(([message]) => message);
+  t.after(async () => {
+    if (child.connected) child.send('close');
+    if (child.exitCode == null && child.signalCode == null) {
+      try { await once(child, 'exit', { signal: AbortSignal.timeout(5000) }); }
+      catch { child.kill(); await exited; assert.fail(`session fixture did not close: ${stderr}`); }
+    }
+  });
+  return { child, ready, exited };
+}
+
+test('independent launchers racing to recover stale locks leave exactly one live owner', async (t) => {
+  const { root, dir } = await staleDesktop(t);
+  const launchers = Array.from({ length: 4 }, () => sessionProcess(t, root));
+  const results = await Promise.all(launchers.map((launcher) => launcher.ready));
+  const winnerIndexes = results.flatMap((result, index) => result.state === 'acquired' ? [index] : []);
+  assert.equal(winnerIndexes.length, 1, JSON.stringify(results));
+  const winner = winnerIndexes[0];
+  await Promise.all(launchers.filter((_, index) => index !== winner).map((launcher) => launcher.exited));
+  for (const name of ['runtime', 'desktop-ui']) {
+    const owner = JSON.parse(await readFile(join(dir, `${name}.lock/owner.json`), 'utf8'));
+    assert.equal(owner.sessionId, results[winner].sessionId);
+    assert.equal(owner.pid, launchers[winner].child.pid);
+  }
+});
+
+test('a closing launcher cannot remove the next independent launcher ownership', async (t) => {
+  const root = await fixture(t);
+  const first = sessionProcess(t, root);
+  assert.equal((await first.ready).state, 'acquired');
+  let next = sessionProcess(t, root);
+  first.child.send('close');
+  const competing = await next.ready;
+  await first.exited;
+  if (competing.state === 'refused') {
+    await next.exited;
+    next = sessionProcess(t, root);
+  }
+  const acquired = await next.ready;
+  assert.equal(acquired.state, 'acquired');
+  for (const name of ['runtime', 'desktop-ui']) {
+    const owner = JSON.parse(await readFile(join(root, `.quotern-dev/${name}.lock/owner.json`), 'utf8'));
+    assert.equal(owner.sessionId, acquired.sessionId);
+    assert.equal(owner.pid, next.child.pid);
+  }
 });

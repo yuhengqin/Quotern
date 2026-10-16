@@ -105,6 +105,7 @@ test('Codex billing uses recorded auth and plan evidence without guessing from m
   };
   assert.equal(read('chatgpt'), 'subscription');
   assert.equal(read('', { plan_type: 'pro' }), 'subscription');
+  assert.equal(read('', { plan_type: 'prolite' }), 'subscription');
   assert.equal(read('', { plan_type: 'api_key' }), 'api');
   assert.equal(read('api_key', { plan_type: 'pro' }), 'api');
   assert.equal(read('', { primary: { used_percent: 20 } }), 'unknown');

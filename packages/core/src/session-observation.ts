@@ -115,7 +115,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
     if (!auth && ['openai', 'openai-codex'].includes(provider)) {
       const rate = obj(event.rate_limits ?? info.rate_limits);
       const plan = text(rate.plan_type).toLowerCase();
-      if (['free', 'go', 'plus', 'pro', 'team', 'business', 'enterprise', 'edu', 'education'].includes(plan)) auth = 'subscription';
+      if (['free', 'go', 'plus', 'pro', 'prolite', 'team', 'business', 'enterprise', 'edu', 'education'].includes(plan)) auth = 'subscription';
       else if (['api', 'api_key', 'apikey'].includes(plan)) auth = 'api';
     }
     if (!Object.keys(total).length && !Object.keys(last).length) return null;

@@ -25,6 +25,8 @@ pnpm dev:status    # 只读查看此 worktree 的端口及会话记录
 
 CLI 与浏览器 Vite 也可分开启动：先 `pnpm dev:cli:api`，待 API 就绪后再 `pnpm dev:cli:ui`。`pnpm dev:dashboard` 等价于后者，默认要求本 worktree 已有所属 API，核对已发布配置的会话 ID 及 `/health` 的 `X-Quotern-Dev-Instance` 响应标识，否则拒绝启动；复用其他 API 必须显式指定代理目标。已有 UI 使用本 worktree API 时，API 重启保持原端口，端口被占用则失败；更改端口前先退出所属 UI。API 与 UI 分别取得资源锁；完整 CLI 取得两者，Desktop 与 CLI API 在同一 worktree 互斥，跨 worktree 使用独立状态。
 
+Dashboard 和 Desktop renderer 的 Vite 开发服务通过 `scripts/vite-core-source.mjs` 将浏览器可用的 Core 入口解析到源码，避免 Core 构建清空 `dist` 时中断热更新。新增浏览器运行时入口时同步维护该插件及回归测试。正式构建、CLI 和 Desktop 主进程继续使用 Core 包的 `dist` 导出；此规则不负责重启运行中的采集进程。`pnpm test:vite-core-source` 在临时目录清空 Core 构建文件，验证两端开发服务仍能加载依赖，并检查正式构建仍读取编译产物。
+
 默认优先使用 API `8452`、浏览器 Vite `5194`、Desktop renderer `5195`。已有服务占用默认 / 保存端口时，启动器寻找其他空闲端口，并保存实际选择；Vite 及 CLI 监听仍严格检查端口，检查后发生竞争时退出报错，绝不停止占用者。打开启动输出中的实际地址，不凭分支名猜端口。
 
 需要固定端口时，在当前命令的环境中指定；显式端口被占用则失败，不自动替换。例如 PowerShell：

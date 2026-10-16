@@ -43,6 +43,7 @@ async function start(t) {
   await cp(join(source, 'scripts/dev.mjs'), join(root, 'scripts/dev.mjs'));
   await cp(join(source, 'scripts/dev-instance.mjs'), join(root, 'scripts/dev-instance.mjs'));
   await cp(join(source, 'scripts/dev-processes.mjs'), join(root, 'scripts/dev-processes.mjs'));
+  await cp(join(source, 'scripts/vite-core-source.mjs'), join(root, 'scripts/vite-core-source.mjs'));
   for (const file of ['dev-windows-job.mjs', 'dev-windows-job.ps1', 'dev-windows-job-host.mjs']) await cp(join(source, 'scripts', file), join(root, 'scripts', file));
   await writeFile(join(root, 'package.json'), '{"name":"quotern-dev-fixture","type":"module","private":true}');
   await mkdir(join(root, 'packages/cli'), { recursive: true });

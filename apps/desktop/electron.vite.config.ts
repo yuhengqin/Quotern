@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coreSourcePlugin } from '../../scripts/vite-core-source.mjs';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
@@ -16,6 +17,7 @@ if (quotaPreview && process.env.QUOTERN_DEV_ISOLATED !== '1') {
 }
 
 const sharedRenderPlugins = () => [
+  coreSourcePlugin(),
   tanstackRouter({
     target: 'react',
     autoCodeSplitting: true,

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Card, Chip, Modal, ProgressBar, Tooltip } from '@heroui/react';
 import { Button as AriaButton } from 'react-aria-components';
 import { RefreshCw } from 'lucide-react';
@@ -27,10 +27,47 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
+  const [hintSource, setHintSource] = useState<'pointer' | 'focus'>('pointer');
+  const [hintPosition, setHintPosition] = useState({ left: 0, top: 0 });
   const hintTimer = useRef<number | null>(null);
+  const hintRef = useRef<HTMLSpanElement>(null);
+  const pointerPosition = useRef({ x: 0, y: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
   useEffect(() => () => { if (hintTimer.current !== null) window.clearTimeout(hintTimer.current); }, []);
+  useLayoutEffect(() => {
+    if (!hintVisible || detailsOpen || !hintRef.current || !triggerRef.current?.parentElement) return;
+    const card = triggerRef.current.parentElement.getBoundingClientRect();
+    const { width, height } = hintRef.current.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    const margin = 8, gap = 8;
+    let left = card.left + (card.width - width) / 2;
+    let top = card.top - height - gap;
+    if (hintSource === 'pointer') {
+      const { x, y } = pointerPosition.current;
+      left = x + 12;
+      top = y + 16;
+      if (left + width > viewportWidth - margin) left = x - width - 12;
+      if (top + height > viewportHeight - margin) top = y - height - 12;
+    } else if (top < margin) {
+      top = card.bottom + gap;
+    }
+    setHintPosition({
+      left: Math.max(margin, Math.min(left, viewportWidth - width - margin)) - card.left,
+      top: Math.max(margin, Math.min(top, viewportHeight - height - margin)) - card.top,
+    });
+    const dismiss = () => setHintVisible(false);
+    const dismissOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss(); };
+    window.addEventListener('resize', dismiss);
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('keydown', dismissOnEscape);
+    return () => {
+      window.removeEventListener('resize', dismiss);
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('keydown', dismissOnEscape);
+    };
+  }, [hintVisible, detailsOpen, hintSource]);
   const status = provider.service;
   const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
@@ -67,8 +104,11 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       onPointerEnter={event => {
         if (event.pointerType === 'touch' || detailsOpen) return;
         hideHint();
+        setHintSource('pointer');
+        pointerPosition.current = { x: event.clientX, y: event.clientY };
         hintTimer.current = window.setTimeout(() => { hintTimer.current = null; setHintVisible(true); }, DETAILS_HINT_DELAY_MS);
       }}
+      onPointerMove={event => { if (!hintVisible) pointerPosition.current = { x: event.clientX, y: event.clientY }; }}
       onPointerLeave={hideHint}
       onClick={event => {
         const target = event.target as Element;
@@ -77,7 +117,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       }}>
     <AriaButton ref={triggerRef} type="button" aria-label={`查看 ${provider.label} 额度详情`} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
-      onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintVisible(true); } }} onBlur={hideHint}
+      onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
     <Card.Content className="relative gap-3 p-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -102,7 +142,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       </p>}
       {provider.windows.length > 3 && <span className="text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
     </Card.Content>
-    <span id={hintId} role="tooltip" className={`pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-retry]:hover]:hidden group-has-[[data-quota-retry]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>点击查看详情</span>
+    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-retry]:hover]:hidden group-has-[[data-quota-retry]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>点击查看详情</span>
     </Card>
           <Modal.Backdrop isOpen={detailsOpen} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">

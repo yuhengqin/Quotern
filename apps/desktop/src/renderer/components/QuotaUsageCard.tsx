@@ -163,7 +163,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
         {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
       </div>}
       {summary && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={`${summary.label}：${summary.text}；点击卡片查看完整分析`}>
-        {summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
+        {!summary.warning && summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
         <p className={`min-w-0 truncate text-[11px] ${summary.warning ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>{summary.text}</p>
       </div>}
       {(message || error) && <div className="flex items-center justify-between gap-2">

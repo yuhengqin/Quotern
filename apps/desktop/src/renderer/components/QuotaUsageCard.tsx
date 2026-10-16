@@ -1,6 +1,6 @@
-import { useId, useState } from 'react';
-import { Button, Card, Chip, ProgressBar, Tooltip } from '@heroui/react';
-import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { Button, Card, Chip, Drawer, ProgressBar, Tooltip } from '@heroui/react';
+import { ChevronRight, RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from '../../shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime } from './SubscriptionUsageCard';
@@ -21,62 +21,107 @@ function duration(until: number) {
 }
 
 export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProviderState; preferences: QuotaPreferences }) {
-  const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const panelId = useId();
+  const [refreshing, setRefreshing] = useState(false);
   const status = provider.service;
   const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
+  const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
+  const hasReading = provider.windows.length > 0 || provider.details.length > 0;
+  const message = provider.status === 'custom-provider' ? '自定义模型无法获取配额'
+    : provider.status === 'expired' ? '登录已过期，请重新登录'
+      : provider.stale ? '读数可能已过期'
+        : provider.message ?? (provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 100) ? '额度已用尽'
+          : provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 90) ? '额度接近上限' : null);
+  const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
+  const busy = provider.refreshing || refreshing;
   const refresh = async () => {
-    try { setError(null); await window.tud.quota.refresh(provider.id); }
+    try { setError(null); setRefreshing(true); await window.tud.quota.refresh(provider.id); }
     catch { setError('刷新失败，请稍后重试'); }
+    finally { setRefreshing(false); }
   };
   return <Card className="min-w-0" variant="secondary">
     <Card.Content className="gap-3 p-3">
       <div className="flex min-w-0 items-center gap-2">
         <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider.label}</span>
-        <Button aria-label={`刷新 ${provider.label} 额度`} size="sm" variant="tertiary" isIconOnly isDisabled={provider.refreshing} onPress={() => void refresh()}>
-          <RefreshCw aria-hidden="true" className={`size-3.5 ${provider.refreshing ? 'motion-safe:animate-spin' : ''}`} />
-        </Button>
       </div>
-      {(provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2">
-        {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
-        {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>重置 {provider.resetCredits} 次</Chip.Label></Chip>}
-      </div>}
-      {status && service && <Tooltip delay={200}>
-        <Tooltip.Trigger<'button'> render={props => <button {...props} />} type="button"
-          className="inline-flex w-fit items-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
-          aria-label={`${provider.label} 官方服务状态：${service.label}，查看官方状态页`}
-          onClick={() => void window.tud.openExternal(status.url)}>
-          <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${service.dotClassName}`} />
-          <span>{service.label}</span><span aria-hidden="true">↗</span>
-        </Tooltip.Trigger>
-        <Tooltip.Content className="max-w-64 text-xs">
-          <div className="flex flex-col gap-1">
-            <p>官方整体状态：{service.label}</p>
-            <p className="text-muted">具体产品与地区的影响以官方状态页为准。</p>
-            {status.stale && <p className="text-muted">最近一次查询未成功，上次结果已过期。</p>}
-            <p className="text-muted">{status.checkedAt ? `上次检查 ${new Date(status.checkedAt * 1000).toLocaleString('zh-CN')}` : '尚未取得有效状态'}</p>
-          </div>
-        </Tooltip.Content>
-      </Tooltip>}
-      <div id={panelId} className="flex flex-col gap-3">
-        {(expanded ? provider.windows : provider.windows.slice(0, 3)).map(window => <QuotaWindowRow key={window.id} window={window} analysis={provider.analyses[window.id]} showSparkline={preferences.showSparkline} stale={provider.stale} />)}
+      {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
+      {hasReading && <div className="flex flex-col gap-3">
+        {provider.windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} window={window} stale={provider.stale} />)}
         {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
+      </div>}
+      {(message || error) && <div className="flex items-center justify-between gap-2">
+        <p role="status" className="text-xs text-muted">{error ?? message}</p>
+        {(retryable || error) && <Button aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
+      </div>}
+      {serviceWarning && !message && <p className="flex items-center gap-1.5 text-xs text-muted">
+        <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${serviceWarning.dotClassName}`} />
+        官方服务{serviceWarning.label}
+      </p>}
+      <div className="flex items-center justify-end gap-2">
+        {provider.windows.length > 3 && <span className="mr-auto text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
+        <Drawer>
+          <Button aria-label={`查看 ${provider.label} 额度详情`} className="h-auto min-h-7 gap-0.5 px-1 text-xs" size="sm" variant="ghost">
+            额度详情<ChevronRight aria-hidden="true" className="size-3.5" />
+          </Button>
+          <Drawer.Backdrop>
+            <Drawer.Content placement="right">
+              <Drawer.Dialog aria-label={`${provider.label} 额度详情`} className="w-full max-w-md">
+                <Drawer.CloseTrigger aria-label="关闭额度详情" />
+                <Drawer.Header>
+                  <Drawer.Heading>{provider.label} 额度详情</Drawer.Heading>
+                </Drawer.Header>
+                <Drawer.Body className="flex flex-col gap-5">
+                  {(provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {provider.planLabel && <span>{provider.planLabel}</span>}
+                    {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>重置 {provider.resetCredits} 次</Chip.Label></Chip>}
+                  </div>}
+                  {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} />}
+                  <div className="flex flex-col gap-5">
+                    {provider.windows.map(window => <QuotaWindowRow key={window.id} window={window} analysis={provider.analyses[window.id]} showSparkline={preferences.showSparkline} stale={provider.stale} detailed />)}
+                    {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
+                  </div>
+                  {(provider.message || error) && <p role="status" className="text-sm text-muted">{error ?? provider.message}</p>}
+                  <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
+                    <div className="flex flex-wrap justify-between gap-2"><dt>有效读数</dt><dd>{provider.fetchedAt ? `${provider.stale ? '旧读数 · ' : ''}${new Date(provider.fetchedAt * 1000).toLocaleString('zh-CN')}` : busy ? '正在读取额度' : '尚无有效读数'}</dd></div>
+                    {provider.nextRefreshAt && <div className="flex flex-wrap justify-between gap-2"><dt>下次尝试</dt><dd>{new Date(provider.nextRefreshAt * 1000).toLocaleString('zh-CN')}</dd></div>}
+                  </dl>
+                </Drawer.Body>
+                <Drawer.Footer>
+                  <Button aria-label={`刷新 ${provider.label} 额度`} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
+                    <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? '正在刷新' : '刷新额度'}
+                  </Button>
+                </Drawer.Footer>
+              </Drawer.Dialog>
+            </Drawer.Content>
+          </Drawer.Backdrop>
+        </Drawer>
       </div>
-      {provider.windows.length > 3 && <Button className="w-fit self-start" size="sm" variant="tertiary" aria-expanded={expanded} aria-controls={panelId} onPress={() => setExpanded(value => !value)}>
-        {expanded ? '收起窗口' : `查看其余 ${provider.windows.length - 3} 个窗口`}
-      </Button>}
-      {(provider.message || error) && <p role="status" className="text-xs text-muted">{error ?? provider.message}</p>}
-      <p className="flex flex-wrap gap-x-2 text-[10px] tabular-nums text-muted" title={provider.fetchedAt ? `上次成功读取：${new Date(provider.fetchedAt * 1000).toLocaleString('zh-CN')}` : undefined}>
-        <span>{provider.fetchedAt ? `${provider.stale ? '旧读数 · ' : ''}${clock(provider.fetchedAt)} 更新` : provider.refreshing ? '正在读取额度' : '尚无有效读数'}</span>
-        {provider.nextRefreshAt && <span>下次尝试 {clock(provider.nextRefreshAt)}</span>}
-      </p>
     </Card.Content>
   </Card>;
 }
 
-function QuotaWindowRow({ window, analysis, showSparkline, stale }: { window: QuotaWindow; analysis?: QuotaAnalysis; showSparkline: boolean; stale: boolean }) {
+function QuotaServiceStatusLink({ label, status, service }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']] }) {
+  return <Tooltip delay={200}>
+    <Tooltip.Trigger<'button'> render={props => <button {...props} />} type="button"
+      className="inline-flex w-fit items-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+      aria-label={`${label} 官方服务状态：${service.label}，查看官方状态页`}
+      onClick={() => void window.tud.openExternal(status.url)}>
+      <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${service.dotClassName}`} />
+      <span>{service.label}</span><span aria-hidden="true">↗</span>
+    </Tooltip.Trigger>
+    <Tooltip.Content className="max-w-64 text-xs">
+      <div className="flex flex-col gap-1">
+        <p>官方整体状态：{service.label}</p>
+        <p className="text-muted">具体产品与地区的影响以官方状态页为准。</p>
+        {status.stale && <p className="text-muted">最近一次查询未成功，上次结果已过期。</p>}
+        <p className="text-muted">{status.checkedAt ? `上次检查 ${new Date(status.checkedAt * 1000).toLocaleString('zh-CN')}` : '尚未取得有效状态'}</p>
+      </div>
+    </Tooltip.Content>
+  </Tooltip>;
+}
+
+function QuotaWindowRow({ window, analysis, showSparkline = false, stale, detailed = false }: { window: QuotaWindow; analysis?: QuotaAnalysis; showSparkline?: boolean; stale: boolean; detailed?: boolean }) {
   const label = [window.groupLabel, window.label].filter(Boolean).join(' ');
   const reset = formatSubscriptionResetTime(window.resetsAt);
   const pace = analysis?.paceDifference;
@@ -92,11 +137,11 @@ function QuotaWindowRow({ window, analysis, showSparkline, stale }: { window: Qu
     </ProgressBar>
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-muted">
       {reset && <span title={formatSubscriptionResetTime(window.resetsAt, new Date(), true) ?? undefined}>{reset} {window.timeKind === 'expiry' ? '到期' : '重置'}</span>}
-      {window.used !== undefined && window.limit !== undefined && <span>{window.used.toLocaleString()} / {window.limit.toLocaleString()} {window.unit === 'requests' ? '次' : window.unit === 'credits' ? '额度' : 'Token'}</span>}
+      {detailed && window.used !== undefined && window.limit !== undefined && <span>{window.used.toLocaleString()} / {window.limit.toLocaleString()} {window.unit === 'requests' ? '次' : window.unit === 'credits' ? '额度' : 'Token'}</span>}
     </div>
-    {!stale && paceText && <p className="text-[10px] text-muted" title={`根据${analysis?.paceBasis === 'workdays' ? '工作日' : analysis?.paceBasis === 'automatic' ? '历史习惯' : '均匀'}参考曲线计算；差值按完整额度的百分点计`}>{paceText}</p>}
-    {!stale && analysis?.etaAt && <p className="text-xs text-warning">按近期速度，预计约 {duration(analysis.etaAt)}后耗尽</p>}
-    {showSparkline && analysis && analysis.trend.length >= 3 && <QuotaSparkline samples={analysis.trend} label={label} />}
+    {detailed && !stale && paceText && <p className="text-[10px] text-muted" title={`根据${analysis?.paceBasis === 'workdays' ? '工作日' : analysis?.paceBasis === 'automatic' ? '历史习惯' : '均匀'}参考曲线计算；差值按完整额度的百分点计`}>{paceText}</p>}
+    {detailed && !stale && analysis?.etaAt && <p className="text-xs text-warning">按近期速度，预计约 {duration(analysis.etaAt)}后耗尽</p>}
+    {detailed && showSparkline && analysis && analysis.trend.length >= 3 && <QuotaSparkline samples={analysis.trend} label={label} />}
   </div>;
 }
 

@@ -24,7 +24,8 @@ function duration(until: number) {
 
 function windowLabel(window: QuotaWindow) {
   const period = /^(\d+(?:\.\d+)?)\s*([hd])$/i.exec(window.label);
-  const label = period ? `${period[1]} ${period[2].toLowerCase() === 'h' ? '小时' : '天'}额度` : window.label;
+  const label = period ? period[1] === '7' && period[2].toLowerCase() === 'd' ? '周限额'
+    : `${period[1]} ${period[2].toLowerCase() === 'h' ? '小时' : '天'}额度` : window.label;
   return [window.groupLabel, label].filter(Boolean).join(' ');
 }
 
@@ -239,17 +240,18 @@ function QuotaWindowRow({ window, analysis, showSparkline = false, stale, detail
   const paceText = analysis ? paceLabel(analysis) : null;
   const color = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
   return <div className="flex min-w-0 flex-col gap-1">
-    <div className="flex min-w-0 items-baseline justify-between gap-3 text-xs">
+    <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
       <span className="min-w-0 truncate text-muted" title={label}>{label}</span>
-      <span className="shrink-0 tabular-nums text-foreground"><span className="mr-1 text-xs font-normal text-muted">{window.valueText ? '' : '剩余'}</span><span className="text-lg font-semibold leading-tight">{window.valueText ?? `${Math.round(100 - window.usedPercent)}%`}</span></span>
+      {reset && <span className="shrink-0 text-[10px] tabular-nums text-muted" title={formatSubscriptionResetTime(window.resetsAt, new Date(), true) ?? undefined}>{reset}{window.timeKind === 'expiry' ? '到期' : '重置'}</span>}
     </div>
-    <ProgressBar aria-label={`${label}，${window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}`} value={100 - window.usedPercent} size="sm" style={{ gap: 0 }}>
-      <ProgressBar.Track className="h-1.5 rounded-full bg-surface-secondary"><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} /></ProgressBar.Track>
-    </ProgressBar>
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-muted">
-      {reset && <span title={formatSubscriptionResetTime(window.resetsAt, new Date(), true) ?? undefined}>{reset}{window.timeKind === 'expiry' ? '到期' : '重置'}</span>}
-      {detailed && window.used !== undefined && window.limit !== undefined && <span>{window.used.toLocaleString()} / {window.limit.toLocaleString()} {window.unit === 'requests' ? '次' : window.unit === 'credits' ? '额度' : 'Token'}</span>}
+    <div className="flex min-w-0 items-center gap-3">
+      <ProgressBar aria-label={`${label}，${window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}`} className="min-w-0 flex-1" value={100 - window.usedPercent} size="sm"
+        style={{ gap: 0, gridTemplateAreas: '"track"', gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto' }}>
+        <ProgressBar.Track className="h-1.5 rounded-full bg-surface-secondary"><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} /></ProgressBar.Track>
+      </ProgressBar>
+      <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground" aria-label={window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}>{window.valueText ?? `${Math.round(100 - window.usedPercent)}%`}</span>
     </div>
+    {detailed && window.used !== undefined && window.limit !== undefined && <p className="text-[10px] text-muted">{window.used.toLocaleString()} / {window.limit.toLocaleString()} {window.unit === 'requests' ? '次' : window.unit === 'credits' ? '额度' : 'Token'}</p>}
     {detailed && !stale && paceText && <p className="text-[10px] text-muted" title={`根据${analysis?.paceBasis === 'workdays' ? '工作日' : analysis?.paceBasis === 'automatic' ? '历史习惯' : '均匀'}参考曲线计算；差值按完整额度的百分点计`}>{paceText}</p>}
     {detailed && !stale && analysis?.etaAt && <p className="text-xs text-amber-700 dark:text-amber-400">按近期速度，预计约 {duration(analysis.etaAt)}后耗尽</p>}
     {detailed && showSparkline && analysis && analysis.trend.length >= 3 && <QuotaSparkline samples={analysis.trend} label={label} />}

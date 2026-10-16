@@ -43,6 +43,8 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 | [Copilot](../apps/desktop/src/shared/copilot-subscription.ts) | `limits[].remainingPercent`、`unlimited`、可选 `exhausted` | 已是剩余比例；缺失比例可为 `null`，不能再次用 `100 - value` 解释 |
 | [Kimi](../apps/desktop/src/shared/kimi-subscription.ts) | `limits`、`region`、可选 `source` | 区分账号区域与读取来源 |
 | [ZCode](../apps/desktop/src/shared/zcode-subscription.ts) | `limits`、`provider` | 保留提供方区别 |
+| [OpenCode](../apps/desktop/src/shared/opencode-subscription.ts) | `limits`，含 `five-hour`、`weekly`、`monthly` | 优先解析官方 `usage.*.percent/resetsAt`；兼容旧 `*Usage.usagePercent/resetInSec`。月周期长度未知时保留 `null` |
+| [Antigravity](../apps/desktop/src/shared/antigravity-subscription.ts) | 全部有效模型的 `limits` | 每个模型独立读取 `resetTime`，不再将原始池截成两个 |
 
 当前 shared 快照均含 `status`、`planLabel`、`message`、`fetchedAt` 和 `stale`；具体状态枚举、空值与附加字段由各类型定义。`fetchedAt` 与 `resetsAt` 使用 Unix 秒：前者表示获取时间，后者表示窗口刷新或到期时间，不能混用。
 
@@ -68,6 +70,8 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 `usedPercent` 的剩余比例按 `100 - usedPercent` 计算；Copilot 的 `remainingPercent` 在规范映射中只转换一次。未知、零额度、耗尽与无限额是不同状态。余额型订阅来源还保留金额信息，缺分母时不能制造百分比；金额余额不参与百分比预测和托盘风险判断。
 
 各 mapper 按自身协议识别秒、毫秒或 ISO 时间；不要把某个订阅来源的转换规则推广为所有入口都接受同样格式。套餐名使用上游名称与有限归一化映射，不能据名称推断限额或刷新周期。
+
+OpenCode Go 的官方百分比已经是 0–100，`1` 不能当作比例值转成 100%；月重置也不等于固定 30 天。协议依据为 [v1.19.0 usage 路由](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/console/app/src/routes/zen/go/v1/usage.ts)及[早期响应实现](https://github.com/anomalyco/opencode/blob/2b8a596/packages/console/app/src/routes/zen/go/v1/usage.ts)。这些源码证明兼容结构，不代表已对所有版本和付费账号完成实测。
 
 Kimi 桌面版与 Code 是独立来源，卡片选择有效读数，不拼接不同来源的套餐和额度、不把共享池相加。Code 只登录时无需启动桌面版。路径与账号要求见 [Desktop README](../apps/desktop/README.md#kimi-桌面版与-kimi-code)。
 

@@ -69,6 +69,12 @@ input_tokens + output_tokens + cached_input_tokens
 
 会话数按来源和逻辑会话去重，总消息数只计用户与 AI 逻辑消息，排除工具、元数据及事件镜像。日期筛选只使用范围内的消息：跨天会话计一次，总时长是各会话范围内首末消息跨度之和；同时进行的会话分别累计。不具备完整消息元数据的来源显示覆盖不完整。
 
+Schema 8 增加独立用量事件与上下文观察，首批支持 Claude、Codex、OpenCode、Pi、OMP，不改变既有消息计数或 Token 桶。Claude 按调用覆盖流式快照；Codex 与既有 parser 保持相同的 per-call / 累计差额及 cache-write 别名口径，按父子继承前缀排除回放。OpenCode SQL 只投影用量、模型、provider、费用和时钟，计入 compaction 调用但不把它计作逻辑消息。旧缓存继续可读并重扫仍存在的日志，已删除的原始日志无法恢复会话用量归属。
+
+`GET /functions/tud-session-activity` 使用与主面板相同的日期及 Agent 筛选，返回最近活动、上下文、逐会话 Token 与按事件计费归属。上下文容量只采用来源明确记录的数字，最近请求输入标为估计；Claude 压缩后采用 postTokens，没有该数字时清除旧占用，显示压缩后用量未知。最近活动不证明 Agent 正在执行。贡献名为“本机 Token 消耗占比”，保留未归属 Token；会话与桶口径不一致时明确标记并用两者较大的总量作为分母。
+
+provider 和认证类型分别保留；普通 OpenAI/Anthropic 名称不能证明订阅。会话内切换渠道时逐事件归属，不把整段会话算给最后一个服务。来源记录费用、按当前价格估算、混合/缺失分别标注；Claude cost-state 的会话费用覆盖同范围请求估价，部分模型金额未知时保持不完整。来源金额不等于实际账单。账号仅保留本地不可逆关联键，有相同账号证据时关联额度 profile 名称，不用当前登录状态反推旧会话付费方式。不提供会话级缓存诊断。
+
 任务执行时长使用独立的工作事件时钟，不改变消息数、会话数或总时长。Codex 按 `turn_id` 配对任务，优先使用 `task_complete.duration_ms`，缺失时用任务开始与完成/取消事件的时间差；真实 turn UUID 的跨文件/继承副本只计一次，旧格式任务标签按会话隔离。进行中或缺少结束证据的任务不通过下一次 prompt 补全。任务时长包含 TTFT、思考和工具执行，不能将减去第一次 TTFT 后的数值称为纯生成时长。
 
 其他 Agent 以真实用户消息划分回合，累加用户消息到该轮最后工作事件的跨度，并明确标注“估算”。工作事件包括已核实的助手输出、思考、工具及步骤进展；排除设置、元数据、usage 与注入事件。OpenCode/ZCode 使用消息 created/completed 以及助手归属的 text/reasoning/tool part 时钟；Antigravity 使用 model 的 created/completed 时钟。估算可能包含排队等待。消息统计仍只计用户和 AI 逻辑消息。

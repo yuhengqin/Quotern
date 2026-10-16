@@ -1,0 +1,115 @@
+name: Upstream contracts
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: quotern-upstream-contracts
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check upstream contracts
+        id: check
+        continue-on-error: true
+        run: node scripts/check-upstream-contracts.mjs --output upstream-report.json --markdown upstream-report.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-contracts
+          path: |
+            upstream-report.json
+            upstream-report.md
+
+      - uses: actions/github-script@v7
+        if: always() && steps.check.outcome != 'cancelled'
+        with:
+          script: |
+            const fs = require('node:fs');
+            const reportPath = 'upstream-report.json';
+
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed('Upstream check failed; existing review issue kept');
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            if (report.status === 'check-failed') {
+              core.setFailed('Upstream check failed; existing review issue kept');
+              return;
+            }
+
+            const marker = '<!-- quotern-upstream-contract-drift:v1 -->';
+            const label = 'upstream-contract-drift';
+            const { owner, repo } = context.repo;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            const machineIssues = issues.filter(
+              (issue) => !issue.pull_request && issue.body?.includes(marker),
+            );
+
+            if (report.status === 'review-required') {
+              const body = marker + '\n' + fs.readFileSync('upstream-report.md', 'utf8');
+              const existing = machineIssues[0];
+
+              if (existing) {
+                if (existing.body !== body) {
+                  await github.rest.issues.update({
+                    owner,
+                    repo,
+                    issue_number: existing.number,
+                    body,
+                  });
+                }
+                return;
+              }
+
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: label,
+                  color: 'd876e3',
+                });
+              }
+
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title: 'Review upstream usage contracts',
+                body,
+                labels: [label],
+              });
+            } else if (report.status === 'unchanged') {
+              for (const issue of machineIssues) {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                });
+              }
+            }

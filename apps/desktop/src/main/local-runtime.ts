@@ -39,6 +39,7 @@ import {
   localDateNow,
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
+import { getQuotaRuntimeState } from './quota-runtime';
 import {
   invalidateSyncWorkerCursors,
   isSyncWorkerRunning,
@@ -244,6 +245,7 @@ function buildApp(state: {
   ) => Promise<SyncResult[]>;
 }): LocalApiApp {
   return createLocalApiApp({
+    getQuotaState: getQuotaRuntimeState,
     dataDir: state.dir,
     getConfig: state.getConfig,
     bucketStore: state.bucketStore,

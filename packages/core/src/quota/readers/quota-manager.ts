@@ -1,13 +1,14 @@
 import { performance } from 'node:perf_hooks';
 import { analyzeQuota, evaluateQuotaAlerts, normalizeQuotaSnapshot, type QuotaAlertKind, type QuotaObservation } from '../shared/quota-analysis.js';
-import type { QuotaPreferences, QuotaPreferencePatch, QuotaProviderState, QuotaServiceStatus, QuotaState } from '../shared/quota.js';
+import type { QuotaPreferences, QuotaPreferencePatch, QuotaProfile, QuotaProviderState, QuotaServiceStatus, QuotaState } from '../shared/quota.js';
 import type { SubscriptionChannelId } from '../shared/subscription-channels.js';
-import { quotaIdentity } from './quota-identity.js';
+import { quotaIdentity, quotaEvidence } from './quota-identity.js';
 import { quotaReadRetryAfter } from './quota-fetch-state.js';
 import { validQuotaPatch, pruneQuotaHistory, type QuotaStore } from './quota-store.js';
 
 export interface QuotaReader {
   id: SubscriptionChannelId; label: string; interval: number; read(): Promise<unknown>; statusUrl?: string;
+  key?: string; profileLabel?: string; profileId?: string; observationOnly?: boolean;
 }
 export interface QuotaNotification { provider: string; label: string; window: string; kind: QuotaAlertKind; resetsAt: number | null; usedPercent: number }
 interface Slot {
@@ -33,16 +34,40 @@ export class QuotaManager {
   private statusPending: Promise<void> | null = null;
   private settingsQueue = Promise.resolve();
   private lastMaintenance: number | null = null;
+  private readonly sentAlerts = new Set<string>();
   constructor(private readonly deps: {
     readers: QuotaReader[]; store: QuotaStore; now?: () => number; monotonic?: () => number; timeZone?: string;
+    profileReaders?(profiles: readonly QuotaProfile[]): QuotaReader[];
     notify(value: QuotaNotification): void; onChanged?(state: QuotaState): void;
     fetchStatus?(url: string): Promise<QuotaServiceStatus['level']>;
   }) {
     this.now = deps.now ?? (() => Date.now() / 1000); this.mono = deps.monotonic ?? (() => performance.now());
     this.preferences = structuredClone(deps.store.preferences); this.notice = deps.store.notice;
     this.lastInteraction = this.mono();
-    this.slots = deps.readers.map(reader => ({ reader, state: normalizeQuotaSnapshot(reader.id, reader.label, {}), identity: null, captured: 0,
-      observations: new Map(), attempted: null, blockedUntil: 0, failures: 0, pending: null, generation: 0 }));
+    this.slots = [];
+    this.syncReaders();
+  }
+  private key(reader: QuotaReader): string { return reader.key ?? reader.id; }
+  private project(reader: QuotaReader, raw: unknown): QuotaProviderState {
+    const state = normalizeQuotaSnapshot(reader.id, reader.label, raw);
+    state.providerId = reader.id; state.id = this.key(reader);
+    if (reader.profileLabel) { state.profileLabel = reader.profileLabel; state.label = `${state.label} · ${reader.profileLabel}`; }
+    const proof = quotaEvidence(raw);
+    if (proof) state.provenance = structuredClone(proof);
+    else state.provenance = { source: 'native', observer: `${reader.label} 本机读取`, observedAt: state.fetchedAt, identityVerified: false };
+    return state;
+  }
+  private syncReaders(): void {
+    const readers = [...this.deps.readers, ...(this.deps.profileReaders?.(this.preferences.profiles ?? []) ?? [])];
+    const previous = new Map(this.slots.map(slot => [this.key(slot.reader), slot]));
+    const next = readers.map(reader => {
+      const old = previous.get(this.key(reader));
+      if (old?.reader === reader) { previous.delete(this.key(reader)); return old; }
+      return { reader, state: this.project(reader, {}), identity: null, captured: 0,
+        observations: new Map(), attempted: null, blockedUntil: 0, failures: 0, pending: null, generation: 0 } as Slot;
+    });
+    for (const old of previous.values()) old.generation++;
+    this.slots.splice(0, this.slots.length, ...next);
   }
   private enabled(slot: Slot): boolean { return this.preferences.channels[slot.reader.id] !== false; }
   private interval(slot: Slot): number {
@@ -56,7 +81,7 @@ export class QuotaManager {
       const state = structuredClone(slot.state);
       state.stale ||= state.fetchedAt !== null && state.fetchedAt < now - Math.max(1800, this.interval(slot) * 2);
       state.nextRefreshAt = slot.attempted === null ? null : now + Math.max(0, Math.max(slot.blockedUntil, slot.attempted + this.interval(slot) * 1000) - this.mono()) / 1000;
-      if (!state.stale && state.status === 'ready') for (const window of state.windows) {
+      if (!slot.reader.observationOnly && !state.stale && state.status === 'ready') for (const window of state.windows) {
         if (window.analysisEligible === false) continue;
         const history = slot.identity ? this.deps.store.history[`${slot.reader.id}:${slot.identity}:${window.id}`] ?? [] : [];
         state.analyses[window.id] = analyzeQuota(window, history, now, this.preferences.paceModel, this.deps.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -88,8 +113,9 @@ export class QuotaManager {
   }
   async refresh(reason: 'startup' | 'manual' | 'interaction' | 'periodic' | 'resume', id?: string): Promise<QuotaState> {
     if (this.disposed || this.paused) return this.getState();
+    this.syncReaders();
     if (reason === 'manual' || reason === 'interaction') this.lastInteraction = this.mono();
-    await Promise.all(this.slots.filter(slot => this.enabled(slot) && (!id || slot.reader.id === id)).map(slot => this.refreshSlot(slot, reason)));
+    await Promise.all(this.slots.filter(slot => this.enabled(slot) && (!id || this.key(slot.reader) === id)).map(slot => this.refreshSlot(slot, reason)));
     if (!this.disposed && !this.paused && (this.lastMaintenance === null || this.mono() - this.lastMaintenance >= 86400000)) {
       this.lastMaintenance = this.mono();
       if (pruneQuotaHistory(this.deps.store.history, this.now())) {
@@ -117,7 +143,7 @@ export class QuotaManager {
       try { raw = await slot.reader.read(); }
       catch { raw = { status: 'temporarily-unavailable', message: '暂时无法读取额度，请稍后重试' }; }
       if (this.disposed || this.paused || generation !== this.generation || slotGeneration !== slot.generation || !this.enabled(slot)) return;
-      const normalized = normalizeQuotaSnapshot(slot.reader.id, slot.reader.label, raw);
+      const normalized = this.project(slot.reader, raw);
       normalized.queriedAt = this.now();
       const identity = quotaIdentity(raw);
       if (normalized.stale && !identity) {
@@ -128,6 +154,7 @@ export class QuotaManager {
       }
       const temporary = ['unavailable', 'temporarily-unavailable'].includes(normalized.status) || normalized.stale;
       const metadata = raw as { retryAfterSeconds?: unknown } | null;
+      const declaredRetry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : null);
       if (temporary) {
         slot.failures++;
         const retry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : Math.min(1800, 120 * 2 ** Math.min(slot.failures - 1, 4)));
@@ -136,10 +163,11 @@ export class QuotaManager {
           slot.state = { ...slot.state, queriedAt: normalized.queriedAt, stale: true, message: normalized.message, refreshing: true, analyses: {} };
           return;
         }
-      } else { slot.failures = 0; slot.blockedUntil = 0; }
+      } else { slot.failures = 0; slot.blockedUntil = normalized.provenance?.source === 'omp' && declaredRetry !== null ? this.mono() + Math.max(1, Math.min(3600, declaredRetry)) * 1000 : 0; }
       normalized.service = slot.state.service;
       normalized.refreshing = true;
       slot.state = normalized;
+      if (slot.reader.observationOnly) { slot.identity = identity; return; }
       if (normalized.status !== 'ready') { slot.identity = null; slot.captured = 0; slot.observations.clear(); return; }
       if (normalized.stale) return;
       if (identity !== slot.identity) { slot.identity = identity; slot.captured = 0; slot.observations.clear(); }
@@ -159,7 +187,12 @@ export class QuotaManager {
         // A jump across both thresholds produces one useful message at the higher level.
         const alerts = result.alerts.includes('threshold-90') ? result.alerts.filter(kind => kind !== 'threshold-70') : result.alerts;
         for (const kind of alerts) if (kind === 'reset' ? this.preferences.resetAlerts : this.preferences.thresholdAlerts) {
-          try { this.deps.notify({ provider: slot.reader.id, label: slot.reader.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
+          if (slot.reader.profileId && this.preferences.profiles?.find(profile => profile.id === slot.reader.profileId)?.alerts === false) continue;
+          const alertKey = JSON.stringify([slot.reader.id, identity, window.id, kind, sample.resetsAt]);
+          if (this.sentAlerts.has(alertKey)) continue;
+          this.sentAlerts.add(alertKey);
+          if (this.sentAlerts.size > 5000) this.sentAlerts.delete(this.sentAlerts.values().next().value!);
+          try { this.deps.notify({ provider: slot.reader.id, label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
           catch { this.notice = '系统通知暂不可用，额度卡片仍会继续更新。'; }
         }
       }
@@ -183,6 +216,7 @@ export class QuotaManager {
       catch { this.notice = '额度设置保存失败，已保留原设置。'; this.emit(); throw new Error(this.notice); }
       const changedAlerts = next.thresholdAlerts !== this.preferences.thresholdAlerts || next.resetAlerts !== this.preferences.resetAlerts;
       const previous = this.preferences; this.preferences = next;
+      this.syncReaders();
       for (const slot of this.slots) {
         if (changedAlerts) slot.observations.clear();
         if (previous.channels[slot.reader.id] !== next.channels[slot.reader.id]) {

@@ -7,6 +7,7 @@ import { listCodexRolloutFiles } from './parsers/codex.js';
 import { findCopilotEventFiles } from './parsers/copilot.js';
 import { findGeminiSessionFiles } from './parsers/gemini.js';
 import { findPiSessionFiles } from './parsers/pi.js';
+import { findOmpSessionFiles, ompAgentDirCollidesWithPi } from './parsers/omp.js';
 import { listDshSessionFiles, decodeDsh } from './parsers/dsh.js';
 import { resolveKimiCodeWireFiles, resolveKimiLegacyWireFiles } from './parsers/kimi.js';
 import { antigravityProjectFromPath, listAntigravityTranscripts } from './parsers/antigravity.js';
@@ -15,13 +16,14 @@ import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
 import type { SessionMessage } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
 import { resolveSessionProject, type ProjectKind } from './session-project.js';
+import { extractSessionObservation, type ObservationContext, type SessionObservation } from './session-observation.js';
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' ? value as ObjectValue : {};
 const string = (value: unknown): string => typeof value === 'string' ? value : '';
 const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value) ?? '').digest('hex');
 
-export interface SessionFileContext {
+export interface SessionFileContext extends ObservationContext {
   sessionId: string;
   parentId?: string;
   recordIndex?: number;
@@ -51,7 +53,7 @@ export interface SessionInput {
   kind: 'jsonl' | 'json' | 'zstd' | 'sqlite';
 }
 
-export const SESSION_SOURCES = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'pi', 'dsh', 'antigravity', 'zcode', 'kimi']);
+export const SESSION_SOURCES = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'pi', 'omp', 'dsh', 'antigravity', 'zcode', 'kimi']);
 
 export function sessionTimestamp(value: unknown, milliseconds = false): string | null {
   if (value === null || value === undefined || value === '') return null;
@@ -110,9 +112,11 @@ export function extractSessionMessage(source: string, record: ObjectValue, conte
     id = role === 'assistant' ? body.id ?? record.uuid : record.uuid ?? body.id;
     content = body.content;
     if (record.isMeta === true || record.isCompactSummary === true) return null;
-  } else if (source === 'pi') {
+  } else if (source === 'pi' || source === 'omp') {
     if (record.type === 'session') {
       context.sessionId = string(record.id) || context.sessionId;
+      const project = resolveSessionProject(string(record.cwd));
+      if (project) Object.assign(context, project);
       return null;
     }
     if (record.type !== 'message') return null;
@@ -223,7 +227,7 @@ export function extractSessionTimingEvents(source: string, record: ObjectValue, 
   else if (source === 'kimi') work = record.type === 'context.append_loop_event'
     && ['step.begin', 'step.end', 'content.part', 'tool.call', 'tool.result'].includes(string(event.type));
   else if (source === 'dsh') work = ['assistant/message', 'assistant/attempt', 'step/start', 'step/end', 'tool/call', 'tool/result', 'turn/end'].includes(string(record.type));
-  else if (source === 'pi') work = record.type === 'message' && body.role === 'toolResult';
+  else if (source === 'pi' || source === 'omp') work = record.type === 'message' && body.role === 'toolResult';
   else if (source === 'antigravity') work = record.type === 'TOOL_RESULT';
   if (!work) return [];
   const stamp = sessionTimestamp(rawTime, source === 'kimi' && record.time !== undefined);
@@ -259,6 +263,7 @@ export async function discoverSessionInputs(source: string): Promise<{ inputs: S
   else if (source === 'codex') paths = await listCodexRolloutFiles();
   else if (source === 'gemini') paths = findGeminiSessionFiles();
   else if (source === 'pi') paths = findPiSessionFiles();
+  else if (source === 'omp') paths = ompAgentDirCollidesWithPi() ? [] : findOmpSessionFiles();
   else if (source === 'dsh') paths = listDshSessionFiles();
   else if (source === 'copilot') return { inputs: findCopilotEventFiles().map((f) => ({ path: f.filePath, sessionId: f.sessionId, kind: 'jsonl' })), complete };
   else if (source === 'kimi') {
@@ -300,10 +305,11 @@ function databaseMessages(path: string, source: string): ObjectValue[] {
       const fallback = columns.has('time_created') ? ', time_created' : '';
       const startClock = columns.has('time_created') ? "coalesce(json_extract(data, '$.time.created'), time_created)" : "json_extract(data, '$.time.created')";
       const provider = source === 'zcode' ? ", coalesce(json_extract(data, '$.providerID'), json_extract(data, '$.providerId')) AS providerID" : '';
+      const usage = source === 'opencode' ? ", json_object('id', id, 'sessionID', session_id, 'role', " + role + ", 'tokens', json_extract(data, '$.tokens'), 'cost', json_extract(data, '$.cost'), 'model', json_extract(data, '$.model'), 'modelID', json_extract(data, '$.modelID'), 'providerID', coalesce(json_extract(data, '$.providerID'), json_extract(data, '$.model.providerID')), 'time', json_extract(data, '$.time')) AS usageJson" : '';
       rows.push(...queryDbJson(db, `SELECT id, session_id AS sessionId, ${role} AS role,
         ${startClock} AS startTimestamp,
-        coalesce(json_extract(data, '$.time.completed'), json_extract(data, '$.time.created')${fallback}) AS timestamp${provider}
-        FROM ${table} WHERE ${role} IN ('user', 'assistant')`));
+        coalesce(json_extract(data, '$.time.completed'), json_extract(data, '$.time.created')${fallback}) AS timestamp${provider}${usage}
+        FROM ${table} WHERE ${role} IN ('user', 'assistant', 'compaction')`));
     }
     if (!tables.has('message') && !tables.has('session_message')) throw new Error('missing_message_projection');
     return rows;
@@ -381,7 +387,7 @@ export function antigravityStepMessage(hex: string, completedFirst = false): { r
   return null;
 }
 
-export function readSessionSnapshot(input: SessionInput, source: string, context: SessionFileContext, timings?: SessionTimingEvent[]): CollectedSessionMessage[] {
+export function readSessionSnapshot(input: SessionInput, source: string, context: SessionFileContext, timings?: SessionTimingEvent[], observations?: SessionObservation[]): CollectedSessionMessage[] {
   const messages: CollectedSessionMessage[] = [];
   if (input.kind === 'sqlite') {
     for (const row of databaseMessages(input.path, source)) {
@@ -398,6 +404,12 @@ export function readSessionSnapshot(input: SessionInput, source: string, context
         if (source === 'zcode' && row.role === 'assistant' && !isZcodeNativeMessage(row)) continue;
         const stamp = sessionTimestamp(row.timestamp);
         if (!stamp || !row.sessionId || !row.id) { context.incomplete = true; continue; }
+        if (observations && typeof row.usageJson === 'string') {
+          const usageRecord = object(JSON.parse(row.usageJson));
+          const observation = extractSessionObservation(source, { ...usageRecord, timestamp: stamp }, context);
+          if (observation) observations.push(observation);
+        }
+        if (row.role !== 'user' && row.role !== 'assistant') continue;
         messages.push({ source, sessionId: String(row.sessionId), id: String(row.id), role: row.role as 'user' | 'assistant', timestamp: stamp });
         const started = sessionTimestamp(row.startTimestamp);
         timings?.push({ source, sessionId: String(row.sessionId), id: `message:${row.id}`, kind: row.role === 'user' ? 'user' : 'activity', timestamp: stamp,
@@ -421,6 +433,8 @@ export function readSessionSnapshot(input: SessionInput, source: string, context
   for (const record of records) {
     const message = extractSessionMessage(source, record, context);
     if (message) messages.push(message);
+    const observation = observations ? extractSessionObservation(source, record, context) : null;
+    if (observation) observations!.push(observation);
     timings?.push(...extractSessionTimingEvents(source, record, context, message));
   }
   return messages;

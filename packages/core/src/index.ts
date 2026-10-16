@@ -67,4 +67,5 @@ export * from './doctor.js';
 export * from './local-metrics.js';
 export * from './share-backgrounds.js';
 export type { SessionMetrics, SessionMessage } from './session-metrics.js';
+export type { SessionActivity, SessionActivitySnapshot, SessionBilling, SessionContextObservation } from './session-observation.js';
 export * from './achievements/public.js';

@@ -67,7 +67,9 @@ export function createCodexSubscriptionReader(deps: {
       let auth: unknown;
       try { auth = JSON.parse(raw); } catch { return unavailable('access-denied', 'Codex 登录信息损坏，请重新登录', true); }
       const credentials = parseCodexCredentials(auth);
-      const fail = (status: CodexSubscriptionSnapshot['status'], message: string) => unavailable(status, message, true, credentials.planLabel);
+      const annotate = <T extends object>(snapshot: T, at: number | null) => markQuotaEvidence(markQuotaIdentity(snapshot, credentials.accountId || null),
+        { source: 'native', observer: 'Codex 官方查询', observedAt: at, identityVerified: Boolean(credentials.accountId) }, { service: 'openai', accountId: credentials.accountId });
+      const fail = (status: CodexSubscriptionSnapshot['status'], message: string) => annotate(unavailable(status, message, true, credentials.planLabel), null);
       if (credentials.unsupported) return unavailable('unsupported-account', '当前 Codex 使用 API key，无法读取订阅额度');
       if (!credentials.accessToken) return unavailable('not-signed-in', '请先使用 ChatGPT 账号登录 Codex');
       if (credentials.expiresAt !== null && credentials.expiresAt <= now()) return fail('expired', 'Codex 登录已过期，请重新登录');
@@ -82,12 +84,12 @@ export function createCodexSubscriptionReader(deps: {
         if (response.status === 429) {
           const retry = response.headers.get('retry-after');
           const seconds = retry && /^\d+$/.test(retry) ? Number(retry) : retry ? (Date.parse(retry) - now()) / 1000 : 120;
-          return { ...fail('unavailable', 'Codex 额度请求过于频繁，请稍后重试'), retryAfterSeconds: Math.max(1, Math.min(3600, Number.isFinite(seconds) ? seconds : 120)) };
+          return annotate({ ...fail('unavailable', 'Codex 额度请求过于频繁，请稍后重试'), retryAfterSeconds: Math.max(1, Math.min(3600, Number.isFinite(seconds) ? seconds : 120)) }, null);
         }
         if (!response.ok) return fail('unavailable', '暂时无法读取 Codex 额度');
         const windows = mapCodexUsage(await response.json());
         if (!windows.windows.length) return fail('unavailable', 'Codex 暂未返回可用额度');
-        return markQuotaIdentity({ status: 'ready' as const, hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, credentials.accountId);
+        return annotate({ status: 'ready' as const, hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, Math.floor(now() / 1000));
       } catch (error) {
         logCodexRequestError(error);
         return fail('unavailable', '网络异常或读取超时，暂时无法读取 Codex 额度');
@@ -101,9 +103,9 @@ function authPath(): string {
   return path.join(home ? path.resolve(home) : path.join(homedir(), '.codex'), 'auth.json');
 }
 /** Read subscription usage with local credentials; never rotate or persist tokens. */
-export function createDefaultCodexSubscriptionReader(fetchImpl: (url: string, init: RequestInit) => Promise<Response> = quotaNodeFetch) {
-  return createCodexSubscriptionReader({ readAuth: () => readFile(authPath(), 'utf8'), fetch: fetchImpl });
+export function createDefaultCodexSubscriptionReader(fetchImpl: (url: string, init: RequestInit) => Promise<Response> = quotaNodeFetch, directory?: string) {
+  return createCodexSubscriptionReader({ readAuth: () => readFile(directory ? path.join(directory, 'auth.json') : authPath(), 'utf8'), fetch: fetchImpl });
 }
 export const readCodexSubscription = createDefaultCodexSubscriptionReader();
 import { codexQuotaWindows } from '../shared/quota-provider-windows.js';
-import { markQuotaIdentity } from './quota-identity.js';
+import { markQuotaIdentity, markQuotaEvidence } from './quota-identity.js';

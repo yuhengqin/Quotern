@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { DEFAULT_QUOTA_PREFERENCES, type QuotaPreferences, type QuotaSample } from '../shared/quota.js';
+import { DEFAULT_QUOTA_PREFERENCES, type QuotaPreferences, type QuotaProfile, type QuotaSample } from '../shared/quota.js';
 import { isSubscriptionChannelVisibility } from '../shared/subscription-channels.js';
 
 export type QuotaHistory = Record<string, QuotaSample[]>;
@@ -20,12 +20,28 @@ export interface QuotaStore {
   savePreferences(value: QuotaPreferences): Promise<void>;
   saveHistory(value: QuotaHistory): Promise<void>;
 }
+export function validQuotaProfiles(value: unknown): value is QuotaProfile[] {
+  if (!Array.isArray(value) || value.length > 20) return false;
+  const ids = new Set<string>();
+  return value.every(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const row = item as Record<string, unknown>;
+    if (Object.keys(row).some(key => !['id', 'provider', 'label', 'directory', 'enabled', 'alerts'].includes(key))) return false;
+    if (typeof row.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(row.id) || ids.has(row.id)) return false;
+    if (!['codex', 'claude'].includes(row.provider as string) || typeof row.enabled !== 'boolean') return false;
+    if (row.alerts !== undefined && typeof row.alerts !== 'boolean') return false;
+    if (typeof row.label !== 'string' || !row.label.trim() || row.label.length > 60 || /[\r\n\x00]/.test(row.label)) return false;
+    if (typeof row.directory !== 'string' || row.directory.length > 2048 || /[\r\n\x00"]/.test(row.directory) || !path.isAbsolute(row.directory)) return false;
+    ids.add(row.id); return true;
+  });
+}
 export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
   return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline'].includes(key) ? typeof value === 'boolean'
     : key === 'paceModel' ? ['uniform', 'workdays', 'automatic'].includes(value as string)
-    : key === 'channels' ? isSubscriptionChannelVisibility(value) : false);
+    : key === 'channels' ? isSubscriptionChannelVisibility(value)
+      : key === 'profiles' ? validQuotaProfiles(value) : false);
 }
 export async function openQuotaStore(directory: string): Promise<QuotaStore> {
   let preferences = structuredClone(DEFAULT_QUOTA_PREFERENCES), history: QuotaHistory = {};

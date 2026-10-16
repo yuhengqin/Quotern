@@ -39,7 +39,7 @@ function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecast
     ?? (showTrend ? rows.find(row => trendWindows.has(row.window.id) && row.analysis.trend.length >= 3) : undefined);
   if (!row) return null;
   const text = eta ? `预计约 ${duration(row.analysis.etaAt!)}后耗尽` : quotaPaceLabel(row.analysis) ?? '最近 6 小时额度趋势';
-  return { text, label: quotaWindowLabel(provider.id, row.window), description: eta ? null : quotaPaceDescription(row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
+  return { text, label: quotaWindowLabel(provider.providerId ?? provider.id, row.window), description: eta ? null : quotaPaceDescription(row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
 }
 
 export interface QuotaUsageCardProps {
@@ -53,6 +53,8 @@ export interface QuotaUsageCardProps {
 function openExternal(url: string) { window.open(url, '_blank', 'noopener,noreferrer'); }
 
 export function QuotaUsageCard({ provider, preferences, statusRow = false, onRefresh, onOpenExternal = openExternal }: QuotaUsageCardProps) {
+  const providerType = provider.providerId ?? provider.id;
+  const proof = provider.provenance;
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -108,9 +110,9 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   const headerService = grouped ? serviceWarning : service;
   const planSummary = grouped ? '' : [provider.planLabel, !compact && provider.resetCredits !== null ? `可重置 ${provider.resetCredits} 次` : null].filter(Boolean).join(' · ');
   const windows = sortQuotaWindows(provider.windows);
-  const details = quotaDisplayDetails(provider.id, provider.details);
-  const forecasts = quotaForecasts(provider.id, provider.windows, provider.analyses, Date.now() / 1000);
-  const trendWindows = quotaTrendWindows(provider.id, provider.windows);
+  const details = quotaDisplayDetails(providerType, provider.details);
+  const forecasts = quotaForecasts(providerType, provider.windows, provider.analyses, Date.now() / 1000);
+  const trendWindows = quotaTrendWindows(providerType, provider.windows);
   const summary = quotaSummary(provider, preferences.showSparkline, forecasts, trendWindows);
   const commonReset = commonQuotaResetAt(provider.windows);
   const message = provider.status === 'custom-provider' ? '自定义模型无法获取配额'
@@ -164,16 +166,17 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
       <div className={`grid min-w-0 items-start gap-x-2 ${headerService ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'} ${grouped ? 'shrink-0' : ''}`}>
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
           <div className="flex min-w-0 max-w-full items-center gap-2">
-            <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
+            <SubscriptionBrandIcon brand={providerType as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
             <span className={`min-w-0 truncate text-sm font-medium ${grouped ? 'max-w-24' : ''}`}>{provider.label}</span>
           </div>
           {planSummary && <Chip size="sm" variant="soft" className="min-w-0 max-w-full bg-foreground/8 text-foreground" title={planSummary}><Chip.Label className="truncate">{planSummary}</Chip.Label></Chip>}
         </div>
         {status && headerService && <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpenExternal={onOpenExternal} iconOnly />}
       </div>
+      {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">OMP 本地记录 · {provider.provenance.observedAt ? queryDate(provider.provenance.observedAt) : '时间未知'} 观察{provider.provenance.identityVerified ? '' : ' · 账号未核实'}</p>}
       {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
       {hasReading && <div className="flex flex-col gap-3">
-        {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={provider.id} window={window} stale={provider.stale} hideReset={commonReset !== null} />)}
+        {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} stale={provider.stale} hideReset={commonReset !== null} />)}
         {details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
       </div>}
       {summary && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={`${summary.label}：${summary.description ?? summary.text}；点击卡片查看完整分析`}>
@@ -203,13 +206,16 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
                   {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
                   {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} onOpenExternal={onOpenExternal} />}
                   <div className="flex flex-col gap-5">
-                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={provider.id} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale} hideReset={commonReset !== null} detailed />)}
+                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale} hideReset={commonReset !== null} detailed />)}
                     {details.map(detail => <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
                   </div>
                   {(message || error) && <p role="status" className="text-sm text-muted">{error ?? message}</p>}
                   {compact && provider.status === 'expired' && <p className="text-xs text-muted">请在 {provider.label} 客户端重新登录，再刷新这里的额度。</p>}
                   {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">当前使用自定义模型服务，无法读取官方订阅额度。</p>}
                   <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
+                    <div className="flex flex-wrap justify-between gap-2"><dt>读取来源</dt><dd>{proof?.observer ?? '本机读取'}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>数据观察时间</dt><dd>{(proof?.observedAt ?? provider.fetchedAt) !== null ? queryDate((proof?.observedAt ?? provider.fetchedAt)!) : '暂无记录'}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>账号归属</dt><dd>{proof?.identityVerified ? '来源身份已核对' : '未取得跨来源身份凭据'}</dd></div>
                     <div className="flex flex-wrap justify-between gap-2"><dt>最近查询</dt><dd>{lastQuery !== null ? queryDate(lastQuery) : busy ? '正在查询' : '暂无记录'}</dd></div>
                   </dl>
                 </Modal.Body>

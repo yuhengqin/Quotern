@@ -128,17 +128,20 @@ export function createClaudeSubscriptionReader(deps: {
       if (kind !== 'official') return unavailable('temporarily-unavailable', '暂时无法确认 Claude Code 登录状态', hadAccount);
       hadAccount = true;
       const planLabel = claudePlanLabel(auth?.subscriptionType);
+      const account = { service: 'anthropic', email: typeof auth?.email === 'string' ? auth.email : undefined, organizationId: typeof (auth?.orgId ?? auth?.organizationId) === 'string' ? String(auth?.orgId ?? auth?.organizationId) : undefined };
+      const annotate = <T extends object>(snapshot: T, at: number | null) => markQuotaEvidence(markQuotaIdentity(snapshot, account.email ? [account.email, account.organizationId] : null),
+        { source: 'native', observer: 'Claude Code /usage', observedAt: at, identityVerified: Boolean(account.email && account.organizationId) }, account);
       // Without identity do not reuse a success across potentially different accounts.
       const key = typeof auth?.email === 'string' && auth.email ? JSON.stringify([auth.email, auth.orgId, auth.organizationId, planLabel]) : `unknown-${now()}`;
       return cache(key, async () => {
-        const fail = (status: ClaudeSubscriptionSnapshot['status'], message: string) => unavailable(status, message, true, planLabel);
+        const fail = (status: ClaudeSubscriptionSnapshot['status'], message: string) => annotate(unavailable(status, message, true, planLabel), null);
         try {
           const output = await deps.usage();
           const parsed = parseClaudeUsageResult(output.stdout, new Date(now()));
           if (parsed.denied) return fail('expired', 'Claude 登录或额度访问受限，请检查 Claude Code 登录状态');
           if (output.code !== 0 || parsed.isError) return fail('temporarily-unavailable', 'Claude /usage 读取失败，请稍后重试');
           if (!parsed.windows?.length) return fail('temporarily-unavailable', 'Claude /usage 暂未返回可用额度');
-          return markQuotaIdentity({ status: 'ready' as const, hasAccount: true, planLabel, windows: parsed.windows, fiveHour: parsed.fiveHour, sevenDay: parsed.sevenDay, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, auth?.email ? [auth.email, auth.orgId, auth.organizationId] : null);
+          return annotate({ status: 'ready' as const, hasAccount: true, planLabel, windows: parsed.windows, fiveHour: parsed.fiveHour, sevenDay: parsed.sevenDay, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, Math.floor(now() / 1000));
         } catch { return fail('temporarily-unavailable', 'Claude /usage 读取超时或启动失败，请稍后重试'); }
       }, options.forceRefresh);
     })();
@@ -154,18 +157,22 @@ function configDir(): string {
 export function claudeUsageEnvironment(): NodeJS.ProcessEnv {
   return { ...guiCliEnvironment(), DISABLE_TELEMETRY: '1', DISABLE_ERROR_REPORTING: '1', DISABLE_AUTOUPDATER: '1' };
 }
-export const readClaudeSubscription = createClaudeSubscriptionReader({
+export function createDefaultClaudeSubscriptionReader(directory = configDir()) {
+  const environment = { ...guiCliEnvironment(), CLAUDE_CONFIG_DIR: directory };
+  return createClaudeSubscriptionReader({
   custom: async () => {
     const settings = await Promise.all(['settings.json', 'settings.local.json'].map(async name => {
-      try { return JSON.parse(await readFile(path.join(configDir(), name), 'utf8')); } catch { return null; }
+      try { return JSON.parse(await readFile(path.join(directory, name), 'utf8')); } catch { return null; }
     }));
-    return hasCustomClaudeConfiguration(process.env, settings);
+    return hasCustomClaudeConfiguration(environment, settings);
   },
-  auth: () => runClaudeCommand(resolveClaudeCommand(), ['auth', 'status', '--json'], homedir(), guiCliEnvironment(), 5_000),
+  auth: () => runClaudeCommand(resolveClaudeCommand(), ['auth', 'status', '--json'], homedir(), environment, 5_000),
   usage: async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'quotern-claude-'));
-    try { return await runClaudeCommand(resolveClaudeCommand(), CLAUDE_USAGE_ARGS, directory, claudeUsageEnvironment(), 15_000); }
+    try { return await runClaudeCommand(resolveClaudeCommand(), CLAUDE_USAGE_ARGS, directory, { ...claudeUsageEnvironment(), ...environment }, 15_000); }
     finally { await rm(directory, { recursive: true, force: true }); }
   },
-});
-import { markQuotaIdentity } from './quota-identity.js';
+  });
+}
+export const readClaudeSubscription = createDefaultClaudeSubscriptionReader();
+import { markQuotaIdentity, markQuotaEvidence } from './quota-identity.js';

@@ -32,7 +32,7 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
   for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET]) ipcMain.removeHandler(channel);
   ipcMain.handle(QUOTA_GET, () => { const state = manager.getState(); void manager.refresh('interaction'); return state; });
   ipcMain.handle(QUOTA_REFRESH, (_event, id: unknown) => {
-    if (id !== undefined && !SUBSCRIPTION_CHANNELS.some(channel => channel.id === id)) throw new Error('未知额度来源');
+    if (id !== undefined && !SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && !manager.getState().providers.some(provider => provider.id === id)) throw new Error('未知额度来源');
     return manager.refresh('manual', id as string | undefined);
   });
   ipcMain.handle(QUOTA_SET, (_event, patch: QuotaPreferencePatch) => manager.setPreferences(patch));

@@ -8,6 +8,7 @@ import {
 } from '@/components/DashboardFilter';
 import { DashboardLoadingSkeleton } from '@/components/DashboardLoadingSkeleton';
 import { DashboardOverviewCard } from '@/components/DashboardOverviewCard';
+import { SessionActivityPanel } from '@/components/SessionActivityPanel';
 import { DashboardRangeSyncOverlay } from '@/components/DashboardRangeSyncOverlay';
 import { DailyUsageTrendCard } from '@/components/DailyUsageTrendCard';
 import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
@@ -358,6 +359,7 @@ export function DashboardPage() {
             summary={visibleSummary}
             sessionMetrics={sessionMetrics}
           />
+          <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section
             aria-label="用量图表"

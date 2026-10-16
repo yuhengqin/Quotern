@@ -1,6 +1,21 @@
 import type { SubscriptionChannelId } from './subscription-channels.js';
 
 export type QuotaPaceModel = 'uniform' | 'workdays' | 'automatic';
+export interface QuotaProfile {
+  id: string;
+  provider: 'codex' | 'claude';
+  label: string;
+  directory: string;
+  enabled: boolean;
+  alerts?: boolean;
+}
+export interface QuotaProvenance {
+  source: 'native' | 'omp';
+  observer: string;
+  observedAt: number | null;
+  identityVerified: boolean;
+  accountRef?: string;
+}
 export interface QuotaWindow {
   id: string;
   label: string;
@@ -30,6 +45,9 @@ export interface QuotaServiceStatus {
 }
 export interface QuotaProviderState {
   id: string;
+  providerId?: string;
+  profileLabel?: string;
+  provenance?: QuotaProvenance;
   label: string;
   status: string;
   planLabel: string | null;
@@ -47,6 +65,7 @@ export interface QuotaProviderState {
   service: QuotaServiceStatus | null;
 }
 export interface QuotaPreferences {
+  profiles?: QuotaProfile[];
   thresholdAlerts: boolean;
   resetAlerts: boolean;
   showSparkline: boolean;

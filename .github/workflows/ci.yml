@@ -47,6 +47,9 @@ jobs:
       - name: 构建全部包
         run: pnpm build
 
+      - name: 测试上游协议检查器（离线）
+        run: pnpm test:upstream-contracts
+
       # electron-vite 走 esbuild，只剥类型不做类型检查，桌面端的 tsc 要单独跑。
       - name: 类型检查（desktop）
         run: pnpm --filter quotern-desktop typecheck

@@ -9,21 +9,21 @@ const ROUTE = '/functions/tud-quota';
 const failure = (message: string) => ({ success: false as const, message, data: null });
 const ok = <T>(data: T) => ({ success: true as const, message: 'ok', data });
 
+export function isLocalPanelOrigin(origin: string | undefined, target: string): boolean {
+  if (!origin) return true;
+  try {
+    const source = new URL(origin), destination = new URL(target);
+    return ['http:', 'https:'].includes(source.protocol)
+      && (source.origin === destination.origin || ['localhost', '127.0.0.1', '[::1]'].includes(source.hostname));
+  } catch { return false; }
+}
+
 export function registerQuotaApi(parent: Hono, quota?: LocalQuotaRuntime): void {
   const app = new Hono();
   app.onError((_error, c) => c.json(failure('QUOTA_REQUEST_FAILED'), 500));
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
-    const origin = c.req.header('Origin');
-    if (origin) {
-      let allowed = false;
-      try {
-        const source = new URL(origin), target = new URL(c.req.url);
-        allowed = ['http:', 'https:'].includes(source.protocol)
-          && (source.origin === target.origin || ['localhost', '127.0.0.1', '[::1]'].includes(source.hostname));
-      } catch { /* Reject opaque and malformed origins. */ }
-      if (!allowed) return c.json(failure('QUOTA_FORBIDDEN_ORIGIN'), 403);
-    }
+    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json(failure('QUOTA_FORBIDDEN_ORIGIN'), 403);
     if (!quota) return c.json(failure('QUOTA_UNAVAILABLE'), 503);
     await next();
   });
@@ -40,7 +40,8 @@ export function registerQuotaApi(parent: Hono, quota?: LocalQuotaRuntime): void 
     if (!input || typeof input !== 'object' || Array.isArray(input)) return c.json(failure('QUOTA_INVALID_REQUEST'), 400);
     if (c.req.param('operation') === 'refresh') {
       const body = input as Record<string, unknown>;
-      if (Object.keys(body).some(key => key !== 'provider') || (body.provider !== undefined && !isSubscriptionChannelId(body.provider))) return c.json(failure('QUOTA_INVALID_PROVIDER'), 400);
+      if (Object.keys(body).some(key => key !== 'provider') || (body.provider !== undefined && !isSubscriptionChannelId(body.provider)
+        && !(typeof body.provider === 'string' && quota!.getState().providers.some(provider => provider.id === body.provider)))) return c.json(failure('QUOTA_INVALID_PROVIDER'), 400);
       return c.json(ok(await quota!.refresh('manual', body.provider as string | undefined)));
     }
     if (c.req.param('operation') === 'preferences') {

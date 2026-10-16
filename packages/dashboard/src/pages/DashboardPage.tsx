@@ -15,6 +15,7 @@ import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
 // import { HourlyActivityHeatmap } from '@/components/HourlyActivityHeatmap';
 import { StatusBanner } from '@/components/StatusBanner';
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
+import { SessionActivityPanel } from '@/components/SessionActivityPanel';
 import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
@@ -328,6 +329,7 @@ export function DashboardPage() {
             summary={visibleSummary}
             sessionMetrics={sessionMetrics}
           />
+          <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section
             aria-label="用量图表"

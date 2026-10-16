@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { QuotaState } from 'quotern-core/quota/shared/quota';
+import type { QuotaState, QuotaPreferencePatch } from 'quotern-core/quota/shared/quota';
 import { request } from '../lib/api';
 
 export function useQuotaState() {
@@ -34,5 +34,14 @@ export function useQuotaState() {
     document.addEventListener('visibilitychange', poll);
     return () => { active.current = false; version.current++; window.clearInterval(timer); window.removeEventListener('focus', poll); document.removeEventListener('visibilitychange', poll); };
   }, [load]);
-  return { state, error, refresh: load };
+  const save = useCallback(async (patch: QuotaPreferencePatch) => {
+    const current = ++version.current;
+    pending.current++;
+    try {
+      const next = await request<QuotaState>('/functions/tud-quota/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch), signal: AbortSignal.timeout(30000) });
+      if (active.current && current === version.current) { setState(next); setError(null); }
+    } catch { if (active.current) setError('额度设置保存失败，已保留原设置'); throw new Error('额度设置保存失败'); }
+    finally { pending.current--; }
+  }, []);
+  return { state, error, refresh: load, save };
 }

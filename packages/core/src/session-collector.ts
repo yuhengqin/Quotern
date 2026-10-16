@@ -11,8 +11,9 @@ import {
 import { aggregateSessionMetrics, type SessionMetricOptions, type SessionMetrics } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
 import { clearProjectResolutionCache } from './session-project.js';
+import { extractSessionObservation, mergeSessionObservation, type SessionObservation } from './session-observation.js';
 
-const VERSION = 6;
+const VERSION = 8;
 interface FileSnapshot {
   complete: boolean;
   size: number;
@@ -23,6 +24,7 @@ interface FileSnapshot {
   context: SessionFileContext;
   messages: Record<string, CollectedSessionMessage>;
   timings?: Record<string, SessionTimingEvent>;
+  observations?: Record<string, SessionObservation>;
 }
 interface SourceSnapshot {
   version: number;
@@ -40,7 +42,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
     const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, 4, 5, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+    if (![3, 4, 5, 6, 7, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
     cache.set(path, { stamp, value });
     return value;
   } catch { return null; }
@@ -149,6 +151,11 @@ export async function syncSessionSource(
         const context: SessionFileContext = append ? { ...old!.context } : { sessionId: input.sessionId };
         const messages = append ? { ...old!.messages } : {};
         const timings = append ? { ...old!.timings } : {};
+        const observations = append ? { ...old!.observations } : {};
+        const addObservation = (event: SessionObservation) => {
+          const key = JSON.stringify([event.sessionId, event.id]);
+          observations[key] = mergeSessionObservation(observations[key], event);
+        };
         const addTiming = (event: SessionTimingEvent) => {
           const key = JSON.stringify([event.sessionId, event.id]);
           timings[key] = mergeSessionTimingEvent(timings[key], event);
@@ -162,17 +169,21 @@ export async function syncSessionSource(
             try { record = JSON.parse(line) as Record<string, unknown>; } catch { fileComplete = false; continue; }
             const message = extractSessionMessage(source, record, context);
             if (message) messages[JSON.stringify([message.sessionId, message.id])] = message;
+            const observation = extractSessionObservation(source, record, context);
+            if (observation) addObservation(observation);
             for (const event of extractSessionTimingEvents(source, record, context, message)) addTiming(event);
           }
           offset = reader.nextOffset;
         } else {
           const snapshotTimings: SessionTimingEvent[] = [];
-          for (const message of readSessionSnapshot(input, source, context, snapshotTimings)) messages[JSON.stringify([message.sessionId, message.id])] = message;
+          const snapshotObservations: SessionObservation[] = [];
+          for (const message of readSessionSnapshot(input, source, context, snapshotTimings, snapshotObservations)) messages[JSON.stringify([message.sessionId, message.id])] = message;
           for (const event of snapshotTimings) addTiming(event);
+          for (const event of snapshotObservations) addObservation(event);
         }
         fileComplete = fileComplete && !context.incomplete && (source !== 'kimi' || context.kimiContext === true);
         if (source === 'codex' && context.legacyCodexMessages && !context.canonicalCodexMessages) fileComplete = false;
-        next.files[input.path] = { complete: fileComplete, size, mtimeMs, ino: st.ino, offset, guard: input.kind === 'jsonl' ? await prefixGuard(input.path, offset) : '', context, messages, timings };
+        next.files[input.path] = { complete: fileComplete, size, mtimeMs, ino: st.ino, offset, guard: input.kind === 'jsonl' ? await prefixGuard(input.path, offset) : '', context, messages, timings, observations };
         dirty = true;
       } catch {
         // A locked DB, incomplete JSON snapshot or temporary read error keeps
@@ -191,7 +202,8 @@ export async function syncSessionSource(
     if (!dirty) return false;
     const before = previous ? materialize(previous) : null;
     const after = materialize(next);
-    const changed = !before || before.complete !== after.complete || JSON.stringify(before.messages) !== JSON.stringify(after.messages) || JSON.stringify(before.timings) !== JSON.stringify(after.timings);
+    const changed = !before || before.complete !== after.complete || JSON.stringify(before.messages) !== JSON.stringify(after.messages) || JSON.stringify(before.timings) !== JSON.stringify(after.timings)
+      || JSON.stringify(Object.values(previous?.files ?? {}).map(file => file.observations)) !== JSON.stringify(Object.values(next.files).map(file => file.observations));
     await saveSource(path, next);
     return changed;
   } finally { await release(); }
@@ -201,11 +213,12 @@ export async function readSessionHistory(
   dataDir: string,
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
-): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; missingSources: string[] }> {
+): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; missingSources: string[] }> {
   const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
   const sources = new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))]);
   const messages: CollectedSessionMessage[] = [];
   const timingEvents: SessionTimingEvent[] = [];
+  const observations = new Map<string, SessionObservation>();
   const missingSources: string[] = [];
   for (const source of sources) {
     if (!validSource(source)) continue;
@@ -215,10 +228,14 @@ export async function readSessionHistory(
     const result = materialize(stored);
     messages.push(...result.messages);
     timingEvents.push(...result.timings);
+    for (const file of Object.values(stored.files)) for (const event of Object.values(file.observations ?? {})) {
+      const key = JSON.stringify([event.source, event.sessionId, event.id]);
+      observations.set(key, mergeSessionObservation(observations.get(key), event));
+    }
     const inRange = aggregateSessionMetrics(result.messages, options).sessionCount > 0;
     if ((usageSources.includes(source) || options.sources?.includes(source) || inRange) && (!result.complete || (usageSources.includes(source) && result.messages.length === 0))) missingSources.push(source);
   }
-  return { messages, timingEvents, missingSources };
+  return { messages, timingEvents, observations: [...observations.values()], missingSources };
 }
 
 export async function readSessionMetrics(

@@ -1,5 +1,6 @@
 import type { QueueBucket, SyncStatus, TudConfig } from '../types.js';
 import type { LocalQuotaRuntime } from './quota-api.js';
+import type { QuotaState } from '../quota/shared/quota.js';
 import { AggregateCache } from '../aggregate-cache.js';
 import { aggregateUsageSummary } from '../aggregate.js';
 import {
@@ -87,6 +88,8 @@ export class BucketStore {
 
 export interface LocalApiDeps {
   quota?: LocalQuotaRuntime;
+  /** Electron exposes quota through IPC while sharing account labels locally. */
+  getQuotaState?(): QuotaState | null;
   dataDir: string;
   getConfig: () => TudConfig;
   bucketStore: BucketStore;

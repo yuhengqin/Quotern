@@ -128,7 +128,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
     setDetailsOpen(true);
   };
   return <>
-    <Card data-quota-card={provider.id} data-quota-compact={compact} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
+    <Card data-quota-card={provider.id} data-quota-compact={compact} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] data-[quota-compact=true]:self-start hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
       onPointerEnter={event => {
         if (event.pointerType === 'touch' || detailsOpen) return;
         hideHint();

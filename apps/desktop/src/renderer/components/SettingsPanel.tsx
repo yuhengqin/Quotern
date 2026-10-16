@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Description,
   Label,
   ListBox,
   Select,
@@ -28,8 +27,7 @@ import {
 import { AboutContent } from '@/components/AboutContent';
 import { StatusBanner } from '@/components/StatusBanner';
 import { PetSettingsCard } from '@/components/PetSettingsCard';
-import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
-import { SUBSCRIPTION_CHANNELS } from '../../shared/subscription-channels';
+import { QuotaSettings } from './QuotaSettings';
 
 import {
   type SettingsTabId,
@@ -105,48 +103,7 @@ export function SettingsPanel({
 
 /** Toggle which auto-detected subscription channels may appear on the dashboard. */
 function SubscriptionChannelSettings() {
-  const { isEnabled, setChannelEnabled, setAllEnabled } =
-    useSubscriptionChannelVisibility();
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-medium text-foreground">订阅额度卡片</p>
-        <Description>
-          控制用量页展示哪些订阅额度卡片。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。
-        </Description>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onPress={() => setAllEnabled(true)}>
-          全部开启
-        </Button>
-        <Button size="sm" variant="tertiary" onPress={() => setAllEnabled(false)}>
-          全部关闭
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {SUBSCRIPTION_CHANNELS.map((channel) => (
-          <Checkbox
-            id={`subscription-channel-${channel.id}`}
-            isSelected={isEnabled(channel.id)}
-            key={channel.id}
-            onChange={(checked) => {
-              setChannelEnabled(channel.id, checked);
-            }}
-          >
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              {channel.label}
-            </Checkbox.Content>
-          </Checkbox>
-        ))}
-      </div>
-    </div>
-  );
+  return <QuotaSettings />;
 }
 
 /** 自动更新 + 开机自启 + 设备信息。 */

@@ -1,7 +1,9 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { markQuotaIdentity } from './quota-identity';
 import {
   mapMiniMaxAccountQuota,
   mapMiniMaxQuota,
@@ -240,7 +242,7 @@ async function fetchJson(
   token: string,
   method: 'GET' | 'POST' = 'GET',
 ): Promise<{ ok: boolean; status: number; value: unknown }> {
-  const response = await fetch(url, {
+  const response = await quotaNodeFetch(url, {
     method,
     headers: {
       Accept: 'application/json',
@@ -309,6 +311,7 @@ async function fetchQuota(credentials: MiniMaxCredentials): Promise<MiniMaxSubsc
       stale: false,
       message: null,
     };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch {
@@ -362,6 +365,7 @@ async function fetchAccountQuota(credentials: MiniMaxCredentials): Promise<MiniM
       stale: false,
       message: null,
     };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch {

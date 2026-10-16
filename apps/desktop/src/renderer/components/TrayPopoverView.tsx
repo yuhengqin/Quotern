@@ -391,7 +391,6 @@ export function TrayPopoverView() {
           <h1 className="text-md text-foreground">用量概览</h1>
           <ThemeToggle />
         </div>
-        <SubscriptionUsageGrid className="grid-cols-2 gap-2.5" />
         <div className="flex min-w-0 items-center gap-2">
           <Tabs
             className="w-fit shrink-0 text-center"
@@ -442,6 +441,7 @@ export function TrayPopoverView() {
 
       <div className="tray-popover__body">
         <div ref={contentRef} className="px-4 pb-4">
+          <SubscriptionUsageGrid className="mb-3 grid-cols-1 gap-2.5" />
           {loading ? (
             <div className="relative isolate min-h-40">
               <DashboardRangeSyncOverlay visible />

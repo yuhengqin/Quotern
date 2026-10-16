@@ -7,6 +7,7 @@
  *  - tud.onDataSynced → Core poll / sync watcher refresh
  */
 import { contextBridge, ipcRenderer } from 'electron';
+import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
@@ -105,6 +106,16 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
 const tudApi = {
   version: () => '0.1.0',
   platform: process.platform,
+  quota: {
+    getState: (): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_GET),
+    refresh: (provider?: string): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_REFRESH, provider),
+    setPreferences: (patch: QuotaPreferencePatch): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_SET, patch),
+    onChanged: (callback: (state: QuotaState) => void) => {
+      const listener = (_event: unknown, state: QuotaState) => callback(state);
+      ipcRenderer.on(QUOTA_CHANGED, listener);
+      return () => ipcRenderer.removeListener(QUOTA_CHANGED, listener);
+    },
+  },
 
   minimize: () => ipcRenderer.send('window:minimize'),
   toggleMaximize: () => ipcRenderer.send('window:toggle-maximize'),

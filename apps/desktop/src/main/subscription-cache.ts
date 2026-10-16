@@ -1,3 +1,5 @@
+import { copyQuotaIdentity, markQuotaIdentity, quotaIdentity } from './quota-identity';
+
 /** One minute cache shared by tray and main window; credentials never leave the caller. */
 export function createSubscriptionCache<T extends { status: string; stale: boolean; message: string | null }>(now = Date.now) {
   let identity: string | null = null;
@@ -12,11 +14,13 @@ export function createSubscriptionCache<T extends { status: string; stale: boole
     const readingGeneration = generation;
     const promise = (async () => {
       const fresh = await read();
+      if (!quotaIdentity(fresh)) markQuotaIdentity(fresh, ['cache', key]);
       let value = fresh;
       if (identity === key && generation === readingGeneration) {
         if (fresh.status === 'ready') lastSuccess = fresh;
         else if (fresh.status === 'unavailable' || fresh.status === 'temporarily-unavailable') {
-          if (lastSuccess) value = { ...lastSuccess, stale: true, message: fresh.message };
+          if (lastSuccess) value = copyQuotaIdentity(lastSuccess, { ...lastSuccess, stale: true, message: fresh.message,
+            ...('retryAfterSeconds' in fresh ? { retryAfterSeconds: fresh.retryAfterSeconds } : {}) });
         } else lastSuccess = null;
         cached = { at: now(), value };
       }

@@ -29,6 +29,7 @@ import {
   resetTrayPopoverQuitting,
   setPopoverTheme,
   setTrayUsageTitle,
+  setTrayQuotaState,
 } from './TrayPopover';
 import { formatTrayUsage } from '../shared/tray-usage';
 import { registerLocalApiIpc } from './local-api-ipc';
@@ -65,6 +66,7 @@ import { restoreNativeTrapHandler } from './native-crash-signals';
 import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
 import { PetController } from './pet-controller';
+import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
 import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
 import {
@@ -110,6 +112,7 @@ let disposeDeepSeekSubscriptionIpc: (() => void) | null = null;
 let disposeOpenCodeSubscriptionIpc: (() => void) | null = null;
 let disposeTraeSubscriptionIpc: (() => void) | null = null;
 let disposeWorkBuddySubscriptionIpc: (() => void) | null = null;
+let quotaRuntime: Awaited<ReturnType<typeof initializeQuotaRuntime>> | null = null;
 let currentThemeMode: ThemeMode = 'system';
 let currentTheme: Theme = 'light';
 let pendingConfigResetNotice = false;
@@ -457,6 +460,10 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeOpenCodeSubscriptionIpc = registerOpenCodeSubscriptionIpc();
     disposeTraeSubscriptionIpc = registerTraeSubscriptionIpc();
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
+    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, onChanged: state => {
+      setTrayQuotaState(state);
+      petController?.updateQuotaState(state);
+    } });
     if (process.platform === 'win32') {
       petController = new PetController({
         toggleMainWindow: () => {
@@ -470,6 +477,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         },
         openSettings: () => void openSettings({ tab: 'app' }),
         getDark: () => currentTheme === 'dark',
+        getQuotaState: getQuotaRuntimeState,
       });
       try {
         await petController.initialize();
@@ -501,7 +509,9 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       triggerSync,
       theme: currentTheme,
       togglePet: () => petController?.toggle(),
+      onOpen: () => { void quotaRuntime?.manager.refresh('interaction'); },
     });
+    quotaRuntime.start();
 
     try {
       await touchRuntimeHeartbeat({ kind: 'desktop', pid: process.pid });
@@ -539,6 +549,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     // and windows are ready, so startup cannot restart services during install.
     await initializeAutoUpdate({
       beforeInstall: async () => {
+        quotaRuntime?.pause();
         hideTrayPopover();
         markTrayPopoverQuitting();
         markAppQuitting();
@@ -546,6 +557,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         await stopLocalRuntime();
       },
       onInstallFailed: async () => {
+        quotaRuntime?.start();
         resetAppQuitting();
         resetTrayPopoverQuitting();
         shutdownPromise = null;
@@ -566,6 +578,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   app.on('before-quit', (event) => {
     if (shutdownPromise) return;
     event.preventDefault();
+    quotaRuntime?.pause();
     markAppQuitting();
     markTrayPopoverQuitting();
     setLocalRuntimeQuitting(true);
@@ -577,6 +590,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   // before-quit/window close can be cancelled. Keep IPC and the update
   // watchdog alive until windows have closed and the app is actually exiting.
   app.on('will-quit', () => {
+    quotaRuntime?.dispose(); quotaRuntime = null;
     ipcMain.removeHandler(THEME_GET_CHANNEL);
     ipcMain.removeHandler(SHARE_CARD_COPY_IMAGE_CHANNEL);
     ipcMain.removeAllListeners(THEME_SET_CHANNEL);

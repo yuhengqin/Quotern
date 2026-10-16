@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { quotaIdentity } from './quota-identity';
 import {
   createCopilotSubscriptionReader,
   fetchCopilotSubscription,
@@ -20,6 +21,16 @@ function quotaResponse(remaining = 97) {
     quota_snapshots: { chat: { percent_remaining: remaining, entitlement: 200, unlimited: false } },
   }));
 }
+
+test('environment tokens without an account ID do not share quota history identity', async () => {
+  let token = 'environment-account-a';
+  const read = createCopilotSubscriptionReader(async () => ({ user: 'environment', tokens: [token] }), async () => quotaResponse());
+  const first = await read({ forceRefresh: true });
+  token = 'environment-account-b';
+  const second = await read({ forceRefresh: true });
+  assert.ok(quotaIdentity(first));
+  assert.notEqual(quotaIdentity(first), quotaIdentity(second));
+});
 
 test('selects the VS Code account and excludes unrelated GitHub hosts and credentials', () => {
   const values = [{

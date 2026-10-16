@@ -1,7 +1,9 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { markQuotaIdentity } from './quota-identity';
 import {
   mapDeepSeekBalance,
   type DeepSeekSubscriptionSnapshot,
@@ -134,7 +136,7 @@ export function hasCustomDeepSeekConfiguration(env: NodeJS.ProcessEnv): boolean 
 
 async function fetchBalance(token: string): Promise<{ ok: boolean; status: number; value: unknown }> {
   const origin = 'https://api.deepseek.com';
-  const response = await fetch(`${origin}/user/balance`, {
+  const response = await quotaNodeFetch(`${origin}/user/balance`, {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -187,6 +189,7 @@ async function queryBalance(credentials: DeepSeekCredentials): Promise<DeepSeekS
       stale: false,
       message: null,
     };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch {

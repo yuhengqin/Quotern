@@ -1,5 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { markQuotaIdentity } from './quota-identity';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { guiCliEnvironment } from './cli-runtime';
@@ -317,6 +319,7 @@ async function fetchFreshGrokSubscription(): Promise<GrokSubscriptionSnapshot> {
   }
 
   try {
+    const identity = await readFile(path.join(grokHome, 'auth.json'), 'utf8');
     const billing = await runGrokBillingRpc(command, grokHome);
     const mapped = mapGrokBilling(billing);
     if (mapped.limits.length === 0) {
@@ -329,6 +332,7 @@ async function fetchFreshGrokSubscription(): Promise<GrokSubscriptionSnapshot> {
       stale: false,
       message: null,
     };
+    if (identity === await readFile(path.join(grokHome, 'auth.json'), 'utf8')) markQuotaIdentity(snapshot, identity);
     lastSuccess = snapshot;
     return snapshot;
   } catch (error) {

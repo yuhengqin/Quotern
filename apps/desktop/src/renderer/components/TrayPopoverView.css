@@ -30,7 +30,7 @@ body:has(.tray-popover),
     'body'
     'footer';
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: 430px;
+  width: min(430px, 100vw);
   max-height: 700px;
 }
 

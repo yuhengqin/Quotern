@@ -1,7 +1,9 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { markQuotaIdentity } from './quota-identity';
 import { mapCopilotSubscription, type CopilotSubscriptionSnapshot } from '../shared/copilot-subscription';
 
 const COPILOT_USER_URL = 'https://api.github.com/copilot_internal/user';
@@ -92,7 +94,7 @@ function unavailable(status: Exclude<CopilotSubscriptionSnapshot['status'], 'rea
 /** Internal IDE endpoint, also used by VS Code; no credentials leave the main process. */
 export async function fetchCopilotSubscription(
   credentials: CopilotCredentials,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = quotaNodeFetch,
 ): Promise<CopilotSubscriptionSnapshot> {
   for (const token of credentials.tokens) {
     const response = await fetchImpl(COPILOT_USER_URL, {
@@ -115,7 +117,7 @@ export async function fetchCopilotSubscription(
 /** Cache is scoped to the selected account and session, including in-flight requests. */
 export function createCopilotSubscriptionReader(
   loadCredentials: () => Promise<CopilotCredentials | null> = readCopilotCredentials,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = quotaNodeFetch,
 ) {
   let lastSuccess: CopilotSubscriptionSnapshot | null = null;
   let credentialKey: string | null = null;
@@ -147,6 +149,8 @@ export function createCopilotSubscriptionReader(
       try {
         const snapshot = await fetchCopilotSubscription(credentials, fetchImpl);
         if (key !== credentialKey) return unavailable('temporarily-unavailable', 'Copilot 账号已切换，请刷新额度');
+        if (snapshot.status === 'ready') markQuotaIdentity(snapshot, credentials.user === 'environment'
+          ? { source: 'environment', tokens: credentials.tokens } : credentials);
         lastSuccess = snapshot.status === 'ready' ? snapshot : null;
         return snapshot;
       } catch {

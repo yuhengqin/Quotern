@@ -1,4 +1,5 @@
 import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+import type { QuotaWindow } from './quota';
 
 /** Read-only Claude.ai subscription allowance exposed to the renderer. */
 export type ClaudeSubscriptionStatus =
@@ -18,6 +19,7 @@ export interface ClaudeRateLimitWindow {
 }
 
 export interface ClaudeSubscriptionSnapshot {
+  windows?: QuotaWindow[];
   status: ClaudeSubscriptionStatus;
   hasAccount: boolean;
   planLabel: string | null;

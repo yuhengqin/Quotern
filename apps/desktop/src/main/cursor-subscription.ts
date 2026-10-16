@@ -1,8 +1,10 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { markQuotaIdentity } from './quota-identity';
 import {
   mapCursorUsageSummary,
   type CursorSubscriptionSnapshot,
@@ -136,7 +138,7 @@ async function readCursorCredentials(): Promise<CursorCredentials> {
 
 export async function fetchCursorSubscription(
   credentials: CursorCredentials,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = quotaNodeFetch,
 ): Promise<CursorSubscriptionSnapshot> {
   const response = await fetchImpl(CURSOR_USAGE_URL, {
     method: 'GET',
@@ -185,7 +187,10 @@ async function fetchFreshCursorSubscription(): Promise<CursorSubscriptionSnapsho
 
   try {
     const snapshot = await fetchCursorSubscription(credentials);
-    if (snapshot.status === 'ready') lastSuccess = snapshot;
+    if (snapshot.status === 'ready') {
+      markQuotaIdentity(snapshot, credentials);
+      lastSuccess = snapshot;
+    }
     return snapshot;
   } catch {
     return staleFallback('暂时无法读取 Cursor 订阅配额');

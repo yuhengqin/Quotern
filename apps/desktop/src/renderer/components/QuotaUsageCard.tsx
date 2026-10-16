@@ -22,6 +22,30 @@ function duration(until: number) {
   return minutes < 60 ? `${minutes} 分钟` : minutes < 1440 ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ''}` : `${Math.ceil(minutes / 1440)} 天`;
 }
 
+function windowLabel(window: QuotaWindow) {
+  const period = /^(\d+(?:\.\d+)?)\s*([hd])$/i.exec(window.label);
+  const label = period ? `${period[1]} ${period[2].toLowerCase() === 'h' ? '小时' : '天'}额度` : window.label;
+  return [window.groupLabel, label].filter(Boolean).join(' ');
+}
+
+function paceLabel(analysis: QuotaAnalysis) {
+  const pace = analysis.paceDifference;
+  return pace === null ? null : pace === 0 ? '节奏均衡' : pace > 0 ? `比参考节奏多余 ${pace} 个百分点` : `消耗超前 ${Math.abs(pace)} 个百分点`;
+}
+
+function quotaSummary(provider: QuotaProviderState, showTrend: boolean) {
+  if (provider.stale || provider.status !== 'ready') return null;
+  const rows = provider.windows.filter(window => window.analysisEligible !== false)
+    .map(window => ({ window, analysis: provider.analyses[window.id] })).filter(row => row.analysis);
+  const eta = rows.filter(row => row.analysis.etaAt && row.analysis.etaAt > Date.now() / 1000)
+    .sort((a, b) => a.analysis.etaAt! - b.analysis.etaAt!)[0];
+  const row = eta ?? rows.find(row => row.analysis.paceDifference !== null)
+    ?? (showTrend ? rows.find(row => row.analysis.trend.length >= 3) : undefined);
+  if (!row) return null;
+  const text = eta ? `预计约 ${duration(row.analysis.etaAt!)}后耗尽` : paceLabel(row.analysis) ?? '最近 6 小时额度趋势';
+  return { text, label: windowLabel(row.window), warning: Boolean(eta), trend: showTrend && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
+}
+
 export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProviderState; preferences: QuotaPreferences }) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,12 +95,15 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   const status = provider.service;
   const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
+  const severeServiceWarning = serviceWarning && (status?.level === 'major' || status?.level === 'critical') ? serviceWarning : null;
   const hasReading = provider.windows.length > 0 || provider.details.length > 0;
+  const compact = !hasReading && provider.resetCredits === null;
+  const summary = quotaSummary(provider, preferences.showSparkline);
   const message = provider.status === 'custom-provider' ? '自定义模型无法获取配额'
     : provider.status === 'expired' ? '登录已过期，请重新登录'
       : provider.stale ? '读数可能已过期'
         : provider.message ?? (provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 100) ? '额度已用尽'
-          : provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 90) ? '额度接近上限' : null);
+          : provider.windows.some(window => window.analysisEligible !== false && window.usedPercent >= 90) ? '额度接近上限' : compact ? '暂未提供可展示的额度读数' : null);
   const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
   const busy = provider.refreshing || refreshing;
   const refresh = async () => {
@@ -100,7 +127,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
     setDetailsOpen(true);
   };
   return <>
-    <Card data-quota-card={provider.id} className="group relative min-w-0 cursor-pointer overflow-visible transition-[background-color,box-shadow] hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
+    <Card data-quota-card={provider.id} data-quota-compact={compact} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
       onPointerEnter={event => {
         if (event.pointerType === 'touch' || detailsOpen) return;
         hideHint();
@@ -119,30 +146,35 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
       onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
-    <Card.Content className="relative gap-3 p-3">
+    <Card.Content className={`relative ${compact ? 'gap-1.5 px-4 py-3' : 'gap-3 p-4'}`}>
       <div className="flex min-w-0 items-center gap-2">
         <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider.label}</span>
+        {compact && provider.planLabel && <span className="max-w-24 truncate text-xs text-muted" title={provider.planLabel}>{provider.planLabel}</span>}
+        {status && serviceWarning && <QuotaServiceStatusLink label={provider.label} status={status} service={serviceWarning} iconOnly />}
       </div>
-      {(provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2">
+      {!compact && (provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2">
         {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
-        {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>{provider.resetCredits}张重置卡</Chip.Label></Chip>}
+        {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>可重置 {provider.resetCredits} 次</Chip.Label></Chip>}
       </div>}
       {hasReading && <div className="flex flex-col gap-3">
         {provider.windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} window={window} stale={provider.stale} />)}
         {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
       </div>}
+      {summary && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={`${summary.label}：${summary.text}；点击卡片查看完整分析`}>
+        {summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
+        <p className={`min-w-0 truncate text-[11px] ${summary.warning ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>{summary.text}</p>
+      </div>}
       {(message || error) && <div className="flex items-center justify-between gap-2">
         <p role="status" className="text-xs text-muted">{error ?? message}</p>
-        {(retryable || error) && <Button data-quota-retry aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
+        {(retryable || error) && <Button data-quota-action data-quota-retry aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
       </div>}
-      {serviceWarning && !message && <p className="flex items-center gap-1.5 text-xs text-muted">
-        <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${serviceWarning.dotClassName}`} />
-        官方服务{serviceWarning.label}
+      {severeServiceWarning && <p role="status" className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+        官方服务{severeServiceWarning.label}
       </p>}
       {provider.windows.length > 3 && <span className="text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
     </Card.Content>
-    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-retry]:hover]:hidden group-has-[[data-quota-retry]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>点击查看详情</span>
+    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>点击查看详情</span>
     </Card>
           <Modal.Backdrop isOpen={detailsOpen} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">
@@ -152,13 +184,15 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
                   <Modal.Heading>{provider.label} 额度详情</Modal.Heading>
                 </Modal.Header>
                 <Modal.Body className="flex flex-col gap-5">
-                  {provider.planLabel && <p className="text-sm">{provider.planLabel}</p>}
+                  {(provider.planLabel || provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, provider.resetCredits !== null ? `可重置 ${provider.resetCredits} 次` : null].filter(Boolean).join(' · ')}</p>}
                   {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} />}
                   <div className="flex flex-col gap-5">
                     {provider.windows.map(window => <QuotaWindowRow key={window.id} window={window} analysis={provider.analyses[window.id]} showSparkline={preferences.showSparkline} stale={provider.stale} detailed />)}
                     {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
                   </div>
-                  {(provider.message || error) && <p role="status" className="text-sm text-muted">{error ?? provider.message}</p>}
+                  {(message || error) && <p role="status" className="text-sm text-muted">{error ?? message}</p>}
+                  {compact && provider.status === 'expired' && <p className="text-xs text-muted">请在 {provider.label} 客户端重新登录，再刷新这里的额度。</p>}
+                  {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">当前使用自定义模型服务，无法读取官方订阅额度。</p>}
                   <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
                     <div className="flex flex-wrap justify-between gap-2"><dt>有效读数</dt><dd>{provider.fetchedAt ? `${provider.stale ? '旧读数 · ' : ''}${new Date(provider.fetchedAt * 1000).toLocaleString('zh-CN')}` : busy ? '正在读取额度' : '尚无有效读数'}</dd></div>
                     {provider.nextRefreshAt && <div className="flex flex-wrap justify-between gap-2"><dt>下次尝试</dt><dd>{new Date(provider.nextRefreshAt * 1000).toLocaleString('zh-CN')}</dd></div>}
@@ -175,15 +209,19 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   </>;
 }
 
-function QuotaServiceStatusLink({ label, status, service }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']] }) {
-  return <Tooltip delay={200}>
-    <Tooltip.Trigger<'button'> render={props => <button {...props} />} type="button"
-      className="inline-flex w-fit items-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+function QuotaServiceStatusLink({ label, status, service, iconOnly = false }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']]; iconOnly?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <Tooltip isOpen={open} onOpenChange={setOpen}>
+    <Button size="sm" variant="tertiary" isIconOnly={iconOnly}
+      data-quota-action
+      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${iconOnly ? 'size-6 min-w-6 p-0' : 'h-auto min-h-6 w-fit px-0'}`}
       aria-label={`${label} 官方服务状态：${service.label}，查看官方状态页`}
-      onClick={() => void window.tud.openExternal(status.url)}>
+      onHoverStart={() => setOpen(true)} onHoverEnd={() => setOpen(false)}
+      onFocus={event => { if (event.target.matches(':focus-visible')) setOpen(true); }} onBlur={() => setOpen(false)}
+      onPress={() => { setOpen(false); void window.tud.openExternal(status.url); }}>
       <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${service.dotClassName}`} />
-      <span>{service.label}</span><span aria-hidden="true">↗</span>
-    </Tooltip.Trigger>
+      {!iconOnly && <><span>{service.label}</span><span aria-hidden="true">↗</span></>}
+    </Button>
     <Tooltip.Content className="max-w-64 text-xs">
       <div className="flex flex-col gap-1">
         <p>官方整体状态：{service.label}</p>
@@ -196,27 +234,33 @@ function QuotaServiceStatusLink({ label, status, service }: { label: string; sta
 }
 
 function QuotaWindowRow({ window, analysis, showSparkline = false, stale, detailed = false }: { window: QuotaWindow; analysis?: QuotaAnalysis; showSparkline?: boolean; stale: boolean; detailed?: boolean }) {
-  const label = [window.groupLabel, window.label].filter(Boolean).join(' ');
+  const label = windowLabel(window);
   const reset = formatSubscriptionResetTime(window.resetsAt);
-  const pace = analysis?.paceDifference;
-  const paceText = pace === undefined || pace === null ? null : pace === 0 ? '节奏均衡' : pace > 0 ? `比参考节奏多余 ${pace} 个百分点` : `消耗超前 ${Math.abs(pace)} 个百分点`;
+  const paceText = analysis ? paceLabel(analysis) : null;
   const color = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
   return <div className="flex min-w-0 flex-col gap-1">
     <div className="flex min-w-0 items-baseline justify-between gap-3 text-xs">
       <span className="min-w-0 truncate text-muted" title={label}>{label}</span>
-      <span className="shrink-0 tabular-nums">{window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}</span>
+      <span className="shrink-0 tabular-nums text-foreground"><span className="mr-1 text-xs font-normal text-muted">{window.valueText ? '' : '剩余'}</span><span className="text-lg font-semibold leading-tight">{window.valueText ?? `${Math.round(100 - window.usedPercent)}%`}</span></span>
     </div>
     <ProgressBar aria-label={`${label}，${window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}`} value={100 - window.usedPercent} size="sm" style={{ gap: 0 }}>
       <ProgressBar.Track className="h-1.5 rounded-full bg-surface-secondary"><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} /></ProgressBar.Track>
     </ProgressBar>
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-muted">
-      {reset && <span title={formatSubscriptionResetTime(window.resetsAt, new Date(), true) ?? undefined}>{reset} {window.timeKind === 'expiry' ? '到期' : '重置'}</span>}
+      {reset && <span title={formatSubscriptionResetTime(window.resetsAt, new Date(), true) ?? undefined}>{reset}{window.timeKind === 'expiry' ? '到期' : '重置'}</span>}
       {detailed && window.used !== undefined && window.limit !== undefined && <span>{window.used.toLocaleString()} / {window.limit.toLocaleString()} {window.unit === 'requests' ? '次' : window.unit === 'credits' ? '额度' : 'Token'}</span>}
     </div>
     {detailed && !stale && paceText && <p className="text-[10px] text-muted" title={`根据${analysis?.paceBasis === 'workdays' ? '工作日' : analysis?.paceBasis === 'automatic' ? '历史习惯' : '均匀'}参考曲线计算；差值按完整额度的百分点计`}>{paceText}</p>}
-    {detailed && !stale && analysis?.etaAt && <p className="text-xs text-warning">按近期速度，预计约 {duration(analysis.etaAt)}后耗尽</p>}
+    {detailed && !stale && analysis?.etaAt && <p className="text-xs text-amber-700 dark:text-amber-400">按近期速度，预计约 {duration(analysis.etaAt)}后耗尽</p>}
     {detailed && showSparkline && analysis && analysis.trend.length >= 3 && <QuotaSparkline samples={analysis.trend} label={label} />}
   </div>;
+}
+
+function QuotaTrendPreview({ samples }: { samples: QuotaSample[] }) {
+  const first = samples[0].at, span = Math.max(1, samples.at(-1)!.at - first);
+  return <svg aria-hidden="true" viewBox="0 0 64 16" className="h-4 w-16 shrink-0 text-accent">
+    <polyline fill="none" stroke="currentColor" strokeWidth="1.5" points={samples.map(sample => `${2 + (sample.at - first) / span * 60},${2 + sample.usedPercent / 100 * 12}`).join(' ')} />
+  </svg>;
 }
 
 function QuotaSparkline({ samples, label }: { samples: QuotaSample[]; label: string }) {

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { net } from 'electron';
 import { codexPlanLabel, mapCodexRateLimitWindows, type CodexSubscriptionSnapshot } from '../shared/codex-subscription';
 import { createSubscriptionCache } from './subscription-cache';
 
@@ -37,8 +38,17 @@ export function mapCodexUsage(value: unknown) {
 function unavailable(status: CodexSubscriptionSnapshot['status'], message: string, hasAccount = false, planLabel: string | null = null): CodexSubscriptionSnapshot {
   return { status, message, hasAccount, planLabel, fiveHour: null, weekly: null, fetchedAt: null, stale: false };
 }
+function logCodexRequestError(error: unknown): void {
+  const details = record(error);
+  const rawType = text(details.name);
+  const type = ['Error', 'TypeError', 'SyntaxError', 'AbortError', 'TimeoutError'].includes(rawType) ? rawType : 'Error';
+  const chromiumCode = text(details.message).match(/\bnet::(ERR_[A-Z0-9_]{2,64})\b/)?.[1];
+  const rawCode = text(details.code) || text(record(details.cause).code);
+  const code = chromiumCode ?? (/^(?:ERR_[A-Z0-9_]{2,64}|E[A-Z][A-Z0-9_]{1,63})$/.test(rawCode) ? rawCode : 'UNKNOWN');
+  console.warn('[tud-desktop] Codex quota request failed', { type, code });
+}
 export function createCodexSubscriptionReader(deps: {
-  readAuth: () => Promise<string>; fetch: typeof fetch; now?: () => number;
+  readAuth: () => Promise<string>; fetch: (url: string, init: RequestInit) => Promise<Response>; now?: () => number;
 }) {
   const now = deps.now ?? Date.now;
   const cache = createSubscriptionCache<CodexSubscriptionSnapshot>(now);
@@ -62,7 +72,7 @@ export function createCodexSubscriptionReader(deps: {
       try {
         const response = await deps.fetch(USAGE_URL, {
           headers: { Authorization: `Bearer ${credentials.accessToken}`, 'ChatGPT-Account-Id': credentials.accountId, Accept: 'application/json' },
-          signal: AbortSignal.timeout(20_000), redirect: 'error',
+          signal: AbortSignal.timeout(20_000), redirect: 'error', credentials: 'omit', cache: 'no-store',
         });
         if (response.status === 401) return fail('expired', 'Codex 登录已过期，请重新登录');
         if (response.status === 403) return fail('access-denied', 'Codex 额度访问受限，请检查账号权限');
@@ -71,7 +81,10 @@ export function createCodexSubscriptionReader(deps: {
         const windows = mapCodexUsage(await response.json());
         if (!windows.fiveHour && !windows.weekly) return fail('unavailable', 'Codex 暂未返回可用额度');
         return { status: 'ready', hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null };
-      } catch { return fail('unavailable', '网络异常或读取超时，暂时无法读取 Codex 额度'); }
+      } catch (error) {
+        logCodexRequestError(error);
+        return fail('unavailable', '网络异常或读取超时，暂时无法读取 Codex 额度');
+      }
     }, options.forceRefresh);
   };
 }
@@ -81,4 +94,4 @@ function authPath(): string {
   return path.join(home ? path.resolve(home) : path.join(homedir(), '.codex'), 'auth.json');
 }
 /** Read subscription usage with local credentials; never rotate or persist tokens. */
-export const readCodexSubscription = createCodexSubscriptionReader({ readAuth: () => readFile(authPath(), 'utf8'), fetch: (...args) => fetch(...args) });
+export const readCodexSubscription = createCodexSubscriptionReader({ readAuth: () => readFile(authPath(), 'utf8'), fetch: (url, init) => net.fetch(url, init) });

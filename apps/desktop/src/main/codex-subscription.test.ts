@@ -50,6 +50,16 @@ test('direct request authenticates, merges callers, isolates changed credentials
   raw = auth('two'); await read(); assert.equal(calls, 2);
   raw = '{}'; assert.equal((await read()).status, 'not-signed-in');
 });
+test('Codex quota requests omit session credentials and bypass HTTP caches', async () => {
+  let requestOptions: RequestInit | undefined;
+  const read = createCodexSubscriptionReader({
+    readAuth: async () => auth(), now: () => 1800000000000,
+    fetch: async (_url, options) => { requestOptions = options; return Response.json(payload); },
+  });
+  assert.equal((await read()).status, 'ready');
+  assert.equal(requestOptions?.credentials, 'omit');
+  assert.equal(requestOptions?.cache, 'no-store');
+});
 test('temporary failures retain only same-account success; refusal clears old data', async () => {
   let now = 1800000000000, status = 200, raw = auth();
   const read = createCodexSubscriptionReader({ readAuth: async () => raw, now: () => now, fetch: async () => status === 200 ? Response.json(payload) : new Response('', { status }) });
@@ -75,6 +85,22 @@ test('invalid response and abort return a bounded unavailable snapshot', async (
     const read = createCodexSubscriptionReader({ readAuth: async () => auth(), now: () => 1800000000000, fetch: request });
     assert.equal((await read()).status, 'unavailable');
   }
+});
+test('network errors log a safe error type and code without request secrets', async () => {
+  const warnings: unknown[][] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => { warnings.push(args); };
+  try {
+    const read = createCodexSubscriptionReader({
+      readAuth: async () => auth(), now: () => 1800000000000,
+      fetch: async () => { throw new Error('net::ERR_PROXY_CONNECTION_FAILED Bearer secret-marker'); },
+    });
+    assert.equal((await read()).status, 'unavailable');
+  } finally { console.warn = originalWarn; }
+  const logged = JSON.stringify(warnings);
+  assert.match(logged, /ERR_PROXY_CONNECTION_FAILED/);
+  assert.match(logged, /"type":"Error"/);
+  assert.doesNotMatch(logged, /Bearer|secret-marker|signature/);
 });
 
 test('a late reading from the previous account cannot overwrite the current cache', async () => {

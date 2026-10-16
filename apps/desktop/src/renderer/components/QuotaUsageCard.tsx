@@ -95,6 +95,8 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false }: { p
   const hasReading = provider.windows.length > 0 || provider.details.length > 0;
   const compact = isQuotaStatusOnly(provider);
   const grouped = compact && statusRow;
+  const headerService = grouped ? serviceWarning : service;
+  const planSummary = grouped ? '' : [provider.planLabel, !compact && provider.resetCredits !== null ? `可重置 ${provider.resetCredits} 次` : null].filter(Boolean).join(' · ');
   const windows = sortQuotaWindows(provider.windows);
   const details = quotaDisplayDetails(provider.id, provider.details);
   const forecasts = quotaForecasts(provider.id, provider.windows, provider.analyses, Date.now() / 1000);
@@ -149,16 +151,16 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false }: { p
       onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
     <Card.Content className={`relative ${grouped ? 'flex-row flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2' : compact ? 'gap-1.5 px-4 py-3' : 'gap-3 p-4'}`}>
-      <div className={`flex min-w-0 items-center gap-2 ${grouped ? 'shrink-0' : ''}`}>
-        <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
-        <span className={`min-w-0 flex-1 truncate text-sm font-medium ${grouped ? 'max-w-24' : ''}`}>{provider.label}</span>
-        {compact && !grouped && provider.planLabel && <span className="max-w-24 truncate text-xs text-muted" title={provider.planLabel}>{provider.planLabel}</span>}
-        {status && serviceWarning && <QuotaServiceStatusLink label={provider.label} status={status} service={serviceWarning} iconOnly />}
+      <div className={`grid min-w-0 items-start gap-x-2 ${headerService ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'} ${grouped ? 'shrink-0' : ''}`}>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <div className="flex min-w-0 max-w-full items-center gap-2">
+            <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
+            <span className={`min-w-0 truncate text-sm font-medium ${grouped ? 'max-w-24' : ''}`}>{provider.label}</span>
+          </div>
+          {planSummary && <Chip size="sm" variant="soft" className="min-w-0 max-w-full bg-foreground/8 text-foreground" title={planSummary}><Chip.Label className="truncate">{planSummary}</Chip.Label></Chip>}
+        </div>
+        {status && headerService && <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} iconOnly />}
       </div>
-      {!compact && (provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2">
-        {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
-        {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>可重置 {provider.resetCredits} 次</Chip.Label></Chip>}
-      </div>}
       {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
       {hasReading && <div className="flex flex-col gap-3">
         {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={provider.id} window={window} stale={provider.stale} hideReset={commonReset !== null} />)}

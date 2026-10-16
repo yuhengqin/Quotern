@@ -1,9 +1,18 @@
 import { useId, useState } from 'react';
-import { Button, Card, Chip, ProgressBar } from '@heroui/react';
+import { Button, Card, Chip, ProgressBar, Tooltip } from '@heroui/react';
 import { RefreshCw } from 'lucide-react';
-import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaWindow } from '../../shared/quota';
+import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from '../../shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime } from './SubscriptionUsageCard';
+
+const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { label: string; dotClassName: string }> = {
+  operational: { label: '服务正常', dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
+  minor: { label: '轻微异常', dotClassName: 'bg-yellow-500 dark:bg-yellow-400' },
+  major: { label: '严重异常', dotClassName: 'bg-orange-500 dark:bg-orange-400' },
+  critical: { label: '重大故障', dotClassName: 'bg-red-600 dark:bg-red-400' },
+  maintenance: { label: '维护中', dotClassName: 'bg-blue-500 dark:bg-blue-400' },
+  unknown: { label: '状态未确认', dotClassName: 'bg-gray-500 dark:bg-gray-400' },
+};
 
 function clock(at: number) { return new Date(at * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); }
 function duration(until: number) {
@@ -16,7 +25,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   const [error, setError] = useState<string | null>(null);
   const panelId = useId();
   const status = provider.service;
-  const serviceText = status?.stale || status?.level === 'unknown' ? '状态未确认' : status?.level === 'maintenance' ? '服务维护' : '服务异常';
+  const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
   const refresh = async () => {
     try { setError(null); await window.tud.quota.refresh(provider.id); }
     catch { setError('刷新失败，请稍后重试'); }
@@ -34,10 +43,23 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
         {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
         {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>重置 {provider.resetCredits} 次</Chip.Label></Chip>}
       </div>}
-      {status && (status.level !== 'operational' || status.stale) && <button type="button" className="w-fit text-xs text-warning underline underline-offset-2" onClick={() => void window.tud.openExternal(status.url)}
-        title={`服务商整体状态，可能与当前账号错误无关。${status.checkedAt ? `上次检查 ${new Date(status.checkedAt * 1000).toLocaleString('zh-CN')}` : '尚未取得有效状态'}`}>
-        {serviceText} ↗
-      </button>}
+      {status && service && <Tooltip delay={200}>
+        <Tooltip.Trigger<'button'> render={props => <button {...props} />} type="button"
+          className="inline-flex w-fit items-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+          aria-label={`${provider.label} 官方服务状态：${service.label}，查看官方状态页`}
+          onClick={() => void window.tud.openExternal(status.url)}>
+          <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${service.dotClassName}`} />
+          <span>{service.label}</span><span aria-hidden="true">↗</span>
+        </Tooltip.Trigger>
+        <Tooltip.Content className="max-w-64 text-xs">
+          <div className="flex flex-col gap-1">
+            <p>官方整体状态：{service.label}</p>
+            <p className="text-muted">具体产品与地区的影响以官方状态页为准。</p>
+            {status.stale && <p className="text-muted">最近一次查询未成功，上次结果已过期。</p>}
+            <p className="text-muted">{status.checkedAt ? `上次检查 ${new Date(status.checkedAt * 1000).toLocaleString('zh-CN')}` : '尚未取得有效状态'}</p>
+          </div>
+        </Tooltip.Content>
+      </Tooltip>}
       <div id={panelId} className="flex flex-col gap-3">
         {(expanded ? provider.windows : provider.windows.slice(0, 3)).map(window => <QuotaWindowRow key={window.id} window={window} analysis={provider.analyses[window.id]} showSparkline={preferences.showSparkline} stale={provider.stale} />)}
         {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}

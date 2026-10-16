@@ -19,7 +19,7 @@ import { readDeepSeekSubscription } from './deepseek-subscription';
 import { readOpenCodeSubscription } from './opencode-subscription';
 import { selectKimiSubscription } from '../shared/kimi-selection';
 
-const STATUS_URLS: Record<string, string> = { codex: 'https://status.openai.com/', claude: 'https://status.anthropic.com/', cursor: 'https://status.cursor.com/', copilot: 'https://www.githubstatus.com/' };
+const STATUS_URLS: Record<string, string> = { codex: 'https://status.openai.com/', claude: 'https://status.claude.com/', cursor: 'https://status.cursor.com/', copilot: 'https://www.githubstatus.com/' };
 export function parseQuotaServiceStatus(value: unknown): QuotaServiceStatus['level'] {
   const indicator = (value as { status?: { indicator?: unknown } } | null)?.status?.indicator;
   const levels: Record<string, QuotaServiceStatus['level']> = { none: 'operational', minor: 'minor', major: 'major', critical: 'critical', maintenance: 'maintenance' };

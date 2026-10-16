@@ -32,6 +32,7 @@
     "dev:dashboard": "node scripts/dev.mjs ui",
     "start:dashboard": "pnpm --filter quotern-dashboard preview",
     "dev:desktop": "node scripts/dev.mjs desktop",
+    "dev:desktop:quota": "cross-env QUOTERN_DEV_QUOTA_PREVIEW=1 node scripts/dev.mjs desktop",
     "build:desktop": "pnpm --filter quotern-desktop... build",
     "build:desktop:mac": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop build:mac",
     "build:desktop:mac:arm": "pnpm --filter \"quotern-desktop^...\" build && pnpm --filter quotern-desktop build:mac:arm",

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { antigravityRemainingPercent, mapAntigravityModels } from './antigravity-subscription';
 
-test('maps the two least consumed official Antigravity model pools', () => {
+test('keeps every official Antigravity model pool, including exhausted pools', () => {
   const limits = mapAntigravityModels({
     models: {
       gemini: { displayName: 'Gemini 3 Pro', quotaInfo: { remainingFraction: 0.32, resetTime: '2027-01-01T00:00:00Z' } },
@@ -13,6 +13,7 @@ test('maps the two least consumed official Antigravity model pools', () => {
   assert.deepEqual(limits.map((limit) => [limit.id, limit.label, limit.usedPercent]), [
     ['claude', 'Claude Sonnet', 19],
     ['gemini', 'Gemini 3 Pro', 68],
+    ['exhausted', 'Exhausted', 100],
   ]);
   assert.equal(limits[1].resetsAt, 1_798_761_600);
 });

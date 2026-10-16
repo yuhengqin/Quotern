@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { net } from 'electron';
+import { quotaFetch } from './quota-fetch';
 import { codexPlanLabel, mapCodexRateLimitWindows, type CodexSubscriptionSnapshot } from '../shared/codex-subscription';
 import { createSubscriptionCache } from './subscription-cache';
 
@@ -33,7 +33,10 @@ export function mapCodexUsage(value: unknown) {
     const raw = record(value);
     return { usedPercent: raw.used_percent, resetsAt: raw.reset_at, windowDurationMins: Number(raw.limit_window_seconds) / 60 };
   };
-  return { planLabel: codexPlanLabel(data.plan_type), ...mapCodexRateLimitWindows({ primary: window(limits.primary_window), secondary: window(limits.secondary_window) }) };
+  const credits = record(data.rate_limit_reset_credits).available_count;
+  return { planLabel: codexPlanLabel(data.plan_type), windows: codexQuotaWindows(value),
+    resetCredits: typeof credits === 'number' && Number.isInteger(credits) && credits >= 0 ? credits : null,
+    ...mapCodexRateLimitWindows({ primary: window(limits.primary_window), secondary: window(limits.secondary_window) }) };
 }
 function unavailable(status: CodexSubscriptionSnapshot['status'], message: string, hasAccount = false, planLabel: string | null = null): CodexSubscriptionSnapshot {
   return { status, message, hasAccount, planLabel, fiveHour: null, weekly: null, fetchedAt: null, stale: false };
@@ -76,11 +79,15 @@ export function createCodexSubscriptionReader(deps: {
         });
         if (response.status === 401) return fail('expired', 'Codex 登录已过期，请重新登录');
         if (response.status === 403) return fail('access-denied', 'Codex 额度访问受限，请检查账号权限');
-        if (response.status === 429) return fail('unavailable', 'Codex 额度请求过于频繁，请稍后重试');
+        if (response.status === 429) {
+          const retry = response.headers.get('retry-after');
+          const seconds = retry && /^\d+$/.test(retry) ? Number(retry) : retry ? (Date.parse(retry) - now()) / 1000 : 120;
+          return { ...fail('unavailable', 'Codex 额度请求过于频繁，请稍后重试'), retryAfterSeconds: Math.max(1, Math.min(3600, Number.isFinite(seconds) ? seconds : 120)) };
+        }
         if (!response.ok) return fail('unavailable', '暂时无法读取 Codex 额度');
         const windows = mapCodexUsage(await response.json());
-        if (!windows.fiveHour && !windows.weekly) return fail('unavailable', 'Codex 暂未返回可用额度');
-        return { status: 'ready', hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null };
+        if (!windows.windows.length) return fail('unavailable', 'Codex 暂未返回可用额度');
+        return markQuotaIdentity({ status: 'ready' as const, hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, credentials.accountId);
       } catch (error) {
         logCodexRequestError(error);
         return fail('unavailable', '网络异常或读取超时，暂时无法读取 Codex 额度');
@@ -94,4 +101,6 @@ function authPath(): string {
   return path.join(home ? path.resolve(home) : path.join(homedir(), '.codex'), 'auth.json');
 }
 /** Read subscription usage with local credentials; never rotate or persist tokens. */
-export const readCodexSubscription = createCodexSubscriptionReader({ readAuth: () => readFile(authPath(), 'utf8'), fetch: (url, init) => net.fetch(url, init) });
+export const readCodexSubscription = createCodexSubscriptionReader({ readAuth: () => readFile(authPath(), 'utf8'), fetch: (url, init) => quotaFetch(url, init) });
+import { codexQuotaWindows } from '../shared/quota-provider-windows';
+import { markQuotaIdentity } from './quota-identity';

@@ -40,7 +40,7 @@ function resetAt(value: unknown): number | null {
   return Number.isFinite(timestamp) ? Math.floor(timestamp / 1_000) : null;
 }
 
-/** Maps Antigravity's official model quota payload, keeping only two useful pools. */
+/** Maps every model pool returned by Antigravity's official quota payload. */
 export function mapAntigravityModels(value: unknown): AntigravityRateLimitWindow[] {
   const root = asRecord(value);
   const models = asRecord(root?.models) ?? asRecord(asRecord(root?.data)?.models);
@@ -62,9 +62,7 @@ export function mapAntigravityModels(value: unknown): AntigravityRateLimitWindow
     });
   }
 
-  return limits
-    .sort((left, right) => left.usedPercent - right.usedPercent)
-    .slice(0, 2);
+  return limits.sort((left, right) => left.usedPercent - right.usedPercent);
 }
 
 export function antigravityRemainingPercent(usedPercent: number): number {

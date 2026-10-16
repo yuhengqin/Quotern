@@ -11,11 +11,12 @@ export type OpenCodeSubscriptionStatus =
   | 'temporarily-unavailable';
 
 export interface OpenCodeRateLimitWindow {
-  id: 'five-hour' | 'weekly';
+  id: 'five-hour' | 'weekly' | 'monthly';
   label: string;
   usedPercent: number;
   /** Unix timestamp in seconds. */
   resetsAt: number | null;
+  durationSeconds?: number | null;
 }
 
 export interface OpenCodeSubscriptionSnapshot {
@@ -34,10 +35,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function boundedPercent(value: unknown): number | null {
+function boundedPercent(value: unknown, allowFraction = true): number | null {
+  if ((typeof value !== 'number' && typeof value !== 'string') || (typeof value === 'string' && !value.trim())) return null;
   const number = Number(value);
   if (!Number.isFinite(number)) return null;
-  const normalized = number <= 1 ? number * 100 : number;
+  const normalized = allowFraction && number <= 1 ? number * 100 : number;
   return Math.round(Math.min(100, Math.max(0, normalized)) * 100) / 100;
 }
 
@@ -54,23 +56,28 @@ export function openCodePlanLabel(value: unknown): string | null {
   return canonicalSubscriptionPlanLabel(value);
 }
 
-function pickWindow(raw: Record<string, unknown>, minutes: number | null): OpenCodeRateLimitWindow | null {
+type WindowId = OpenCodeRateLimitWindow['id'];
+const WINDOWS: { id: WindowId; key: string; label: string; durationSeconds: number | null }[] = [
+  { id: 'five-hour', key: 'rolling', label: '5h', durationSeconds: 18_000 },
+  { id: 'weekly', key: 'weekly', label: '7d', durationSeconds: 604_800 },
+  { id: 'monthly', key: 'monthly', label: '月限额', durationSeconds: null },
+];
+
+function pickWindow(raw: Record<string, unknown>, hint?: WindowId): OpenCodeRateLimitWindow | null {
   const usedPercent = boundedPercent(raw.usedPercent ?? raw.usagePercent ?? raw.percent);
   if (usedPercent === null) return null;
   const resetsAt = resetAt(raw.resetsAt ?? raw.nextResetTime ?? raw.resetTime);
-  if (minutes !== null) {
-    if (minutes >= 240 && minutes <= 360) {
-      return { id: 'five-hour', label: '5h', usedPercent, resetsAt };
-    }
-    if (minutes >= 10_000 && minutes <= 10_200) {
-      return { id: 'weekly', label: '7d', usedPercent, resetsAt };
-    }
-  }
-  return null;
+  const minutes = Number(raw.windowDurationMins ?? raw.windowMins ?? raw.minutes);
+  const id = hint ?? (minutes >= 240 && minutes <= 360 ? 'five-hour'
+    : minutes >= 10_000 && minutes <= 10_200 ? 'weekly'
+      : minutes >= 28 * 1440 && minutes <= 31 * 1440 ? 'monthly' : null);
+  const definition = WINDOWS.find(window => window.id === id);
+  return definition ? { id: definition.id, label: definition.label, usedPercent, resetsAt,
+    durationSeconds: Number.isFinite(minutes) && minutes > 0 ? minutes * 60 : definition.durationSeconds } : null;
 }
 
-/** Normalize OpenCode Go's `GET /zen/go/v1/usage` response into tray-shaped windows. */
-export function mapOpenCodeUsage(value: unknown): Pick<
+/** Official Go usage schemas: v1.19.0 `usage.*`, and the original `*Usage` response. */
+export function mapOpenCodeUsage(value: unknown, now = Date.now() / 1_000): Pick<
   OpenCodeSubscriptionSnapshot,
   'planLabel' | 'limits'
 > {
@@ -78,36 +85,38 @@ export function mapOpenCodeUsage(value: unknown): Pick<
   if (!root) return { planLabel: null, limits: [] };
 
   const planLabel = openCodePlanLabel(root.plan ?? root.tier ?? root.planName ?? root.plan_name);
+  const usage = asRecord(root.usage);
+  const byId = new Map<WindowId, OpenCodeRateLimitWindow>();
+  for (const definition of WINDOWS) {
+    const row = asRecord(usage?.[definition.key]) ?? asRecord(root[`${definition.key}Usage`]);
+    if (!row || (row.status !== undefined && row.status !== 'ok' && row.status !== 'rate-limited')) continue;
+    // Official percentages are already 0–100; 1 means one percent, not a full pool.
+    const usedPercent = boundedPercent(row.percent ?? row.usagePercent, false);
+    if (usedPercent === null) continue;
+    const seconds = row.resetInSec;
+    const resetsAt = resetAt(row.resetsAt) ?? (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0 ? Math.floor(now + seconds) : null);
+    byId.set(definition.id, { id: definition.id, label: definition.label, usedPercent, resetsAt, durationSeconds: definition.durationSeconds });
+  }
+  const official = byId.size > 0;
 
   const buckets: unknown[] = [];
   if (Array.isArray(root.windows)) buckets.push(...root.windows);
   if (Array.isArray(root.limits)) buckets.push(...root.limits);
   if (Array.isArray(root.usagePeriods)) buckets.push(...root.usagePeriods);
-  const primary = asRecord(root.primary ?? root.fiveHour);
-  const secondary = asRecord(root.secondary ?? root.weekly);
-  if (primary) buckets.push(primary);
-  if (secondary) buckets.push(secondary);
-
-  let fiveHour: OpenCodeRateLimitWindow | null = null;
-  let weekly: OpenCodeRateLimitWindow | null = null;
+  for (const [id, value] of [['five-hour', root.primary ?? root.fiveHour], ['weekly', root.secondary ?? root.weekly], ['monthly', root.monthly ?? root.tertiary]] as const) {
+    const row = asRecord(value);
+    const window = row ? pickWindow(row, id) : null;
+    if (window && !byId.has(window.id)) byId.set(window.id, window);
+  }
 
   for (const item of buckets) {
     const record = asRecord(item);
     if (!record) continue;
-    const minutes = Number(record.windowDurationMins ?? record.windowMins ?? record.minutes);
-    const window = pickWindow(
-      record,
-      Number.isFinite(minutes) ? minutes : null,
-    );
-    if (!window) continue;
-    if (window.id === 'five-hour' && !fiveHour) fiveHour = window;
-    if (window.id === 'weekly' && !weekly) weekly = window;
+    const window = pickWindow(record);
+    if (window && !byId.has(window.id)) byId.set(window.id, window);
   }
 
-  const limits: OpenCodeRateLimitWindow[] = [];
-  if (fiveHour) limits.push(fiveHour);
-  if (weekly) limits.push(weekly);
-  return { planLabel, limits };
+  return { planLabel: planLabel ?? (official ? 'Go' : null), limits: WINDOWS.flatMap(window => byId.has(window.id) ? [byId.get(window.id)!] : []) };
 }
 
 export function openCodeRemainingPercent(usedPercent: number): number {

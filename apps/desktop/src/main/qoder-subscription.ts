@@ -1,7 +1,9 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { markQuotaIdentity } from './quota-identity';
 import { mapQoderQuota, type QoderSubscriptionSnapshot } from '../shared/qoder-subscription';
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -74,7 +76,7 @@ async function readCachedQoderQuota(): Promise<CachedQoderQuota | null> {
   return latest;
 }
 async function fetchJson(pathname: string, token: string): Promise<{ status: number; value: unknown }> {
-  const response = await fetch(`${QODER_API_URL}${pathname}`, {
+  const response = await quotaNodeFetch(`${QODER_API_URL}${pathname}`, {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -91,6 +93,7 @@ async function fetchFreshQoderSubscription(): Promise<QoderSubscriptionSnapshot>
       status: 'ready', ...mapped, fetchedAt: cached.fetchedAt, stale: true,
       message: '使用 Qoder CLI 最近同步的额度',
     };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   }
@@ -101,6 +104,7 @@ async function fetchFreshQoderSubscription(): Promise<QoderSubscriptionSnapshot>
     const mapped = quota.status >= 200 && quota.status < 300 ? mapQoderQuota(quota.value, plan.value) : { planLabel: null, limits: [] };
     if (!mapped.limits.length) return staleFallback('Qoder 暂未返回可用的订阅配额');
     const snapshot: QoderSubscriptionSnapshot = { status: 'ready', ...mapped, fetchedAt: Math.floor(Date.now() / 1_000), stale: false, message: null };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch { return staleFallback('网络异常，暂时无法读取 Qoder 配额'); }

@@ -10,6 +10,11 @@ const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
+const quotaPreview = process.env.QUOTERN_DEV_QUOTA_PREVIEW === '1';
+if (quotaPreview && process.env.QUOTERN_DEV_ISOLATED !== '1') {
+  throw new Error('额度 mock 必须通过 pnpm dev:desktop:quota 隔离启动');
+}
+
 const sharedRenderPlugins = () => [
   tanstackRouter({
     target: 'react',
@@ -51,7 +56,7 @@ export default defineConfig({
       outDir: 'out/main',
       rollupOptions: {
         external: ['sharp'],
-        input: { index: resolve(__dirname, 'src/main/index.ts') },
+        input: { index: resolve(__dirname, quotaPreview ? 'src/main/quota-preview.ts' : 'src/main/index.ts') },
       },
     },
   },
@@ -60,7 +65,7 @@ export default defineConfig({
     build: {
       outDir: 'out/preload',
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/preload/index.ts') },
+        input: { index: resolve(__dirname, quotaPreview ? 'src/preload/quota-preview.ts' : 'src/preload/index.ts') },
       },
     },
   },

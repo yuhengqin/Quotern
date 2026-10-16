@@ -1,3 +1,4 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -266,7 +267,7 @@ async function fetchKimiSubscription(
 /** Read-only; cache identity includes source, region, account and credential session. */
 export function createKimiSubscriptionReader(
   loadAccount: () => Promise<KimiAccount | KimiSubscriptionSnapshot> = loadKimiAccount,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = quotaNodeFetch,
 ) {
   let lastSuccess: KimiSubscriptionSnapshot | null = null;
   let accountKey: string | null = null;
@@ -351,6 +352,11 @@ export function createKimiSubscriptionReader(
         return switched();
       }
       if (snapshot) {
+        if (snapshot.status === 'ready' && !snapshot.stale) markQuotaIdentity(snapshot, {
+          provider: 'kimi', source: selected.source, region: selected.origin,
+          userId: selected.source === 'code' && selected.userId === 'kimi-code' ? undefined : selected.userId,
+          accessToken: selected.accessToken,
+        });
         lastSuccess = snapshot.status === 'ready' ? snapshot : null;
         return snapshot;
       }
@@ -387,7 +393,8 @@ export function createKimiSubscriptionsReader(options: {
   return (requestOptions: { forceRefresh?: boolean } = {}): Promise<KimiSubscriptionSnapshot[]> => Promise.all(
     readers.map(async ([source, read]) => {
       try {
-        return { ...await read(requestOptions), source };
+        const snapshot = await read(requestOptions);
+        return copyQuotaIdentity(snapshot, { ...snapshot, source });
       } catch {
         return unavailable('temporarily-unavailable', '暂时无法读取 Kimi 订阅信息', source);
       }
@@ -396,3 +403,4 @@ export function createKimiSubscriptionsReader(options: {
 }
 
 export const readKimiSubscriptions = createKimiSubscriptionsReader();
+import { copyQuotaIdentity, markQuotaIdentity } from './quota-identity';

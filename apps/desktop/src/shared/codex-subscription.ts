@@ -1,4 +1,5 @@
 import { canonicalSubscriptionPlanLabel } from './subscription-plan';
+import type { QuotaWindow } from './quota';
 
 /** Read-only subset of the local Codex account and rate-limit snapshot. */
 export type CodexSubscriptionStatus =
@@ -17,6 +18,9 @@ export interface CodexRateLimitWindow {
 }
 
 export interface CodexSubscriptionSnapshot {
+  windows?: QuotaWindow[];
+  resetCredits?: number | null;
+  retryAfterSeconds?: number;
   status: CodexSubscriptionStatus;
   hasAccount: boolean;
   fetchedAt: number | null;

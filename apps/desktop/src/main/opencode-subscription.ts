@@ -1,7 +1,9 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { markQuotaIdentity } from './quota-identity';
 import {
   mapOpenCodeUsage,
   type OpenCodeSubscriptionSnapshot,
@@ -108,7 +110,7 @@ export function hasCustomOpenCodeConfiguration(env: NodeJS.ProcessEnv): boolean 
 }
 
 async function fetchUsage(token: string): Promise<{ ok: boolean; status: number; value: unknown }> {
-  const response = await fetch('https://opencode.ai/zen/go/v1/usage', {
+  const response = await quotaNodeFetch('https://opencode.ai/zen/go/v1/usage', {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -152,6 +154,7 @@ async function fetchFreshOpenCodeSubscription(): Promise<OpenCodeSubscriptionSna
       stale: false,
       message: null,
     };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch {

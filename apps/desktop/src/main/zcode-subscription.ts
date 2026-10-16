@@ -1,3 +1,4 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { createDecipheriv, createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -214,7 +215,7 @@ async function hasBuiltinAccountProvider(provider: ZcodeAccountCredentials['prov
 }
 
 async function fetchJson(url: string, token: string): Promise<{ status: number; value: unknown }> {
-  const response = await fetch(url, {
+  const response = await quotaNodeFetch(url, {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
@@ -276,6 +277,7 @@ async function fetchFreshZcodeSubscription(): Promise<ZcodeSubscriptionSnapshot>
       stale: false,
       message: null,
     };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch {
@@ -301,3 +303,4 @@ export async function readZcodeSubscription(
 }
 
 export { extractBillingPlan };
+import { markQuotaIdentity } from './quota-identity';

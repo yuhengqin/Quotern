@@ -1,7 +1,9 @@
+import { quotaNodeFetch } from './quota-fetch-state';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { markQuotaIdentity } from './quota-identity';
 import { canonicalSubscriptionPlanLabel } from '../shared/subscription-plan';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -66,7 +68,7 @@ export function hasCustomAntigravityConfiguration(env: NodeJS.ProcessEnv): boole
 }
 
 async function requestCloudCode(endpoint: string, token: string, body: unknown): Promise<{ status: number; value: unknown }> {
-  const response = await fetch(`${CLOUD_CODE_URL}${endpoint}`, {
+  const response = await quotaNodeFetch(`${CLOUD_CODE_URL}${endpoint}`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'User-Agent': 'antigravity' },
     body: JSON.stringify(body),
@@ -132,7 +134,7 @@ async function readLocalLanguageServerQuota(): Promise<Pick<AntigravitySubscript
   const server = await findLocalLanguageServer();
   if (!server) return null;
   try {
-    const response = await fetch(`${server.baseUrl}/exa.language_server_pb.LanguageServerService/GetUserStatus`, {
+    const response = await quotaNodeFetch(`${server.baseUrl}/exa.language_server_pb.LanguageServerService/GetUserStatus`, {
       method: 'POST',
       headers: {
         Accept: 'application/json', 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1',
@@ -159,6 +161,8 @@ async function fetchFreshAntigravitySubscription(): Promise<AntigravitySubscript
     const local = await readLocalLanguageServerQuota();
     if (local) {
       const snapshot: AntigravitySubscriptionSnapshot = { status: 'ready', ...local, fetchedAt: Math.floor(Date.now() / 1_000), stale: false, message: null };
+      // The IDE engine and Gemini OAuth file may belong to different accounts.
+      // Display its live quota, but do not attribute historical samples without an identity.
       lastSuccess = snapshot;
       return snapshot;
     }
@@ -172,6 +176,7 @@ async function fetchFreshAntigravitySubscription(): Promise<AntigravitySubscript
     const limits = models.status >= 200 && models.status < 300 ? mapAntigravityModels(models.value) : [];
     if (!limits.length) return staleFallback('Antigravity 暂未返回可用的订阅配额');
     const snapshot: AntigravitySubscriptionSnapshot = { status: 'ready', planLabel: antigravityPlan(assist.value), limits, fetchedAt: Math.floor(Date.now() / 1_000), stale: false, message: null };
+    markQuotaIdentity(snapshot, credentials);
     lastSuccess = snapshot;
     return snapshot;
   } catch {

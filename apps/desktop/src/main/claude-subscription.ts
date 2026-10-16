@@ -137,8 +137,8 @@ export function createClaudeSubscriptionReader(deps: {
           const parsed = parseClaudeUsageResult(output.stdout, new Date(now()));
           if (parsed.denied) return fail('expired', 'Claude 登录或额度访问受限，请检查 Claude Code 登录状态');
           if (output.code !== 0 || parsed.isError) return fail('temporarily-unavailable', 'Claude /usage 读取失败，请稍后重试');
-          if (!parsed.fiveHour && !parsed.sevenDay) return fail('temporarily-unavailable', 'Claude /usage 暂未返回可用额度');
-          return { status: 'ready', hasAccount: true, planLabel, fiveHour: parsed.fiveHour, sevenDay: parsed.sevenDay, fetchedAt: Math.floor(now() / 1000), stale: false, message: null };
+          if (!parsed.windows?.length) return fail('temporarily-unavailable', 'Claude /usage 暂未返回可用额度');
+          return markQuotaIdentity({ status: 'ready' as const, hasAccount: true, planLabel, windows: parsed.windows, fiveHour: parsed.fiveHour, sevenDay: parsed.sevenDay, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, auth?.email ? [auth.email, auth.orgId, auth.organizationId] : null);
         } catch { return fail('temporarily-unavailable', 'Claude /usage 读取超时或启动失败，请稍后重试'); }
       }, options.forceRefresh);
     })();
@@ -168,3 +168,4 @@ export const readClaudeSubscription = createClaudeSubscriptionReader({
     finally { await rm(directory, { recursive: true, force: true }); }
   },
 });
+import { markQuotaIdentity } from './quota-identity';

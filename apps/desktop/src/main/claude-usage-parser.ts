@@ -1,4 +1,5 @@
 import type { ClaudeRateLimitWindow } from '../shared/claude-subscription';
+import type { QuotaWindow } from '../shared/quota';
 
 const HOUR_MS = 3_600_000;
 const MONTH_NAMES = 'jan feb mar apr may jun jul aug sep oct nov dec'.split(' ');
@@ -94,6 +95,7 @@ export function parseClaudeResetTime(input: string, now: Date, spanHours: number
 }
 
 export function parseClaudeUsageResult(output: string, now = new Date()): {
+  windows?: QuotaWindow[];
   fiveHour: ClaudeRateLimitWindow | null;
   sevenDay: ClaudeRateLimitWindow | null;
   denied: boolean;
@@ -112,28 +114,34 @@ export function parseClaudeUsageResult(output: string, now = new Date()): {
   const text = envelope.result.replace(/\u001b\[[\d;?]*[A-Za-z]/g, '');
   const denied = refused(text);
   const windows = new Map<string, ClaudeRateLimitWindow>();
+  const dynamic: QuotaWindow[] = [];
 
   if (!denied) {
     for (const line of text.split('\n')) {
       const separator = line.indexOf(':');
       const label = line.slice(0, separator).trim();
-      if (separator < 0 || !['Current session', 'Current week', 'Current week (all models)'].includes(label)) continue;
+      const scoped = /^Current week \(([^)]+)\)$/.exec(label);
+      if (separator < 0 || !['Current session', 'Current week', 'Current week (all models)'].includes(label) && !scoped) continue;
       const fragments = line.slice(separator + 1).split('·').map(fragment => fragment.trim());
       const percent = /^(\d+(?:\.\d+)?)%\s+used$/.exec(fragments[0]);
       if (!percent) continue;
       const value = Number(percent[1]);
       if (!Number.isFinite(value)) continue;
       const session = label === 'Current session';
+      const groupLabel = scoped && scoped[1] !== 'all models' ? scoped[1] : undefined;
       const key = session ? 'fiveHour' : 'sevenDay';
-      if (windows.has(key)) continue;
       const reset = fragments.find(fragment => fragment.startsWith('resets '));
-      windows.set(key, {
+      const metric = {
         usedPercent: Math.max(0, Math.min(100, value)),
         resetsAt: reset ? parseClaudeResetTime(reset.slice(7), now, session ? 5 : 168) : null,
-      });
+      };
+      const id = groupLabel ? `model:${groupLabel.toLowerCase()}:weekly` : session ? 'five-hour' : 'weekly';
+      if (!dynamic.some(window => window.id === id)) dynamic.push({ id, label: session ? '5h' : '7d', ...metric, durationSeconds: session ? 18000 : 604800, ...(groupLabel ? { groupLabel } : {}) });
+      if (!groupLabel && !windows.has(key)) windows.set(key, metric);
     }
   }
   return {
+    windows: dynamic,
     fiveHour: windows.get('fiveHour') ?? null,
     sevenDay: windows.get('sevenDay') ?? null,
     denied,

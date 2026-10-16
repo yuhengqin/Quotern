@@ -7,21 +7,7 @@ import { localDateNow } from 'quotern-core/timezone';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
 import { isLocalRuntimeSyncing, localApiRequest, onLocalRuntimeSyncActivity, onLocalRuntimeSynced } from './local-runtime';
 import { PetCatalog } from './pet-catalog';
-import { collectPetLimits } from './pet-limits';
-import { readCodexSubscription } from './codex-subscription';
-import { readClaudeSubscription } from './claude-subscription';
-import { readCursorSubscription } from './cursor-subscription';
-import { readCopilotSubscription } from './copilot-subscription';
-import { readGrokSubscription } from './grok-subscription';
-import { readKimiSubscriptions } from './kimi-subscription';
-import { readZcodeSubscription } from './zcode-subscription';
-import { readAntigravitySubscription } from './antigravity-subscription';
-import { readQoderSubscription } from './qoder-subscription';
-import { readMiniMaxSubscription } from './minimax-subscription';
-import { readDeepSeekSubscription } from './deepseek-subscription';
-import { readOpenCodeSubscription } from './opencode-subscription';
-import { readTraeSubscription } from './trae-subscription';
-import { readWorkBuddySubscription } from './workbuddy-subscription';
+import type { QuotaState } from '../shared/quota';
 import {
   clampPetBounds,
   DEFAULT_PET_SETTINGS,
@@ -54,7 +40,6 @@ const CURSOR_POLL_MS = 50;
 const IDLE_SLEEP_MS = 60_000;
 const EDGE_ANIMATION_MS = 200;
 const DATA_REFRESH_MS = 60_000;
-const LIMIT_REFRESH_MS = 5 * 60_000;
 
 function dataFromResponse(value: { status: number; body: unknown }): Record<string, unknown> {
   const body = value.body && typeof value.body === 'object' ? value.body as Record<string, unknown> : {};
@@ -88,12 +73,10 @@ export class PetController {
   private cursorTimer: ReturnType<typeof setInterval> | null = null;
   private edgeTimer: ReturnType<typeof setInterval> | null = null;
   private dataTimer: ReturnType<typeof setInterval> | null = null;
-  private limitTimer: ReturnType<typeof setInterval> | null = null;
   private lastCursor: Point | null = null;
   private lastCursorMoveAt = Date.now();
   private sleeping = false;
   private refreshing = false;
-  private refreshingLimits = false;
   private refreshAgain = false;
   private lastStatsDate = '';
   private settingsQueue: Promise<unknown> = Promise.resolve();
@@ -106,6 +89,7 @@ export class PetController {
     isMainWindowVisible: () => boolean;
     openSettings: () => void;
     getDark: () => boolean;
+    getQuotaState?: () => QuotaState | null;
   }) {}
 
   private settingsPath(): string {
@@ -514,37 +498,16 @@ export class PetController {
   }
 
   private async refreshLimits(): Promise<void> {
-    if (!this.settings.visible || this.refreshingLimits) return;
-    this.refreshingLimits = true;
-    const readers: Record<string, Promise<unknown>> = {
-      codex: readCodexSubscription(),
-      claude: readClaudeSubscription(),
-      cursor: readCursorSubscription(),
-      copilot: readCopilotSubscription(),
-      grok: readGrokSubscription(),
-      kimi: readKimiSubscriptions(),
-      zcode: readZcodeSubscription(),
-      antigravity: readAntigravitySubscription(),
-      qoder: readQoderSubscription(),
-      minimax: readMiniMaxSubscription(),
-      deepseek: readDeepSeekSubscription(),
-      opencode: readOpenCodeSubscription(),
-      traeGlobal: readTraeSubscription('global'),
-      traeCn: readTraeSubscription('mainland'),
-      workbuddyGlobal: readWorkBuddySubscription('global'),
-      workbuddyMainland: readWorkBuddySubscription('mainland'),
-    };
-    try {
-      const pairs = await Promise.all(Object.entries(readers).map(async ([key, promise]) => [key, await promise.catch(() => null)] as const));
-      const snapshots = Object.fromEntries(pairs) as Record<string, unknown>;
-      const kimi = Array.isArray(snapshots.kimi) ? snapshots.kimi as Array<{ source?: string }> : [];
-      snapshots.kimiCode = kimi.find(item => item.source === 'code');
-      snapshots.kimiDesktop = kimi.find(item => item.source === 'desktop');
-      this.state.limits = collectPetLimits(snapshots);
-      this.broadcast();
-    } catch (error) {
-      console.debug('[tud-desktop] pet limits refresh failed:', error);
-    } finally { this.refreshingLimits = false; }
+    const state = this.options.getQuotaState?.();
+    if (state) this.updateQuotaState(state);
+  }
+
+  updateQuotaState(state: QuotaState): void {
+    this.state.limits = state.providers.filter(provider => provider.status === 'ready' && !provider.stale)
+      .flatMap(provider => provider.windows.filter(window => window.analysisEligible !== false && window.usedPercent > 0 && window.usedPercent < 100)
+        .map(window => ({ provider: provider.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), usedPercent: window.usedPercent, resetAt: window.resetsAt })))
+      .sort((a, b) => b.usedPercent - a.usedPercent);
+    this.broadcast();
   }
 
   private async handleCatalog(request: PetCatalogRequest): Promise<unknown> {
@@ -610,7 +573,6 @@ export class PetController {
       this.broadcast();
     });
     this.dataTimer = setInterval(() => void this.refreshData(), DATA_REFRESH_MS);
-    this.limitTimer = setInterval(() => void this.refreshLimits(), LIMIT_REFRESH_MS);
     if (this.settings.visible) this.setVisible(true);
     this.broadcast();
     void this.refreshData();
@@ -630,8 +592,6 @@ export class PetController {
     this.stopEdgeAnimation();
     if (this.dataTimer) clearInterval(this.dataTimer);
     this.dataTimer = null;
-    if (this.limitTimer) clearInterval(this.limitTimer);
-    this.limitTimer = null;
     this.unsubscribeSync?.();
     this.unsubscribeSync = null;
     this.unsubscribeSyncActivity?.();

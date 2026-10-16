@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Card, Chip, Drawer, ProgressBar, Tooltip } from '@heroui/react';
+import { Button, Card, Chip, Modal, ProgressBar, Tooltip } from '@heroui/react';
 import { ChevronRight, RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from '../../shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
@@ -45,7 +45,10 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
         <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider.label}</span>
       </div>
-      {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
+      {(provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2">
+        {provider.planLabel && <span className="text-xs text-muted">{provider.planLabel}</span>}
+        {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>{provider.resetCredits}张重置卡</Chip.Label></Chip>}
+      </div>}
       {hasReading && <div className="flex flex-col gap-3">
         {provider.windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} window={window} stale={provider.stale} />)}
         {provider.details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
@@ -60,22 +63,19 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       </p>}
       <div className="flex items-center justify-end gap-2">
         {provider.windows.length > 3 && <span className="mr-auto text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
-        <Drawer>
+        <Modal>
           <Button aria-label={`查看 ${provider.label} 额度详情`} className="h-auto min-h-7 gap-0.5 px-1 text-xs" size="sm" variant="ghost">
             额度详情<ChevronRight aria-hidden="true" className="size-3.5" />
           </Button>
-          <Drawer.Backdrop>
-            <Drawer.Content placement="right">
-              <Drawer.Dialog aria-label={`${provider.label} 额度详情`} className="w-full max-w-md">
-                <Drawer.CloseTrigger aria-label="关闭额度详情" />
-                <Drawer.Header>
-                  <Drawer.Heading>{provider.label} 额度详情</Drawer.Heading>
-                </Drawer.Header>
-                <Drawer.Body className="flex flex-col gap-5">
-                  {(provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2 text-sm">
-                    {provider.planLabel && <span>{provider.planLabel}</span>}
-                    {provider.resetCredits !== null && <Chip size="sm" variant="secondary"><Chip.Label>重置 {provider.resetCredits} 次</Chip.Label></Chip>}
-                  </div>}
+          <Modal.Backdrop>
+            <Modal.Container placement="center" scroll="inside">
+              <Modal.Dialog aria-label={`${provider.label} 额度详情`} className="w-full max-w-md">
+                <Modal.CloseTrigger aria-label="关闭额度详情" />
+                <Modal.Header>
+                  <Modal.Heading>{provider.label} 额度详情</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body className="flex flex-col gap-5">
+                  {provider.planLabel && <p className="text-sm">{provider.planLabel}</p>}
                   {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} />}
                   <div className="flex flex-col gap-5">
                     {provider.windows.map(window => <QuotaWindowRow key={window.id} window={window} analysis={provider.analyses[window.id]} showSparkline={preferences.showSparkline} stale={provider.stale} detailed />)}
@@ -86,16 +86,16 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
                     <div className="flex flex-wrap justify-between gap-2"><dt>有效读数</dt><dd>{provider.fetchedAt ? `${provider.stale ? '旧读数 · ' : ''}${new Date(provider.fetchedAt * 1000).toLocaleString('zh-CN')}` : busy ? '正在读取额度' : '尚无有效读数'}</dd></div>
                     {provider.nextRefreshAt && <div className="flex flex-wrap justify-between gap-2"><dt>下次尝试</dt><dd>{new Date(provider.nextRefreshAt * 1000).toLocaleString('zh-CN')}</dd></div>}
                   </dl>
-                </Drawer.Body>
-                <Drawer.Footer>
+                </Modal.Body>
+                <Modal.Footer>
                   <Button aria-label={`刷新 ${provider.label} 额度`} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
                     <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? '正在刷新' : '刷新额度'}
                   </Button>
-                </Drawer.Footer>
-              </Drawer.Dialog>
-            </Drawer.Content>
-          </Drawer.Backdrop>
-        </Drawer>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
       </div>
     </Card.Content>
   </Card>;

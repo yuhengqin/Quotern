@@ -1,4 +1,78 @@
-import type { QuotaAnalysis, QuotaWindow } from '../../shared/quota';
+import type { QuotaAnalysis, QuotaProviderState, QuotaWindow } from '../../shared/quota';
+
+/** Nominal month length is used only for presentation order, never for analysis. */
+function periodOrder(window: QuotaWindow): number | null {
+  if (window.timeKind === 'expiry' || window.analysisEligible === false) return null;
+  const label = window.label.trim();
+  const period = /^(\d+(?:\.\d+)?)\s*([hd])$/i.exec(label);
+  if (period) return Number(period[1]) * (period[2].toLowerCase() === 'h' ? 3600 : 86400);
+  if (/^(月限额|月度额度|月度共享额度)$/.test(label) || /^(monthly|limit_month_total)$/.test(window.id)) return 31 * 86400;
+  if (/^(周限额|周额度)$/.test(label) || /^(weekly|seven-day|limit_7d)$/.test(window.id)) return 7 * 86400;
+  if (/^(日限额|每日额度)$/.test(label) || window.id === 'daily') return 86400;
+  const hours = /^(\d+(?:\.\d+)?)\s*小时(?:限额|额度)$/.exec(label);
+  if (hours) return Number(hours[1]) * 3600;
+  return /^(five-hour|five_hour|limit_5h)$/.test(window.id) ? 18000 : null;
+}
+
+export function sortQuotaWindows(windows: QuotaWindow[]): QuotaWindow[] {
+  const sorted = windows.filter(window => periodOrder(window) !== null)
+    .sort((a, b) => periodOrder(b)! - periodOrder(a)!);
+  let index = 0;
+  return windows.map(window => periodOrder(window) === null ? window : sorted[index++]);
+}
+
+function forecastScope(providerId: string, window: QuotaWindow): string {
+  if (window.timeKind === 'expiry') return window.id;
+  if (providerId === 'codex' && window.id.startsWith('feature:')) return window.id.slice(0, window.id.lastIndexOf(':'));
+  if (window.groupLabel || window.id.startsWith('model:')) return window.id;
+  if (providerId === 'grok' && ['session', 'daily', 'weekly', 'monthly', 'billing'].includes(window.id)) return 'account';
+  if (periodOrder(window) !== null && ['codex', 'claude', 'kimi', 'grok', 'zcode', 'minimax', 'opencode'].includes(providerId)) return 'account';
+  return window.id;
+}
+
+/** Keep the first forecast that can occur before a related reset or limit blocks use. */
+export function quotaForecasts(providerId: string, windows: QuotaWindow[], analyses: Record<string, QuotaAnalysis>, now: number): Map<string, number> {
+  const eligible = windows.filter(window => window.analysisEligible !== false);
+  const firstByScope = new Map<string, { id: string; at: number }>();
+  for (const window of eligible) {
+    const at = analyses[window.id]?.etaAt;
+    if (!at || !Number.isFinite(at) || at <= now || window.usedPercent >= 100 || !window.resetsAt || at >= window.resetsAt) continue;
+    const scope = forecastScope(providerId, window);
+    const order = periodOrder(window) ?? (providerId === 'grok' && window.id === 'billing' ? Number.POSITIVE_INFINITY : null);
+    const blocked = eligible.some(other => forecastScope(providerId, other) === scope && (
+      other.usedPercent >= 100 || (other.resetsAt !== null && other.resetsAt <= at)
+      || (other.resetsAt === null && periodOrder(other) !== null && order !== null && periodOrder(other)! < order)
+    ));
+    if (blocked) continue;
+    const current = firstByScope.get(scope);
+    if (!current || at < current.at) firstByScope.set(scope, { id: window.id, at });
+  }
+  return new Map([...firstByScope.values()].map(value => [value.id, value.at]));
+}
+
+export function quotaWindowLabel(providerId: string, window: QuotaWindow): string {
+  const labels: Record<string, string> = { '月度额度': '月限额', '月度共享额度': '月限额', '每日额度': '日限额', 'Opus 周限额': 'Opus 模型周限额' };
+  const cursor: Record<string, string> = { Cursor: 'Cursor模型额度', 'Cursor Models': 'Cursor模型额度', Other: '其他模型额度', 'Other Models': '其他模型额度' };
+  const period = /^(\d+(?:\.\d+)?)\s*([hd])$/i.exec(window.label);
+  const label = providerId === 'cursor' && cursor[window.label] ? cursor[window.label]
+    : period ? period[1] === '7' && period[2].toLowerCase() === 'd' ? '周限额'
+      : period[1] === '1' && period[2].toLowerCase() === 'd' ? '日限额'
+        : `${period[1]} ${period[2].toLowerCase() === 'h' ? '小时' : '天'}限额`
+      : labels[window.label] ?? window.label.replace(/^(\d+(?:\.\d+)?)\s*小时额度$/, '$1 小时限额');
+  return /^opus$/i.test(window.groupLabel ?? '') ? `Opus 模型${label}` : [window.groupLabel, label].filter(Boolean).join(' ');
+}
+
+export function quotaDisplayDetails(providerId: string, details: QuotaProviderState['details']): QuotaProviderState['details'] {
+  if (providerId !== 'copilot') return details;
+  const chat = details.find(detail => detail.id === 'chat');
+  const completions = details.find(detail => detail.id === 'completions');
+  const merge = chat?.text === '无限' && completions?.text === '无限';
+  return details.flatMap(detail => {
+    if (merge && detail.id === 'completions') return [];
+    if (merge && detail.id === 'chat') return [{ id: 'chat-completions', label: '聊天与代码补全', text: '无限', resetsAt: null }];
+    return [{ ...detail, label: detail.id === 'completions' ? '代码补全' : detail.id === 'chat' && detail.label === 'Chat' ? '聊天' : detail.label }];
+  });
+}
 
 export function commonQuotaResetAt(windows: QuotaWindow[]): number | null {
   if (windows.length < 2) return null;

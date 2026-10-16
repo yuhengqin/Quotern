@@ -14,7 +14,7 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
   return (
     <section
       aria-label="订阅额度"
-      className={`grid items-start empty:hidden ${className}`.trim()}
+      className={`grid items-stretch empty:hidden ${className}`.trim()}
     >
       {visible.map(provider => <QuotaUsageCard key={provider.id} provider={provider} preferences={state.preferences} />)}
       {state.notice && <p role="status" className="col-span-full text-xs text-warning">{state.notice}</p>}

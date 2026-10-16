@@ -115,8 +115,7 @@ export function mapCopilotSubscription(value: unknown): Pick<
 
   // Paid usage-based plans use premium_interactions; Free keeps chat and completions.
   for (const id of ['chat', 'premium_interactions', 'completions'] as const) {
-    if (id !== 'premium_interactions' && usageBasedBilling && planLabel !== 'Free') continue;
-    const label = id === 'completions' ? '内联建议'
+    const label = id === 'completions' ? '代码补全'
       : usageBasedBilling ? '额度'
         : id === 'chat' ? '聊天消息' : '高级请求';
     const snapshot = asRecord(snapshots?.[id]);
@@ -134,8 +133,10 @@ export function mapCopilotSubscription(value: unknown): Pick<
         };
       }
     }
-    // Like VS Code, omit unlimited base features and keep an unlimited premium quota.
-    if (limit && (id === 'premium_interactions' || !limit.unlimited)) limits.push(limit);
+    // Modern paid plans meter Chat through credits; retain base features only
+    // when the actual response explicitly identifies an unlimited entitlement.
+    if (id !== 'premium_interactions' && usageBasedBilling && planLabel !== 'Free' && !limit?.unlimited) continue;
+    if (limit) limits.push(limit);
   }
 
   return { planLabel, limits };

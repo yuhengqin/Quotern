@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Button, Card, Chip, Modal, ProgressBar, Tooltip } from '@heroui/react';
-import { ChevronRight, RefreshCw } from 'lucide-react';
+import { Button as AriaButton } from 'react-aria-components';
+import { RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from '../../shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime } from './SubscriptionUsageCard';
@@ -23,6 +24,9 @@ function duration(until: number) {
 export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProviderState; preferences: QuotaPreferences }) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const hintId = useId();
   const status = provider.service;
   const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
@@ -39,8 +43,26 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
     catch { setError('刷新失败，请稍后重试'); }
     finally { setRefreshing(false); }
   };
-  return <Card className="min-w-0" variant="secondary">
-    <Card.Content className="gap-3 p-3">
+  const hasSelectedText = (card: HTMLElement) => {
+    const selection = window.getSelection();
+    return selection && !selection.isCollapsed
+      && ((selection.anchorNode && card.contains(selection.anchorNode)) || (selection.focusNode && card.contains(selection.focusNode)));
+  };
+  const openDetails = () => {
+    triggerRef.current?.focus({ preventScroll: true });
+    setDetailsOpen(true);
+  };
+  return <>
+    <Card data-quota-card={provider.id} className="group relative min-w-0 cursor-pointer overflow-visible transition-[background-color,box-shadow] hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
+      onClick={event => {
+        const target = event.target as Element;
+        if (target.closest('button, a, input, select, textarea, [role="button"], [role="link"]') || hasSelectedText(event.currentTarget)) return;
+        openDetails();
+      }}>
+    <AriaButton ref={triggerRef} type="button" aria-label={`查看 ${provider.label} 额度详情`} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
+      className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
+      onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
+    <Card.Content className="relative gap-3 p-3">
       <div className="flex min-w-0 items-center gap-2">
         <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider.label}</span>
@@ -55,19 +77,17 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       </div>}
       {(message || error) && <div className="flex items-center justify-between gap-2">
         <p role="status" className="text-xs text-muted">{error ?? message}</p>
-        {(retryable || error) && <Button aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
+        {(retryable || error) && <Button data-quota-retry aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
       </div>}
       {serviceWarning && !message && <p className="flex items-center gap-1.5 text-xs text-muted">
         <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${serviceWarning.dotClassName}`} />
         官方服务{serviceWarning.label}
       </p>}
-      <div className="flex items-center justify-end gap-2">
-        {provider.windows.length > 3 && <span className="mr-auto text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
-        <Modal>
-          <Button aria-label={`查看 ${provider.label} 额度详情`} className="h-auto min-h-7 gap-0.5 px-1 text-xs" size="sm" variant="ghost">
-            额度详情<ChevronRight aria-hidden="true" className="size-3.5" />
-          </Button>
-          <Modal.Backdrop>
+      {provider.windows.length > 3 && <span className="text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
+    </Card.Content>
+    <span id={hintId} role="tooltip" className={`pointer-events-none invisible absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background opacity-0 shadow-sm transition-[opacity,visibility] duration-0 group-hover:visible group-hover:opacity-100 group-hover:delay-500 group-hover:duration-150 peer-focus-visible:visible peer-focus-visible:opacity-100 peer-focus-visible:delay-0 peer-focus-visible:duration-150 group-has-[[data-quota-retry]:hover]:hidden group-has-[[data-quota-retry]:focus-visible]:hidden motion-reduce:transition-none ${detailsOpen ? 'hidden' : ''}`}>点击查看详情</span>
+    </Card>
+          <Modal.Backdrop isOpen={detailsOpen} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">
               <Modal.Dialog aria-label={`${provider.label} 额度详情`} className="w-full max-w-md">
                 <Modal.CloseTrigger aria-label="关闭额度详情" />
@@ -95,10 +115,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
               </Modal.Dialog>
             </Modal.Container>
           </Modal.Backdrop>
-        </Modal>
-      </div>
-    </Card.Content>
-  </Card>;
+  </>;
 }
 
 function QuotaServiceStatusLink({ label, status, service }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']] }) {

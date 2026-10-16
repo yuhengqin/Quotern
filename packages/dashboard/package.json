@@ -26,6 +26,7 @@
     "@tailwindcss/vite": "^4.3.2",
     "@tanstack/react-router": "^1.170.18",
     "clsx": "^2.1.1",
+    "date-fns": "4.4.0",
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.24.0",
     "qrcode.react": "^4.2.0",

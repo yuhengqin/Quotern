@@ -51,6 +51,7 @@ import {
 import { writePid } from './daemon.js';
 import { printDoctorReport } from './doctor.js';
 import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js';
+import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
 
 export { parseArgs } from './args.js';
 
@@ -60,6 +61,7 @@ let server: Server | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let syncWatcherStop: (() => void) | null = null;
 let pricingRefreshStop: (() => void) | null = null;
+let quotaRuntime: QuotaManager | null = null;
 let runSyncFn: ((reason: string, source?: string) => Promise<SyncResult[]>) | null =
   null;
 let runtime: {
@@ -271,7 +273,11 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
 
   const getConfig = () => runtime!.config;
 
+  // CLI owns its quota history; Electron keeps its existing userData store.
+  quotaRuntime = await createQuotaRuntime({ directory: join(dir, 'quota') });
+
   const app = createLocalApiApp({
+    quota: quotaRuntime,
     dataDir: dir,
     getConfig,
     bucketStore,
@@ -296,6 +302,8 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
   try {
     ({ port: actualPort } = await listenServer(httpServer, host, port));
   } catch (err) {
+    quotaRuntime.dispose();
+    quotaRuntime = null;
     if (ownedPid) {
       await releaseRuntimeOwner(dir);
       ownedPid = false;
@@ -305,6 +313,7 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
   server = httpServer;
 
   if (!isObserver) {
+    quotaRuntime.start();
     // Schedule next poll only after the previous one settles (avoid overlap).
     const scheduleNextPoll = (delayMs = pollBackoff.currentDelayMs()) => {
       if (pollTimer) clearTimeout(pollTimer);
@@ -441,6 +450,8 @@ async function cmdDoctor(port?: number): Promise<void> {
 }
 
 async function cmdStop(): Promise<void> {
+  quotaRuntime?.dispose();
+  quotaRuntime = null;
   if (pricingRefreshStop) {
     pricingRefreshStop();
     pricingRefreshStop = null;

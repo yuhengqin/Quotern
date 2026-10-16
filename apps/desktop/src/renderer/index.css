@@ -8,6 +8,8 @@
 @source "../../../../packages/dashboard/src/pages/PricingPage.tsx";
 @source "../../../../packages/dashboard/src/components/PricingMoreFilters.tsx";
 @source "../../../../packages/dashboard/src/components/ModelProviderIcon.tsx";
+@source "../../../../packages/dashboard/src/components/QuotaUsageCard.tsx";
+@source "../../../../packages/dashboard/src/components/SubscriptionBrandIcon.tsx";
 @source "../../../../packages/dashboard/src/achievements";
 
 :root {

@@ -1,21 +1,23 @@
 # 订阅数据获取与接口注意事项
 
-订阅额度由 Desktop 主进程读取，renderer 接收展示快照。本机 Token 统计与订阅余额分别计算；有历史用量不代表当前 Agent 已登录，有套餐名也不代表一定能取得额度。
+订阅额度由 Core 读取器在 CLI 或 Desktop 主进程中读取，网页及 renderer 只接收展示快照。本机 Token 统计与订阅余额分别计算；有历史用量不代表当前 Agent 已登录，有套餐名也不代表一定能取得额度。
 
-当前主窗口、托盘与宠物通过统一后台额度管理器消费上述 reader。动态窗口、通知、历史分析、刷新策略及偏好路径见 [Desktop 额度管理](quota-management.md)。旧的逐来源 IPC 继续保留兼容用途。
+当前网页面板、主窗口、托盘与宠物通过各自宿主的统一后台额度管理器消费上述 reader。动态窗口、通知、历史分析、刷新策略及偏好路径见 [订阅额度管理](quota-management.md)。旧的逐来源 IPC 继续保留兼容用途。
 
 ## 数据流与职责
 
 ```text
 本机 Agent 登录状态 / CLI / 本地服务 / 官方额度接口
-  → 主进程 reader：发现、读取、超时、校验、缓存
+  → Core reader：发现、读取、超时、校验、缓存
   → shared mapper：转换字段、百分比、时间和套餐名称
   → QuotaManager：统一调度、身份隔离、历史、提醒和偏好
-  → preload：quota.getState / refresh / setPreferences / onChanged
-  → renderer：订阅额度卡片、刷新状态与订阅卡片开关
+  ├─ Desktop preload：quota.getState / refresh / setPreferences / onChanged
+  │   → renderer：订阅额度卡片、刷新状态与订阅卡片开关
+  └─ CLI HTTP：/functions/tud-quota、/refresh、/preferences
+      → Dashboard：订阅额度卡片、详情与刷新
 ```
 
-各订阅 reader 保留自己的 shared 类型与兼容 IPC；当前界面通过统一 `quota` IPC 消费规范快照。新增来源时同时核对 [main](../apps/desktop/src/main) reader、[shared](../apps/desktop/src/shared) 原始类型与规范映射，以及 `quota-runtime.ts` 注册和调度间隔。
+各订阅 reader 保留自己的 shared 类型与 Desktop 兼容 IPC。新增来源时同时核对 [Core reader](../packages/core/src/quota/readers)、[shared](../packages/core/src/quota/shared) 原始类型与规范映射，以及 [runtime.ts](../packages/core/src/quota/runtime.ts) 注册和调度间隔。HTTP 仅返回规范 `QuotaState`，不返回凭据、账号标识或上游原始对象；拒绝不受支持的网页 Origin，刷新及偏好写入要求 JSON 并校验参数。Cursor/Copilot 使用可选 Node SQLite 与只读 sqlite3 回退，缺少两者时保留读取失败状态，不阻止 CLI 启动。
 
 当前显示的订阅来源以 [subscription-channels.ts](../apps/desktop/src/shared/subscription-channels.ts) 为准，包括 Codex、Claude、Cursor、Copilot、Grok、Kimi、ZCode、Antigravity、Qoder、MiniMax、OpenCode、DeepSeek。Trae 和 WorkBuddy 的适配器文件不代表它们已经进入当前界面。
 

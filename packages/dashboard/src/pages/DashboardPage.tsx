@@ -14,6 +14,7 @@ import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
 // 分时热力图：暂时注释，保留组件便于以后恢复
 // import { HourlyActivityHeatmap } from '@/components/HourlyActivityHeatmap';
 import { StatusBanner } from '@/components/StatusBanner';
+import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
 import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
@@ -315,6 +316,7 @@ export function DashboardPage() {
         <div className="relative min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
+            belowMetrics={<SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />}
             heatmapDays={visibleHeatmapDays}
             metricTrendPeriodLabel={metricTrendPeriodLabel}
             metricTrendRows={metricTrendRows}

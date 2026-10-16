@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
+import { registerQuotaApi } from './quota-api.js';
 
 import type { LocalApiDeps } from './state.js';
 import {
@@ -55,6 +56,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.use('*', cors());
   registerShareBackgroundApi(app, deps.dataDir);
   registerAchievementsApi(app, deps.dataDir);
+  registerQuotaApi(app, deps.quota);
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {

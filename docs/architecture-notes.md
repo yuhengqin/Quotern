@@ -29,7 +29,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
       └─ Desktop IPC → Renderer / 托盘
 ```
 
-订阅额度走另一条链路：主进程读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效历史和发出通知，经 `quota` IPC 向主窗口、托盘与宠物提供同一份状态。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和历史口径见[Desktop 额度管理](./quota-management.md)。
+订阅额度走另一条链路：`packages/core/src/quota` 读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效历史。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 经 `quota` IPC 向主窗口、托盘与宠物提供状态，并负责系统通知。两端共用卡片和详情展示，保留各自的额度历史目录。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和历史口径见[额度管理](./quota-management.md)。
 
 ## 本地接口
 

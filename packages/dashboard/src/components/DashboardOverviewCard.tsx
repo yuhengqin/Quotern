@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { AchievementActivityLink } from '../achievements/AchievementEntry';
 
 interface DashboardOverviewCardProps {
+  belowMetrics?: ReactNode;
   /** Ordered hourly or daily buckets for the selected dashboard range. */
   metricTrendRows: readonly UsageMetricTrendPoint[];
   metricTrendPeriodLabel: string;
@@ -39,6 +40,7 @@ interface DashboardOverviewCardProps {
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
 export function DashboardOverviewCard({
+  belowMetrics,
   metricTrendRows,
   metricTrendPeriodLabel,
   heatmapDays,
@@ -181,6 +183,8 @@ export function DashboardOverviewCard({
       </div>
 
       <DashboardSessionCards metrics={sessionMetrics} />
+
+      {belowMetrics}
 
       <Card className="mt-4">
         <Card.Content>

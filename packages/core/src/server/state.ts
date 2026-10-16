@@ -1,4 +1,5 @@
 import type { QueueBucket, SyncStatus, TudConfig } from '../types.js';
+import type { LocalQuotaRuntime } from './quota-api.js';
 import { AggregateCache } from '../aggregate-cache.js';
 import { aggregateUsageSummary } from '../aggregate.js';
 import {
@@ -85,6 +86,7 @@ export class BucketStore {
 }
 
 export interface LocalApiDeps {
+  quota?: LocalQuotaRuntime;
   dataDir: string;
   getConfig: () => TudConfig;
   bucketStore: BucketStore;

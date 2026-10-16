@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +32,7 @@ lines.on('line', (line) => {
   // Run the fixture through Node on every platform; Windows cannot execute a
   // POSIX shebang script directly. Keep the real child process and stdio RPC.
   const spawn = childProcess.spawn;
-  t.mock.method(childProcess, 'spawn', (
+  const mockedSpawn = t.mock.method(childProcess, 'spawn', (
     command: string,
     args: readonly string[],
     options: childProcess.SpawnOptionsWithoutStdio,
@@ -40,11 +41,15 @@ lines.on('line', (line) => {
     assert.deepEqual(args, ['--no-auto-update', 'agent', '--no-leader', 'stdio']);
     return spawn(process.execPath, [executable, ...args], options);
   });
+  // The shared Core reader is ESM, so refresh its named builtin binding too.
+  syncBuiltinESMExports();
   try {
     assert.deepEqual(await runGrokBillingRpc(executable, directory), {
       config: { creditUsagePercent: 42, currentPeriod: { type: 'weekly' } },
     });
   } finally {
+    mockedSpawn.mock.restore();
+    syncBuiltinESMExports();
     rmSync(directory, { recursive: true, force: true });
   }
 });

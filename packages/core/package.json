@@ -23,6 +23,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./quota/*": {
+      "types": "./dist/quota/*.d.ts",
+      "import": "./dist/quota/*.js",
+      "require": "./dist/quota/*.js"
+    },
     "./achievements": {
       "types": "./dist/achievements/public.d.ts",
       "import": "./dist/achievements/public.js"

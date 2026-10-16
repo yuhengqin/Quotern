@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button, Card, Chip, Modal, ProgressBar, Tooltip } from '@heroui/react';
 import { Button as AriaButton } from 'react-aria-components';
 import { RefreshCw } from 'lucide-react';
@@ -14,6 +14,7 @@ const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { label: string; dotCl
   maintenance: { label: '维护中', dotClassName: 'bg-blue-500 dark:bg-blue-400' },
   unknown: { label: '状态未确认', dotClassName: 'bg-gray-500 dark:bg-gray-400' },
 };
+const DETAILS_HINT_DELAY_MS = 800;
 
 function clock(at: number) { return new Date(at * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); }
 function duration(until: number) {
@@ -25,8 +26,11 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [hintVisible, setHintVisible] = useState(false);
+  const hintTimer = useRef<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
+  useEffect(() => () => { if (hintTimer.current !== null) window.clearTimeout(hintTimer.current); }, []);
   const status = provider.service;
   const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
@@ -48,12 +52,24 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
     return selection && !selection.isCollapsed
       && ((selection.anchorNode && card.contains(selection.anchorNode)) || (selection.focusNode && card.contains(selection.focusNode)));
   };
+  const hideHint = () => {
+    if (hintTimer.current !== null) window.clearTimeout(hintTimer.current);
+    hintTimer.current = null;
+    setHintVisible(false);
+  };
   const openDetails = () => {
     triggerRef.current?.focus({ preventScroll: true });
+    hideHint();
     setDetailsOpen(true);
   };
   return <>
     <Card data-quota-card={provider.id} className="group relative min-w-0 cursor-pointer overflow-visible transition-[background-color,box-shadow] hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
+      onPointerEnter={event => {
+        if (event.pointerType === 'touch' || detailsOpen) return;
+        hideHint();
+        hintTimer.current = window.setTimeout(() => { hintTimer.current = null; setHintVisible(true); }, DETAILS_HINT_DELAY_MS);
+      }}
+      onPointerLeave={hideHint}
       onClick={event => {
         const target = event.target as Element;
         if (target.closest('button, a, input, select, textarea, [role="button"], [role="link"]') || hasSelectedText(event.currentTarget)) return;
@@ -61,6 +77,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       }}>
     <AriaButton ref={triggerRef} type="button" aria-label={`查看 ${provider.label} 额度详情`} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
+      onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
     <Card.Content className="relative gap-3 p-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -85,7 +102,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       </p>}
       {provider.windows.length > 3 && <span className="text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
     </Card.Content>
-    <span id={hintId} role="tooltip" className={`pointer-events-none invisible absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background opacity-0 shadow-sm transition-[opacity,visibility] duration-0 group-hover:visible group-hover:opacity-100 group-hover:delay-500 group-hover:duration-150 peer-focus-visible:visible peer-focus-visible:opacity-100 peer-focus-visible:delay-0 peer-focus-visible:duration-150 group-has-[[data-quota-retry]:hover]:hidden group-has-[[data-quota-retry]:focus-visible]:hidden motion-reduce:transition-none ${detailsOpen ? 'hidden' : ''}`}>点击查看详情</span>
+    <span id={hintId} role="tooltip" className={`pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-retry]:hover]:hidden group-has-[[data-quota-retry]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>点击查看详情</span>
     </Card>
           <Modal.Backdrop isOpen={detailsOpen} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">

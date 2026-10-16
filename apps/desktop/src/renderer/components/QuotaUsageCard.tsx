@@ -5,7 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from '../../shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime } from './SubscriptionUsageCard';
-import { commonQuotaResetAt, quotaDisplayDetails, quotaForecasts, quotaPaceDescription, quotaPaceLabel, quotaTrendWindows, quotaWindowLabel, sortQuotaWindows } from '../lib/quota-presentation';
+import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaPaceDescription, quotaPaceLabel, quotaTrendWindows, quotaWindowLabel, sortQuotaWindows } from '../lib/quota-presentation';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { label: string; dotClassName: string }> = {
   operational: { label: '服务正常', dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
@@ -42,7 +42,7 @@ function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecast
   return { text, label: quotaWindowLabel(provider.id, row.window), description: eta ? null : quotaPaceDescription(row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
 }
 
-export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProviderState; preferences: QuotaPreferences }) {
+export function QuotaUsageCard({ provider, preferences, statusRow = false }: { provider: QuotaProviderState; preferences: QuotaPreferences; statusRow?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -93,7 +93,8 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
   const severeServiceWarning = serviceWarning && (status?.level === 'major' || status?.level === 'critical') ? serviceWarning : null;
   const hasReading = provider.windows.length > 0 || provider.details.length > 0;
-  const compact = !hasReading && provider.resetCredits === null;
+  const compact = isQuotaStatusOnly(provider);
+  const grouped = compact && statusRow;
   const windows = sortQuotaWindows(provider.windows);
   const details = quotaDisplayDetails(provider.id, provider.details);
   const forecasts = quotaForecasts(provider.id, provider.windows, provider.analyses, Date.now() / 1000);
@@ -128,7 +129,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
     setDetailsOpen(true);
   };
   return <>
-    <Card data-quota-card={provider.id} data-quota-compact={compact} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] data-[quota-compact=true]:self-start hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant="secondary"
+    <Card data-quota-card={provider.id} data-quota-compact={compact} data-quota-status-row={grouped} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] data-[quota-compact=true]:self-start data-[quota-status-row=true]:rounded-xl data-[quota-status-row=true]:shadow-none hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant={grouped ? 'transparent' : 'secondary'}
       onPointerEnter={event => {
         if (event.pointerType === 'touch' || detailsOpen) return;
         hideHint();
@@ -147,11 +148,11 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
       onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
-    <Card.Content className={`relative ${compact ? 'gap-1.5 px-4 py-3' : 'gap-3 p-4'}`}>
-      <div className="flex min-w-0 items-center gap-2">
+    <Card.Content className={`relative ${grouped ? 'flex-row flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2' : compact ? 'gap-1.5 px-4 py-3' : 'gap-3 p-4'}`}>
+      <div className={`flex min-w-0 items-center gap-2 ${grouped ? 'shrink-0' : ''}`}>
         <SubscriptionBrandIcon brand={provider.id as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider.label}</span>
-        {compact && provider.planLabel && <span className="max-w-24 truncate text-xs text-muted" title={provider.planLabel}>{provider.planLabel}</span>}
+        <span className={`min-w-0 flex-1 truncate text-sm font-medium ${grouped ? 'max-w-24' : ''}`}>{provider.label}</span>
+        {compact && !grouped && provider.planLabel && <span className="max-w-24 truncate text-xs text-muted" title={provider.planLabel}>{provider.planLabel}</span>}
         {status && serviceWarning && <QuotaServiceStatusLink label={provider.label} status={status} service={serviceWarning} iconOnly />}
       </div>
       {!compact && (provider.planLabel || provider.resetCredits !== null) && <div className="flex flex-wrap items-center gap-2">
@@ -167,11 +168,11 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
         {!summary.warning && summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
         <p className={`min-w-0 truncate text-[11px] ${summary.warning ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>{summary.text}</p>
       </div>}
-      {(message || error) && <div className={`flex items-center justify-between gap-2 ${compact ? 'min-h-8' : ''}`}>
-        <p role="status" className="text-xs text-muted">{error ?? message}</p>
+      {(message || error) && <div className={`flex items-center justify-between gap-2 ${grouped ? 'min-w-0 flex-1' : compact ? 'min-h-8' : ''}`}>
+        <p role="status" className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? error ?? message ?? undefined : undefined}>{error ?? message}</p>
         {(retryable || error) && <Button data-quota-action data-quota-retry aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
       </div>}
-      {severeServiceWarning && <p role="status" className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+      {severeServiceWarning && <p role="status" className={`flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 ${grouped ? 'w-full' : ''}`}>
         官方服务{severeServiceWarning.label}
       </p>}
       {provider.windows.length > 3 && <span className="text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}

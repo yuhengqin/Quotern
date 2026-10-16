@@ -1,5 +1,9 @@
 import type { QuotaAnalysis, QuotaProviderState, QuotaWindow } from '../../shared/quota';
 
+export function isQuotaStatusOnly(provider: Pick<QuotaProviderState, 'windows' | 'details' | 'resetCredits'>): boolean {
+  return provider.windows.length === 0 && provider.details.length === 0 && provider.resetCredits === null;
+}
+
 /** Nominal month length is used only for presentation order, never for analysis. */
 function periodOrder(window: QuotaWindow): number | null {
   if (window.timeKind === 'expiry' || window.analysisEligible === false) return null;

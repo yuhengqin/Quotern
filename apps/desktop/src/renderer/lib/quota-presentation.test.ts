@@ -3,9 +3,18 @@ import test from 'node:test';
 import type { QuotaAnalysis, QuotaProviderState, QuotaWindow } from '../../shared/quota';
 import { normalizeQuotaSnapshot } from '../../shared/quota-analysis';
 import { mapGrokBilling } from '../../shared/grok-subscription';
-import { commonQuotaResetAt, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows } from './quota-presentation';
+import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows } from './quota-presentation';
 
 const window = (id: string, resetsAt: number | null, timeKind?: 'reset' | 'expiry'): QuotaWindow => ({ id, label: id, usedPercent: 40, resetsAt, timeKind });
+
+test('groups only providers without quota readings, benefits or reset-credit information as status rows', () => {
+  const empty = { windows: [], details: [], resetCredits: null };
+  assert.equal(isQuotaStatusOnly(empty), true);
+  assert.equal(isQuotaStatusOnly({ ...empty, windows: [{ ...window('weekly', null), usedPercent: 100 }] }), false);
+  assert.equal(isQuotaStatusOnly({ ...empty, details: [{ id: 'completions', label: '代码补全', text: '无限', resetsAt: null }] }), false);
+  assert.equal(isQuotaStatusOnly({ ...empty, resetCredits: 0 }), false);
+  assert.equal(isQuotaStatusOnly({ ...empty, resetCredits: 3 }), false);
+});
 
 test('combines reset times only when every displayed pool has the same exact reset timestamp', () => {
   assert.equal(commonQuotaResetAt([window('a', 1_900_000_000), window('b', 1_900_000_000)]), 1_900_000_000);

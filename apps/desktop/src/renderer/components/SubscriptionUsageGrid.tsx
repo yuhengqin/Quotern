@@ -1,5 +1,7 @@
+import { Card } from '@heroui/react';
 import { QuotaUsageCard } from './QuotaUsageCard';
 import { useQuotaState } from '../hooks/useQuotaState';
+import { isQuotaStatusOnly } from '../lib/quota-presentation';
 
 interface SubscriptionUsageGridProps {
   className?: string;
@@ -10,13 +12,19 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
   const { state, error } = useQuotaState();
   if (!state) return error ? <p role="status" className="text-xs text-muted">{error}</p> : null;
   const visible = state.providers.filter(provider => provider.windows.length || provider.details.length || provider.planLabel || provider.fetchedAt || ['expired', 'access-denied', 'custom-provider'].includes(provider.status));
+  const allowances = visible.filter(provider => !isQuotaStatusOnly(provider));
+  const statuses = visible.filter(isQuotaStatusOnly);
 
   return (
     <section
       aria-label="订阅额度"
       className={`grid items-stretch empty:hidden ${className}`.trim()}
     >
-      {visible.map(provider => <QuotaUsageCard key={provider.id} provider={provider} preferences={state.preferences} />)}
+      {allowances.map(provider => <QuotaUsageCard key={provider.id} provider={provider} preferences={state.preferences} />)}
+      {statuses.length > 0 && <Card data-quota-status-group role="group" aria-label="订阅状态" variant="secondary"
+        className={`grid min-w-0 self-start gap-1 overflow-visible p-1 ${allowances.length ? '' : 'col-span-full grid-cols-subgrid'}`.trim()}>
+        {statuses.map(provider => <QuotaUsageCard key={provider.id} provider={provider} preferences={state.preferences} statusRow />)}
+      </Card>}
       {state.notice && <p role="status" className="col-span-full text-xs text-warning">{state.notice}</p>}
     </section>
   );

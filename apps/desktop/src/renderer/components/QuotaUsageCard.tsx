@@ -17,6 +17,12 @@ const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { label: string; dotCl
 const DETAILS_HINT_DELAY_MS = 800;
 
 function clock(at: number) { return new Date(at * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); }
+function queryDate(at: number, now = new Date()) {
+  const date = new Date(at * 1000);
+  return date.toDateString() === now.toDateString()
+    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    : date.toLocaleDateString('zh-CN');
+}
 function duration(until: number) {
   const minutes = Math.max(1, Math.ceil((until - Date.now() / 1000) / 60));
   return minutes < 60 ? `${minutes} 分钟` : minutes < 1440 ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ''}` : `${Math.ceil(minutes / 1440)} 天`;
@@ -195,8 +201,7 @@ export function QuotaUsageCard({ provider, preferences }: { provider: QuotaProvi
                   {compact && provider.status === 'expired' && <p className="text-xs text-muted">请在 {provider.label} 客户端重新登录，再刷新这里的额度。</p>}
                   {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">当前使用自定义模型服务，无法读取官方订阅额度。</p>}
                   <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
-                    <div className="flex flex-wrap justify-between gap-2"><dt>有效读数</dt><dd>{provider.fetchedAt ? `${provider.stale ? '旧读数 · ' : ''}${new Date(provider.fetchedAt * 1000).toLocaleString('zh-CN')}` : busy ? '正在读取额度' : '尚无有效读数'}</dd></div>
-                    {provider.nextRefreshAt && <div className="flex flex-wrap justify-between gap-2"><dt>下次尝试</dt><dd>{new Date(provider.nextRefreshAt * 1000).toLocaleString('zh-CN')}</dd></div>}
+                    <div className="flex flex-wrap justify-between gap-2"><dt>最近查询</dt><dd>{provider.fetchedAt ? queryDate(provider.fetchedAt) : busy ? '正在查询' : '暂无记录'}</dd></div>
                   </dl>
                 </Modal.Body>
                 <Modal.Footer>

@@ -27,7 +27,6 @@ import {
   hideTrayPopover,
   markTrayPopoverQuitting,
   resetTrayPopoverQuitting,
-  setPopoverTheme,
   setTrayUsageTitle,
   setTrayQuotaState,
 } from './TrayPopover';
@@ -168,7 +167,6 @@ function applyResolvedTheme(next: Theme): void {
     if (desktopWindow.window.isDestroyed()) continue;
     desktopWindow.setThemeBackground(currentTheme);
   }
-  setPopoverTheme(currentTheme);
   petController?.setDark(next === 'dark');
 }
 
@@ -507,7 +505,6 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       showMainWindow,
       openSettings: () => openSettings(),
       triggerSync,
-      theme: currentTheme,
       togglePet: () => petController?.toggle(),
       onOpen: () => { void quotaRuntime?.manager.refresh('interaction'); },
     });

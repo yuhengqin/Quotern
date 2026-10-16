@@ -1,21 +1,20 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import {
+  Button,
   Card,
-  Chip,
   ProgressBar,
   Skeleton,
   Tabs,
 } from '@heroui/react';
-import { buildUsageMetricTrendValues } from 'quotern-core/dashboard-trend';
 import {
   DASHBOARD_RANGE_DAYS,
   ToolChannelSelect,
@@ -40,10 +39,19 @@ import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
 import { DEFAULT_DASHBOARD_RANGE } from '../../shared/dashboard-range';
+import {
+  TRAY_PANEL_WIDTH,
+  TRAY_PANEL_MIN_HEIGHT,
+  TRAY_PANEL_MAX_HEIGHT,
+  TRAY_PANEL_GUTTER,
+} from '../../shared/tray-popover-layout';
 import './TrayPopoverView.css';
 
-const POPOVER_MAX_HEIGHT = 700;
-const POPOVER_MIN_HEIGHT = 200;
+const POPOVER_SHELL_STYLE = {
+  '--tray-panel-width': `${TRAY_PANEL_WIDTH}px`,
+  '--tray-panel-max-height': `${TRAY_PANEL_MAX_HEIGHT}px`,
+  '--tray-panel-gutter': `${TRAY_PANEL_GUTTER}px`,
+} as CSSProperties;
 
 /** Tabs update immediately; data fetch waits until after paint. */
 function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
@@ -59,7 +67,7 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
   return dataRange;
 }
 
-/** Dedicated React surface loaded inside the macOS tray popover window. */
+/** Dedicated React surface loaded inside the native tray popover window. */
 export function TrayPopoverView() {
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
@@ -223,7 +231,8 @@ export function TrayPopoverView() {
       const footer = footerRef.current?.offsetHeight ?? 0;
       const natural = header + contentEl.offsetHeight + footer;
       const clamped = Math.ceil(
-        Math.min(Math.max(natural, POPOVER_MIN_HEIGHT), POPOVER_MAX_HEIGHT),
+        Math.min(Math.max(natural, TRAY_PANEL_MIN_HEIGHT), TRAY_PANEL_MAX_HEIGHT)
+          + TRAY_PANEL_GUTTER * 2,
       );
       if (clamped === lastSentHeight.current) return;
       lastSentHeight.current = clamped;
@@ -248,65 +257,43 @@ export function TrayPopoverView() {
     };
   }, [loading, error]);
 
+  const comparisonLabel = range === 'today' ? '较昨日同期' : `较前 ${rangeDays} 天`;
   const metrics = useMemo(
-    () => {
-      const trendRows = range === 'today'
-        ? visibleTrendRows.hourlyRows
-        : visibleTrendRows.dailyRows;
-      const trendValues = buildUsageMetricTrendValues(trendRows);
-      const trendPeriodLabel =
-        range === 'today' ? '今日小时' : `近 ${rangeDays} 日`;
-
-      return [
-        {
-          label: '预估费用',
-          value: visibleSummary.totalCostUsd,
-          trend: visibleMetricTrends.totalCostUsd,
-          trendDisplay: 'percent' as const,
-          format: formatUsd,
-          exactFormat: formatUsd,
-          trendValues: trendValues.costUsd,
-          trendLabel: `${trendPeriodLabel}预估费用趋势`,
-        },
-        {
-          label: '总 Token',
-          value: visibleSummary.totalTokens,
-          trend: visibleMetricTrends.totalTokens,
-          trendDisplay: 'percent' as const,
-          format: formatTokens,
-          exactFormat: formatTokensExact,
-          trendValues: trendValues.totalTokens,
-          trendLabel: `${trendPeriodLabel}总 Token 趋势`,
-        },
-        {
-          label: '输入 Token',
-          value: visibleSummary.inputTokens,
-          trend: visibleMetricTrends.inputTokens,
-          trendDisplay: 'tokens' as const,
-          format: formatTokens,
-          exactFormat: formatTokensExact,
-          trendValues: trendValues.inputTokens,
-          trendLabel: `${trendPeriodLabel}输入 Token 趋势`,
-        },
-        {
-          label: '输出 Token',
-          value: visibleSummary.outputTokens,
-          trend: visibleMetricTrends.outputTokens,
-          trendDisplay: 'tokens' as const,
-          format: formatTokens,
-          exactFormat: formatTokensExact,
-          trendValues: trendValues.outputTokens,
-          trendLabel: `${trendPeriodLabel}输出 Token 趋势`,
-        },
-      ] as const;
-    },
-    [
-      range,
-      rangeDays,
-      visibleMetricTrends,
-      visibleSummary,
-      visibleTrendRows,
-    ],
+    () => [
+      {
+        label: '预估费用',
+        value: visibleSummary.totalCostUsd,
+        trend: visibleMetricTrends.totalCostUsd,
+        trendDisplay: 'percent' as const,
+        format: formatUsd,
+        exactFormat: formatUsd,
+      },
+      {
+        label: '总 Token',
+        value: visibleSummary.totalTokens,
+        trend: visibleMetricTrends.totalTokens,
+        trendDisplay: 'percent' as const,
+        format: formatTokens,
+        exactFormat: formatTokensExact,
+      },
+      {
+        label: '输入 Token',
+        value: visibleSummary.inputTokens,
+        trend: visibleMetricTrends.inputTokens,
+        trendDisplay: 'tokens' as const,
+        format: formatTokens,
+        exactFormat: formatTokensExact,
+      },
+      {
+        label: '输出 Token',
+        value: visibleSummary.outputTokens,
+        trend: visibleMetricTrends.outputTokens,
+        trendDisplay: 'tokens' as const,
+        format: formatTokens,
+        exactFormat: formatTokensExact,
+      },
+    ] as const,
+    [visibleMetricTrends, visibleSummary],
   );
 
   const topTools = useMemo(
@@ -382,13 +369,13 @@ export function TrayPopoverView() {
   }, [availableTools, selectedTools, visibleSummary.totalTokens]);
 
   return (
-    <div className="tray-popover bg-background font-sans text-foreground">
+    <div className="tray-popover font-sans text-foreground" style={POPOVER_SHELL_STYLE}>
       <header
         ref={headerRef}
-        className="tray-popover__header flex flex-col gap-2.5 px-4 py-3"
+        className="tray-popover__header flex flex-col gap-2 px-4 py-2"
       >
         <div className="flex items-center justify-between">
-          <h1 className="text-md text-foreground">用量概览</h1>
+          <h1 className="text-sm font-semibold text-foreground">用量概览</h1>
           <ThemeToggle />
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -452,15 +439,15 @@ export function TrayPopoverView() {
               {error}
             </div>
           ) : (
-            <div className="relative isolate grid min-h-40 gap-3.5">
+            <div className="tray-popover__usage relative isolate grid min-h-40 gap-3">
               <DashboardRangeSyncOverlay visible={refreshing} />
-              <section aria-label="用量指标" className="grid grid-cols-2 gap-2.5">
-                {metrics.map((metric) => (
+              <section aria-label="用量指标" className="grid grid-cols-2 gap-2">
+                {metrics.slice(0, 2).map((metric) => (
                   <Card
                     key={metric.label}
-                    className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3"
+                    className="min-w-0 overflow-hidden rounded-xl px-3 py-2.5"
                   >
-                    <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
+                    <Card.Content className="grid gap-1 p-0">
                       <div className="flex h-5 min-w-0 items-center justify-between gap-2">
                         <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
                           {metric.label}
@@ -468,31 +455,45 @@ export function TrayPopoverView() {
                         <div className="flex h-5 shrink-0 items-center justify-end">
                           {metric.trend ? (
                             <MetricTrend
+                              comparisonLabel={comparisonLabel}
                               display={metric.trendDisplay}
                               trend={metric.trend}
                             />
                           ) : null}
                         </div>
                       </div>
-                      <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
-                        <AnimatedMetricValue
-                          exactFormat={metric.exactFormat}
-                          format={metric.format}
-                          label={metric.label}
-                          value={metric.value}
-                        />
-                        <MetricSparkline
-                          isIncrease={(metric.trend?.changeValue ?? 0) >= 0}
-                          label={metric.trendLabel}
-                          values={metric.trendValues}
-                        />
-                      </div>
+                      <AnimatedMetricValue
+                        exactFormat={metric.exactFormat}
+                        format={metric.format}
+                        label={metric.label}
+                        value={metric.value}
+                      />
                     </Card.Content>
                   </Card>
                 ))}
+                <div className="col-span-full grid grid-cols-2 divide-x divide-separator rounded-xl bg-surface/60 py-2">
+                  {metrics.slice(2).map((metric) => (
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 px-3" key={metric.label}>
+                      <p className="text-xs text-muted">{metric.label === '输入 Token' ? '输入' : '输出'}</p>
+                      <AnimatedMetricValue
+                        compact
+                        exactFormat={metric.exactFormat}
+                        format={metric.format}
+                        label={metric.label}
+                        value={metric.value}
+                      />
+                      {metric.trend && (
+                        <span className="ml-auto">
+                          <MetricTrend compact comparisonLabel={comparisonLabel} display={metric.trendDisplay} trend={metric.trend} />
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </section>
 
               <DailyUsageTrendCard
+                className="tray-popover__trend"
                 compact
                 hourly={range === 'today'}
                 hourlyRows={visibleTrendRows.hourlyRows}
@@ -522,27 +523,30 @@ export function TrayPopoverView() {
 
       <footer
         ref={footerRef}
-        className="tray-popover__footer flex items-center px-4 py-2.5"
+        className="tray-popover__footer flex items-center gap-1.5 px-4 py-2"
       >
         <span
           aria-hidden="true"
-          className="flex size-4 shrink-0 items-center justify-center rounded-full bg-success text-success-foreground"
+          className="flex size-4 shrink-0 items-center justify-center text-success"
         >
           <Check className="size-3" />
         </span>
         <span
-          className="ml-1.5 text-xs leading-none text-muted"
+          className="min-w-0 truncate text-xs text-muted"
           title={lastSyncAt ? new Date(lastSyncAt).toLocaleString() : undefined}
         >
           最近同步：{formatLastSyncTime(lastSyncAt, now)}
         </span>
-        <button
+        <Button
           type="button"
-          className="ml-auto text-xs leading-none text-accent-soft-foreground transition-colors hover:text-foreground"
-          onClick={() => window.tud?.showMainWindow?.()}
+          className="ml-auto h-8 min-h-8 shrink-0 gap-1.5 rounded-lg px-2.5 text-xs"
+          size="sm"
+          variant="secondary"
+          onPress={() => window.tud?.showMainWindow?.()}
         >
           打开主窗口
-        </button>
+          <span aria-hidden="true">↗</span>
+        </Button>
       </footer>
     </div>
   );
@@ -551,22 +555,25 @@ export function TrayPopoverView() {
 /** Preserve the tray's final content rhythm while the first dataset loads. */
 function TrayLoadingSkeleton() {
   return (
-    <div aria-label="用量数据加载中" className="grid gap-3.5" role="status">
-      <section aria-hidden="true" className="grid grid-cols-2 gap-2.5">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Card className="h-[5.5rem] min-h-[5.5rem] min-w-0 overflow-hidden rounded-2xl p-3" key={index}>
-            <Card.Content className="grid grid-rows-[auto_auto] content-start gap-4 p-0">
+    <div aria-label="用量数据加载中" className="grid gap-3" role="status">
+      <section aria-hidden="true" className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 2 }, (_, index) => (
+          <Card className="min-w-0 overflow-hidden rounded-xl px-3 py-2.5" key={index}>
+            <Card.Content className="grid gap-1 p-0">
               <div className="flex items-center justify-between gap-2">
                 <Skeleton className="h-3 w-14 rounded-md" />
                 <Skeleton className="h-5 w-12 rounded-full" />
               </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
-                <Skeleton className="h-6 w-20 rounded-md" />
-                <Skeleton className="h-6 w-16 justify-self-end rounded-md" />
-              </div>
+              <Skeleton className="h-8 w-24 rounded-md" />
             </Card.Content>
           </Card>
         ))}
+        <div className="col-span-full grid grid-cols-2 gap-3 rounded-xl bg-surface/60 px-3 py-2">
+          {Array.from({ length: 2 }, (_, index) => <div className="flex items-center gap-2" key={index}>
+            <Skeleton className="h-3 w-8 rounded-md" />
+            <Skeleton className="h-5 w-16 rounded-md" />
+          </div>)}
+        </div>
       </section>
 
       <Card aria-hidden="true" className="overflow-hidden rounded-2xl p-3">
@@ -575,7 +582,7 @@ function TrayLoadingSkeleton() {
           <Skeleton className="h-6 w-24 rounded-lg" />
         </Card.Header>
         <Card.Content>
-          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-[6.5rem] w-full rounded-xl" />
         </Card.Content>
       </Card>
 
@@ -615,39 +622,44 @@ function formatLastSyncTime(lastSyncAt: string | null, now: number): string {
 }
 
 function MetricTrend({
+  compact = false,
+  comparisonLabel,
   display,
   trend,
 }: {
+  compact?: boolean;
+  comparisonLabel: string;
   display: 'percent' | 'tokens';
   trend: { changePct: number; changeValue: number };
 }) {
-  const isIncrease = trend.changeValue >= 0;
-  const direction = isIncrease ? '上涨' : '下降';
+  const isIncrease = trend.changeValue > 0;
+  const unchanged = trend.changeValue === 0;
+  const direction = unchanged ? '持平' : isIncrease ? '增加' : '减少';
   const label =
     display === 'tokens'
       ? `${isIncrease ? '+' : '−'}${formatTokens(Math.abs(trend.changeValue))}`
       : `${Math.abs(trend.changePct).toFixed(1)}%`;
 
   return (
-    <Chip
-      aria-label={`${direction} ${label}`}
-      className="shrink-0"
-      color={isIncrease ? 'success' : 'danger'}
-      size="sm"
-      variant="soft"
+    <span
+      aria-label={`${comparisonLabel}，${direction}${unchanged ? '' : ` ${label}`}`}
+      title={`${comparisonLabel}，${direction}${unchanged ? '' : ` ${label}`}`}
+      className={`inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[11px] leading-5 tabular-nums text-muted ${compact ? '' : 'rounded-md bg-default/50 px-1.5'}`}
     >
-      <span aria-hidden="true">{isIncrease ? '↑' : '↓'}</span>
-      <Chip.Label className="tabular-nums">{label}</Chip.Label>
-    </Chip>
+      {!unchanged && <span aria-hidden="true">{isIncrease ? '↑' : '↓'}</span>}
+      {unchanged ? '持平' : label}
+    </span>
   );
 }
 
 function AnimatedMetricValue({
+  compact = false,
   exactFormat,
   format,
   label,
   value,
 }: {
+  compact?: boolean;
   exactFormat: (value: number) => string;
   format: (value: number) => string;
   label: string;
@@ -658,90 +670,11 @@ function AnimatedMetricValue({
   return (
     <span
       aria-label={`${label} ${exactFormat(value)}`}
-      className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums"
+      className={`min-w-0 truncate font-semibold tracking-tight text-foreground tabular-nums ${compact ? 'text-sm leading-5' : 'text-[26px] leading-8'}`}
       title={exactFormat(value)}
     >
       {format(animatedValue)}
     </span>
-  );
-}
-
-/** Compact, non-interactive trend cue for metric cards. */
-function MetricSparkline({
-  isIncrease,
-  label,
-  values,
-}: {
-  isIncrease: boolean;
-  label: string;
-  values: number[];
-}) {
-  const gradientId = useId().replace(/:/g, '');
-  const points = useMemo(
-    () => values.filter((value) => Number.isFinite(value)),
-    [values],
-  );
-
-  if (points.length < 2) {
-    return (
-      <div
-        aria-hidden="true"
-        className="h-6 w-16 justify-self-end"
-      />
-    );
-  }
-
-  const width = 64;
-  const height = 24;
-  const padding = 2;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-  const stroke = isIncrease ? 'var(--chart-2)' : 'var(--chart-5)';
-  const path = points
-    .map((value, index) => {
-      const x =
-        padding +
-        (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
-      const y =
-        height -
-        padding -
-        ((value - min) / span) * (height - padding * 2);
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ');
-
-  return (
-    <div
-      aria-label={label}
-      className="pointer-events-none h-6 w-16 justify-self-end"
-      role="img"
-    >
-      <svg
-        aria-hidden="true"
-        className="h-full w-full overflow-visible"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        <defs>
-          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity={0.24} />
-            <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <path
-          d={`${path} L ${width - padding} ${height} L ${padding} ${height} Z`}
-          fill={`url(#${gradientId})`}
-        />
-        <path
-          d={path}
-          fill="none"
-          stroke={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.5"
-        />
-      </svg>
-    </div>
   );
 }
 
@@ -755,7 +688,7 @@ function DistributionMiniCard({
   totalTokens: number;
 }) {
   return (
-    <Card className="min-w-0 rounded-2xl p-3">
+    <Card className="min-w-0 rounded-xl p-3">
       <Card.Content className="grid gap-2.5 p-0">
         <p className="text-xs font-medium text-muted">{title}</p>
         {rows.map((row) => {

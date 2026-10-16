@@ -12,7 +12,12 @@ import path from 'node:path';
 import sharp from 'sharp';
 import type { QuotaState } from '../shared/quota';
 import { quotaPopoverBounds, quotaTraySummary } from './tray-quota';
-import { defaultPreloadPath, resolveAppIconPath, WINDOW_BACKGROUND_COLORS, type DesktopWindowTheme } from './DesktopWindow';
+import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
+import {
+  TRAY_WINDOW_WIDTH as POPOVER_WIDTH,
+  TRAY_WINDOW_MIN_HEIGHT as POPOVER_MIN_HEIGHT,
+  TRAY_WINDOW_MAX_HEIGHT as POPOVER_MAX_HEIGHT,
+} from '../shared/tray-popover-layout';
 import { pokeSyncOnForeground } from './local-runtime';
 import {
   markTrayPopoverQuitting,
@@ -42,9 +47,6 @@ const isMac = process.platform === 'darwin';
 
 const TRAY_POPOVER_RESIZE_CHANNEL = 'tray-popover:resize';
 
-const POPOVER_WIDTH = 430;
-const POPOVER_MIN_HEIGHT = 200;
-const POPOVER_MAX_HEIGHT = 700;
 /** Initial height; the renderer reports its real content height on first paint. */
 const POPOVER_INITIAL_HEIGHT = POPOVER_MIN_HEIGHT;
 
@@ -56,13 +58,10 @@ export interface TrayPopoverOptions {
   /** Windows desktop pet toggle. */
   togglePet?: () => void;
   onOpen?: () => void;
-  /** Initial popover window background, kept in sync with the app theme. */
-  theme: DesktopWindowTheme;
 }
 
 let tray: Tray | null = null;
 let popover: BrowserWindow | null = null;
-let popoverTheme: DesktopWindowTheme = 'light';
 let lastHiddenAt = 0;
 let iconGeneration = 0;
 let quotaLevel = -1;
@@ -131,16 +130,19 @@ function ensurePopover(): BrowserWindow {
     show: false,
     frame: false,
     fullscreenable: false,
-    backgroundColor: WINDOW_BACKGROUND_COLORS[popoverTheme],
-    // Keep native resizing enabled for programmatic auto-height updates. The
-    // active height is locked with equal min/max bounds after every update.
-    resizable: true,
+    // The renderer paints the rounded shell; an opaque native backing would
+    // fill its corners. Keep transparency stable across renderer theme changes.
+    transparent: true,
+    backgroundColor: '#00000000',
+    // Transparent windows must not be user-resizable. Programmatic setBounds
+    // still works; positionPopoverNearTray unlocks the min/max bounds first.
+    resizable: false,
     movable: false,
     minimizable: false,
     maximizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    hasShadow: true,
+    hasShadow: false,
     webPreferences: {
       preload: defaultPreloadPath(),
       sandbox: true,
@@ -241,14 +243,6 @@ export function hideTrayPopover(): void {
   popover.hide();
 }
 
-/** Keep the popover's native background in sync with the app theme. */
-export function setPopoverTheme(theme: DesktopWindowTheme): void {
-  popoverTheme = theme;
-  if (popover && !popover.isDestroyed()) {
-    popover.setBackgroundColor(WINDOW_BACKGROUND_COLORS[theme]);
-  }
-}
-
 /**
  * Set the text displayed beside the tray icon in the macOS menu bar.
  * Uses monospaced digits to prevent jitter when usage numbers tick up.
@@ -278,8 +272,6 @@ export function setTrayQuotaState(state: QuotaState): void {
 
 export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
-  popoverTheme = options.theme;
-
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
   const menu = buildTrayMenu(options);

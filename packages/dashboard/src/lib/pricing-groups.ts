@@ -75,11 +75,15 @@ export function groupPricingCatalog(rows: PricingCatalogRow[]): PricingModelGrou
   });
 }
 
-export function filterAndSortPricingGroups(groups: PricingModelGroup[], query: string, sort: PricingSortDescriptor): PricingModelGroup[] {
+export function filterAndSortPricingGroups(groups: PricingModelGroup[], query: string, sort: PricingSortDescriptor, usedOnly = false): PricingModelGroup[] {
   const normalized = query.trim().toLowerCase();
-  const filtered = normalized ? groups.filter(group => group.entries.some(entry =>
-    [entry.model, entry.displayName, entry.canonicalModelId].some(value => value?.toLowerCase().includes(normalized)))) : groups;
+  const filtered = groups.filter(group => (!usedOnly || (group.usageTokens ?? 0) > 0) && (!normalized || group.entries.some(entry =>
+    [entry.model, entry.displayName, entry.canonicalModelId].some(value => value?.toLowerCase().includes(normalized)))));
   return filterAndSortPricingCatalog(filtered, '', sort);
+}
+
+export function getPrimaryPricingVariant(group: PricingModelGroup): PricingVariant {
+  return group.apiVariants[0] ?? group.subscriptionVariants.find(variant => variant.row.model === group.model)!;
 }
 
 export function formatPricingContext(value?: number): string {

@@ -63,7 +63,8 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    // Sandboxed preloads cannot require workspace packages at runtime.
+    plugins: [externalizeDepsPlugin({ exclude: ['quotern-core'] })],
     build: {
       outDir: 'out/preload',
       rollupOptions: {

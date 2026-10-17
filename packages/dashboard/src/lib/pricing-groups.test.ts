@@ -103,4 +103,15 @@ describe('pricing model groups', () => {
     assert.equal(formatPricingContext(200_000), '200K');
     assert.equal(formatPricingContext(undefined), '—');
   });
+
+  it('filters by recent matched group usage while retaining unused regional and subscription channels', () => {
+    const groups = groupPricingCatalog([
+      { ...api, usageTokens: 7 }, { ...regionalApi, usageTokens: 0 }, ...plans.map(plan => ({ ...plan, usageTokens: 0 })),
+      { ...api, model: 'openai/unused', canonicalModelId: 'openai/unused', usageTokens: 0 },
+    ]);
+    const visible = filterAndSortPricingGroups(groups, '', DEFAULT_PRICING_SORT, true);
+    assert.equal(visible.length, 1);
+    assert.equal(visible[0]!.entries.length, 6);
+    assert.equal(filterAndSortPricingGroups(groups, 'unused', DEFAULT_PRICING_SORT, true).length, 0);
+  });
 });

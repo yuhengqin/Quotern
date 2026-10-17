@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatPricingDisplayRate, getPricingVariantSuffixes } from './pricing-display.ts';
+import { formatPricingDisplayRate, getPricingVariantSuffixes, getPricingVariantAliases, splitPricingHighlight } from './pricing-display.ts';
 
 describe('pricing display', () => {
   it('preserves exact variant suffixes without translating or guessing their meaning', () => {
@@ -21,5 +21,20 @@ describe('pricing display', () => {
     assert.deepEqual(formatPricingDisplayRate(1, 'CNY', null), { text: '—', exact: '—', approximate: false });
     assert.deepEqual(formatPricingDisplayRate(0.1, 'CNY', 7.2), { text: '¥0.72', exact: '¥0.72', approximate: false });
     assert.deepEqual(formatPricingDisplayRate(1.77744, 'CNY', 7), { text: '≈¥12.44', exact: '¥12.44208', approximate: true });
+  });
+
+  it('keeps full calling IDs behind shortened labels, including equal labels across regions', () => {
+    assert.deepEqual(getPricingVariantAliases('vendor/model', ['vendor/model-preview', 'vendor-cn/model-preview', 'vendor/model']), [
+      { label: 'preview', models: ['vendor/model-preview', 'vendor-cn/model-preview'] },
+    ]);
+  });
+
+  it('highlights literal case-insensitive matches without treating search input as a regex or HTML', () => {
+    assert.deepEqual(splitPricingHighlight('Flash FLASH flash', ' flash '), [
+      { text: 'Flash', match: true }, { text: ' ', match: false }, { text: 'FLASH', match: true },
+      { text: ' ', match: false }, { text: 'flash', match: true },
+    ]);
+    assert.deepEqual(splitPricingHighlight('model [preview]', '[preview]'), [{ text: 'model ', match: false }, { text: '[preview]', match: true }]);
+    assert.deepEqual(splitPricingHighlight('<script>', ''), [{ text: '<script>', match: false }]);
   });
 });

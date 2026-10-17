@@ -5,7 +5,7 @@ import { CopyPricingId, PricingEstimatedCost, PricingRate, type PriceDisplay } f
 import { PricingCalculator, formatPricingScenario } from './PricingTools';
 import { getPricingModelName, getPricingProvider } from '../lib/pricing-catalog';
 import { formatPricingContext, getPrimaryPricingVariant, type PricingModelGroup, type PricingVariant } from '../lib/pricing-groups';
-import { estimatePricingCost, getCacheReadSavings, type PricingScenario } from '../lib/pricing-workbench';
+import { comparePricingCosts, estimatePricingCost, getCacheReadSavings, type PricingScenario } from '../lib/pricing-workbench';
 import { formatTokens } from '../lib/format';
 
 function channelLabel(variant: PricingVariant): string {
@@ -22,21 +22,29 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
     group,
     variant: [...group.apiVariants, ...group.subscriptionVariants].find(variant => variant.id === channels[group.id]) ?? getPrimaryPricingVariant(group),
   }));
-  const totals = selections.map(({ variant }) => estimatePricingCost(variant.row, scenario).totalUsd).filter((value): value is number => value !== null);
-  const minimum = totals.length > 1 ? Math.min(...totals) : null;
-  const metrics: Array<{ label: string; detail?: string; render: (group: PricingModelGroup, variant: PricingVariant) => ReactNode }> = [
-    { label: '输入', detail: '/ 百万 Token', render: (_, variant) => <PricingRate value={variant.row.input} currency={currency} exchangeRate={exchangeRate} /> },
-    { label: '输出', detail: '/ 百万 Token', render: (_, variant) => <PricingRate value={variant.row.output} currency={currency} exchangeRate={exchangeRate} /> },
-    { label: '缓存读', detail: '/ 百万 Token', render: (_, variant) => <PricingRate value={variant.row.cacheRead} currency={currency} exchangeRate={exchangeRate} /> },
-    { label: '缓存写', detail: '/ 百万 Token', render: (_, variant) => <PricingRate value={variant.row.cacheWrite} currency={currency} exchangeRate={exchangeRate} /> },
+  const comparisons = comparePricingCosts(selections.map(({ variant }) => estimatePricingCost(variant.row, scenario).totalUsd));
+  const sameCosts = comparisons.every(comparison => comparison?.isLowest);
+  const lowestCount = comparisons.filter(comparison => comparison?.isLowest).length;
+  const canDisplayPrice = currency === 'USD' || (exchangeRate !== null && Number.isFinite(exchangeRate) && exchangeRate > 0);
+  const rateValues = (key: 'input' | 'output' | 'cacheRead' | 'cacheWrite') => selections.map(({ variant }) => variant.row.billingMode === 'subscription' ? null : variant.row[key]);
+  const renderRate = (variant: PricingVariant, key: 'input' | 'output' | 'cacheRead' | 'cacheWrite') => variant.row.billingMode === 'subscription'
+    ? <span className="text-[11px] text-muted">订阅不适用</span> : <PricingRate value={variant.row[key]} currency={currency} exchangeRate={exchangeRate} />;
+  const metrics: Array<{ label: string; detail?: string; values?: Array<number | null>; preferred?: 'lower' | 'higher'; primary?: boolean; supporting?: boolean; render: (group: PricingModelGroup, variant: PricingVariant) => ReactNode }> = [
+    { label: '输入', detail: '/ 百万 Token', values: canDisplayPrice ? rateValues('input') : undefined, preferred: 'lower', primary: true, render: (_, variant) => renderRate(variant, 'input') },
+    { label: '输出', detail: '/ 百万 Token', values: canDisplayPrice ? rateValues('output') : undefined, preferred: 'lower', primary: true, render: (_, variant) => renderRate(variant, 'output') },
+    { label: '上下文', values: selections.map(({ variant }) => {
+      const value = variant.row.contextWindow;
+      return value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : null;
+    }), preferred: 'higher', primary: true, render: (_, variant) => formatPricingContext(variant.row.contextWindow) },
+    { label: '缓存读', detail: `/ 百万 Token · ${scenario.cacheRead === 0 ? '本次未使用' : `本次 ${formatTokens(scenario.cacheRead)} Token`}`, values: canDisplayPrice ? rateValues('cacheRead') : undefined, preferred: 'lower', render: (_, variant) => renderRate(variant, 'cacheRead') },
+    { label: '缓存写', detail: `/ 百万 Token · ${scenario.cacheWrite === 0 ? '本次未使用' : `本次 ${formatTokens(scenario.cacheWrite)} Token`}`, values: canDisplayPrice ? rateValues('cacheWrite') : undefined, preferred: 'lower', render: (_, variant) => renderRate(variant, 'cacheWrite') },
     { label: '缓存读优惠', detail: '相对普通输入', render: (_, variant) => {
       const saving = getCacheReadSavings(variant.row);
       return saving == null ? '—' : saving >= 0 ? `节省 ${Number(saving.toFixed(2))}%` : `贵 ${Number((-saving).toFixed(2))}%`;
     } },
-    { label: '上下文', render: (_, variant) => formatPricingContext(variant.row.contextWindow) },
-    { label: '发布时间', render: (_, variant) => variant.row.releaseDate ?? '未收录' },
-    { label: '近 30 天用量', detail: '模型合计', render: group => usageStatus === 'error' ? '用量不可用' : usageStatus === 'loading' ? '加载中' : (group.usageTokens ?? 0) > 0 ? formatTokens(group.usageTokens!) : '无匹配用量' },
-    { label: '调用 ID', render: (_, variant) => <div className="space-y-2">{variant.entries.map(entry => <div key={entry.model} className="flex items-start gap-1"><code className="min-w-0 flex-1 select-text break-all text-[11px] leading-5">{entry.model}</code><CopyPricingId model={entry.model} /></div>)}</div> },
+    { label: '发布时间', supporting: true, render: (_, variant) => variant.row.releaseDate ?? '未收录' },
+    { label: '个人近 30 天用量', detail: '模型合计 · Token', supporting: true, render: group => usageStatus === 'error' ? '用量不可用' : usageStatus === 'loading' ? '加载中' : (group.usageTokens ?? 0) > 0 ? formatTokens(group.usageTokens!) : '无匹配用量' },
+    { label: '调用 ID', supporting: true, render: (_, variant) => <div className="space-y-2">{variant.entries.map(entry => <div key={entry.model} className="flex items-start gap-1"><code className="min-w-0 flex-1 select-text break-all text-[11px] leading-5">{entry.model}</code><CopyPricingId model={entry.model} /></div>)}</div> },
   ];
   return <Modal.Backdrop isOpen onOpenChange={open => { if (!open) onClose(); }}>
     <Modal.Container scroll="inside" placement="center" className="p-3 sm:p-6">
@@ -52,8 +60,9 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
         </Modal.Header>
         <Modal.Body className="min-w-0">
           <p className="mb-2 text-[11px] text-muted sm:hidden">横向滑动查看全部模型，左侧指标保持可见。</p>
-          <div role="region" aria-label="模型对比表，可横向滚动" tabIndex={0} className="max-w-full overflow-auto rounded-xl border border-border/70 outline-none focus-visible:outline-2 focus-visible:outline-accent">
+          <div role="region" aria-label="模型对比表，可横向滚动" tabIndex={0} className="max-w-full overflow-auto overscroll-contain rounded-xl border border-border/70 outline-none focus-visible:outline-2 focus-visible:outline-accent">
             <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ minWidth: 112 + groups.length * 210 }}>
+              <caption className="sr-only">同等用量费用、API 单价、上下文与个人使用记录对比</caption>
               <thead>
                 <tr>
                   <th scope="col" className="sticky left-0 top-0 z-20 w-28 min-w-28 bg-surface-secondary p-3 text-muted">模型 / 渠道</th>
@@ -77,24 +86,37 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
               </thead>
               <tbody>
                 <tr>
-                  <th scope="row" className="sticky left-0 z-10 bg-surface-secondary p-3 font-medium">试算费用</th>
-                  {selections.map(({ group, variant }) => {
-                    const estimate = estimatePricingCost(variant.row, scenario);
-                    const lowest = minimum !== null && estimate.totalUsd === minimum && (currency === 'USD' || exchangeRate !== null);
-                    return <td key={group.id} className={`border-t border-border/60 p-3 ${lowest ? 'bg-accent-soft' : 'bg-surface'}`}>
-                      <div className="text-base font-semibold"><PricingEstimatedCost row={variant.row} scenario={scenario} currency={currency} exchangeRate={exchangeRate} /></div>
-                      {lowest && <p className="mt-1 text-[10px] text-accent-soft-foreground">已知价格中最低</p>}
+                  <th scope="row" className="sticky left-0 z-10 border-t border-border/60 bg-surface-secondary p-3 font-medium">同等用量费用<span className="mt-1 block text-[10px] font-normal text-muted">按当前试算用量</span></th>
+                  {selections.map(({ group, variant }, index) => {
+                    const comparison = canDisplayPrice ? comparisons[index] : null;
+                    const lowest = Boolean(comparison?.isLowest);
+                    return <td key={group.id} className={`border-t border-border/60 p-3 align-top ${lowest ? 'bg-accent-soft/60' : 'bg-surface'}`}>
+                      <div className={`text-2xl font-semibold tracking-tight ${lowest ? 'text-accent-soft-foreground' : 'text-foreground'}`}><PricingEstimatedCost row={variant.row} scenario={scenario} currency={currency} exchangeRate={exchangeRate} /></div>
+                      {lowest && <p className="mt-1.5 text-[11px] font-medium text-accent-soft-foreground">{sameCosts ? '费用相同' : `${comparisons.some(value => value === null) ? '已知费用中' : ''}${lowestCount > 1 ? '并列最低' : '费用最低'}`}</p>}
+                      {comparison && !comparison.isLowest && <p className="mt-1.5 text-[11px] leading-5 text-muted">比最低贵 <PricingRate value={comparison.differenceUsd} currency={currency} exchangeRate={exchangeRate} unit="总费用差额" />{comparison.multiple !== null && comparison.multiple >= 1.01 && <> · 约 {comparison.multiple.toLocaleString('zh-CN', { maximumSignificantDigits: 3 })} 倍</>}</p>}
                     </td>;
                   })}
                 </tr>
-                {metrics.map(metric => <tr key={metric.label}>
-                  <th scope="row" className="sticky left-0 z-10 border-t border-border/60 bg-surface-secondary p-3 font-medium">{metric.label}{metric.detail && <span className="mt-1 block text-[10px] font-normal text-muted">{metric.detail}</span>}</th>
-                  {selections.map(({ group, variant }) => <td key={group.id} className="border-t border-border/60 bg-surface p-3 align-top tabular-nums">{metric.render(group, variant)}</td>)}
-                </tr>)}
+                {metrics.map(metric => {
+                  const known = metric.values?.filter((value): value is number => value !== null && Number.isFinite(value) && value >= 0) ?? [];
+                  const same = known.length === selections.length && known.every(value => value === known[0]);
+                  const different = known.length > 1 && Math.min(...known) !== Math.max(...known);
+                  const preferred = metric.preferred === 'higher' ? Math.max(...known) : Math.min(...known);
+                  return <tr key={metric.label}>
+                    <th scope="row" className={`sticky left-0 z-10 border-t border-border/60 bg-surface-secondary p-3 font-medium ${metric.supporting ? 'text-[11px] text-muted' : ''}`}>{metric.label}{same && <span className="ml-1.5 inline-block rounded bg-surface px-1 py-0.5 text-[10px] font-normal text-muted">相同</span>}{metric.detail && <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">{metric.detail}</span>}</th>
+                    {selections.map(({ group, variant }, index) => {
+                      const highlighted = different && metric.values?.[index] === preferred;
+                      return <td key={group.id} className={`border-t border-border/60 p-3 align-top tabular-nums ${highlighted ? 'bg-accent-soft/30 text-accent-soft-foreground' : 'bg-surface'} ${metric.primary ? 'text-sm font-semibold' : metric.supporting ? 'text-[11px] text-muted' : 'text-[13px]'}`}>
+                        {metric.render(group, variant)}{highlighted && <span className="mt-1 block text-[10px] font-normal">{metric.preferred === 'higher' ? '已知上下文最大' : '已知单价最低'}</span>}
+                      </td>;
+                    })}
+                  </tr>;
+                })}
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">试算不等于实际账单，不含税费或渠道折扣；缺失单价不按零计算。价格与上下文不能代表模型能力。</p>
+          {scenario.cacheRead === 0 && scenario.cacheWrite === 0 && <p className="mt-3 text-[11px] leading-relaxed text-muted">本次未使用缓存读写，缓存单价与缓存读优惠不影响上述费用。</p>}
+          <p className="mt-2 text-[11px] leading-relaxed text-muted">试算不等于实际账单，不含税费或渠道折扣；缺失单价不按零计算。个人用量反映使用记录，价格与上下文不能代表模型能力。</p>
         </Modal.Body>
       </Modal.Dialog>
     </Modal.Container>

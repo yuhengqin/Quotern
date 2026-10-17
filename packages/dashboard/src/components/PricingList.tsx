@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { ChevronDown } from '@gravity-ui/icons';
 import { Button, Checkbox, ListLayout, Table, TableLayout, Virtualizer, type SortDescriptor } from '@heroui/react';
 import { GridList, GridListItem } from 'react-aria-components';
@@ -8,7 +8,7 @@ import type { PricingCatalogRow } from '../lib/pricing-data';
 import { getPricingModelName, getPricingProvider, type PricingSortDescriptor, type PricingSortKey } from '../lib/pricing-catalog';
 import { formatPricingContext, getPrimaryPricingVariant as primaryVariant, type PricingModelGroup, type PricingVariant } from '../lib/pricing-groups';
 import { formatTokens } from '../lib/format';
-import { MAX_COMPARISON_MODELS, type PricingScenario } from '../lib/pricing-workbench';
+import type { PricingScenario } from '../lib/pricing-workbench';
 
 type TableColumn = { id: PricingSortKey | 'estimate'; label: string; minWidth: number; width: NonNullable<ComponentProps<typeof Table.Column>['defaultWidth']> };
 type DisplayRow = { id: string; kind: 'model' | 'api' | 'subscription'; group: PricingModelGroup; variant: PricingVariant };
@@ -31,9 +31,17 @@ function Regions({ regions }: { regions: string[] }) {
   return regions.length > 0 && <span className="shrink-0 rounded bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">{regions.join(' / ')}</span>;
 }
 
-function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, currency, exchangeRate, query, selected, selectionFull, onCompare }: {
+function getComparisonRow(event: { target: EventTarget | null; currentTarget: HTMLElement }, includeSubrows = false): HTMLElement | null {
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest('button, a, input, label, select, textarea, [role="button"], [role="link"], [contenteditable="true"]')) return null;
+  if (!includeSubrows && target.closest('[data-pricing-subrow]')) return null;
+  const row = target.closest<HTMLElement>('[data-pricing-selectable]');
+  return row && event.currentTarget.contains(row) ? row : null;
+}
+
+function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, currency, exchangeRate, query, selected, selectionStarted, onCompare }: {
   item: DisplayRow; sort: PricingSortDescriptor; hasUsage: boolean; expanded: boolean; onToggle: () => void; compact: boolean;
-  query: string; selected: boolean; selectionFull: boolean; onCompare: () => void;
+  query: string; selected: boolean; selectionStarted: boolean; onCompare: () => void;
 } & PriceDisplay) {
   const { group, variant, kind } = item;
   const name = getPricingModelName(group.model, group.displayName);
@@ -54,7 +62,7 @@ function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, curr
   const sameApiPrice = group.apiVariants.length === 1 && variant.regions.length > 1
     && [variant.row.input, variant.row.output, variant.row.cacheRead, variant.row.cacheWrite].every(value => value !== null);
   return <div className="flex min-w-0 flex-1 items-start gap-2">
-    <Checkbox aria-label={`对比 ${name}（${provider.label}）`} isSelected={selected} isDisabled={!selected && selectionFull} onChange={onCompare} className="mt-1 shrink-0">
+    <Checkbox aria-label={`对比 ${name}（${provider.label}）`} isSelected={selected} onChange={onCompare} className={`mt-1 shrink-0 ${selectionStarted ? '' : '[@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover/pricing-row:opacity-100 group-focus-within/pricing-row:opacity-100'}`}>
       <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control></Checkbox.Content>
     </Checkbox>
     <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-surface sm:size-8">
@@ -128,7 +136,7 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
   });
   const mobile = width > 0 && width < 640;
   const wide = width >= (scenario ? 1040 : 960);
-  const identity = (item: DisplayRow) => <ModelIdentity item={item} sort={sort} hasUsage={hasUsage} expanded={expanded.has(item.group.id)} onToggle={() => toggle(item.group.id)} compact={!wide} currency={currency} exchangeRate={exchangeRate} query={query} selected={selected.includes(item.group.id)} selectionFull={selected.length >= MAX_COMPARISON_MODELS} onCompare={() => onCompare(item.group.id)} />;
+  const identity = (item: DisplayRow) => <ModelIdentity item={item} sort={sort} hasUsage={hasUsage} expanded={expanded.has(item.group.id)} onToggle={() => toggle(item.group.id)} compact={!wide} currency={currency} exchangeRate={exchangeRate} query={query} selected={selected.includes(item.group.id)} selectionStarted={selected.length > 0} onCompare={() => onCompare(item.group.id)} />;
   const columns: TableColumn[] = [...(wide ? WIDE_COLUMNS : COMPACT_COLUMNS), ...(wide && scenario ? [{ id: 'estimate' as const, label: '试算费用', minWidth: 112, width: 120 }] : [])];
   const handleSort = (descriptor: SortDescriptor) => {
     const column = columns.find(column => column.id === descriptor.column)?.id;
@@ -137,13 +145,32 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
   const displayedSort = !wide && sort.column === 'input' ? { ...sort, column: 'inputOutput' }
     : !wide && sort.column === 'cacheRead' ? { ...sort, column: 'cache' } : sort;
   const sortDescriptor = columns.some(column => column.id === displayedSort.column) ? displayedSort : undefined;
+  // Keep native row selection semantics, but select on click so dragging text remains possible.
+  const onRowPointerDown = (event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) => {
+    if (event.button === 0 && getComparisonRow(event, true)) event.stopPropagation();
+  };
+  const onRowClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || event.defaultPrevented) return;
+    const row = getComparisonRow(event);
+    const textSelection = event.currentTarget.ownerDocument.getSelection();
+    if (!row || (textSelection && !textSelection.isCollapsed)) return;
+    onCompare(row.dataset.pricingSelectable!);
+  };
+  const onRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.repeat || (event.key !== ' ' && event.key !== 'Enter')) return;
+    const row = getComparisonRow(event);
+    if (!row) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onCompare(row.dataset.pricingSelectable!);
+  };
 
-  return <div ref={containerRef} className="min-h-0 min-w-0 flex-1 overflow-hidden" data-pricing-layout={mobile ? 'mobile' : wide ? 'wide' : 'compact'}>
+  return <div ref={containerRef} className="min-h-0 min-w-0 flex-1 overflow-hidden" data-pricing-layout={mobile ? 'mobile' : wide ? 'wide' : 'compact'} onPointerDownCapture={onRowPointerDown} onMouseDownCapture={onRowPointerDown} onClickCapture={onRowClick} onKeyDownCapture={onRowKeyDown}>
     {groups.length === 0 ? <div className="flex h-full min-h-48 flex-col items-center justify-center gap-1 text-center">
       <p className="text-sm font-medium">没有匹配的模型</p><p className="text-xs text-muted">请调整或清空筛选条件</p>
     </div> : mobile ? <Virtualizer layout={ListLayout} layoutOptions={{ gap: 8, estimatedRowHeight: 180 }} shouldObserveItemSize>
-      <GridList aria-label="模型价格列表" className="h-full w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto outline-none" items={groups} selectionMode="none" dependencies={[sort.column, hasUsage, currency, exchangeRate, expanded, query, selected, scenario]}>
-        {group => <GridListItem id={group.id} textValue={getPricingModelName(group.model, group.displayName)} className="w-full min-w-0 max-w-full rounded-xl border border-border/70 bg-surface p-3 outline-none focus-visible:outline-2 focus-visible:outline-accent">
+      <GridList aria-label="模型价格列表" className="h-full w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto outline-none" items={groups} selectedKeys={selected} selectionMode="multiple" selectionBehavior="toggle" dependencies={[sort.column, hasUsage, currency, exchangeRate, expanded, query, selected, scenario]}>
+        {group => <GridListItem id={group.id} data-pricing-selectable={group.id} textValue={getPricingModelName(group.model, group.displayName)} className={`group/pricing-row w-full min-w-0 max-w-full cursor-pointer rounded-xl border border-border/70 p-3 outline-none focus-visible:outline-2 focus-visible:outline-accent ${selected.includes(group.id) ? 'bg-accent-soft/50 hover:bg-accent-soft/70' : 'bg-surface hover:bg-surface-secondary/70'}`}>
           <div className="min-w-0 space-y-2">
             {identity({ id: group.id, kind: 'model', group, variant: primaryVariant(group) })}
             {primaryVariant(group).row.billingMode === 'subscription' ? <p className="text-xs text-muted">订阅制 · 按套餐额度使用</p> : <div className="grid min-w-0 grid-cols-2 gap-x-4 border-t border-border/40 pt-2">
@@ -151,7 +178,7 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
               <PricePair row={primaryVariant(group).row} cache currency={currency} exchangeRate={exchangeRate} />
             </div>}
             {scenario && <div className="flex items-baseline justify-between gap-2 border-t border-border/40 pt-2 text-xs"><span className="text-muted">试算费用</span><PricingEstimatedCost row={primaryVariant(group).row} scenario={scenario} currency={currency} exchangeRate={exchangeRate} /></div>}
-            {rows.filter(row => row.group.id === group.id && row.kind !== 'model').map(item => <div key={item.id} className="space-y-1.5 border-t border-border/40 pt-2">
+            {rows.filter(row => row.group.id === group.id && row.kind !== 'model').map(item => <div key={item.id} data-pricing-subrow className="space-y-1.5 border-t border-border/40 pt-2">
               {identity(item)}
               {item.kind === 'api' && <div className="grid min-w-0 grid-cols-2 gap-x-4">
                 <PricePair row={item.variant.row} currency={currency} exchangeRate={exchangeRate} />
@@ -167,13 +194,13 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
       <Virtualizer key={wide ? 'wide' : 'compact'} layout={TableLayout} layoutOptions={{ headingHeight: 36, estimatedRowHeight: 56 }} shouldObserveItemSize>
         <Table className="table-size-small h-full w-full">
           <Table.ScrollContainer className="h-full min-w-0 rounded-xl">
-            <Table.Content aria-label="模型价格表" className="h-full w-full overflow-y-auto [scrollbar-gutter:stable]" sortDescriptor={sortDescriptor} onSortChange={handleSort}>
+            <Table.Content aria-label="模型价格表" className="h-full w-full overflow-y-auto [scrollbar-gutter:stable]" selectedKeys={selected} selectionMode="multiple" selectionBehavior="toggle" disabledKeys={rows.filter(item => item.kind !== 'model').map(item => item.id)} disabledBehavior="selection" sortDescriptor={sortDescriptor} onSortChange={handleSort}>
               <Table.Header>{columns.map(column => <Table.Column key={column.id} id={column.id} allowsSorting={column.id !== 'estimate'} isRowHeader={column.id === 'model'} defaultWidth={column.width} minWidth={column.minWidth} className={`bg-surface-secondary ${column.id === 'model' ? '!text-left' : '!text-right'}`}>
                 {({ sortDirection }) => column.id === 'estimate' ? <span>{column.label}</span> : <Table.SortableColumnHeader className={`${column.id === 'model' ? '!justify-start' : '!justify-end'} !gap-1`} sortDirection={sortDirection}>{column.label}</Table.SortableColumnHeader>}
               </Table.Column>)}</Table.Header>
               <Table.Body items={rows} dependencies={[sort.column, hasUsage, currency, exchangeRate, wide, expanded, query, selected, scenario]}>
-                {item => <Table.Row id={item.id} data-pricing-row={item.kind} className="!border-0">
-                  {columns.map(column => <Table.Cell key={column.id} className={`!px-3 !py-0 !border-b-0 ${item.kind === 'model' ? 'border-t border-border/70' : '!border-t-0'} ${column.id === 'model' ? '!text-left' : '!text-right'}`}>
+                {item => <Table.Row id={item.id} data-pricing-row={item.kind} data-pricing-selectable={item.kind === 'model' ? item.group.id : undefined} className={`group/pricing-row !border-0 ${item.kind === 'model' ? 'cursor-pointer' : ''}`}>
+                  {columns.map(column => <Table.Cell key={column.id} className={`!px-3 !py-0 !border-b-0 ${item.kind === 'model' ? `border-t border-border/70 ${selected.includes(item.group.id) ? 'bg-accent-soft/50 group-hover/pricing-row:bg-accent-soft/70' : 'group-hover/pricing-row:bg-surface-secondary/70'}` : '!border-t-0'} ${column.id === 'model' ? '!text-left' : '!text-right'}`}>
                     <div className={`flex min-w-0 items-center ${column.id === 'model' ? '' : 'justify-end'} ${item.kind === 'model' ? wide ? 'min-h-16 py-1.5' : 'min-h-[72px] py-1.5' : wide ? 'min-h-10 py-1' : 'min-h-12 py-1'}`}>
                     {column.id === 'model' ? <div className="min-w-0 flex-1">{identity(item)}{scenario && !wide && <div className="ml-7 mt-1 flex flex-wrap items-baseline gap-x-2 text-[11px]"><span className="text-muted">试算费用</span><PricingEstimatedCost row={item.variant.row} scenario={scenario} currency={currency} exchangeRate={exchangeRate} /></div>}</div>
                       : column.id === 'estimate' && scenario ? <PricingEstimatedCost row={item.variant.row} scenario={scenario} currency={currency} exchangeRate={exchangeRate} />

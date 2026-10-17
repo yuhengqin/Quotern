@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { PricingCatalogRow } from './pricing-data.ts';
-import { estimatePricingCost, getCacheReadSavings, togglePricingComparison, type PricingScenario } from './pricing-workbench.ts';
+import { comparePricingCosts, estimatePricingCost, getCacheReadSavings, togglePricingComparison, type PricingScenario } from './pricing-workbench.ts';
 
 const row: PricingCatalogRow = { model: 'vendor/model', input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 };
 const scenario: PricingScenario = { input: 10_000_000, output: 1_000_000, cacheRead: 2_000_000, cacheWrite: 1_000_000 };
@@ -46,5 +46,31 @@ describe('pricing comparison selection', () => {
     assert.deepEqual(togglePricingComparison(selected, 'b'), ['a', 'c', 'd']);
     assert.deepEqual(togglePricingComparison(['a'], 'b'), ['a', 'b']);
     assert.deepEqual(selected, ['a', 'b', 'c', 'd']);
+  });
+});
+
+describe('pricing cost comparisons', () => {
+  it('compares equal usage against the lowest known cost, including ties', () => {
+    assert.deepEqual(comparePricingCosts([30, 150, 30]), [
+      { differenceUsd: 0, multiple: 1, isLowest: true },
+      { differenceUsd: 120, multiple: 5, isLowest: false },
+      { differenceUsd: 0, multiple: 1, isLowest: true },
+    ]);
+  });
+
+  it('does not compare missing costs or claim a minimum from just one known cost', () => {
+    assert.deepEqual(comparePricingCosts([null, 30]), [null, null]);
+    assert.deepEqual(comparePricingCosts([null, 30, 60, Infinity, -1]), [
+      null, { differenceUsd: 0, multiple: 1, isLowest: true },
+      { differenceUsd: 30, multiple: 2, isLowest: false }, null, null,
+    ]);
+  });
+
+  it('shows absolute differences without dividing by a free baseline', () => {
+    assert.deepEqual(comparePricingCosts([0, 10]), [
+      { differenceUsd: 0, multiple: null, isLowest: true },
+      { differenceUsd: 10, multiple: null, isLowest: false },
+    ]);
+    assert.equal(comparePricingCosts([0.1, 0.3])[1]?.differenceUsd, 0.2);
   });
 });

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
 import { ArrowLeft, Xmark } from '@gravity-ui/icons';
 import { Check, Columns2, Info } from 'lucide-react';
-import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton } from '@heroui/react';
+import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
 import { PricingList } from '../components/PricingList';
 import { PricingCalculator, PricingProviderFilter, PricingSortSelect, formatPricingScenario } from '../components/PricingTools';
 import { PricingComparison } from '../components/PricingComparison';
@@ -40,6 +40,9 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   const [selected, setSelected] = useState<string[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<Record<string, string>>({});
   const [comparisonOpen, setComparisonOpen] = useState(false);
+  const comparisonStatusId = useId();
+  const [toastQueue] = useState(() => new ToastQueue({ maxVisibleToasts: 1 }));
+  const comparisonLimitToast = useRef<string | null>(null);
   const [catalog, setCatalog] = useState<PricingCatalogResponse | null>(null);
   const [usage, setUsage] = useState<ModelBreakdownRow[]>([]);
   const [usageStatus, setUsageStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -89,6 +92,13 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   const groups = useMemo(() => filterAndSortPricingGroups(groupPricingCatalog(filterPricingCatalog(directModels, { ...advancedFilters, providers: providerFilters })), debouncedQuery, sort, usedOnly), [directModels, debouncedQuery, sort, providerFilters, advancedFilters, usedOnly]);
   const selectedGroups = useMemo(() => selected.flatMap(id => modelGroups.find(group => group.id === id) ?? []), [selected, modelGroups]);
   const toggleComparison = (id: string) => {
+    if (!selected.includes(id) && selected.length >= MAX_COMPARISON_MODELS) {
+      const notice = { title: <strong className="font-semibold">最多对比 4 个模型</strong>, variant: 'default' as const };
+      if (!comparisonLimitToast.current) {
+        comparisonLimitToast.current = toastQueue.add(notice, { timeout: 2500, onClose: () => { comparisonLimitToast.current = null; } });
+      }
+      return;
+    }
     const group = groups.find(item => item.id === id);
     if (!selected.includes(id) && selected.length < MAX_COMPARISON_MODELS && group) {
       setSelectedChannels(current => ({ ...current, [id]: getPrimaryPricingVariant(group).id }));
@@ -96,15 +106,18 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
     setSelected(current => togglePricingComparison(current, id));
   };
   const channelCount = groups.reduce((sum, group) => sum + group.entries.length, 0);
-  const hasFilterChips = Boolean(query.trim() || providerFilters.length > 1 || advancedFilters.minContext || advancedFilters.releasedAfter || advancedFilters.releasedBefore || usedOnly);
+  const hasFilterChips = Boolean(query.trim() || providerFilters.length > 0 || advancedFilters.minContext || advancedFilters.releasedAfter || advancedFilters.releasedBefore || usedOnly);
   const clearFilters = () => { setQuery(''); setDebouncedQuery(''); setProviderFilters([]); setAdvancedFilters(EMPTY_PRICING_FILTERS); setUsedOnly(false); };
   const sortKey = `${sort.column}:${sort.direction}`;
   const tableTimestamp = catalog?.generatedAt ?? catalog?.updatedAt;
   const dateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleString('zh-CN', { hour12: false }) : '未知';
   const shortDateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleDateString('zh-CN') : '未知';
+  const comparisonHint = selectedGroups.length === MAX_COMPARISON_MODELS ? ''
+    : selectedGroups.length === 1 ? '还需选择 1 个' : '勾选 2～4 个模型对比';
 
   return (
     <section className="flex h-[calc(100dvh-5rem)] min-h-0 min-w-0 flex-col gap-3">
+      <Toast.Provider placement="top" queue={toastQueue} width={240} className="top-12 !w-60 !min-w-0 max-w-[calc(100vw-2rem)]" />
       <header className="flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0"><h1 className="text-xl font-semibold">模型价格</h1><p className="mt-1 text-xs text-muted">API 参考价 · {currency} / 百万 Token</p></div>
         <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-muted hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-3.5" />返回用量</Link>
@@ -130,10 +143,10 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
       {hasFilterChips && <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label="已选筛选条件">
         {query.trim() && <ActiveFilter label="搜索" onRemove={() => { setQuery(''); setDebouncedQuery(''); }}>搜索：{query.trim()}</ActiveFilter>}
         {usedOnly && <ActiveFilter label="用量" onRemove={() => setUsedOnly(false)}>近 30 天有匹配用量</ActiveFilter>}
-        {providerFilters.length > 1 && providerFilters.map(key => <ActiveFilter key={key} label={providers.find(provider => provider.key === key)?.label ?? key} onRemove={() => setProviderFilters(providerFilters.filter(provider => provider !== key))}>{providers.find(provider => provider.key === key)?.label ?? key}</ActiveFilter>)}
+        {providerFilters.map(key => <ActiveFilter key={key} label={providers.find(provider => provider.key === key)?.label ?? key} onRemove={() => setProviderFilters(providerFilters.filter(provider => provider !== key))}>{providers.find(provider => provider.key === key)?.label ?? key}</ActiveFilter>)}
         {advancedFilters.minContext > 0 && <ActiveFilter label="上下文" onRemove={() => setAdvancedFilters({ ...advancedFilters, minContext: 0 })}>上下文 ≥ {formatContextWindow(advancedFilters.minContext)}</ActiveFilter>}
         {(advancedFilters.releasedAfter || advancedFilters.releasedBefore) && <ActiveFilter label="发布时间" onRemove={() => setAdvancedFilters({ ...advancedFilters, releasedAfter: '', releasedBefore: '' })}>发布：{advancedFilters.releasedAfter || '不限'} ～ {advancedFilters.releasedBefore || '不限'}</ActiveFilter>}
-        <Button className="!h-6 !min-h-6 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={clearFilters}>清空</Button>
+        <Button className="!h-6 !min-h-6 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={clearFilters}>清除全部筛选</Button>
       </div>}
       {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
         <span role="status" aria-live="polite">{groups.length} 个模型</span>
@@ -158,12 +171,6 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
       {estimateEnabled && <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-[11px] text-muted" aria-label="当前试算用量">
         <span>试算：{formatPricingScenario(scenario)}</span><Button size="sm" variant="ghost" isIconOnly aria-label="关闭费用试算" className="!size-6 !min-h-6 !min-w-6 !p-0" onPress={() => setEstimateEnabled(false)}><Xmark className="size-3" /></Button>
       </div>}
-      {selectedGroups.length > 0 && <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-accent/20 bg-accent-soft/30 px-2 py-1.5" aria-label="已选对比模型">
-        <span className="shrink-0 text-xs" role="status">已选 {selectedGroups.length} / {MAX_COMPARISON_MODELS}</span>
-        <div className="order-last flex w-full min-w-0 gap-1 overflow-x-auto sm:order-none sm:w-auto sm:flex-1">{selectedGroups.map(group => <Button key={group.id} variant="tertiary" size="sm" className="!h-6 !min-h-6 max-w-40 shrink-0 !gap-1 !px-1.5 !text-[11px]" aria-label={`移除对比 ${getPricingModelName(group.model, group.displayName)}`} onPress={() => setSelected(current => current.filter(id => id !== group.id))}><span className="truncate">{getPricingModelName(group.model, group.displayName)}</span><Xmark className="size-3 shrink-0" /></Button>)}</div>
-        <Button variant="ghost" size="sm" className="ml-auto !h-7 !min-h-7 !px-2 !text-xs" onPress={() => setSelected([])}>清空对比</Button>
-        <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" isDisabled={selectedGroups.length < 2} onPress={() => setComparisonOpen(true)}><Columns2 className="size-3.5" />{selectedGroups.length < 2 ? '再选一个' : '开始对比'}</Button>
-      </div>}
       {currency === 'CNY' && <div className="shrink-0 text-[11px] text-muted" role="status" aria-live="polite">
         {exchangeRate ? <>$1 = ¥{exchangeRate.rate} · {exchangeRate.source === 'manual' ? '手动汇率' : <><a className="underline underline-offset-2" href="https://frankfurter.dev" target="_blank" rel="noreferrer">Frankfurter</a> · {exchangeRate.date}</>}{exchangeStatus === 'loading' ? ' · 更新中' : exchangeStatus === 'error' ? ' · 自动更新失败，保留当前汇率' : ''}</>
           : exchangeStatus === 'loading' ? '正在获取 USD/CNY 参考汇率…' : '汇率暂不可用，请在“更多筛选”中重试或手动设置'}
@@ -171,7 +178,20 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
       {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
         : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry(value => value + 1)}>重试</Button></div>
           : <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
-            <div className="flex shrink-0 flex-wrap justify-between gap-x-2 text-[10px] text-muted"><span>价格单位：{currency === 'USD' ? '$' : '¥'} / 百万 Token{estimateEnabled ? ' · 试算为总费用' : ''}</span><span>勾选 2～4 个模型对比</span></div>
+            <div role="group" aria-label="模型对比操作" className={`grid h-[72px] shrink-0 grid-rows-[32px_28px] gap-1 rounded-xl border px-2 py-1 sm:h-14 sm:grid-rows-[16px_28px] ${selectedGroups.length ? 'border-accent/20 bg-accent-soft/30' : 'border-border/60 bg-surface-secondary/40'}`}>
+              <div id={comparisonStatusId} role="status" aria-live="polite" aria-atomic="true" className="min-w-0 text-[11px] leading-4">
+                {selectedGroups.length > 0 && <span className="mr-2 whitespace-nowrap font-medium">已选 {selectedGroups.length} / {MAX_COMPARISON_MODELS}</span>}
+                <span className="text-muted">{comparisonHint}</span>
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="已选对比模型">
+                  {selectedGroups.length ? selectedGroups.map(group => <Button key={group.id} variant="tertiary" size="sm" className="!h-6 !min-h-6 max-w-40 shrink-0 !gap-1 !px-1.5 !text-[11px]" aria-label={`移除对比 ${getPricingModelName(group.model, group.displayName)}`} onPress={() => setSelected(current => current.filter(id => id !== group.id))}><span className="truncate">{getPricingModelName(group.model, group.displayName)}</span><Xmark className="size-3 shrink-0" aria-hidden /></Button>)
+                    : <span className="truncate text-[10px] text-muted">价格单位：{currency === 'USD' ? '$' : '¥'} / 百万 Token{estimateEnabled ? ' · 试算为总费用' : ''}</span>}
+                </div>
+                <Button variant="ghost" size="sm" className="!h-7 !min-h-7 shrink-0 !px-2 !text-xs" isDisabled={selectedGroups.length === 0} onPress={() => setSelected([])}>清除已选</Button>
+                <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" aria-describedby={comparisonStatusId} isDisabled={selectedGroups.length < 2} onPress={() => setComparisonOpen(true)}><Columns2 className="size-3.5" aria-hidden />开始对比</Button>
+              </div>
+            </div>
             <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}:${usedOnly}`} groups={groups} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} query={debouncedQuery} selected={selected} onCompare={toggleComparison} scenario={estimateEnabled ? scenario : null} />
           </div>}
       <p className="shrink-0 text-[10px] text-muted">≈ 表示舍入 · — 表示未提供定价{currency === 'CNY' ? '或汇率暂不可用' : ''} · 订阅以渠道套餐为准</p>

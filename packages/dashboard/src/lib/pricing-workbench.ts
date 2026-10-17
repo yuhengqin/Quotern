@@ -44,3 +44,17 @@ export function togglePricingComparison(selected: string[], id: string): string[
   if (selected.includes(id)) return selected.filter(value => value !== id);
   return selected.length < MAX_COMPARISON_MODELS ? [...selected, id] : selected;
 }
+
+export function comparePricingCosts(totals: Array<number | null>): Array<{
+  differenceUsd: number; multiple: number | null; isLowest: boolean;
+} | null> {
+  const valid = (value: number | null): value is number => value !== null && Number.isFinite(value) && value >= 0;
+  const known = totals.filter(valid);
+  if (known.length < 2) return totals.map(() => null);
+  const minimum = Math.min(...known);
+  return totals.map(total => valid(total) ? {
+    differenceUsd: Number((total - minimum).toPrecision(15)),
+    multiple: minimum > 0 ? total / minimum : null,
+    isLowest: total === minimum,
+  } : null);
+}

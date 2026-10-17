@@ -58,14 +58,14 @@ export function PricingAliases({ group, variant, query }: { group: PricingModelG
   </>;
 }
 
-export function PricingRate({ value, currency, exchangeRate }: { value: number | null } & PriceDisplay) {
+export function PricingRate({ value, currency, exchangeRate, unit = '/ 百万 Token' }: { value: number | null; unit?: string } & PriceDisplay) {
   const price = formatPricingDisplayRate(value, currency, exchangeRate);
   if (!price.approximate) return <span className="whitespace-nowrap font-mono tabular-nums">{price.text}</span>;
   return <Tooltip delay={200}>
-    <Tooltip.Trigger className="inline-flex cursor-help whitespace-nowrap rounded font-mono tabular-nums outline-none focus-visible:outline-2 focus-visible:outline-accent" aria-label={`${price.text}，精确参考价 ${price.exact}`}>
+    <Tooltip.Trigger className="inline-flex cursor-help whitespace-nowrap rounded font-mono tabular-nums outline-none focus-visible:outline-2 focus-visible:outline-accent" aria-label={`${price.text}，精确值 ${price.exact} ${unit}`}>
       {price.text}
     </Tooltip.Trigger>
-    <Tooltip.Content><span className="font-mono">{price.exact}</span><span className="ml-1 text-muted">/ 百万 Token</span></Tooltip.Content>
+    <Tooltip.Content><span className="font-mono">{price.exact}</span><span className="ml-1 text-muted">{unit}</span></Tooltip.Content>
   </Tooltip>;
 }
 

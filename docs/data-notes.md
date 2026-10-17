@@ -115,6 +115,8 @@ Codex 的明确 chatgpt 认证标记，或 OpenAI 来源事件中已知的 rate_
 
 维护底表使用 `pnpm sync:pricing`，请求自动读取 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（也支持小写形式），不需要额外设置 `NODE_USE_ENV_PROXY`。`_meta.generated_at` 记录本次生成的实际 UTC 时间，页面按本地时区显示；它不是供应商调价时间，也不再固定为当天 UTC 零点。
 
+[每日价格同步](../.github/workflows/sync-pricing.yml)计划于北京时间 09:23 运行，也支持手动触发。任务使用 `pnpm sync:pricing --if-changed`，仅当模型费率或元数据有实际变化时生成新表，由 `github-actions[bot]` 提交并推送默认分支；数据未变时保留原文件和生成时间。该任务需要 `contents: write` 权限，并遵守仓库的分支保护规则。
+
 费用卡的说明按当前日期和 Agent 筛选读取 `/functions/tud-usage-report`，展示来源报告金额、费率估算、默认价格占比、未计价 Token、匹配模型/方式和表来源。价格日期来自表内发布时间元数据，缺少时明确显示未知，不使用进程加载时间。已有费用数值算法保持不变；报表另提供 `costUsd=null` 和 `knownCostUsd` 区分不完整价格与已知小计。
 
 本地费用卡金额与说明共用报表的已计价小计，加载或失败时显示占位，全部未计价时显示“未知”。Agent 筛选后的旧趋势数据按 Token 占比分摊费用，不能作为各模型费率汇总，因此费用卡不再用该比例生成筛选后的金额、迷你趋势和比较徽标；其他趋势图仍沿用原有口径。异步说明绑定筛选条件及概览数据版本，刷新或快速切回旧筛选时不会展示过期报告。

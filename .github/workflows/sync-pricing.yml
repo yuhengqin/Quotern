@@ -1,0 +1,55 @@
+name: Sync model pricing
+
+on:
+  schedule:
+    # Daily at 09:23 Asia/Shanghai (01:23 UTC).
+    - cron: '23 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quotern-model-pricing-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install sync dependencies
+        run: pnpm install --filter quotern-core --frozen-lockfile --ignore-scripts
+
+      - name: Test pricing scripts
+        run: node --test packages/core/scripts/*.test.mjs
+
+      - name: Sync published model prices
+        run: pnpm sync:pricing --if-changed
+
+      - name: Commit and push pricing changes
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          pricing_file=packages/core/src/pricing/pricing.json
+          if git diff --quiet -- "$pricing_file"; then
+            echo 'No pricing changes to commit.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- "$pricing_file"
+          git commit -m 'chore(pricing): sync model prices'
+          git push origin "HEAD:$DEFAULT_BRANCH"

@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { EnvHttpProxyAgent } from 'undici';
 import { mergePricingModelMetadata } from './pricing-metadata.mjs';
 
@@ -184,12 +185,21 @@ async function main() {
   }
   const added = Object.keys(exact).filter((k) => !(k in (current.exact ?? {}))).length;
   const removed = Object.keys(current.exact ?? {}).filter((k) => !(k in exact));
+  const modelMetadata = mergePricingModelMetadata(current.model_metadata, catalog, exact);
+
+  // Scheduled syncs must not create commits just for timestamps or history notes.
+  if (process.argv.includes('--if-changed') &&
+      isDeepStrictEqual(exact, current.exact ?? {}) &&
+      isDeepStrictEqual(modelMetadata, current.model_metadata ?? {})) {
+    console.log('(no pricing or model metadata changes — file left unchanged)');
+    return;
+  }
 
   const generatedAt = new Date().toISOString();
   const next = {
     ...current,
     exact,
-    model_metadata: mergePricingModelMetadata(current.model_metadata, catalog, exact),
+    model_metadata: modelMetadata,
     _meta: {
       ...(current._meta ?? {}),
       generated_at: generatedAt,

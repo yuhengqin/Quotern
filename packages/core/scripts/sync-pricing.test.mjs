@@ -13,6 +13,10 @@ const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const catalog = { openai: { models: {
   'gpt-fixture': { id: 'gpt-fixture', cost: { input: 1, output: 2 } },
 } } };
+const initialPricing = {
+  _meta: { units: 'usd_per_million_tokens', generated_at: '2026-10-14T12:34:56.000Z', note: 'Previous sync' },
+  exact: { 'openai/gpt-fixture': { input: 1, output: 2 } },
+};
 
 async function listen(server, t) {
   const sockets = new Set();
@@ -28,7 +32,7 @@ async function listen(server, t) {
   return server.address().port;
 }
 
-async function fixture(t) {
+async function fixture(t, pricing = initialPricing, upstreamCatalog = catalog) {
   const root = await mkdtemp(join(scriptsDir, '.sync-pricing-test-'));
   t.after(async () => {
     assert.equal(dirname(root), scriptsDir);
@@ -41,18 +45,16 @@ async function fixture(t) {
     await copyFile(join(scriptsDir, name), join(root, 'scripts', name));
   }
   const pricingPath = join(root, 'src', 'pricing', 'pricing.json');
-  await writeFile(pricingPath, JSON.stringify({
-    _meta: { units: 'usd_per_million_tokens' },
-    exact: { 'openai/gpt-fixture': { input: 1, output: 2 } },
-  }));
+  await writeFile(pricingPath, JSON.stringify(pricing));
   const port = await listen(createServer((_req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(catalog));
+    res.end(JSON.stringify(upstreamCatalog));
   }), t);
 
   return {
     port,
-    async run(url, overrides = {}) {
+    readRaw: () => readFile(pricingPath, 'utf8'),
+    async run(url, overrides = {}, args = []) {
       // Keep the real fetch transport; only redirect the upstream to a local fixture.
       const preload = join(root, 'redirect-fetch.mjs');
       await writeFile(preload, `const fetchImpl = globalThis.fetch;\n` +
@@ -61,7 +63,7 @@ async function fixture(t) {
       for (const key of Object.keys(env)) {
         if (/^(?:https?_proxy|all_proxy|no_proxy|node_use_env_proxy|node_options)$/i.test(key)) delete env[key];
       }
-      await runFile(process.execPath, ['--import', pathToFileURL(preload).href, join(root, 'scripts', 'sync-pricing.mjs')], {
+      await runFile(process.execPath, ['--import', pathToFileURL(preload).href, join(root, 'scripts', 'sync-pricing.mjs'), ...args], {
         env: { ...env, ...overrides }, timeout: 10_000,
       });
       return JSON.parse(await readFile(pricingPath, 'utf8'));
@@ -116,4 +118,35 @@ test('honors NO_PROXY when an HTTP proxy is configured', async t => {
     HTTP_PROXY: `http://127.0.0.1:${proxyPort}`, NO_PROXY: '127.0.0.1',
   });
   assert.equal(proxyConnections, 0);
+});
+
+test('--if-changed leaves an unchanged table byte-for-byte intact', async t => {
+  const current = await fixture(t);
+  const before = await current.readRaw();
+  await current.run(`http://127.0.0.1:${current.port}/api.json`, {}, ['--if-changed']);
+  assert.equal(await current.readRaw(), before);
+});
+
+test('--if-changed writes new rates once and preserves the published time on the next sync', async t => {
+  const current = await fixture(t, {
+    ...initialPricing, exact: { 'openai/gpt-fixture': { input: 3, output: 6 } },
+  });
+  const before = Date.now();
+  const url = `http://127.0.0.1:${current.port}/api.json`;
+  const result = await current.run(url, {}, ['--if-changed']);
+  assert.deepEqual(result.exact['openai/gpt-fixture'], { input: 1, output: 2 });
+  const generatedAt = Date.parse(result._meta.generated_at);
+  assert.ok(generatedAt >= before && generatedAt <= Date.now());
+  const published = await current.readRaw();
+  await current.run(url, {}, ['--if-changed']);
+  assert.equal(await current.readRaw(), published);
+});
+
+test('--if-changed includes model metadata updates even when rates stay unchanged', async t => {
+  const current = await fixture(t, initialPricing, { openai: { models: {
+    'gpt-fixture': { ...catalog.openai.models['gpt-fixture'], release_date: '2026-10-12' },
+  } } });
+  const result = await current.run(`http://127.0.0.1:${current.port}/api.json`, {}, ['--if-changed']);
+  assert.equal(result.model_metadata['openai/gpt-fixture'].release_date, '2026-10-12');
+  assert.deepEqual(result.exact, initialPricing.exact);
 });

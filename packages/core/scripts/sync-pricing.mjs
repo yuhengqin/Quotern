@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { EnvHttpProxyAgent } from 'undici';
 import { mergePricingModelMetadata } from './pricing-metadata.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -118,9 +119,23 @@ function toRates(cost) {
 
 async function main() {
   const current = JSON.parse(readFileSync(PRICING_PATH, 'utf8'));
-  const res = await fetch(MODELS_DEV_URL, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`models.dev fetch failed: HTTP ${res.status}`);
-  const catalog = await res.json();
+  // Honor HTTP(S)_PROXY / NO_PROXY even on Node versions without --use-env-proxy.
+  const dispatcher = new EnvHttpProxyAgent();
+  let catalog;
+  try {
+    const res = await fetch(MODELS_DEV_URL, {
+      headers: { Accept: 'application/json' },
+      dispatcher,
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw new Error(`models.dev fetch failed: HTTP ${res.status}`);
+    }
+    catalog = await res.json();
+  } finally {
+    await dispatcher.close();
+  }
 
   // 1. Build the fresh exact table from models.dev (scoped providers, text models with cost).
   const fresh = {};
@@ -170,14 +185,15 @@ async function main() {
   const added = Object.keys(exact).filter((k) => !(k in (current.exact ?? {}))).length;
   const removed = Object.keys(current.exact ?? {}).filter((k) => !(k in exact));
 
+  const generatedAt = new Date().toISOString();
   const next = {
     ...current,
     exact,
     model_metadata: mergePricingModelMetadata(current.model_metadata, catalog, exact),
     _meta: {
       ...(current._meta ?? {}),
-      generated_at: `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
-      note: `${current._meta?.note ?? ''} Incremental models.dev sync on ${new Date().toISOString().slice(0, 10)}: ` +
+      generated_at: generatedAt,
+      note: `${current._meta?.note ?? ''} Incremental models.dev sync on ${generatedAt.slice(0, 10)}: ` +
         `kept=${Object.keys(exact).length} (added=${added}, changed=${changes.length}, removed=${removed.length}). ` +
         `Official-only: cross-vendor hosting and cloud-partnership channels dropped.`,
     },

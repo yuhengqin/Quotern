@@ -76,7 +76,7 @@
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node -e \"require('node:fs').copyFileSync('src/pricing/pricing.json','dist/pricing/pricing.json')\"",
     "dev": "tsc -p tsconfig.json --watch",
     "sync:pricing": "node scripts/sync-pricing.mjs",
-    "test": "pnpm test:compile && node --test dist-test/test/*.test.js && node --test scripts/pricing-metadata.test.mjs",
+    "test": "pnpm test:compile && node --test dist-test/test/*.test.js && node --test scripts/*.test.mjs",
     "test:compile": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json && node -e \"require('node:fs').copyFileSync('src/pricing/pricing.json','dist-test/src/pricing/pricing.json')\""
   },
   "dependencies": {
@@ -89,7 +89,8 @@
   "devDependencies": {
     "@types/node": "^22.13.10",
     "@types/proper-lockfile": "^4.1.4",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "undici": "^6.29.0"
   },
   "engines": {
     "node": ">=20.10.0"

@@ -23,8 +23,9 @@ export function CostExplanationLabel({ report, loading, error }: {
         </Button>
         <Popover.Content className="max-w-[calc(100vw-2rem)] rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface" placement="bottom">
           <Popover.Dialog className="max-h-[calc(100dvh-3rem)] w-80 max-w-full overflow-y-auto p-4 outline-none">
-            <Popover.Heading className="text-sm font-semibold">费用如何估算</Popover.Heading>
-            <p className="mt-2 text-xs leading-5 text-muted">{explanation && explanation.reportedCostUsd > 0 ? '费用采用来源报告金额和适用的模型参考价，均不代表实际付款。' : '按当前筛选范围的 Token 与模型参考价估算，不代表实际付款。'}</p>
+            <Popover.Heading className="text-sm font-semibold">预估金额并非实际账单</Popover.Heading>
+            <p className="mt-2 text-xs leading-5 text-muted">{explanation && explanation.reportedCostUsd > 0 ? '金额包含来源报告值与按模型参考价估算的费用，可用于了解用量的参考价值。' : '按当前筛选范围的 Token 与模型参考价折算，供你了解同等用量按 API 计费时的大致费用。'}</p>
+            <p className="mt-2 text-xs leading-5 text-muted">使用订阅套餐时，套餐内用量通常已包含在订阅费中。可将此金额与订阅费对照，了解套餐价值；实际支付以服务商账单为准。</p>
             {!explanation ? (
               <p className="mt-2 text-xs text-muted" role="status">{loading ? '正在读取费用依据…' : error ? '费用依据暂不可用，将自动重试。' : '暂无费用依据。'}</p>
             ) : (

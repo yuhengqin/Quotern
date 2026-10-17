@@ -82,7 +82,8 @@ test('zero totals and empty results do not invent percentages or measured zero c
   const input = report({ rows: [] });
   Object.assign(input.summary, { tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 });
   const html = renderUsageHtml(input);
-  assert.doesNotMatch(html, /NaN|Infinity/);
+  // Inspect report content, not incidental character sequences in font bytes.
+  assert.doesNotMatch(html.slice(html.indexOf('<body>')), /NaN|Infinity/);
   assert.match(html, /暂无已采集记录/);
   assert.match(html, /命中率[^<]*未记录/);
 });

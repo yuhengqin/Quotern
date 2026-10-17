@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const templateUrl = new URL('../assets/report-template.html', import.meta.url);
+const brandUrl = new URL('../assets/quotern-mark.svg', import.meta.url);
+const fontUrl = new URL('../assets/jetbrains-mono-latin-wght-normal.woff2', import.meta.url);
+const fontLicenseUrl = new URL('../assets/JetBrainsMono-OFL.txt', import.meta.url);
 const periodNames = { summary: '用量总览', models: '模型用量', projects: '项目用量', daily: '每日用量', weekly: '每周用量', monthly: '每月用量' };
 const sourceNames = { codex: 'Codex', claude: 'Claude', zcode: 'Zcode', opencode: 'OpenCode', antigravity: 'Antigravity', cursor: 'Cursor', gemini: 'Gemini' };
 const countNames = { summary: '汇总项', models: '模型与来源组合', projects: '项目', daily: '有记录的日期', weekly: '有记录的周', monthly: '有记录的月份' };
@@ -114,7 +117,7 @@ function rankingChart(report, rows) {
   const shown = rows.slice(0, 10);
   const max = Math.max(...shown.map((row) => row.tokens), 0);
   if (!max) return '<p class="empty">暂无非零用量可供比较。</p>';
-  const bars = shown.map((row) => `<li><div class="bar-label"><span>${escape(row.label)}${row.source ? `<small>${escape(sourceName(row.source))}</small>` : ''}</span><strong>${escape(compact(row.tokens))}</strong></div><div class="bar-track"><span style="inline-size:${row.tokens / max * 100}%"></span></div></li>`).join('');
+  const bars = shown.map((row) => `<li class="source-${Object.hasOwn(sourceNames, row.source) ? row.source : 'other'}"><div class="bar-label"><span>${escape(row.label)}${row.source ? `<small>${escape(sourceName(row.source))}</small>` : ''}</span><strong>${escape(compact(row.tokens))}</strong></div><div class="bar-track"><span style="inline-size:${row.tokens / max * 100}%"></span></div></li>`).join('');
   return `<p class="muted">${rows.length > 10 ? '图中显示用量前 10 项，完整明细保留全部项目。' : '按 Token 用量排序。'} 条形长度相对本图最大值；明细占比以当前筛选范围的总量为分母。</p><ol class="bars">${bars}</ol>`;
 }
 
@@ -185,6 +188,9 @@ export function renderUsageHtml(report, analysis = {}, options = {}) {
   const nextSteps = analysis.nextSteps?.length
     ? `<section class="section"><h2>可考虑的下一步</h2><ul class="notes">${analysis.nextSteps.map((text) => `<li>${escape(text)}</li>`).join('')}</ul></section>` : '';
   const values = {
+    BRAND_MARK: readFileSync(brandUrl, 'utf8'),
+    FONT_DATA: readFileSync(fontUrl).toString('base64'),
+    FONT_LICENSE: escape(readFileSync(fontLicenseUrl, 'utf8')),
     TITLE: escape(analysis.title || `${periodNames[report.period]}报告`),
     PERIOD: escape(periodNames[report.period]),
     RANGE: escape(`${dateLabel(report.fromDate)} — ${dateLabel(report.toDate)}`),
@@ -230,7 +236,7 @@ function main(args) {
     } else throw new Error(`Unknown or incomplete argument: ${argument}`);
   }
   if (!options.input || !options.output) throw new Error('Required: --input usage.json --output report.html.');
-  const protectedFiles = [options.input, options.analysis, fileURLToPath(templateUrl), fileURLToPath(import.meta.url)].filter(Boolean);
+  const protectedFiles = [options.input, options.analysis, ...[templateUrl, brandUrl, fontUrl, fontLicenseUrl, import.meta.url].map((url) => fileURLToPath(url))].filter(Boolean);
   if (protectedFiles.some((path) => sameFile(options.output, path))) throw new Error('Output must differ from input, analysis and renderer files, including file aliases.');
   const report = readJson(options.input);
   const analysis = options.analysis ? readJson(options.analysis) : {};

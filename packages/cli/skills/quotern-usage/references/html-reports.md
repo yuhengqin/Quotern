@@ -45,7 +45,7 @@ Analysis JSON fields (all optional):
 - **Complete detail:** every returned row, preserving source/model identity, with exact Token values and shares calculated from the same report total. The table can be collapsed; chart truncation never removes table rows.
 - **Composition and scope:** Token components, successful-sync/read timestamps, snapshot meaning and relevant limitations. Fees, reported/estimated amounts and missing/default prices appear only with `--costs`.
 
-The HTML is offline and script-free, supports system light/dark appearance and uses native expandable sections. The renderer owns layout and safe text escaping; do not rewrite the template per query or add decorative controls without behavior. Annotations are plain text so they cannot change the page structure.
+The HTML is offline and script-free, supports system light/dark appearance and uses native expandable sections. Its bundled typography, Q mark, neutral card surfaces and Agent chart colors follow the Quotern Dashboard; the JetBrains Mono font and its license are embedded so sharing the single HTML file preserves the Latin typography without external requests. Chinese text uses the same system fallback stack as Dashboard. The renderer owns layout and safe text escaping; do not rewrite the template per query or add decorative controls without behavior. Annotations are plain text so they cannot change the page structure.
 
 ## Verification and handoff
 

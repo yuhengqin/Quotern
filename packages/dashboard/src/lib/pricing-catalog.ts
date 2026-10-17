@@ -158,7 +158,7 @@ const PRICING_PROVIDERS: Record<string, Omit<ModelProvider, 'key'>> = {
   anthropic: { label: 'Anthropic（Claude）', icon: 'claude' },
   openai: { label: 'OpenAI', icon: 'openai' },
   google: { label: 'Google', icon: 'google' },
-  alibaba: { label: 'Alibaba（Qwen）', icon: 'alibaba' },
+  alibaba: { label: 'Alibaba（百炼）', icon: 'alibaba' },
   moonshot: { label: 'Moonshot（Kimi）', icon: 'moonshot' },
   minimax: { label: 'MiniMax', icon: 'minimax' },
   deepseek: { label: 'DeepSeek', icon: 'deepseek' },

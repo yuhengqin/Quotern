@@ -125,7 +125,7 @@ function AppSettingsPanel() {
           value={getTokenUnitMode()}
           variant="secondary"
           onChange={(next) => {
-            if (next !== 'chinese' && next !== 'international') return;
+            if (next !== 'localized' && next !== 'international') return;
             if (next === getTokenUnitMode()) return;
             setTokenUnitMode(next);
             window.location.reload();
@@ -133,12 +133,12 @@ function AppSettingsPanel() {
         >
           <Label>{t('settings.tokenUnit.label')}</Label>
           <Description>{t('settings.tokenUnit.description')}</Description>
-          <Radio value="chinese">
+          <Radio value="localized">
             <Radio.Content>
               <Radio.Control>
                 <Radio.Indicator />
               </Radio.Control>
-              {t('settings.tokenUnit.chinese')}
+              {t('settings.tokenUnit.localized')}
             </Radio.Content>
           </Radio>
           <Radio value="international">

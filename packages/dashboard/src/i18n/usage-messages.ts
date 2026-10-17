@@ -364,7 +364,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.metric.formatHelpAria': ['查看 Token 缩略换算规则', 'About abbreviated token units', 'トークンの省略表記について', '토큰 축약 단위 설명'],
   'usage.metric.formatHelp': ['Token 缩略换算', 'Abbreviated token units', 'トークンの省略表記', '토큰 축약 단위'],
   'usage.metric.equalTokens': ['= {{count}} Token', '= {{count}} tokens', '= {{count}} トークン', '= {{count}} 토큰'],
-  'usage.metric.chinesePrecision': ['最多保留四位有效数字，例如 1.872亿。', 'Up to four significant digits, for example 1.872亿.', '有効数字は最大4桁です（例：1.872億）。', '유효 숫자는 최대 네 자리입니다. 예: 1.872억.'],
+  'usage.metric.localizedPrecision': ['最多保留四位有效数字，例如 1.872亿。', 'Up to four significant digits in local East Asian units.', '有効数字は最大4桁です（例：1.872億）。', '유효 숫자는 최대 네 자리입니다. 예: 1.872억.'],
   'usage.metric.internationalPrecision': ['最多保留一位小数，例如 125 万显示为 1.3M。', 'Up to one decimal place; for example, 1,250,000 appears as 1.3M.', '小数点以下は最大1桁です（例：125万は 1.3M と表示）。', '소수점 아래 최대 한 자리까지 표시합니다. 예: 125만은 1.3M으로 표시.'],
   'usage.quota.service.operational': ['服务正常', 'Operational', '正常に稼働中', '정상 운영 중'],
   'usage.quota.service.minor': ['轻微异常', 'Minor disruption', '軽微な障害', '경미한 장애'],

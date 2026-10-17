@@ -3,6 +3,7 @@ import { Button, Card, Chip, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
+import { formatCompactTokenCount, getTokenUnitMode, usesEastAsianTokenUnits } from '@/lib/utils';
 import type {
   DashboardMetricChanges,
   DashboardUsageSummary,
@@ -85,6 +86,7 @@ export function DashboardMetricCards({
 
 function TokenFormatHelp() {
   const { t } = useTranslation();
+  const eastAsian = getTokenUnitMode() === 'localized' && usesEastAsianTokenUnits();
   return (
     <Tooltip closeDelay={80} delay={100}>
       <Button
@@ -105,17 +107,32 @@ function TokenFormatHelp() {
           {t('usage.metric.formatHelp')}
         </p>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          <dt className="font-medium tabular-nums">1K</dt>
-          <dd>{t('usage.metric.equalTokens', { count: '1,000' })}</dd>
-          <dt className="font-medium tabular-nums">1M</dt>
-          <dd>{t('usage.metric.equalTokens', { count: '1,000,000' })}</dd>
-          <dt className="font-medium tabular-nums">1B</dt>
-          <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000' })}</dd>
-          <dt className="font-medium tabular-nums">1T</dt>
-          <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000,000' })}</dd>
+          {eastAsian ? (
+            <>
+              <dt className="font-medium tabular-nums">{formatCompactTokenCount(10_000, 'localized')}</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '10,000' })}</dd>
+              <dt className="font-medium tabular-nums">{formatCompactTokenCount(100_000_000, 'localized')}</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '100,000,000' })}</dd>
+              <dt className="font-medium tabular-nums">{formatCompactTokenCount(1_000_000_000_000, 'localized')}</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000,000' })}</dd>
+            </>
+          ) : (
+            <>
+              <dt className="font-medium tabular-nums">1K</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000' })}</dd>
+              <dt className="font-medium tabular-nums">1M</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000' })}</dd>
+              <dt className="font-medium tabular-nums">1B</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000' })}</dd>
+              <dt className="font-medium tabular-nums">1T</dt>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000,000' })}</dd>
+            </>
+          )}
         </dl>
         <p className="mt-2 text-[11px] text-muted">
-          {t('usage.metric.internationalPrecision')}
+          {eastAsian
+            ? t('usage.metric.localizedPrecision')
+            : t('usage.metric.internationalPrecision')}
         </p>
       </Tooltip.Content>
     </Tooltip>

@@ -35,9 +35,12 @@ function csvCell(value: unknown, protectFormula = false): string {
 
 function formatCsv(report: UsageReport): string {
   const header = CSV_HEADERS.join(',');
-  const lines = report.rows.map((row) => {
+  const groups: { period: string; rows: UsageReport['rows'] }[] = report.period === 'overview' && report.breakdowns
+    ? [{ period: 'summary', rows: report.rows }, ...Object.entries(report.breakdowns).map(([period, rows]) => ({ period, rows }))]
+    : [{ period: report.period, rows: report.rows }];
+  const lines = groups.flatMap(({ period, rows }) => rows.map((row) => {
     const values: unknown[] = [
-      report.period,
+      period,
       row.label,
       row.source,
       row.model,
@@ -58,7 +61,7 @@ function formatCsv(report: UsageReport): string {
       report.timeZone,
     ];
     return values.map((value, index) => csvCell(value, index >= 1 && index <= 4)).join(',');
-  });
+  }));
 
   return [header, ...lines].join('\r\n');
 }
@@ -133,6 +136,12 @@ function compactCost(explanation: UsageReport['summary']['costExplanation']) {
 /** Presentation only: Core still owns all aggregation, grouping and quality semantics. */
 function compactReport(report: UsageReport) {
   const { costExplanation, ...summary } = report.summary;
+  const compactRows = (rows: UsageReport['rows']) => rows.map((row) => ({
+    label: row.label, source: row.source, model: row.model, project: row.project,
+    fromDate: row.fromDate, toDate: row.toDate,
+    tokens: row.tokens, costUsd: row.costUsd, knownCostUsd: row.knownCostUsd,
+    costExplanation: compactCost(row.costExplanation),
+  }));
   return {
     schemaVersion: report.schemaVersion,
     view: 'compact',
@@ -143,12 +152,8 @@ function compactReport(report: UsageReport) {
     filters: report.filters,
     coverage: { ...report.coverage, display: displayCoverage(report) },
     summary: { ...summary, costExplanation: compactCost(costExplanation) },
-    rows: report.rows.map((row) => ({
-      label: row.label, source: row.source, model: row.model, project: row.project,
-      fromDate: row.fromDate, toDate: row.toDate,
-      tokens: row.tokens, costUsd: row.costUsd, knownCostUsd: row.knownCostUsd,
-      costExplanation: compactCost(row.costExplanation),
-    })),
+    rows: compactRows(report.rows),
+    ...(report.breakdowns ? { breakdowns: Object.fromEntries(Object.entries(report.breakdowns).map(([period, rows]) => [period, compactRows(rows)])) } : {}),
   };
 }
 
@@ -161,15 +166,17 @@ function formatText(report: UsageReport, locale: SupportedLocale): string {
   const label = (key: string) => cliT(locale, `report.${key}`);
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
   const unknown = label('unknown');
+  const rowText = (row: UsageReport['rows'][number]) => {
+    const cost = row.costUsd === null
+      ? cliT(locale, 'report.unknownCost', { known: money(row.knownCostUsd, locale) })
+      : money(row.costUsd, locale);
+    return [row.label, row.source ?? '', number(row.tokens), cost].map(cleanText).join('\t');
+  };
   const lines = [
     cliT(locale, 'report.title', { period: label(`period.${report.period}`) }),
     `${cleanText(displayTextDate(report.fromDate, locale))} – ${cleanText(displayTextDate(report.toDate, locale))} · ${cleanText(report.timeZone)}`,
-    ...report.rows.map((row) => {
-      const cost = row.costUsd === null
-        ? cliT(locale, 'report.unknownCost', { known: money(row.knownCostUsd, locale) })
-        : money(row.costUsd, locale);
-      return [row.label, row.source ?? '', number(row.tokens), cost].map(cleanText).join('\t');
-    }),
+    ...report.rows.map(rowText),
+    ...(report.breakdowns ? Object.entries(report.breakdowns).flatMap(([period, rows]) => ['', label(`period.${period}`), ...rows.map(rowText)]) : []),
     '',
     `${label('reportedCost')}\t${money(report.summary.costExplanation.reportedCostUsd, locale)}`,
     `${label('estimatedCost')}\t${money(report.summary.costExplanation.estimatedCostUsd, locale)}`,

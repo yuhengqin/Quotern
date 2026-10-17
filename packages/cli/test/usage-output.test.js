@@ -119,6 +119,34 @@ test('compact JSON preserves identity, totals and uncertainty without detailed p
   assert.deepEqual(JSON.parse(formatUsageReport(report, 'json')), before);
 });
 
+test('overview keeps all dimensions in JSON, text and distinguishable CSV groups', () => {
+  const report = makeReport({ period: 'overview' });
+  report.breakdowns = {
+    daily: [{ ...report.rows[0], label: '2026-10-01', fromDate: '2026-10-01', toDate: '2026-10-01' }],
+    models: [{ ...report.rows[0], label: 'Model A', source: 'claude' }, { ...report.rows[0], label: 'Model A' }],
+    projects: [{ ...report.rows[0], label: 'Project A', project: 'Project A' }],
+  };
+  const before = structuredClone(report);
+  const compact = JSON.parse(formatUsageReport(report, 'json', { compact: true }));
+  for (const dimension of ['daily', 'models', 'projects']) {
+    assert.equal(compact.breakdowns[dimension].length, report.breakdowns[dimension].length);
+    assert.equal(compact.breakdowns[dimension][0].costUsd, null);
+    assert.equal(compact.breakdowns[dimension][0].costExplanation.unpricedTokens, 4);
+    assert.equal('entries' in compact.breakdowns[dimension][0].costExplanation, false);
+    assert.equal('localMetrics' in compact.breakdowns[dimension][0], false);
+  }
+  assert.deepEqual(compact.breakdowns.models.map((row) => row.source), ['claude', 'codex']);
+  const text = formatUsageReport(report, 'text', { locale: 'zh-CN' });
+  assert.ok(text.includes('2026-10-01'));
+  assert.ok(text.includes('Model A'));
+  assert.ok(text.includes('Project A'));
+  const csv = formatUsageReport(report, 'csv');
+  assert.ok(csv.includes('\r\ndaily,2026-10-01,'));
+  assert.ok(csv.includes('\r\nmodels,Model A,'));
+  assert.ok(csv.includes('\r\nprojects,Project A,'));
+  assert.deepEqual(report, before);
+});
+
 test('display timestamps use the report time zone including date rollover and daylight saving', () => {
   for (const [timeZone, stamp, expected] of [
     ['Asia/Shanghai', '2026-10-17T08:55:21.344Z', '2026-10-17 16:55:21 (Asia/Shanghai)'],

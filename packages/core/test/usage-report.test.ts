@@ -77,6 +77,40 @@ test('report coverage distinguishes Shanghai midnight from a partial first day',
   }
 });
 
+test('overview builds every dimension from the same filtered snapshot and preserves unknown metrics', () => {
+  const rows = [
+    bucket({ hour_start: '2026-10-14T16:00:00Z' }),
+    bucket({ source: 'claude', project: 'Other' }),
+    bucket({ model: 'second-model', input_tokens: 200 }),
+    bucket({ hour_start: '2026-10-09T00:00:00Z' }),
+    bucket({ input_tokens: -1 }),
+  ];
+  const context = { collectSince: '2026-10-01', now, snapshot: 'persisted' as const };
+  const query = { period: 'overview' as const, days: 7 };
+  const before = structuredClone(rows);
+  const overview = core.buildUsageReport(rows, query, context);
+  const summary = core.buildUsageReport(rows, { ...query, period: 'summary' }, context);
+  assert.deepEqual(overview.summary, summary.summary);
+  assert.equal(overview.coverage.invalidRows, 1);
+  assert.equal(overview.coverage.readAt, now.toISOString());
+  for (const period of ['daily', 'models', 'projects'] as const) {
+    const single = core.buildUsageReport(rows, { ...query, period }, context);
+    assert.deepEqual(overview.breakdowns?.[period], single.rows);
+    assert.equal(overview.breakdowns?.[period].reduce((sum, row) => sum + row.tokens, 0), overview.summary.tokens);
+  }
+  assert.equal(overview.breakdowns?.models.filter((row) => row.model === 'unit-price').length, 2);
+  assert.equal(overview.breakdowns?.daily.length, 2); // Missing days remain missing.
+  assert.equal(overview.summary.localMetrics.requestCount, null);
+  const filtered = core.buildUsageReport(rows, { ...query, sources: ['codex'], project: 'Quotern', model: 'unit-price' }, context);
+  assert.equal(filtered.summary.tokens, 150);
+  assert.equal(filtered.breakdowns?.models.length, 1);
+  assert.equal(filtered.breakdowns?.projects.length, 1);
+  assert.deepEqual(rows, before);
+  const empty = core.buildUsageReport([], query, context);
+  assert.equal(empty.summary.tokens, 0);
+  assert.deepEqual(empty.breakdowns, { daily: [], models: [], projects: [] });
+});
+
 test('persisted reporting dedupes snapshots and never initializes or rewrites local runtime files', async () => {
   const { readUsageReport } = api();
   assert.equal(typeof readUsageReport, 'function');

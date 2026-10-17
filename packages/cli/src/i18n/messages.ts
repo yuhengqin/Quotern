@@ -156,6 +156,7 @@ const entries: Record<string, [string, string, string, string]> = {
   'usage.compactJson': ['--compact 仅支持 JSON 输出，请同时指定 --format json 或 --json', '--compact requires JSON output; use --format json or --json', '--compact は JSON 出力専用です。--format json または --json を指定してください', '--compact는 JSON 출력에서만 사용할 수 있습니다. --format json 또는 --json을 지정하세요'],
   'report.title': ['Quotern 用量 · {{period}}', 'Quotern usage · {{period}}', 'Quotern 使用量 · {{period}}', 'Quotern 사용량 · {{period}}'],
   'report.period.summary': ['汇总', 'summary', '概要', '요약'],
+  'report.period.overview': ['综合概览', 'overview', '総合概要', '종합 개요'],
   'report.period.daily': ['每日', 'daily', '日別', '일별'],
   'report.period.weekly': ['每周', 'weekly', '週別', '주별'],
   'report.period.monthly': ['每月', 'monthly', '月別', '월별'],
@@ -191,7 +192,7 @@ Commands:
   stop                  停止当前进程内的服务
   status                查看 CLI / 面板当前启动状态
   sync                  手动同步本地用量数据
-  usage [summary|daily|weekly|monthly|models|projects]
+  usage [summary|overview|daily|weekly|monthly|models|projects]
                         查询已落盘的本地用量数据（只读，不触发同步）
   service <action>      后台服务与开机自启（macOS / Windows / Linux）
                         action: start | stop | status
@@ -234,7 +235,7 @@ Commands:
   stop                  Stop the service in this process
   status                Show current CLI and dashboard status
   sync                  Sync local usage data manually
-  usage [summary|daily|weekly|monthly|models|projects]
+  usage [summary|overview|daily|weekly|monthly|models|projects]
                         Query persisted local usage (read only; does not sync)
   service <action>      Background service and login startup (macOS / Windows / Linux)
                         action: start | stop | status
@@ -277,7 +278,7 @@ Examples:
   stop                  このプロセス内のサービスを停止
   status                CLI とダッシュボードの状態を表示
   sync                  ローカル使用量を手動で同期
-  usage [summary|daily|weekly|monthly|models|projects]
+  usage [summary|overview|daily|weekly|monthly|models|projects]
                         保存済みの使用量を参照（読取専用。同期は行いません）
   service <action>      バックグラウンドサービスとログイン時の自動起動
                         action: start | stop | status
@@ -320,7 +321,7 @@ Examples:
   stop                  이 프로세스의 서비스를 중지
   status                CLI 및 대시보드 상태 표시
   sync                  로컬 사용량을 수동 동기화
-  usage [summary|daily|weekly|monthly|models|projects]
+  usage [summary|overview|daily|weekly|monthly|models|projects]
                         저장된 로컬 사용량 조회 (읽기 전용, 동기화하지 않음)
   service <action>      백그라운드 서비스 및 로그인 시 자동 시작
                         action: start | stop | status

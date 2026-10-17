@@ -12,7 +12,7 @@ import {
 } from './pricing/index.js';
 import { addLocalDays, DEFAULT_STATS_TIMEZONE, localDateAndHour, localDateDaysAgo, localDateNow } from './timezone.js';
 
-export const USAGE_REPORT_PERIODS = ['summary', 'daily', 'weekly', 'monthly', 'models', 'projects'] as const;
+export const USAGE_REPORT_PERIODS = ['summary', 'overview', 'daily', 'weekly', 'monthly', 'models', 'projects'] as const;
 export type UsageReportPeriod = typeof USAGE_REPORT_PERIODS[number];
 export interface UsageReportQuery {
   period?: UsageReportPeriod;
@@ -59,6 +59,11 @@ export interface UsageReportRow extends UsageReportTotals {
   fromDate?: string;
   toDate?: string;
 }
+export interface UsageReportBreakdowns {
+  daily: UsageReportRow[];
+  models: UsageReportRow[];
+  projects: UsageReportRow[];
+}
 export interface UsageReport {
   schemaVersion: 1;
   period: UsageReportPeriod;
@@ -78,6 +83,8 @@ export interface UsageReport {
   };
   summary: UsageReportTotals;
   rows: UsageReportRow[];
+  /** Overview dimensions share the selected buckets, pricing and coverage above. Never add their totals together. */
+  breakdowns?: UsageReportBreakdowns;
 }
 export interface UsageReportContext {
   collectSince: string;
@@ -183,33 +190,39 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
       && (!model || row.model === model)
       && (!project || normalizeProjectName(row.project || 'unknown') === project);
   });
-  const groups = new Map<string, { identity: Omit<UsageReportRow, keyof UsageReportTotals>; rows: QueueBucket[] }>();
-  for (const row of selected) {
-    const date = localDateAndHour(row.hour_start).date;
-    let key = 'summary';
-    let identity: Omit<UsageReportRow, keyof UsageReportTotals> = { key, label: '合计' };
-    if (period === 'models') {
-      key = JSON.stringify([row.source, row.model]);
-      identity = { key, label: row.model, source: row.source, model: row.model };
-    } else if (period === 'projects') {
-      key = normalizeProjectName(row.project || 'unknown');
-      identity = { key, label: key, project: key };
-    } else if (period !== 'summary') {
-      key = period === 'daily' ? date : period === 'monthly' ? date.slice(0, 7)
-        : addLocalDays(date, -((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7));
-      const start = period === 'monthly' ? `${key}-01` : key;
-      const end = period === 'weekly' ? addLocalDays(start, 6) : period === 'monthly'
-        ? new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 0)).toISOString().slice(0, 10) : date;
-      identity = { key, label: key, fromDate: start < effectiveFrom ? effectiveFrom : start, toDate: end > toDate ? toDate : end };
-    }
-    const group = groups.get(key) ?? { identity, rows: [] };
-    group.rows.push(row);
-    groups.set(key, group);
-  }
   const summary = totals(selected);
-  const reportRows = [...groups.values()].map((group) => ({ ...group.identity, ...totals(group.rows) }));
-  reportRows.sort(period === 'models' || period === 'projects' ? (a, b) => b.tokens - a.tokens || a.key.localeCompare(b.key) : (a, b) => a.key.localeCompare(b.key));
-  if (period === 'summary' && !reportRows.length) reportRows.push({ key: 'summary', label: '合计', ...summary });
+  const groupRows = (dimension: Exclude<UsageReportPeriod, 'overview'>): UsageReportRow[] => {
+    const groups = new Map<string, { identity: Omit<UsageReportRow, keyof UsageReportTotals>; rows: QueueBucket[] }>();
+    for (const row of selected) {
+      const date = localDateAndHour(row.hour_start).date;
+      let key = 'summary';
+      let identity: Omit<UsageReportRow, keyof UsageReportTotals> = { key, label: '合计' };
+      if (dimension === 'models') {
+        key = JSON.stringify([row.source, row.model]);
+        identity = { key, label: row.model, source: row.source, model: row.model };
+      } else if (dimension === 'projects') {
+        key = normalizeProjectName(row.project || 'unknown');
+        identity = { key, label: key, project: key };
+      } else if (dimension !== 'summary') {
+        key = dimension === 'daily' ? date : dimension === 'monthly' ? date.slice(0, 7)
+          : addLocalDays(date, -((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7));
+        const start = dimension === 'monthly' ? `${key}-01` : key;
+        const end = dimension === 'weekly' ? addLocalDays(start, 6) : dimension === 'monthly'
+          ? new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 0)).toISOString().slice(0, 10) : date;
+        identity = { key, label: key, fromDate: start < effectiveFrom ? effectiveFrom : start, toDate: end > toDate ? toDate : end };
+      }
+      const group = groups.get(key) ?? { identity, rows: [] };
+      group.rows.push(row);
+      groups.set(key, group);
+    }
+    const reportRows = [...groups.values()].map((group) => ({ ...group.identity, ...totals(group.rows) }));
+    reportRows.sort(dimension === 'models' || dimension === 'projects' ? (a, b) => b.tokens - a.tokens || a.key.localeCompare(b.key) : (a, b) => a.key.localeCompare(b.key));
+    if (dimension === 'summary' && !reportRows.length) reportRows.push({ key: 'summary', label: '合计', ...summary });
+    return reportRows;
+  };
+  const reportRows = period === 'overview' ? [{ key: 'summary', label: '合计', ...summary }] : groupRows(period);
+  const breakdowns = period === 'overview'
+    ? { daily: groupRows('daily'), models: groupRows('models'), projects: groupRows('projects') } : undefined;
   return {
     schemaVersion: 1, period, timeZone: DEFAULT_STATS_TIMEZONE, fromDate, toDate,
     filters: { sources: selectedSources, model, project },
@@ -217,7 +230,7 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
       collectSince: context.collectSince, fromDate: effectiveFrom, toDate,
       limited: Date.parse(context.collectSince) > Date.parse(`${fromDate}T00:00:00+08:00`),
       snapshot: context.snapshot ?? 'runtime', lastSyncAt: context.lastSyncAt ?? null, readAt: now.toISOString(), invalidRows,
-    }, summary, rows: reportRows,
+    }, summary, rows: reportRows, ...(breakdowns ? { breakdowns } : {}),
   };
 }
 

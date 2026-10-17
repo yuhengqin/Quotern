@@ -6,7 +6,7 @@ const templateUrl = new URL('../assets/report-template.html', import.meta.url);
 const brandUrl = new URL('../assets/quotern-mark.svg', import.meta.url);
 const fontUrl = new URL('../assets/jetbrains-mono-latin-wght-normal.woff2', import.meta.url);
 const fontLicenseUrl = new URL('../assets/JetBrainsMono-OFL.txt', import.meta.url);
-const periodNames = { summary: '用量总览', models: '模型用量', projects: '项目用量', daily: '每日用量', weekly: '每周用量', monthly: '每月用量' };
+const periodNames = { summary: '用量总览', overview: '综合用量概览', models: '模型用量', projects: '项目用量', daily: '每日用量', weekly: '每周用量', monthly: '每月用量' };
 const sourceNames = { codex: 'Codex', claude: 'Claude', zcode: 'Zcode', opencode: 'OpenCode', antigravity: 'Antigravity', cursor: 'Cursor', gemini: 'Gemini' };
 const countNames = { summary: '汇总项', models: '模型与来源组合', projects: '项目', daily: '有记录的日期', weekly: '有记录的周', monthly: '有记录的月份' };
 const whole = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 6 });
@@ -61,10 +61,25 @@ function validate(report, analysis) {
   if (typeof report.timeZone !== 'string' || !report.timeZone) throw new Error('Missing timeZone.');
   new Intl.DateTimeFormat('zh-CN', { timeZone: report.timeZone }).format();
   if (!validNumber(report.summary?.tokens) || !Array.isArray(report.rows)) throw new Error('Invalid summary.tokens or rows.');
-  for (const [index, row] of report.rows.entries()) {
-    if (!validNumber(row?.tokens) || typeof row.label !== 'string') throw new Error(`Invalid rows[${index}].tokens or label.`);
-    for (const key of ['costUsd', 'knownCostUsd']) {
-      if (row[key] != null && !validNumber(row[key])) throw new Error(`Invalid rows[${index}].${key}.`);
+  const validateRows = (rows, path) => {
+    if (!Array.isArray(rows)) throw new Error(`Missing or invalid ${path}.`);
+    for (const [index, row] of rows.entries()) {
+      if (!validNumber(row?.tokens) || typeof row.label !== 'string') throw new Error(`Invalid ${path}[${index}].tokens or label.`);
+      for (const key of ['costUsd', 'knownCostUsd']) {
+        if (row[key] != null && !validNumber(row[key])) throw new Error(`Invalid ${path}[${index}].${key}.`);
+      }
+    }
+  };
+  validateRows(report.rows, 'rows');
+  if (report.period === 'overview') {
+    for (const dimension of ['daily', 'models', 'projects']) {
+      const rows = report.breakdowns?.[dimension];
+      validateRows(rows, `breakdowns.${dimension}`);
+      const total = rows.reduce((sum, row) => sum + row.tokens, 0);
+      if (Math.abs(total - report.summary.tokens) > Math.max(1, report.summary.tokens) * 1e-12) throw new Error(`Inconsistent total in breakdowns.${dimension}.`);
+      if (dimension === 'daily' && rows.some((row) => !/^\d{4}-\d{2}-\d{2}$/.test(row.fromDate) || row.fromDate < report.fromDate || row.fromDate > report.toDate || row.fromDate !== row.toDate)) throw new Error('Invalid breakdowns.daily dates.');
+      if (dimension === 'models' && rows.some((row) => typeof row.source !== 'string' || typeof row.model !== 'string')) throw new Error('Missing breakdowns.models identity.');
+      if (dimension === 'projects' && rows.some((row) => typeof row.project !== 'string')) throw new Error('Missing breakdowns.projects identity.');
     }
   }
   for (const key of ['costUsd', 'knownCostUsd', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens']) {
@@ -113,12 +128,12 @@ function warnings(report, costs) {
   return result.map((text) => `<p class="notice">${escape(text)}</p>`).join('');
 }
 
-function rankingChart(report, rows) {
-  const shown = rows.slice(0, 10);
-  const max = Math.max(...shown.map((row) => row.tokens), 0);
+function rankingChart(report, rows, limit = 10, overview = false) {
+  const shown = rows.slice(0, limit);
+  const max = overview ? report.summary.tokens : Math.max(...shown.map((row) => row.tokens), 0);
   if (!max) return '<p class="empty">暂无非零用量可供比较。</p>';
-  const bars = shown.map((row) => `<li class="source-${Object.hasOwn(sourceNames, row.source) ? row.source : 'other'}"><div class="bar-label"><span>${escape(row.label)}${row.source ? `<small>${escape(sourceName(row.source))}</small>` : ''}</span><strong>${escape(compact(row.tokens))}</strong></div><div class="bar-track"><span style="inline-size:${row.tokens / max * 100}%"></span></div></li>`).join('');
-  return `<p class="muted">${rows.length > 10 ? '图中显示用量前 10 项，完整明细保留全部项目。' : '按 Token 用量排序。'} 条形长度相对本图最大值；明细占比以当前筛选范围的总量为分母。</p><ol class="bars">${bars}</ol>`;
+  const bars = shown.map((row) => `<li class="source-${!overview && Object.hasOwn(sourceNames, row.source) ? row.source : 'other'}"><div class="bar-label"><span>${escape(row.label)}${row.source ? `<small>${escape(sourceName(row.source))}</small>` : ''}</span><strong>${escape(compact(row.tokens))}${overview ? `<span class="bar-share">${escape(percent(row.tokens, report.summary.tokens))}</span>` : ''}</strong></div><div class="bar-track"><span style="inline-size:${row.tokens / max * 100}%"></span></div></li>`).join('');
+  return `<p class="muted chart-caption">${rows.length > limit ? `图中显示前 ${limit} 项，共 ${rows.length} 项；完整明细保留全部。` : '按 Token 用量排序。'} ${overview ? '条形和占比均以当前范围总量为分母。' : '条形长度相对本图最大值。'}</p><ol class="bars">${bars}</ol>`;
 }
 
 function temporalChart(report, rows) {
@@ -135,7 +150,14 @@ function temporalChart(report, rows) {
     const height = row.tokens / max * 170;
     return `<rect x="${x - width / 2}" y="${200 - height}" width="${width}" height="${height}" rx="2"><title>${escape(row.label)}：${escape(exact(row.tokens))} Token</title></rect>`;
   }).join('');
-  return `<p class="muted">按时间展示各已记录时段；空白日期表示没有返回记录，不能据此确认零用量。</p><svg class="timeline" viewBox="0 0 710 245" role="img" aria-labelledby="timeline-title timeline-description"><title id="timeline-title">${escape(periodNames[report.period])}</title><desc id="timeline-description">当前筛选范围内已记录时段的 Token 用量。每个时段的精确值见完整明细。</desc><line x1="55" y1="200" x2="655" y2="200"/><text x="8" y="30">${escape(compact(max))}</text><text x="28" y="204">0</text>${bars}<text x="55" y="230">${escape(report.fromDate)}</text><text x="655" y="230" text-anchor="end">${escape(report.toDate)}</text></svg>`;
+  const days = Math.round((end - start) / 86400000);
+  const tickCount = Math.min(days + 1, 7);
+  const ticks = Array.from({ length: tickCount }, (_, index) => {
+    const offset = tickCount === 1 ? 0 : Math.round(index * days / (tickCount - 1));
+    const date = new Date(start + offset * 86400000).toISOString().slice(5, 10);
+    return `<text x="${55 + offset * 86400000 / span * 600}" y="230" text-anchor="middle">${date}</text>`;
+  }).join('');
+  return `<p class="muted chart-caption">按时间展示已记录用量；空白日期不能据此确认零用量。未结束的统计时段不宜与完整自然日直接比较。</p><svg class="timeline" viewBox="0 0 710 245" role="img" aria-labelledby="timeline-title timeline-description"><title id="timeline-title">${escape(periodNames[report.period])}</title><desc id="timeline-description">当前筛选范围内已记录时段的 Token 用量。每个时段的精确值见完整明细。</desc><line x1="55" y1="200" x2="655" y2="200"/><text x="8" y="30">${escape(compact(max))}</text><text x="28" y="204">0</text>${bars}${ticks}</svg>`;
 }
 
 function table(report, rows, costs) {
@@ -158,24 +180,56 @@ function notes(report, analysis, costs) {
     `最近成功同步：${timeLabel(report, 'lastSyncAt')}；各来源可能仍有更新延迟。`,
     `报告数据读取：${timeLabel(report, 'readAt')}。读取或同步时间都不能证明每个来源已完整更新到该时刻。`,
     'Token 反映记录的使用量，不能单独据此判断产出、效率或实际支付金额。',
-    ...(report.period === 'projects' ? ['项目按显示名称归组，不同目录的同名项目可能合并。'] : []),
+    ...(report.period === 'projects' || report.period === 'overview' ? ['项目按显示名称归组，不同目录的同名项目可能合并。'] : []),
+    ...(report.period === 'overview' ? ['趋势、模型与项目维度使用同一次读取后筛选的记录及同一统计范围，是同一用量的不同视角，不能相加。'] : []),
     ...(costs ? [`费用中的来源报告金额：${dollars(report.summary.costExplanation?.reportedCostUsd)}；按费率估算：${dollars(report.summary.costExplanation?.estimatedCostUsd)}。二者均不代表实际支付证明。`] : []),
     ...(analysis.notes ?? []),
   ];
   return `<ul class="notes">${items.map((item) => `<li>${escape(item)}</li>`).join('')}</ul>`;
 }
 
+function orderedRows(period, rows) {
+  return [...rows].sort(['models', 'projects'].includes(period)
+    ? (a, b) => b.tokens - a.tokens
+    : (a, b) => (a.fromDate ?? a.label).localeCompare(b.fromDate ?? b.label));
+}
+
+function sectionHeading(id, title, number) {
+  return `<div class="section-heading"><span class="section-number">${number}</span><h2 id="${id}-title">${title}</h2></div>`;
+}
+
+function overviewSections(report, costs) {
+  const dimensions = Object.fromEntries(['daily', 'models', 'projects'].map((period) => [period, orderedRows(period, report.breakdowns[period])]));
+  const detail = (period) => {
+    const rows = dimensions[period];
+    return `<details class="dimension-detail"><summary>查看完整明细 <small>${rows.length} 项</small></summary>${rows.length ? table({ ...report, period }, rows, costs) : '<p class="empty">暂无已采集记录。</p>'}</details>`;
+  };
+  const distribution = (period, title, number) => {
+    const rows = dimensions[period];
+    return `<section class="section distribution" id="${period}" aria-labelledby="${period}-title">${sectionHeading(period, title, number)}${rankingChart(report, rows, 5, true)}${detail(period)}</section>`;
+  };
+  const daily = dimensions.daily;
+  return `<section class="section" id="composition" aria-labelledby="composition-title">${sectionHeading('composition', 'Token 构成', '02')}${composition(report)}</section>
+    <section class="section" id="daily" aria-labelledby="daily-title">${sectionHeading('daily', '每日用量趋势', '03')}${daily.length ? temporalChart({ ...report, period: 'daily' }, daily) : '<p class="empty">暂无已采集记录。</p>'}${detail('daily')}</section>
+    <div class="report-grid">${distribution('models', '模型分布', '04')}${distribution('projects', '项目分布', '05')}</div>`;
+}
+
 /** Presentation only: consume Core/CLI totals; never regroup or reprice them. */
 export function renderUsageHtml(report, analysis = {}, options = {}) {
   validate(report, analysis);
   const costs = options.costs === true;
-  const rows = [...report.rows].sort(['models', 'projects'].includes(report.period)
-    ? (a, b) => b.tokens - a.tokens
-    : (a, b) => (a.fromDate ?? a.label).localeCompare(b.fromDate ?? b.label));
+  const rows = orderedRows(report.period, report.rows);
+  const overview = report.period === 'overview';
   const summary = report.summary;
   const hitRate = summary.localMetrics?.cacheHitRate;
   const cacheNote = validNumber(hitRate) && hitRate <= 1 ? `缓存命中率 ${percent(hitRate, 1)}（报告记录）` : '缓存命中率未记录';
-  const cards = metric('Token 合计', compact(summary.tokens), `精确值 ${exact(summary.tokens)}`)
+  const cards = overview
+    ? metric('Token 合计', compact(summary.tokens), `精确值 ${exact(summary.tokens)}`)
+      + metric('输入 Token（非缓存）', compact(summary.inputTokens), `占总量 ${percent(summary.inputTokens, summary.tokens)}`)
+      + metric('输出 Token', compact(summary.outputTokens), '推理 Token 单列于下方构成')
+      + metric('缓存读取 Token', compact(summary.cacheReadTokens), `占总量 ${percent(summary.cacheReadTokens, summary.tokens)} · ${cacheNote}`)
+      + (costs ? metric(costLabel(summary), summary.costUsd == null ? '完整费用未知' : dollars(summary.costUsd), `已定价部分 ${dollars(summary.knownCostUsd)}`) : '')
+    : metric('Token 合计', compact(summary.tokens), `精确值 ${exact(summary.tokens)}`)
     + metric('缓存读取占总量', percent(summary.cacheReadTokens, summary.tokens), cacheNote)
     + (costs
       ? metric(costLabel(summary), summary.costUsd == null ? '完整费用未知' : dollars(summary.costUsd), `已定价部分 ${dollars(summary.knownCostUsd)}`)
@@ -187,6 +241,10 @@ export function renderUsageHtml(report, analysis = {}, options = {}) {
       : report.period === 'summary' ? composition(report) : rankingChart(report, rows);
   const nextSteps = analysis.nextSteps?.length
     ? `<section class="section"><h2>可考虑的下一步</h2><ul class="notes">${analysis.nextSteps.map((text) => `<li>${escape(text)}</li>`).join('')}</ul></section>` : '';
+  const content = overview ? overviewSections(report, costs)
+    : `<section class="section" aria-labelledby="chart-title">${sectionHeading('chart', '用量分布', '02')}${chart}</section>
+      <details class="section" open><summary>完整明细 <small>${rows.length} 项 · 点击收起或展开</small></summary>${rows.length ? table(report, rows, costs) : '<p class="empty">暂无已采集记录。</p>'}</details>
+      ${report.period === 'summary' ? '' : `<details class="section"><summary>Token 构成</summary>${composition(report)}</details>`}`;
   const values = {
     BRAND_MARK: readFileSync(brandUrl, 'utf8'),
     FONT_DATA: readFileSync(fontUrl).toString('base64'),
@@ -197,9 +255,9 @@ export function renderUsageHtml(report, analysis = {}, options = {}) {
     ZONE: escape(report.timeZone === 'Asia/Shanghai' ? '北京时间' : report.timeZone),
     SCOPE: escape(scopeText(report)),
     OVERVIEW: analysis.overview ? `<p class="overview">${escape(analysis.overview)}</p>` : '',
-    WARNINGS: warnings(report, costs), METRICS: cards, FINDINGS: findings, CHART: chart,
-    DETAIL: rows.length ? table(report, rows, costs) : '<p class="empty">暂无已采集记录。</p>',
-    COUNT: escape(rows.length), COMPOSITION: report.period === 'summary' ? '' : `<details class="section"><summary>Token 构成</summary>${composition(report)}</details>`,
+    WARNINGS: warnings(report, costs), METRICS: cards, FINDINGS: findings, CONTENT: content,
+    METRIC_CLASS: overview ? 'metrics-overview' : '',
+    NAVIGATION: overview ? '<nav class="report-nav" aria-label="报告目录"><a href="#composition">Token 构成</a><a href="#daily">每日趋势</a><a href="#models">模型分布</a><a href="#projects">项目分布</a></nav>' : '',
     NOTES: notes(report, analysis, costs), NEXT_STEPS: nextSteps,
     ATTRIBUTION: analysis.overview || analysis.findings?.length || analysis.notes?.length || analysis.nextSteps?.length
       ? '<span>数值来自 Quotern · 文字解读由 AI 生成</span>' : '',
@@ -242,7 +300,7 @@ function main(args) {
   const analysis = options.analysis ? readJson(options.analysis) : {};
   const html = renderUsageHtml(report, analysis, options);
   writeFileSync(options.output, html, { encoding: 'utf8', flag: options.force ? 'w' : 'wx' });
-  console.log(JSON.stringify({ output: options.output, rows: report.rows.length, period: report.period, fromDate: report.fromDate, toDate: report.toDate, timeZone: report.timeZone, costsIncluded: options.costs === true }));
+  console.log(JSON.stringify({ output: options.output, rows: report.rows.length, ...(report.breakdowns ? { breakdowns: Object.fromEntries(Object.entries(report.breakdowns).map(([key, rows]) => [key, rows.length])) } : {}), period: report.period, fromDate: report.fromDate, toDate: report.toDate, timeZone: report.timeZone, costsIncluded: options.costs === true }));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

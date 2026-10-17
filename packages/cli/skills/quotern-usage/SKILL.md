@@ -8,12 +8,20 @@ description: Use for questions about the user's locally collected Coding Agent t
 Use the installed `quotern usage` command and parse its JSON. Core defines statistics, CLI presents them, and this Skill selects queries and explains results. Queries read persisted local data, work while Desktop owns collection, and require no web server.
 
 ```sh
+quotern usage overview --days 7 --format json --compact
 quotern usage models --days 7 --format json --compact
 quotern usage daily --from 2026-06-01 --to 2026-06-30 --format json --compact
 quotern usage projects --days 30 --project Quotern --format json --compact
 ```
 
-Periods: `summary` (default), `daily`, `weekly`, `monthly`, `models`, `projects`. Default range is 7 days including today. Dates are inclusive in `Asia/Shanghai`; weeks begin Monday. Use either `--days N` or both `--from YYYY-MM-DD --to YYYY-MM-DD`. Optional filters: `--source` (comma-separated), exact `--model`, normalized display-name `--project`. `--data-dir` explicitly selects an existing Quotern data directory. Use `--help` for command syntax; do not invent unsupported flags or a session report.
+Periods: `summary` (CLI default), `overview`, `daily`, `weekly`, `monthly`, `models`, `projects`. Default range is 7 days including today. Dates are inclusive in `Asia/Shanghai`; weeks begin Monday. Use either `--days N` or both `--from YYYY-MM-DD --to YYYY-MM-DD`. Optional filters: `--source` (comma-separated), exact `--model`, normalized display-name `--project`. `--data-dir` explicitly selects an existing Quotern data directory. Use `--help` for command syntax; do not invent unsupported flags or a session report.
+
+## Select the query and delivery
+
+- Broad requests such as “查看用量信息”, “看看最近用量”, or “生成用量报告” default to `overview` and a complete HTML report, using the requested range/filters or the default 7 days. Do not silently narrow these to a model ranking. The overview includes totals, Token composition, daily trend, model/source distribution and project distribution.
+- Specific questions stay focused: “用了多少 Token” → `summary` and a short chat answer; model ranking → `models`; trend → `daily`/`weekly`/`monthly`; project usage → `projects`. An explicit brief/chat-only request takes precedence over HTML. Costs appear only when requested.
+- `overview` returns one authoritative `summary` plus `breakdowns.daily`, `breakdowns.models` and `breakdowns.projects`, produced from the same selected records in one query. Each breakdown is another view of the same total; never add them together. Read all three for supported cross-dimensional findings. Do not stitch separate queries into a supposedly identical snapshot.
+- If the installed CLI explicitly rejects `overview` as an unknown period, explain that it needs an update and provide the supported summary inline. Do not label a model-only or summary-only output a complete overview, and do not silently install software or start services.
 
 Prefer one compact query for totals and rankings. `schemaVersion: 1`, `view: compact` keeps dates, filters, coverage, summary details and each group's totals, cost subtotals and provenance. Per-row token components/local metrics and detailed price matching entries require full JSON: omit `--compact` when the question needs them. If an older CLI explicitly rejects `--compact` as unknown, retry once without it; other failures follow the read-only failure rule below. Do not silently interpret an unsupported schema version.
 
@@ -35,7 +43,7 @@ For a model ranking, single-cost query or incomplete-data answer, consult [respo
 
 ## Deliver a complete HTML report
 
-For a requested report, weekly/monthly review, exportable/shareable result, or substantial analysis whose charts and detail would overwhelm chat, follow [HTML reports](references/html-reports.md). Use the bundled Node.js renderer and fixed template to produce a self-contained local HTML file: overview, supported findings, distribution or time chart, every returned detail row, and data scope. The renderer accepts existing CLI JSON; Core continues to own statistics. Ordinary short lookups stay in chat, and an explicit chat-only request takes precedence.
+For a broad usage request, requested report, weekly/monthly review, exportable/shareable result, or substantial analysis whose charts and detail would overwhelm chat, follow [HTML reports](references/html-reports.md). Use the bundled Node.js renderer and fixed Quotern-style template to produce a self-contained local HTML file: overview, supported findings, relevant charts, every returned detail row, and data scope. The renderer accepts CLI JSON; Core continues to own statistics. Ordinary specific short lookups stay in chat, and an explicit chat-only request takes precedence.
 
 Write brief, evidence-backed analysis annotations; let the template handle layout. Verify and preview the file where browser tools are available, then deliver a short chat summary and an absolute file link. The HTML file carries the complete detail; the chat highlights the answer, a useful finding and any limitation that changes interpretation. Include costs only when requested. Node.js is already required by Quotern; no extra packages or local server are needed.
 

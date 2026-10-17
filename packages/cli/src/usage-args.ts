@@ -4,6 +4,7 @@ import { extractCliLanguage, systemCliLocale, userError } from './i18n/locale.js
 
 export type UsagePeriod =
   | 'summary'
+  | 'overview'
   | 'daily'
   | 'weekly'
   | 'monthly'
@@ -31,6 +32,7 @@ export interface ParsedUsageArgs {
 
 const PERIODS: readonly UsagePeriod[] = [
   'summary',
+  'overview',
   'daily',
   'weekly',
   'monthly',

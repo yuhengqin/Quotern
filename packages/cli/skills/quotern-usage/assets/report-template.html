@@ -18,6 +18,7 @@
       --ink: oklch(0.2103 0.0059 285.89); --muted: oklch(0.5517 0.0138 285.94);
       --line: oklch(90% 0.004 286.32); --separator: oklch(92% 0.004 286.32);
       --accent: oklch(0.6204 0.195 253.83); --chart-1: #0485f7;
+      --chart-2: #4fbd91; --chart-3: #f0a12b; --chart-4: #8b6ee8; --chart-5: #e45b55;
       --source-codex: #4fbd91; --source-claude: #f0a12b; --source-zcode: #10b981;
       --source-opencode: #ff5c00; --source-antigravity: #1a73e8; --source-cursor: #0485f7; --source-gemini: #4285f4;
       --notice: #fff8e8; --notice-ink: #79520d; --track: var(--surface-secondary);
@@ -43,6 +44,16 @@
     .overview { max-inline-size: 850px; margin: 8px 0 20px; color: var(--muted); font-size: 14px; line-height: 1.9; }
     .notice { padding: 14px 18px; border-radius: 12px; color: var(--notice-ink); background: var(--notice); font-size: 14px; }
     .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0 24px; }
+    .metrics-overview { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .report-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 20px; }
+    .report-nav a { padding: 5px 11px; border-radius: 999px; background: var(--surface); color: var(--muted); text-decoration: none; font-size: 11px; }
+    .report-nav a:hover { color: var(--ink); box-shadow: var(--shadow); }
+    .report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .report-grid > .section { min-inline-size: 0; }
+    .chart-caption { font-size: 11px; }
+    .dimension-detail { padding-block-start: 16px; margin-block-start: 20px; border-block-start: 1px solid var(--separator); }
+    .dimension-detail > summary { font-size: 12px; }
+    section[id] { scroll-margin-block-start: 20px; }
     .metric { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; padding: 18px 20px; border: 1px solid transparent; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); min-inline-size: 0; }
     .metric .eyebrow { font-size: 12px; font-weight: 500; }
     .metric-value { margin: 0; font-family: var(--font-mono); font-size: clamp(24px, 2.6vw, 30px); font-weight: 600; line-height: 1.4; letter-spacing: -.06em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -56,6 +67,10 @@
     .findings article p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.9; }
     .bars { display: grid; gap: 16px; list-style: none; margin: 24px 0 0; padding: 0; }
     .bars li { --bar-color: var(--chart-1); }
+    .bars li:nth-child(5n + 2) { --bar-color: var(--chart-2); }
+    .bars li:nth-child(5n + 3) { --bar-color: var(--chart-3); }
+    .bars li:nth-child(5n + 4) { --bar-color: var(--chart-4); }
+    .bars li:nth-child(5n) { --bar-color: var(--chart-5); }
     .source-codex { --bar-color: var(--source-codex) !important; }
     .source-claude { --bar-color: var(--source-claude) !important; }
     .source-zcode { --bar-color: var(--source-zcode) !important; }
@@ -68,6 +83,7 @@
     .bar-label small { display: inline-flex; align-items: center; gap: 5px; margin-inline-start: 10px; font-size: 10px; font-weight: 400; }
     .bar-label small::before { content: ""; inline-size: 5px; block-size: 5px; border-radius: 50%; background: var(--bar-color); }
     .bar-label strong { white-space: nowrap; font-family: var(--font-mono); font-size: 12px; font-weight: 550; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+    .bar-share { display: block; color: var(--muted); font-size: 10px; font-weight: 400; text-align: end; }
     .bar-track { overflow: hidden; block-size: 7px; border-radius: 999px; background: var(--track); }
     .bar-track span { display: block; block-size: 100%; border-radius: inherit; background: var(--bar-color); }
     .timeline { display: block; inline-size: 100%; margin-block-start: 18px; overflow: visible; }
@@ -100,6 +116,7 @@
         --page: oklch(12% 0.005 285.823); --surface: oklch(0.2103 0.0059 285.89); --surface-secondary: oklch(0.257 0.0037 286.14);
         --ink: oklch(0.9911 0 0); --muted: oklch(70.5% 0.015 286.067); --line: oklch(28% 0.006 286.033); --separator: oklch(25% 0.006 286.033);
         --chart-1: #48a7ff; --source-codex: #62cfa4; --source-claude: #f4b64c; --source-zcode: #34d399;
+        --chart-2: #62cfa4; --chart-3: #f4b64c; --chart-4: #aa91f2; --chart-5: #f07872;
         --source-opencode: #ff7a33; --source-antigravity: #4d9af5; --source-cursor: #48a7ff; --source-gemini: #6ba4f8;
         --notice: #342b16; --notice-ink: #f5d990; --shadow: none;
       }
@@ -110,6 +127,7 @@
       .brand { margin-block-end: 26px; }
       .brand small { font-size: 10px; }
       .metrics { grid-template-columns: 1fr; gap: 10px; margin: 24px 0; }
+      .report-grid { grid-template-columns: 1fr; gap: 0; }
       .metric { padding: 16px 18px; }
       .section { padding: 18px; }
       .findings { grid-template-columns: 1fr; }
@@ -145,17 +163,10 @@
       {{OVERVIEW}}
       {{WARNINGS}}
     </header>
-    <section class="metrics" aria-label="用量总览">{{METRICS}}</section>
+    {{NAVIGATION}}
+    <section class="metrics {{METRIC_CLASS}}" aria-label="用量总览">{{METRICS}}</section>
     {{FINDINGS}}
-    <section class="section" aria-labelledby="chart-title">
-      <div class="section-heading"><span class="section-number">02</span><h2 id="chart-title">用量分布</h2></div>
-      {{CHART}}
-    </section>
-    <details class="section" open>
-      <summary>完整明细 <small>{{COUNT}} 项 · 点击收起或展开</small></summary>
-      {{DETAIL}}
-    </details>
-    {{COMPOSITION}}
+    {{CONTENT}}
     <details class="section"><summary>统计口径与数据说明</summary>{{NOTES}}</details>
     {{NEXT_STEPS}}
     <footer><span>Quotern · 本地生成的独立报告</span>{{ATTRIBUTION}}<a href="#top">返回顶部 ↑</a></footer>

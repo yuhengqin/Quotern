@@ -35,6 +35,65 @@ function report(overrides = {}) {
   };
 }
 
+function overviewReport() {
+  const input = report({ period: 'overview' });
+  input.breakdowns = {
+    daily: [
+      { ...input.rows[0], label: '2026-10-11', fromDate: '2026-10-11', toDate: '2026-10-11', tokens: 310000000 },
+      { ...input.rows[1], label: '2026-10-17', fromDate: '2026-10-17', toDate: '2026-10-17', tokens: 900000000 },
+    ],
+    models: structuredClone(input.rows),
+    projects: [{ ...input.rows[0], label: 'project-with-usage', project: 'project-with-usage', tokens: input.summary.tokens }],
+  };
+  input.rows = [{ label: '合计', ...input.summary }];
+  return input;
+}
+
+test('overview renders composition, trend and both distributions with every detail row', async () => {
+  const { renderUsageHtml } = await renderer();
+  const input = overviewReport();
+  const before = structuredClone(input);
+  const html = renderUsageHtml(input);
+  assert.match(html, /综合用量概览/);
+  for (const id of ['composition', 'daily', 'models', 'projects']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /project-with-usage/);
+  assert.match(html, /model-shared/);
+  assert.match(html, /2026-10-11/);
+  assert.match(html, /2026-10-17/);
+  assert.equal((html.match(/<tbody>/g) ?? []).length, 3);
+  assert.equal((html.match(/<tr><th scope="row">/g) ?? []).length, 6);
+  assert.doesNotMatch(html, /\$12\.35/);
+  assert.deepEqual(input, before);
+});
+
+test('overview rejects missing dimensions, invalid nested values and inconsistent totals', async () => {
+  const { renderUsageHtml } = await renderer();
+  const input = overviewReport();
+  delete input.breakdowns.daily;
+  assert.throws(() => renderUsageHtml(input), /breakdowns/);
+  const invalid = overviewReport();
+  invalid.breakdowns.projects[0].tokens = -1;
+  assert.throws(() => renderUsageHtml(invalid), /tokens/);
+  const mismatch = overviewReport();
+  mismatch.breakdowns.daily[0].tokens++;
+  assert.throws(() => renderUsageHtml(mismatch), /total/i);
+  const malicious = overviewReport();
+  malicious.breakdowns.projects[0].label = '</table><script>alert(1)</script>';
+  assert.doesNotMatch(renderUsageHtml(malicious), /<script/);
+});
+
+test('empty overview keeps all sections and unknown cache metrics without invented rows', async () => {
+  const { renderUsageHtml } = await renderer();
+  const input = overviewReport();
+  Object.assign(input.summary, { tokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 });
+  input.breakdowns = { daily: [], models: [], projects: [] };
+  const html = renderUsageHtml(input);
+  assert.doesNotMatch(html.slice(html.indexOf('<body>')), /NaN|Infinity/);
+  assert.match(html, /暂无已采集记录/);
+  assert.match(html, /命中率[^<]*未记录/);
+  assert.equal((html.match(/<tr><th scope="row">/g) ?? []).length, 0);
+});
+
 test('report preserves all source/model identities and raw totals without mutating input', async () => {
   const { renderUsageHtml } = await renderer();
   const input = report();

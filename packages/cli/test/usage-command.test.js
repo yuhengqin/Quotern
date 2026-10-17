@@ -42,6 +42,17 @@ test('usage queries persisted data while Desktop owns runtime without writing or
     assert.equal(concise.rows[0].source, 'codex');
     assert.equal(concise.coverage.display.lastSyncAt, '2026-06-09 18:00:00 (Asia/Shanghai)');
     assert.equal(compact.stdout.includes('private-test-secret'), false);
+    const overviewArgs = [...args];
+    overviewArgs[1] = 'overview';
+    const overviewResult = await run(process.execPath, [bin, ...overviewArgs, '--json', '--compact'], { timeout: 15_000 });
+    const overview = JSON.parse(overviewResult.stdout);
+    assert.equal(overview.period, 'overview');
+    assert.equal(overview.summary.tokens, 120);
+    assert.equal(overview.breakdowns.daily[0].tokens, 120);
+    assert.equal(overview.breakdowns.models[0].source, 'codex');
+    assert.equal(overview.breakdowns.projects[0].project, 'Project');
+    assert.equal(overview.coverage.snapshot, 'persisted');
+    assert.equal(overviewResult.stderr, '');
     const csv = await run(process.execPath, [bin, ...args, '--csv'], { timeout: 15_000 });
     assert.ok(csv.stdout.startsWith('period,label,source,model,'));
     await assert.rejects(run(process.execPath, [bin, 'usage', '--days', '0', '--json', '--data-dir', dir]), (error) => error.code === 1 && error.stdout === '' && /days/.test(error.stderr));

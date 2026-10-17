@@ -13,6 +13,12 @@ test('parseUsageArgs defaults to summary text output', () => {
   });
 });
 
+test('overview is an explicit multidimensional query and accepts the same filters', () => {
+  const parsed = parseUsageArgs(['overview', '--days', '7', '--source', 'codex', '--project', 'Quotern', '--json', '--compact']);
+  assert.deepEqual(parsed.query, { period: 'overview', days: 7, sources: ['codex'], project: 'Quotern' });
+  assert.equal(parsed.compact, true);
+});
+
 test('parseUsageArgs accepts the supported options and normalizes their values', () => {
   assert.deepEqual(
     parseUsageArgs([

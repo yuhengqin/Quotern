@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CircleQuestion } from '@gravity-ui/icons';
 import { Button, Card, Chip, Tooltip } from '@heroui/react';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
+import { getTokenUnitMode } from '@/lib/utils';
 import type {
   DashboardMetricChanges,
   DashboardUsageSummary,
@@ -82,6 +83,7 @@ export function DashboardMetricCards({
 }
 
 function TokenFormatHelp() {
+  const chinese = getTokenUnitMode() === 'chinese';
   return (
     <Tooltip closeDelay={80} delay={100}>
       <Button
@@ -102,17 +104,32 @@ function TokenFormatHelp() {
           Token 缩略换算
         </p>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          <dt className="font-medium tabular-nums">1K</dt>
-          <dd>= 1,000 Token</dd>
-          <dt className="font-medium tabular-nums">1M</dt>
-          <dd>= 100 万 Token</dd>
-          <dt className="font-medium tabular-nums">1B</dt>
-          <dd>= 10 亿 Token</dd>
-          <dt className="font-medium tabular-nums">1T</dt>
-          <dd>= 1 万亿 Token</dd>
+          {chinese ? (
+            <>
+              <dt className="font-medium tabular-nums">1万</dt>
+              <dd>= 10,000 Token</dd>
+              <dt className="font-medium tabular-nums">1亿</dt>
+              <dd>= 100,000,000 Token</dd>
+              <dt className="font-medium tabular-nums">1万亿</dt>
+              <dd>= 1,000,000,000,000 Token</dd>
+            </>
+          ) : (
+            <>
+              <dt className="font-medium tabular-nums">1K</dt>
+              <dd>= 1,000 Token</dd>
+              <dt className="font-medium tabular-nums">1M</dt>
+              <dd>= 100 万 Token</dd>
+              <dt className="font-medium tabular-nums">1B</dt>
+              <dd>= 10 亿 Token</dd>
+              <dt className="font-medium tabular-nums">1T</dt>
+              <dd>= 1 万亿 Token</dd>
+            </>
+          )}
         </dl>
         <p className="mt-2 text-[11px] text-muted">
-          最多保留一位小数，例如 125 万显示为 1.3M。
+          {chinese
+            ? '最多保留四位有效数字，例如 1.872亿。'
+            : '最多保留一位小数，例如 125 万显示为 1.3M。'}
         </p>
       </Tooltip.Content>
     </Tooltip>

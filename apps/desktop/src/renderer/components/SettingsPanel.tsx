@@ -4,8 +4,11 @@ import {
   Button,
   Card,
   Checkbox,
+  Description,
   Label,
   ListBox,
+  Radio,
+  RadioGroup,
   Select,
   Tabs,
   Toast,
@@ -27,6 +30,7 @@ import {
 import { AboutContent } from '@/components/AboutContent';
 import { StatusBanner } from '@/components/StatusBanner';
 import { PetSettingsCard } from '@/components/PetSettingsCard';
+import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
 
 import {
@@ -376,6 +380,41 @@ function AppSettingsPanel() {
       )}
 
       {isWindows && <PetSettingsCard />}
+
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <RadioGroup
+            name="token-unit-mode"
+            value={getTokenUnitMode()}
+            variant="secondary"
+            onChange={(next) => {
+              if (next !== 'chinese' && next !== 'international') return;
+              if (next === getTokenUnitMode()) return;
+              setTokenUnitMode(next);
+              window.location.reload();
+            }}
+          >
+            <Label>Token 数字单位</Label>
+            <Description>应用于用量概览、图表和分享卡。</Description>
+            <Radio value="chinese">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                中文（1.872亿）
+              </Radio.Content>
+            </Radio>
+            <Radio value="international">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                国际缩写（187.2M）
+              </Radio.Content>
+            </Radio>
+          </RadioGroup>
+        </Card.Content>
+      </Card>
 
       <AutoUpdateSettings />
 

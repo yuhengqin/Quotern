@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
+  Description,
+  Label,
+  Radio,
+  RadioGroup,
   Surface,
   Tabs,
   Toast,
@@ -11,6 +15,7 @@ import {
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
 import { StatusBanner } from '@/components/StatusBanner';
+import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import {
   type SettingsTabId,
 } from '@/lib/shell-events';
@@ -102,42 +107,67 @@ function AppSettingsPanel() {
     };
   }, []);
 
-  if (loading) {
-    return <p className="text-muted">加载配置…</p>;
-  }
-
-  if (error) {
-    return <StatusBanner tone="error" title={error} />;
-  }
-
-  if (!config) {
-    return (
-      <p className="text-sm text-muted">
-        当前为 Web 模式，设备信息仅在本机 CLI / 桌面端可见。
-      </p>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
-        <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
-        <div className="flex flex-col gap-2 text-sm">
-          <InfoRow label="设备 ID" value={config.deviceId} />
-          <InfoRow
-            label="统计起点"
-            value={config.statsSince.slice(0, 19).replace('T', ' ')}
-          />
-          <InfoRow
-            label="上次同步"
-            value={
-              config.lastSyncAt
-                ? new Date(config.lastSyncAt).toLocaleString()
-                : '从未'
-            }
-          />
-        </div>
+        <RadioGroup
+          name="token-unit-mode"
+          value={getTokenUnitMode()}
+          variant="secondary"
+          onChange={(next) => {
+            if (next !== 'chinese' && next !== 'international') return;
+            if (next === getTokenUnitMode()) return;
+            setTokenUnitMode(next);
+            window.location.reload();
+          }}
+        >
+          <Label>Token 数字单位</Label>
+          <Description>应用于用量概览、图表和分享卡。</Description>
+          <Radio value="chinese">
+            <Radio.Content>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              中文（1.872亿）
+            </Radio.Content>
+          </Radio>
+          <Radio value="international">
+            <Radio.Content>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              国际缩写（187.2M）
+            </Radio.Content>
+          </Radio>
+        </RadioGroup>
       </Surface>
+      {loading ? <p className="text-muted">加载配置…</p> : null}
+      {error ? <StatusBanner tone="error" title={error} /> : null}
+      {!loading && !error && !config ? (
+        <p className="text-sm text-muted">
+          当前为 Web 模式，设备信息仅在本机 CLI / 桌面端可见。
+        </p>
+      ) : null}
+      {config ? (
+        <Surface className="rounded-xl p-4" variant="secondary">
+          <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
+          <div className="flex flex-col gap-2 text-sm">
+            <InfoRow label="设备 ID" value={config.deviceId} />
+            <InfoRow
+              label="统计起点"
+              value={config.statsSince.slice(0, 19).replace('T', ' ')}
+            />
+            <InfoRow
+              label="上次同步"
+              value={
+                config.lastSyncAt
+                  ? new Date(config.lastSyncAt).toLocaleString()
+                  : '从未'
+              }
+            />
+          </div>
+        </Surface>
+      ) : null}
     </div>
   );
 }

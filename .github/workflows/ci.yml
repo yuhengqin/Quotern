@@ -1,12 +1,20 @@
 name: ✅ CI
 
-# PR 与 main 的构建 / 测试门禁。
+# PR 与 main 的构建 / 测试门禁；纯文档改动跳过，手动运行始终保留。
 # 只跑 CONTRIBUTING.md 已经要求本地跑的那几条命令，不新增工具链。
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
   workflow_dispatch:
 
 # 同一分支上新推的 commit 取消上一次还在跑的 CI；main 上的不取消，保留完整历史。

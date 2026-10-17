@@ -85,6 +85,8 @@ PR 会自动带出模板，按模板填完即可。几个容易踩的点：
 
 PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Windows + Node 22 上跑同一套命令：`pnpm build` → 桌面端 `typecheck` → 四个包的测试。CI 红了先看是哪个包哪一步挂的，本地用上面对应的 `--filter` 命令复现。
 
+仅修改 Markdown（`**/*.md`）、`docs/` 目录或根 `LICENSE` 的 push / PR 会跳过这套 CI；只要同时包含其他文件的改动，仍运行三平台验证。Actions 页面的手动运行不受文档过滤影响。
+
 数据口径、运行恢复及验证边界见[开发协作注意事项](./docs/development-notes.md)及其关联文档。
 
 ## 按端启动

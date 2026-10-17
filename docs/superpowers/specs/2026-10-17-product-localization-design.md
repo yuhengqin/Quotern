@@ -6,7 +6,7 @@ Quotern's browser dashboard, Desktop renderer and native surfaces, pet, and CLI 
 
 ## Language contract
 
-- Canonical locales: `zh-CN`, `en`, `ja`, `ko`. The default and translation fallback is `zh-CN`.
+- Canonical locales: `zh-CN`, `en`, `ja`, `ko`. Unsupported system languages and unrecognized locale values fall back to `en`; missing translation keys fall back to `zh-CN`.
 - Locale preference is `system` or one canonical locale. Browser and Desktop persist their own preference. Desktop main owns its preference and broadcasts changes to every window, the tray, notifications, and the pet. CLI uses an explicit language option when supplied, then its runtime environment.
 - Translation resources ship with the app for offline use. Product copy uses i18next and React copy uses react-i18next. Dates, numbers, currency display, and relative time use the current locale through `Intl` or date-fns locale data. Calendar controls receive the same locale through React Aria's `I18nProvider`.
 - Translation keys are stable identifiers. Variables and plurals are formatted as whole messages; translated strings are never used for control flow.

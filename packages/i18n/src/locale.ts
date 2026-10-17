@@ -23,7 +23,7 @@ function matchSupportedLocale(input: unknown): SupportedLocale | undefined {
 }
 
 export function normalizeLocale(input: unknown): SupportedLocale {
-  return matchSupportedLocale(input) ?? 'zh-CN';
+  return matchSupportedLocale(input) ?? 'en';
 }
 
 export function isLocalePreference(input: unknown): input is LocalePreference {
@@ -36,5 +36,5 @@ export function resolveLocale(preference: LocalePreference, systemLanguages: rea
     const match = matchSupportedLocale(language);
     if (match) return match;
   }
-  return 'zh-CN';
+  return 'en';
 }

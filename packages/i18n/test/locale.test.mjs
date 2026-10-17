@@ -8,8 +8,8 @@ test('normalizes supported system locale variants and falls back on unknown inpu
   assert.equal(normalizeLocale('ja_JP'), 'ja');
   assert.equal(normalizeLocale('ko-KR'), 'ko');
   assert.equal(normalizeLocale('zh-Hans-CN'), 'zh-CN');
-  assert.equal(normalizeLocale('fr-FR'), 'zh-CN');
-  assert.equal(normalizeLocale(null), 'zh-CN');
+  assert.equal(normalizeLocale('fr-FR'), 'en');
+  assert.equal(normalizeLocale(null), 'en');
 });
 
 test('accepts only persisted locale preference values', () => {
@@ -23,7 +23,8 @@ test('accepts only persisted locale preference values', () => {
 test('system resolution skips unsupported languages and respects explicit preference', () => {
   assert.equal(resolveLocale('system', ['fr-FR', 'ja-JP', 'en-US']), 'ja');
   assert.equal(resolveLocale('system', ['de-DE', 'ko-KR']), 'ko');
-  assert.equal(resolveLocale('system', ['fr-FR']), 'zh-CN');
+  assert.equal(resolveLocale('system', ['fr-FR']), 'en');
+  assert.equal(resolveLocale('system', []), 'en');
   assert.equal(resolveLocale('en', ['ja-JP']), 'en');
 });
 

@@ -32,7 +32,7 @@ async function listen(server, t) {
   return server.address().port;
 }
 
-async function fixture(t, pricing = initialPricing, upstreamCatalog = catalog) {
+async function fixture(t, pricing = initialPricing, upstreamCatalog = catalog, models = {}) {
   const root = await mkdtemp(join(scriptsDir, '.sync-pricing-test-'));
   t.after(async () => {
     assert.equal(dirname(root), scriptsDir);
@@ -48,7 +48,7 @@ async function fixture(t, pricing = initialPricing, upstreamCatalog = catalog) {
   await writeFile(pricingPath, JSON.stringify(pricing));
   const port = await listen(createServer((_req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(upstreamCatalog));
+    res.end(JSON.stringify({ providers: upstreamCatalog, models }));
   }), t);
 
   return {
@@ -149,4 +149,66 @@ test('--if-changed includes model metadata updates even when rates stay unchange
   const result = await current.run(`http://127.0.0.1:${current.port}/api.json`, {}, ['--if-changed']);
   assert.equal(result.model_metadata['openai/gpt-fixture'].release_date, '2026-10-12');
   assert.deepEqual(result.exact, initialPricing.exact);
+});
+
+test('imports official Coding Plans as subscription metadata without zero API rates', async t => {
+  const model = {
+    id: 'kimi-for-coding', name: 'kimi-for-coding',
+    canonical_model_id: 'moonshotai/kimi-k2.8-preview',
+    modalities: { input: ['text', 'image'], output: ['text'] },
+    limit: { context: 1_048_576 }, cost: { input: 0, output: 0 },
+  };
+  const current = await fixture(t, initialPricing, {
+    ...catalog,
+    'kimi-code-plan-cn': { models: { 'kimi-for-coding': model } },
+    'kimi-code-plan-global': { models: { 'kimi-for-coding': model } },
+    'untrusted-coding-plan': { models: { 'kimi-for-coding': model } },
+  }, {
+    'moonshotai/kimi-k2.8-preview': { name: 'Kimi K2.8 Preview', release_date: '2026-09-11' },
+  });
+  const url = `http://127.0.0.1:${current.port}/catalog.json`;
+  const result = await current.run(url, {}, ['--if-changed']);
+  assert.deepEqual(result.exact, initialPricing.exact);
+  assert.deepEqual(Object.keys(result.subscription_models).sort(), [
+    'kimi-code-plan-cn/kimi-for-coding', 'kimi-code-plan-global/kimi-for-coding',
+  ]);
+  assert.deepEqual(result.subscription_models['kimi-code-plan-cn/kimi-for-coding'], {
+    display_name: 'Kimi K2.8 Preview', canonical_model_id: 'moonshotai/kimi-k2.8-preview',
+    release_date: '2026-09-11', release_date_source: 'models.dev',
+    context_window: 1_048_576, context_window_source: 'models.dev',
+  });
+  const before = await current.readRaw();
+  await current.run(url, {}, ['--if-changed']);
+  assert.equal(await current.readRaw(), before);
+});
+
+test('refreshes subscription identity even when API rates do not change', async t => {
+  const current = await fixture(t, {
+    ...initialPricing,
+    subscription_models: { 'kimi-code-plan-cn/kimi-for-coding': { display_name: 'Previous model' } },
+  }, {
+    ...catalog,
+    'kimi-code-plan-cn': { models: { 'kimi-for-coding': {
+      id: 'kimi-for-coding', canonical_model_id: 'moonshotai/kimi-k2.8-preview',
+      modalities: { input: ['text'], output: ['text'] },
+    } } },
+  });
+  const result = await current.run(`http://127.0.0.1:${current.port}/catalog.json`, {}, ['--if-changed']);
+  assert.equal(result.subscription_models['kimi-code-plan-cn/kimi-for-coding'].canonical_model_id, 'moonshotai/kimi-k2.8-preview');
+  assert.deepEqual(result.exact, initialPricing.exact);
+});
+
+test('classifies verified subscriptions independently of missing or nonzero upstream costs', async t => {
+  const text = { modalities: { input: ['text'], output: ['text'] } };
+  const current = await fixture(t, initialPricing, {
+    ...catalog,
+    'zhipuai-coding-plan': { models: { 'glm-4.6v': { ...text, name: 'GLM-4.6V', cost: { input: 0.3, output: 0.9 } } } },
+    'stepfun-step-plan': { models: { 'step-5-preview': { ...text, name: 'Step 5 Preview' } } },
+    'xiaomi-token-plan-sgp': { models: { 'mimo-v2.6-pro': { ...text, name: 'MiMo-V2.6-Pro', cost: { input: 0, output: 0 } } } },
+  });
+  const result = await current.run(`http://127.0.0.1:${current.port}/catalog.json`);
+  assert.deepEqual(result.exact, initialPricing.exact);
+  assert.deepEqual(Object.keys(result.subscription_models).sort(), [
+    'stepfun-step-plan/step-5-preview', 'xiaomi-token-plan-sgp/mimo-v2.6-pro', 'zhipuai-coding-plan/glm-4.6v',
+  ]);
 });

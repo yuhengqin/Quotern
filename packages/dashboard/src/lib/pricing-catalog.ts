@@ -77,11 +77,15 @@ export function addPricingUsage(
   usage: ModelBreakdownRow[],
   matching?: Pick<PricingData, 'alias' | 'sourceAlias'>,
 ): PricingCatalogRow[] {
-  const data: PricingData = { ...matching, exact: Object.fromEntries(rows.map(row => [row.model, {}])) };
+  // Adding plan routes must not make previously unique API model IDs ambiguous.
+  // A subscription's usage needs its explicit channel ID; never copy API usage
+  // into every plan that happens to serve the same canonical model.
+  const data: PricingData = { ...matching, exact: Object.fromEntries(rows.filter(row => row.billingMode !== 'subscription').map(row => [row.model, {}])) };
+  const subscriptionIds = new Map(rows.filter(row => row.billingMode === 'subscription').map(row => [row.model.toLowerCase(), row.model]));
   const totals = new Map<string, number>();
   for (const row of usage) {
     if (!Number.isFinite(row.tokens) || row.tokens <= 0) continue;
-    const id = resolvePricingModelId(row.model, data, row.source);
+    const id = subscriptionIds.get(row.model.trim().toLowerCase()) ?? resolvePricingModelId(row.model, data, row.source);
     if (id) totals.set(id, (totals.get(id) ?? 0) + row.tokens);
   }
   return rows.map(row => ({ ...row, usageTokens: totals.get(row.model) ?? 0 }));
@@ -96,7 +100,8 @@ function compareLatest(a: PricingCatalogRow, b: PricingCatalogRow): number {
 }
 
 /** The price source may include a provider namespace such as `azure/gpt-5.4`. */
-export function getPricingModelName(model: string): string {
+export function getPricingModelName(model: string, displayName?: string): string {
+  if (displayName?.trim()) return displayName.trim();
   const segments = model.split('/').filter(Boolean);
   return segments[segments.length - 1] ?? model;
 }
@@ -108,7 +113,8 @@ export function filterAndSortPricingCatalog(
 ): PricingCatalogRow[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filtered = normalizedQuery
-    ? rows.filter((row) => row.model.toLocaleLowerCase().includes(normalizedQuery))
+    ? rows.filter((row) => [row.model, row.displayName, row.canonicalModelId]
+      .some(value => value?.toLocaleLowerCase().includes(normalizedQuery)))
     : rows;
 
   return [...filtered].sort((a, b) => {
@@ -116,7 +122,7 @@ export function filterAndSortPricingCatalog(
     if (sort.column === 'usage') return (b.usageTokens ?? 0) - (a.usageTokens ?? 0) || compareLatest(a, b);
 
     if (sort.column === 'model') {
-      const comparison = getPricingModelName(a.model).localeCompare(getPricingModelName(b.model));
+      const comparison = getPricingModelName(a.model, a.displayName).localeCompare(getPricingModelName(b.model, b.displayName));
       if (comparison !== 0) return sort.direction === 'descending' ? -comparison : comparison;
     } else if (sort.column === 'releaseDate') {
       const left = isModelReleaseDate(a.releaseDate) ? a.releaseDate : null;
@@ -134,10 +140,13 @@ export function filterAndSortPricingCatalog(
           ? [[a.cacheRead, b.cacheRead], [a.cacheWrite, b.cacheWrite]]
           : [[a[sort.column] ?? null, b[sort.column] ?? null]];
       for (const [left, right] of comparisons) {
-        if (left == null && right != null) return 1;
-        if (right == null && left != null) return -1;
-        if (left == null || right == null || left === right) continue;
-        const comparison = left - right;
+        const priceColumn = ['inputOutput', 'cache', 'input', 'output', 'cacheRead', 'cacheWrite'].includes(sort.column);
+        const aValue = priceColumn && a.billingMode === 'subscription' ? null : left;
+        const bValue = priceColumn && b.billingMode === 'subscription' ? null : right;
+        if (aValue == null && bValue != null) return 1;
+        if (bValue == null && aValue != null) return -1;
+        if (aValue == null || bValue == null || aValue === bValue) continue;
+        const comparison = aValue - bValue;
         return sort.direction === 'descending' ? -comparison : comparison;
       }
     }
@@ -169,6 +178,14 @@ const PRICING_PROVIDERS: Record<string, Omit<ModelProvider, 'key'>> = {
 
 const PRICING_PROVIDER_ALIASES: Record<string, string> = {
   'alibaba-cn': 'alibaba', 'minimax-cn': 'minimax',
+  'kimi-code-plan-cn': 'moonshot', 'kimi-code-plan-global': 'moonshot',
+  'zai-coding-plan': 'zhipu', 'zhipuai-coding-plan': 'zhipu',
+  'minimax-coding-plan': 'minimax', 'minimax-cn-coding-plan': 'minimax',
+  'alibaba-coding-plan': 'alibaba', 'alibaba-coding-plan-cn': 'alibaba',
+  'alibaba-token-plan': 'alibaba', 'alibaba-token-plan-cn': 'alibaba',
+  'volcengine-coding-plan': 'bytedance', 'tencent-coding-plan': 'tencent', 'tencent-token-plan': 'tencent',
+  'stepfun-ai-step-plan': 'stepfun', 'stepfun-step-plan': 'stepfun',
+  'xiaomi-token-plan-cn': 'xiaomi', 'xiaomi-token-plan-sgp': 'xiaomi', 'xiaomi-token-plan-ams': 'xiaomi',
   moonshotai: 'moonshot', 'moonshotai-cn': 'moonshot',
   zai: 'zhipu', zhipuai: 'zhipu', volcengine: 'bytedance',
   claude: 'anthropic', codex: 'openai', kimi: 'moonshot', qwen: 'alibaba',
@@ -186,6 +203,17 @@ export function getPricingProvider(model: string): ModelProvider {
 
 export function getPricingChannel(model: string): string | null {
   const namespace = model.split('/')[0].toLowerCase();
+  const subscriptionRegions: Record<string, string> = {
+    'kimi-code-plan-cn': '中国', 'kimi-code-plan-global': '国际',
+    'zai-coding-plan': '国际', 'zhipuai-coding-plan': '中国',
+    'minimax-coding-plan': '国际', 'minimax-cn-coding-plan': '中国',
+    'alibaba-coding-plan': '国际', 'alibaba-coding-plan-cn': '中国',
+    'alibaba-token-plan': '国际', 'alibaba-token-plan-cn': '中国',
+    'volcengine-coding-plan': '中国', 'tencent-coding-plan': '中国', 'tencent-token-plan': '中国',
+    'stepfun-ai-step-plan': '国际', 'stepfun-step-plan': '中国',
+    'xiaomi-token-plan-cn': '中国', 'xiaomi-token-plan-sgp': '新加坡', 'xiaomi-token-plan-ams': '欧洲',
+  };
+  if (subscriptionRegions[namespace]) return subscriptionRegions[namespace];
   if (namespace.endsWith('-cn') || namespace === 'zhipuai') return '中国';
   if (['alibaba', 'minimax', 'moonshotai', 'zai'].includes(namespace)) return '国际';
   return null;
@@ -193,6 +221,11 @@ export function getPricingChannel(model: string): string | null {
 
 export function formatPricingRate(value: number | null, currency: PricingCurrency = 'USD', exchangeRate: number | null = null): string {
   return formatConvertedPricingRate(value, currency, exchangeRate);
+}
+
+export function formatCatalogPricingRate(row: PricingCatalogRow, key: 'input' | 'output' | 'cacheRead' | 'cacheWrite', currency: PricingCurrency = 'USD', exchangeRate: number | null = null): string {
+  if (row.billingMode === 'subscription') return key === 'input' ? '订阅制' : '—';
+  return formatPricingRate(row[key], currency, exchangeRate);
 }
 
 export function getPageCount(totalItems: number, pageSize = PRICING_PAGE_SIZE): number {

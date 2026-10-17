@@ -13,7 +13,7 @@ import { filterPricingCatalog, formatContextWindow } from '../lib/pricing-filter
 import type { PricingCurrency } from '../lib/pricing-currency';
 import {
   addPricingUsage, filterAndSortPricingCatalog, filterDirectPricingCatalog,
-  formatPricingRate, getPricingChannel, getPricingModelName, getPricingProvider,
+  formatCatalogPricingRate, getPricingChannel, getPricingModelName, getPricingProvider,
   DEFAULT_PRICING_SORT,
   type PricingSortDescriptor, type PricingSortKey,
 } from '../lib/pricing-catalog';
@@ -47,8 +47,9 @@ function ModelIdentity({ row, sort, hasUsage, compact = false }: {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate font-mono text-sm font-medium" title={row.model}>{getPricingModelName(row.model)}</span>
+          <span className="truncate font-mono text-sm font-medium" title={row.canonicalModelId ?? row.model}>{getPricingModelName(row.model, row.displayName)}</span>
           {channel && <span className="shrink-0 rounded bg-surface-secondary px-1 py-0.5 text-[10px] text-muted">{channel}</span>}
+          {row.billingMode === 'subscription' && <span className="shrink-0 rounded bg-accent-soft px-1 py-0.5 text-[10px] text-accent-soft-foreground">订阅</span>}
           {row.featured && sort.column === 'latest' && <span className="shrink-0 rounded bg-accent-soft px-1 py-0.5 text-[10px] text-accent-soft-foreground">主推</span>}
         </div>
         <div className="mt-0.5 flex min-w-0 items-baseline gap-x-2 text-[11px] text-muted">
@@ -63,12 +64,15 @@ function ModelIdentity({ row, sort, hasUsage, compact = false }: {
 }
 
 function PricePair({ row, cache = false, currency, exchangeRate }: { row: PricingCatalogRow; cache?: boolean } & PriceDisplay) {
+  if (row.billingMode === 'subscription') return <div className="text-xs text-muted">
+    {cache ? '—' : <><span className="font-medium text-foreground">订阅制</span><span className="mt-1 block text-[11px]">按套餐额度使用</span></>}
+  </div>;
   return (
     <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-1.5 gap-y-1.5 text-xs tabular-nums sm:text-sm">
       <span className="whitespace-nowrap text-xs text-muted">{cache ? '缓存读' : '输入'}</span>
-      <span className="min-w-0 break-all text-left font-mono">{formatPricingRate(cache ? row.cacheRead : row.input, currency, exchangeRate)}</span>
+      <span className="min-w-0 break-all text-left font-mono">{formatCatalogPricingRate(row, cache ? 'cacheRead' : 'input', currency, exchangeRate)}</span>
       <span className="whitespace-nowrap text-xs text-muted">{cache ? '缓存写' : '输出'}</span>
-      <span className="min-w-0 break-all text-left font-mono">{formatPricingRate(cache ? row.cacheWrite : row.output, currency, exchangeRate)}</span>
+      <span className="min-w-0 break-all text-left font-mono">{formatCatalogPricingRate(row, cache ? 'cacheWrite' : 'output', currency, exchangeRate)}</span>
     </div>
   );
 }
@@ -138,7 +142,7 @@ function PricingList({ rows, sort, hasUsage, onSortChange, currency, exchangeRat
                         : column.id === 'inputOutput' || column.id === 'cache' ? <PricePair row={row} cache={column.id === 'cache'} currency={currency} exchangeRate={exchangeRate} />
                           : column.id === 'contextWindow' ? <span className="text-xs tabular-nums text-muted" title={row.contextWindow ? `${row.contextWindow.toLocaleString()} Token` : '上下文未收录'}>{formatContextWindow(row.contextWindow)}</span>
                             : column.id === 'releaseDate' ? <span className="whitespace-nowrap text-xs tabular-nums text-muted">{row.releaseDate ?? '—'}</span>
-                              : <span className="whitespace-nowrap text-left font-mono text-[13px] tabular-nums">{formatPricingRate(row[column.id as 'input' | 'output' | 'cacheRead' | 'cacheWrite'], currency, exchangeRate)}</span>}
+                              : <span className="whitespace-nowrap text-left font-mono text-[13px] tabular-nums" title={row.billingMode === 'subscription' ? '按订阅套餐额度使用，不提供按 Token API 单价' : undefined}>{formatCatalogPricingRate(row, column.id as 'input' | 'output' | 'cacheRead' | 'cacheWrite', currency, exchangeRate)}</span>}
                     </Table.Cell>)}
                   </Table.Row>}
                 </Table.Body>
@@ -223,8 +227,8 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   return (
     <section className="flex h-[calc(100dvh-5rem)] min-h-0 min-w-0 flex-col gap-3">
       <header className="flex shrink-0 items-center justify-between gap-3">
-        <div><h1 className="text-xl font-semibold">模型价格</h1><p className="mt-1 text-xs text-muted">API 参考价 · {currency} / 百万 Token</p></div>
-        <Link to="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-muted hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-3.5" />返回用量</Link>
+        <div><h1 className="text-xl font-semibold">模型价格</h1><p className="mt-1 text-xs text-muted">API 参考价 · {currency} / 百万 Token · 官方订阅套餐</p></div>
+        <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-muted hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-3.5" />返回用量</Link>
       </header>
       <div aria-label="价格筛选条件" className="flex shrink-0 flex-wrap items-center gap-2">
         <SearchField aria-label="搜索模型名称或 ID" value={query} onChange={setQuery} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-72">
@@ -272,7 +276,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
       {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
         : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry(value => value + 1)}>重试</Button></div>
           : <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}`} rows={rows} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} />}
-      <p className="shrink-0 text-[11px] text-muted">所有价格均按百万 Token 计 · {currency === 'USD' ? '$0' : '¥0'} 表示零价，— 表示未提供定价{currency === 'CNY' ? '或汇率暂不可用 · 人民币为参考换算' : ''}</p>
+      <p className="shrink-0 text-[11px] text-muted">API 价格按百万 Token 计 · {currency === 'USD' ? '$0' : '¥0'} 表示 API 零价，— 表示未提供定价{currency === 'CNY' ? '或汇率暂不可用 · 人民币为参考换算' : ''} · 订阅制按套餐额度使用</p>
     </section>
   );
 }

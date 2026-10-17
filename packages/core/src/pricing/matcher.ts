@@ -6,6 +6,8 @@ export interface ModelPricingRates {
 }
 
 export interface PricingModelMetadata {
+  display_name?: string;
+  canonical_model_id?: string;
   release_date?: string;
   /** models.dev for synchronized dates; an announcement URL for manual corrections. */
   release_date_source?: string;
@@ -18,6 +20,8 @@ export interface PricingData {
   _meta?: Record<string, unknown>;
   exact: Record<string, ModelPricingRates>;
   model_metadata?: Record<string, PricingModelMetadata>;
+  /** Subscription catalog only: never used as per-token rates by the matcher. */
+  subscription_models?: Record<string, PricingModelMetadata>;
   alias?: Record<string, string>;
   fuzzy?: Array<{ match: string; ref: string }>;
   sourceAlias?: Record<string, Record<string, string>>;

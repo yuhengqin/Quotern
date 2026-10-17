@@ -97,3 +97,20 @@ test('retains the last valid context window when upstream context is missing or 
     'vendor/unsafe': { context_window: 32_768, context_window_source: 'models.dev' },
   });
 });
+
+test('imports canonical display names without changing the provider model identity', () => {
+  const result = mergePricingModelMetadata({}, { vendor: { models: {
+    'call-id': { name: 'Call ID', canonical_model_id: 'lab/standard-id' },
+    'other-id': { name: 'Official Display Name' },
+  } } }, { 'vendor/call-id': {}, 'vendor/other-id': {} }, {
+    'lab/standard-id': { name: 'Standard Model', release_date: '2026-09-11', limit: { context: 1_048_576 } },
+  });
+  assert.deepEqual(result, {
+    'vendor/call-id': {
+      display_name: 'Standard Model', canonical_model_id: 'lab/standard-id',
+      release_date: '2026-09-11', release_date_source: 'models.dev',
+      context_window: 1_048_576, context_window_source: 'models.dev',
+    },
+    'vendor/other-id': { display_name: 'Official Display Name' },
+  });
+});

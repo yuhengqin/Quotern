@@ -9,7 +9,7 @@ function validContextWindow(value) {
 }
 
 /** Upstream supplies dates; Quotern alone supplies its current flagship selection. */
-export function mergePricingModelMetadata(current, catalog, exact) {
+export function mergePricingModelMetadata(current, catalog, exact, canonicalModels = {}) {
   const result = {};
   for (const key of Object.keys(exact)) {
     const previous = current?.[key];
@@ -26,13 +26,20 @@ export function mergePricingModelMetadata(current, catalog, exact) {
     const [provider, ...segments] = key.split('/');
     const model = segments.join('/');
     const upstreamModel = catalog?.[provider]?.models?.[model];
-    const date = upstreamModel?.release_date;
+    const canonicalId = typeof upstreamModel?.canonical_model_id === 'string'
+      ? upstreamModel.canonical_model_id.trim() : '';
+    const canonical = canonicalModels[canonicalId];
+    const displayName = canonical?.name ?? upstreamModel?.name ?? previous?.display_name;
+    if (typeof displayName === 'string' && displayName.trim()) metadata.display_name = displayName.trim();
+    if (canonicalId) metadata.canonical_model_id = canonicalId;
+    else if (typeof previous?.canonical_model_id === 'string') metadata.canonical_model_id = previous.canonical_model_id;
+    const date = validReleaseDate(upstreamModel?.release_date) ? upstreamModel.release_date : canonical?.release_date;
     const manual = metadata.release_date && metadata.release_date_source !== 'models.dev';
     if (!manual && validReleaseDate(date)) {
       metadata.release_date = date;
       metadata.release_date_source = 'models.dev';
     }
-    const contextWindow = upstreamModel?.limit?.context;
+    const contextWindow = validContextWindow(upstreamModel?.limit?.context) ? upstreamModel.limit.context : canonical?.limit?.context;
     const manualContextWindow = metadata.context_window && metadata.context_window_source !== 'models.dev';
     if (!manualContextWindow && validContextWindow(contextWindow)) {
       metadata.context_window = contextWindow;

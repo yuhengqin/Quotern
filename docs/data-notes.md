@@ -115,6 +115,10 @@ Codex 的明确 chatgpt 认证标记，或 OpenAI 来源事件中已知的 rate_
 
 维护底表使用 `pnpm sync:pricing`，请求自动读取 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（也支持小写形式），不需要额外设置 `NODE_USE_ENV_PROXY`。`_meta.generated_at` 记录本次生成的实际 UTC 时间，页面按本地时区显示；它不是供应商调价时间，也不再固定为当天 UTC 零点。
 
+同步从 models.dev 的 `catalog.json` 同时读取 provider 调用 ID 和标准模型元数据。`model_metadata` 保存 `display_name` / `canonical_model_id`，价格页按调用 ID、展示名与标准模型 ID 搜索，保留不同渠道及 highspeed 等调用变体。经明确名单核实的厂商 Coding / Token / Step Plan 保存在独立的 `subscription_models` 目录，缺少 cost 仍可收录；上游的零值或非零占位费率均不进入 `exact`，不影响按 Token 的费用估算。名单不能仅凭 provider 名称包含 plan 或 cost 为零来扩大。两条历史人工补充的 `moonshotai/kimi-for-coding*` 费率仍供原有费用估算使用，公开目录由当前 Kimi Code 订阅渠道取代。
+
+Dashboard 与 Desktop 共享价格页及目录转换，订阅行显示“订阅制 / 按套餐额度使用”，不显示为免费 API，也不参与 API 单价排序。官方套餐由销售平台归类，套餐内的第三方模型不因此成为模型原厂 API；标准名关联只用于目录展示和搜索，不作为费用匹配 alias。
+
 [每日价格同步](../.github/workflows/sync-pricing.yml)计划于北京时间 09:23 运行，也支持手动触发。任务使用 `pnpm sync:pricing --if-changed`，仅当模型费率或元数据有实际变化时生成新表，由 `github-actions[bot]` 提交并推送默认分支；数据未变时保留原文件和生成时间。该任务需要 `contents: write` 权限，并遵守仓库的分支保护规则。
 
 费用卡的说明按当前日期和 Agent 筛选读取 `/functions/tud-usage-report`，展示来源报告金额、费率估算、默认价格占比、未计价 Token、匹配模型/方式和表来源。价格日期来自表内发布时间元数据，缺少时明确显示未知，不使用进程加载时间。已有费用数值算法保持不变；报表另提供 `costUsd=null` 和 `knownCostUsd` 区分不完整价格与已知小计。

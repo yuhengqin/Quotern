@@ -28,6 +28,7 @@
   "files": [
     "bin",
     "dist",
+    "skills",
     "package.json"
   ],
   "publishConfig": {

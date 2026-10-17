@@ -137,6 +137,8 @@ Commands:
   stop                  停止当前进程内的服务
   status                查看 CLI / 面板当前启动状态
   sync                  手动同步本地用量数据
+  usage [summary|daily|weekly|monthly|models|projects]
+                        查询已落盘的本地用量数据（只读，不触发同步）
   service <action>      后台服务与开机自启（macOS / Windows / Linux）
                         action: start | stop | status
   doctor                诊断系统环境与本地数据源
@@ -146,6 +148,15 @@ Options:
   --port <number>       面板端口（默认 ${DEFAULT_PORT}）
   --host <address>      面板监听地址（默认 ${DEFAULT_HOST}；局域网访问用 0.0.0.0）
   --source <name>       sync 数据源：${formatSyncSourceList()}
+  usage 选项：
+    --days <1..3660>     查询最近 N 天
+    --from <YYYY-MM-DD>  日期范围起始日期（须与 --to 同时使用）
+    --to <YYYY-MM-DD>    日期范围结束日期（须与 --from 同时使用）
+    --source <names>     按数据源筛选，支持逗号分隔与重复值去重
+    --model <name>       按模型筛选
+    --project <name>     按项目筛选
+    --data-dir <path>    指定本地用量数据目录
+    --format <text|json|csv> 选择输出格式；--json / --csv 为快捷方式
   -h, --help            显示帮助
 
 Examples:
@@ -153,6 +164,10 @@ Examples:
   quotern start --port 8452
   quotern start --host 0.0.0.0
   quotern status
+  quotern usage
+  quotern usage daily --days 30 --source claude,codex
+  quotern usage --from 2026-03-01 --to 2026-03-07 --format json
+  quotern usage models --csv --model claude-3-7-sonnet
   quotern sync --source=claude
   quotern service start`);
 }

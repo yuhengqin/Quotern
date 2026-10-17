@@ -439,6 +439,59 @@ export function computeRowCost(row: QueueBucket): number {
   );
 }
 
+export type CostKind = 'reported' | 'model_estimate' | 'default_estimate' | 'unpriced';
+
+export interface RowCostExplanation {
+  source: string;
+  model: string;
+  matchedModel: string | null;
+  matchMethod: string;
+  priceTable: 'overlay' | 'builtin' | null;
+  /** Table publication timestamp, never the time this process loaded the table. */
+  priceUpdatedAt: string | null;
+  costKind: CostKind;
+  /** Known amount only; null means none of the consumed token fields has a price. */
+  costUsd: number | null;
+  tokens: number;
+  unpricedTokens: number;
+}
+
+/** Explain the same calculation as computeRowCost without turning missing rates into free usage. */
+export function explainRowCost(row: QueueBucket): RowCostExplanation {
+  const tokens = computeTokens(row);
+  if (row.source === 'cursor' && Number.isFinite(row.reported_cost_usd) && (row.reported_cost_usd ?? 0) > 0) {
+    return {
+      source: row.source, model: row.model, matchedModel: null,
+      matchMethod: 'reported', priceTable: null, priceUpdatedAt: null,
+      costKind: 'reported', costUsd: row.reported_cost_usd!, tokens, unpricedTokens: 0,
+    };
+  }
+  const match = lookupPricingStacked(row.model, remoteOverlay, builtinPricing, row.source);
+  const table = match.table === 'overlay' ? remoteOverlay : builtinPricing;
+  const published = table?._meta?.generated_at ?? table?._meta?.updated_at;
+  const priceUpdatedAt = typeof published === 'string' && Number.isFinite(Date.parse(published))
+    ? published : null;
+  const fields: Array<[number, keyof ModelPricingRates]> = [
+    [row.input_tokens ?? 0, 'input'],
+    [row.output_tokens ?? 0, 'output'],
+    [row.cached_input_tokens ?? 0, 'cache_read'],
+    [row.cache_creation_input_tokens ?? 0, 'cache_write'],
+    [row.reasoning_output_tokens ?? 0, 'output'],
+  ];
+  const unpricedTokens = fields.reduce((sum, [count, field]) => {
+    const rate = match.value?.[field];
+    return sum + (count > 0 && !(typeof rate === 'number' && Number.isFinite(rate) && rate >= 0) ? count : 0);
+  }, 0);
+  const entirelyUnpriced = tokens > 0 && unpricedTokens >= tokens;
+  return {
+    source: row.source, model: row.model, matchedModel: match.matchedModel ?? null,
+    matchMethod: match.source, priceTable: match.table ?? null, priceUpdatedAt,
+    costKind: entirelyUnpriced || !match.value ? 'unpriced' : match.source === 'default' ? 'default_estimate' : 'model_estimate',
+    costUsd: entirelyUnpriced || !match.value ? null : computeRowCost(row),
+    tokens, unpricedTokens,
+  };
+}
+
 /**
  * Sum the five token fields instead of trusting `row.total_tokens`:
  * zcode buckets historically stored the provider total (input + output,

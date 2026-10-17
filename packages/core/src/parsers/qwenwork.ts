@@ -257,6 +257,7 @@ function flushTurn(
       ...body2,
       total_tokens: total,
       conversation_count: 1,
+      token_quality: 'estimated',
     };
     accumulateBucket(bucketState, 'qwenwork', turn.model, project, hourStart, totals, collector);
     state.events += 1;

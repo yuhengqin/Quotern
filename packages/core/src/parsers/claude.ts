@@ -97,6 +97,7 @@ export function normalizeClaudeUsage(u: ClaudeUsage): TokenTotals {
     ...body,
     total_tokens: computeTotalTokens(body),
     conversation_count: 1,
+    token_quality: 'recorded',
     local_metrics: localEvidence(1, true, validCache, validCache),
   };
 }
@@ -127,6 +128,7 @@ function diffClaudeUsage(
     ...body,
     total_tokens: total,
     conversation_count: 0,
+    token_quality: 'recorded',
     local_metrics: { ...next.local_metrics!, requestCount: 0 },
   };
 }

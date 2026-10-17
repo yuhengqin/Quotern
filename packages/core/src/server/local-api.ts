@@ -20,6 +20,7 @@ import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
 import { localDateNow } from '../timezone.js';
+import { buildUsageReport, type UsageReportPeriod } from '../usage-report.js';
 import {
   ensureLocalCollectRange,
   getHookStatus,
@@ -81,6 +82,30 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.get('/functions/tud-usage-summary', summaryHandler);
   app.get('/functions/tud-account-usage-summary', summaryHandler);
+
+  app.get('/functions/tud-usage-report', (c) => {
+    try {
+      const params = new URL(c.req.url).searchParams;
+      const allowed = new Set(['period', 'days', 'fromDate', 'toDate', 'sources', 'model', 'project']);
+      for (const key of params.keys()) {
+        if (!allowed.has(key) || params.getAll(key).length !== 1) throw new Error(`无效或重复的参数: ${key}`);
+      }
+      const days = params.get('days');
+      if (days !== null && !/^\d+$/.test(days)) throw new Error('days 必须是正整数');
+      const config = deps.getConfig();
+      return c.json(ok(buildUsageReport(deps.bucketStore.getRows(), {
+        period: (params.get('period') ?? undefined) as UsageReportPeriod | undefined,
+        days: days === null ? undefined : Number(days),
+        fromDate: params.get('fromDate') ?? undefined,
+        toDate: params.get('toDate') ?? undefined,
+        sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
+        model: params.get('model') ?? undefined,
+        project: params.get('project') ?? undefined,
+      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' })));
+    } catch (error) {
+      return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_USAGE_QUERY', data: null }, 400);
+    }
+  });
 
   app.get('/functions/tud-usage-sessions', async (c) => {
     const bounds = readDateBounds(c);

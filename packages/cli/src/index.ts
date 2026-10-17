@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Server } from 'node:http';
 
@@ -34,6 +34,8 @@ import {
   DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
   startPricingRefresh,
   runDoctorDiagnostics,
+  readUsageReport,
+  resolveDataDir,
   type AggregateCache,
   type SyncResult,
   type TudConfig,
@@ -52,6 +54,8 @@ import { writePid } from './daemon.js';
 import { printDoctorReport } from './doctor.js';
 import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js';
 import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
+import { parseUsageArgs } from './usage-args.js';
+import { formatUsageReport } from './usage-output.js';
 
 export { parseArgs } from './args.js';
 
@@ -501,9 +505,16 @@ async function cmdService(
 }
 
 async function main(): Promise<void> {
-  const { command, serviceAction, port, host, source, days } = parseArgs(process.argv);
-
   try {
+    // Query before the runtime argument path: no startup, ownership or sync.
+    if (process.argv[2] === 'usage') {
+      const parsed = parseUsageArgs(process.argv.slice(3));
+      if (parsed.help) { printHelp(); return; }
+      const report = await readUsageReport(parsed.dataDir ? resolve(parsed.dataDir) : resolveDataDir(), parsed.query);
+      console.log(formatUsageReport(report, parsed.format));
+      return;
+    }
+    const { command, serviceAction, port, host, source, days } = parseArgs(process.argv);
     const daysAgo = resolveDaysAgo(days);
     switch (command) {
       case 'help':

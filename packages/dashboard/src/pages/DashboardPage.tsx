@@ -20,6 +20,7 @@ import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useCostExplanation } from '@/hooks/useCostExplanation';
 import { useSessionMetrics } from '@/hooks/useSessionMetrics';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useShareSnapshot } from '@/hooks/ShareSnapshotContext';
@@ -85,6 +86,7 @@ export function DashboardPage() {
   const { data, error, loading, refreshing, reload, source } =
     useDashboardData(rangeDays, selectedDate, customRange);
   const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing);
+  const costExplanation = useCostExplanation(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing && range === dataRange && source === 'api', data);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
@@ -318,6 +320,9 @@ export function DashboardPage() {
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
             belowMetrics={<SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />}
+            costReport={costExplanation.report}
+            costExplanationLoading={costExplanation.loading}
+            costExplanationError={costExplanation.error}
             heatmapDays={visibleHeatmapDays}
             metricTrendPeriodLabel={metricTrendPeriodLabel}
             metricTrendRows={metricTrendRows}

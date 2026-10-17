@@ -1,6 +1,6 @@
 import type { DashboardDateRange } from './dashboard-date-range.js';
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
-import type { SessionMetrics } from 'quotern-core';
+import type { SessionMetrics, UsageReport } from 'quotern-core';
 import type { AchievementSnapshot, AchievementOperation, AchievementNotice } from 'quotern-core/achievements';
 
 export async function fetchSessionMetrics(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<SessionMetrics> {
@@ -9,6 +9,19 @@ export async function fetchSessionMetrics(days: number, range?: DashboardDateRan
   if (range) { query.set('fromDate', range.start); query.set('toDate', range.end); }
   if (sources.length) query.set('sources', sources.join(','));
   return request<SessionMetrics>(`${others}usage-sessions?${query}`, { headers: authHeaders() });
+}
+
+export async function fetchUsageReport(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<UsageReport> {
+  const { others } = apiPrefixes();
+  const query = new URLSearchParams({ period: 'summary' });
+  if (range) {
+    query.set('fromDate', range.start);
+    query.set('toDate', range.end);
+  } else {
+    query.set('days', String(days));
+  }
+  if (sources.length) query.set('sources', sources.join(','));
+  return request<UsageReport>(`${others}usage-report?${query.toString()}`, { headers: authHeaders() });
 }
 
 export async function fetchAchievements(): Promise<AchievementSnapshot> {

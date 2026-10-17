@@ -1,4 +1,5 @@
 import { localEvidence, mergeLocalEvidence } from '../local-metrics.js';
+import { mergeTokenQuality } from '../token-quality.js';
 import { resolveLocalCollectSince, setLastSyncAt } from '../config.js';
 import type { CursorsFile, QueueBucket, TudConfig } from '../types.js';
 import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } from '../paths.js';
@@ -103,6 +104,9 @@ function mergeBuckets(a: QueueBucket, b: QueueBucket): QueueBucket {
     conversation_count: a.conversation_count + b.conversation_count,
     ...(a.local_metrics || b.local_metrics
       ? { local_metrics: mergeLocalEvidence(a.local_metrics, b.local_metrics) }
+      : {}),
+    ...(a.token_quality || b.token_quality
+      ? { token_quality: mergeTokenQuality(a.token_quality, b.token_quality) }
       : {}),
     ...(a.reported_cost_usd != null || b.reported_cost_usd != null
       ? {

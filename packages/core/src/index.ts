@@ -8,6 +8,8 @@ export * from './signals.js';
 export * from './runtime-pid.js';
 export * from './runtime-supervisor.js';
 export * from './aggregate.js';
+export * from './usage-report.js';
+export * from './token-quality.js';
 export * from './aggregate-cache.js';
 export * from './timezone.js';
 export * from './daily-model-key.js';

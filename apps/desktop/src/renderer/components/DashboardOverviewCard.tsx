@@ -6,6 +6,7 @@ import { DashboardSessionCards } from '@/components/DashboardSessionCards';
 import type { SessionMetrics, UsageReport } from 'quotern-core';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { CostExplanationLabel } from '@/components/CostExplanationLabel';
+import { TokenSourceDetails } from '@/components/TokenSourceDetails';
 import {
   buildUsageMetricTrendValues,
   type UsageMetricTrendPoint,
@@ -159,6 +160,9 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
                   />
                 ) : metric.id === 'total-tokens' ? (
                   <TotalTokenLabel
+                    report={costReport}
+                    loading={costExplanationLoading}
+                    error={costExplanationError}
                     showRequestHelp={showLocalMetrics}
                     summary={summary}
                   />
@@ -251,11 +255,13 @@ function MetricHelpLabel({
   heading,
   label,
   panel,
+  details,
 }: {
   ariaLabel: string;
   heading: string;
   label: string;
   panel: ReactNode;
+  details?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -286,9 +292,10 @@ function MetricHelpLabel({
           className="rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
           placement="bottom"
         >
-          <Popover.Dialog className="p-3 outline-none">
+          <Popover.Dialog className="max-h-[calc(100dvh-3rem)] max-w-[calc(100vw-2rem)] overflow-y-auto p-3 outline-none">
             <Popover.Heading className="sr-only">{heading}</Popover.Heading>
             {panel}
+            {details}
           </Popover.Dialog>
         </Popover.Content>
       </Popover>
@@ -297,9 +304,15 @@ function MetricHelpLabel({
 }
 
 function TotalTokenLabel({
+  report,
+  loading,
+  error,
   showRequestHelp,
   summary,
 }: {
+  report: UsageReport | null;
+  loading: boolean;
+  error: boolean;
   showRequestHelp: boolean;
   summary: DashboardUsageSummary;
 }) {
@@ -308,6 +321,7 @@ function TotalTokenLabel({
       ariaLabel="总 Token 构成说明"
       heading="总 Token 构成"
       label="总 Token"
+      details={showRequestHelp ? <TokenSourceDetails report={report} loading={loading} error={error} /> : null}
       panel={
         <TokenBreakdownPanel
           showRequestHelp={showRequestHelp}

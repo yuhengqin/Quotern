@@ -18,7 +18,8 @@ const entry = imports.map(name => `export * from 'quotern-core/${name}';`).join(
   + "\nexport { default as pricing } from 'quotern-core/pricing-data';\n";
 
 async function fixture(t, desktop) {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-vite-core-'));
+  // Expand Windows 8.3 temp paths and macOS /var symlinks before Vite uses them.
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-vite-core-')));
   let server;
   t.after(async () => {
     await server?.close();
@@ -37,7 +38,9 @@ async function fixture(t, desktop) {
   const frontend = join(root, relative);
   const page = desktop ? join(frontend, 'src/renderer') : frontend;
   await mkdir(page, { recursive: true });
-  await writeFile(join(page, 'entry.ts'), entry);
+  // Include a root-relative module URL as well as Vite's /@fs/ Core URLs.
+  await writeFile(join(page, 'entry.ts'), "export * from './core-entries.ts';\n");
+  await writeFile(join(page, 'core-entries.ts'), entry);
   await cp(join(source, relative, 'package.json'), join(frontend, 'package.json'));
   const configName = desktop ? 'electron.vite.config.ts' : 'vite.config.ts';
   await cp(join(source, relative, configName), join(frontend, configName));
@@ -92,10 +95,13 @@ async function loadGraph(server) {
     assert.equal(response.status, 200, `${url}\n${code}`);
     assert.match(response.headers.get('content-type') ?? '', /javascript/, `${url}\n${code}`);
     for (const match of code.matchAll(/\b(?:from\s*|import\s*)["']([^"']+)["']/g)) {
-      if (match[1].startsWith('/@fs/') || match[1].startsWith('/@id/')) pending.push(match[1]);
+      const specifier = match[1];
+      if (specifier.startsWith('/') || specifier.startsWith('./') || specifier.startsWith('../')) {
+        pending.push(new URL(specifier, url).href);
+      }
     }
   }
-  assert.ok(seen.size >= imports.length + 2, `loads all public Core entries, pricing JSON and transitive imports: ${JSON.stringify([...seen])}`);
+  assert.ok(seen.size >= imports.length + 3, `loads all public Core entries, pricing JSON and transitive imports: ${JSON.stringify([...seen])}`);
   return seen;
 }
 

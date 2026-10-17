@@ -9,7 +9,7 @@ export function useCostExplanation(days: number, selectedDate: string | null, da
   const end = selectedDate ?? dateRange?.end;
   const sourceKey = [...sources].sort().join(',');
   const key = `${days}|${start ?? ''}|${end ?? ''}|${sourceKey}`;
-  const context = useMemo(() => ({ key }), [key, enabled, snapshot]);
+  const context = useMemo(() => ({ key }), [key]);
   const [state, setState] = useState<{ context: object | null; report: UsageReport | null; error: boolean }>({ context: null, report: null, error: false });
   useEffect(() => {
     if (!enabled || !isCliBackend()) return;
@@ -17,12 +17,12 @@ export function useCostExplanation(days: number, selectedDate: string | null, da
     const refresh = async () => {
       if (pending || cancelled || document.visibilityState === 'hidden') return;
       pending = true;
-      setState({ context, report: null, error: false });
+      setState((current) => ({ context, report: current.context === context ? current.report : null, error: false }));
       try {
         const report = await fetchUsageReport(days, start && end ? { start, end } : undefined, sourceKey ? sourceKey.split(',') : []);
         if (!cancelled) setState({ context, report, error: false });
       } catch {
-        if (!cancelled) setState({ context, report: null, error: true });
+        if (!cancelled) setState((current) => ({ context, report: current.context === context ? current.report : null, error: true }));
       } finally { pending = false; }
     };
     void refresh();
@@ -38,7 +38,7 @@ export function useCostExplanation(days: number, selectedDate: string | null, da
       window.removeEventListener('focus', onRefresh);
       document.removeEventListener('visibilitychange', onRefresh);
     };
-  }, [days, start, end, sourceKey, context, enabled]);
+  }, [days, start, end, sourceKey, context, enabled, snapshot]);
   const current = enabled && state.context === context;
   return { report: current ? state.report : null, error: current && state.error, loading: !current || (!state.report && !state.error) };
 }

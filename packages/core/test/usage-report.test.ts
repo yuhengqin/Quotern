@@ -60,6 +60,23 @@ test('report rejects ambiguous dates and invalid filters, and discloses truncate
   assert.equal(report.summary.tokens, 0);
 });
 
+test('report coverage distinguishes Shanghai midnight from a partial first day', () => {
+  const query = { fromDate: '2026-10-16', toDate: '2026-10-16' };
+  const cases: Array<[string, boolean]> = [
+    ['2026-10-15T15:59:59.999Z', false],
+    ['2026-10-15T16:00:00.000Z', false],
+    ['2026-10-16T00:00:00+08:00', false],
+    ['2026-10-15T16:00:00.001Z', true],
+    ['2026-10-15T16:00:01.000Z', true],
+    ['2026-10-15T16:30:00.000Z', true],
+    ['2026-10-15T17:00:00.000Z', true],
+  ];
+  for (const [collectSince, limited] of cases) {
+    const report = core.buildUsageReport([], query, { collectSince, now });
+    assert.equal(report.coverage.limited, limited, collectSince);
+  }
+});
+
 test('persisted reporting dedupes snapshots and never initializes or rewrites local runtime files', async () => {
   const { readUsageReport } = api();
   assert.equal(typeof readUsageReport, 'function');

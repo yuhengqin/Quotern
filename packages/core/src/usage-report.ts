@@ -215,7 +215,7 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
     filters: { sources: selectedSources, model, project },
     coverage: {
       collectSince: context.collectSince, fromDate: effectiveFrom, toDate,
-      limited: floorDate > fromDate || (floorDate === fromDate && localDateAndHour(context.collectSince).hour > 0),
+      limited: Date.parse(context.collectSince) > Date.parse(`${fromDate}T00:00:00+08:00`),
       snapshot: context.snapshot ?? 'runtime', lastSyncAt: context.lastSyncAt ?? null, readAt: now.toISOString(), invalidRows,
     }, summary, rows: reportRows,
   };

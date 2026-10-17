@@ -106,11 +106,11 @@ export function getPricingModelName(model: string, displayName?: string): string
   return segments[segments.length - 1] ?? model;
 }
 
-export function filterAndSortPricingCatalog(
-  rows: PricingCatalogRow[],
+export function filterAndSortPricingCatalog<T extends PricingCatalogRow>(
+  rows: T[],
   query: string,
   sort: PricingSortDescriptor,
-): PricingCatalogRow[] {
+): T[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filtered = normalizedQuery
     ? rows.filter((row) => [row.model, row.displayName, row.canonicalModelId]

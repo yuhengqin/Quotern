@@ -1,4 +1,4 @@
-import { Description, Label, Radio, RadioGroup } from '@heroui/react';
+import { Label, Radio, RadioGroup } from '@heroui/react';
 import { isLocalePreference, type LocalePreference } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 
@@ -26,7 +26,6 @@ export function LanguagePreferenceControl({
       }}
     >
       <Label>{t('settings.language.label')}</Label>
-      <Description>{t('settings.language.description')}</Description>
       {OPTIONS.map((option) => (
         <Radio key={option} value={option}>
           <Radio.Content>

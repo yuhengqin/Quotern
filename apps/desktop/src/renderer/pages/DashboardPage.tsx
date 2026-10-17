@@ -26,6 +26,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { projectDashboardForDate } from '@/lib/dashboard-data';
 import { scheduleAfterPaint } from '@/lib/schedule-after-paint';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { getDashboardReturnState, rememberDashboardScroll, useDashboardReturnState } from '../../../../../packages/dashboard/src/lib/dashboard-return-state';
 import { localDateNow } from '@/lib/stats-timezone';
 import { dateRangeDays, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { sourceLabel } from '@/lib/tokens';
@@ -74,12 +75,12 @@ export function DashboardPage() {
   useEffect(() => {
     void window.tud.setDashboardRange(range);
   }, [range]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => getDashboardReturnState()?.selectedDate ?? null);
   const [customRange, setCustomRange] = useLocalStorage<DashboardDateRange | null>(
     'tud.dashboardCustomRange', null,
     (value): value is DashboardDateRange | null => value === null || isDashboardDateRange(value),
   );
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [selectedTools, setSelectedTools] = useState<string[]>(() => getDashboardReturnState()?.selectedTools ?? []);
 
   useEffect(
     () =>
@@ -95,6 +96,7 @@ export function DashboardPage() {
   const rangeDays = customRange ? dateRangeDays(customRange) : DASHBOARD_RANGE_DAYS[dataRange];
   const { data, error, loading, refreshing, reload } =
     useDashboardData(rangeDays, selectedDate, customRange);
+  useDashboardReturnState(selectedDate, selectedTools, loading);
   const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing);
   const costExplanation = useCostExplanation(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing && range === dataRange, data);
   const view = useMemo(
@@ -111,12 +113,13 @@ export function DashboardPage() {
     : '全部 Agent';
 
   useEffect(() => {
+    if (loading) return;
     const available = new Set(view.toolModelUsage.map((row) => row.source));
     setSelectedTools((current) => {
       const next = current.filter((source) => available.has(source));
       return next.length === current.length ? current : next;
     });
-  }, [view.toolModelUsage]);
+  }, [loading, view.toolModelUsage]);
 
   useEffect(() => {
     let timer = 0;
@@ -293,6 +296,10 @@ export function DashboardPage() {
     <div
       aria-busy={loading || refreshing}
       className="dashboard-page flex w-full flex-col"
+      onClickCapture={(event) => {
+        const href = (event.target as Element).closest('a[href]')?.getAttribute('href');
+        if (href && /\/(pricing|achievements)(?:[?#]|$)/.test(href)) rememberDashboardScroll(selectedDate, selectedTools);
+      }}
     >
       <DashboardFilter
         customRange={customRange}

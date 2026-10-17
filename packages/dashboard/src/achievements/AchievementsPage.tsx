@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
 import { Button, Label, Spinner, Switch } from '@heroui/react';
-import { ArrowLeft, ArrowUpRight, Award, Check, Flame, Plus, RefreshCw, Share2, Sparkles, Trophy, X } from 'lucide-react';
+import { ArrowUpRight, Award, Check, Flame, Plus, RefreshCw, Share2, Sparkles, Trophy, X } from 'lucide-react';
+import { BackToUsageLink } from '../components/BackToUsageLink';
 import { ACHIEVEMENT_FAMILIES, ACHIEVEMENT_CATEGORY_LABELS, type AchievementCategory, type AchievementFamily } from 'quotern-core/achievements';
 import { sourceLabel } from '@/lib/tokens';
 import { useAchievements } from './AchievementProvider';
@@ -30,7 +30,7 @@ export function AchievementsPage() {
   return <div className="achievement-page min-w-0 pb-6">
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <Link to="/dashboard" className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground"><ArrowLeft size={14} aria-hidden="true"/>返回用量</Link>
+        <BackToUsageLink />
         <div className="flex items-center gap-2"><Award className="text-accent" size={25} aria-hidden="true"/><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">成就</h1></div>
         <p className="mt-2 text-sm text-muted">把每一次同行，留成值得收藏的记录。</p>
       </div>

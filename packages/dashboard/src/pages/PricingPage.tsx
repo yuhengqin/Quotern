@@ -1,9 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useSearch } from '@tanstack/react-router';
-import { ArrowLeft, Xmark } from '@gravity-ui/icons';
+import { useSearch } from '@tanstack/react-router';
+import { Xmark } from '@gravity-ui/icons';
 import { Check, Columns2, Info } from 'lucide-react';
 import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
 import { PricingList } from '../components/PricingList';
+import { BackToUsageLink } from '../components/BackToUsageLink';
 import { PricingCalculator, PricingProviderFilter, PricingSortSelect, formatPricingScenario } from '../components/PricingTools';
 import { PricingComparison } from '../components/PricingComparison';
 import { PricingMoreFilters, EMPTY_PRICING_FILTERS, type PricingAdvancedFilters } from '../components/PricingMoreFilters';
@@ -118,9 +119,9 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   return (
     <section className="flex h-[calc(100dvh-5rem)] min-h-0 min-w-0 flex-col gap-3">
       <Toast.Provider placement="top" queue={toastQueue} width={240} className="top-12 !w-60 !min-w-0 max-w-[calc(100vw-2rem)]" />
-      <header className="flex shrink-0 items-center justify-between gap-3">
+      <header className="shrink-0">
+        <BackToUsageLink />
         <div className="min-w-0"><h1 className="text-xl font-semibold">模型价格</h1><p className="mt-1 text-xs text-muted">API 参考价 · {currency} / 百万 Token</p></div>
-        <Link to="/dashboard" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-muted hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft className="size-3.5" />返回用量</Link>
       </header>
       <div aria-label="价格筛选条件" className="flex shrink-0 flex-wrap items-center gap-2">
         <SearchField aria-label="搜索模型名称或 ID" value={query} onChange={setQuery} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-72">

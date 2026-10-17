@@ -195,6 +195,11 @@
     font-family: var(--font-sans);
   }
 
+  html:has(.dashboard-page),
+  body:has(.dashboard-page) {
+    overflow-anchor: none;
+  }
+
   /* Desktop window: keep page scroll, hide the right-edge scrollbar. */
   html,
   body,

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { i18n, normalizeLocale } from 'quotern-i18n';
 
 const TOKEN_COUNT_UNITS = [
   { value: 1_000_000_000_000, suffix: 'T' },
@@ -18,13 +19,20 @@ const TOKEN_UNIT_STORAGE_KEY = 'quotern-token-unit-mode';
 
 export type TokenUnitMode = 'chinese' | 'international';
 
+function displayLocale() {
+  return normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
+}
+
+function defaultTokenUnitMode(): TokenUnitMode {
+  return displayLocale() === 'zh-CN' ? 'chinese' : 'international';
+}
+
 export function getTokenUnitMode(): TokenUnitMode {
   try {
-    return localStorage.getItem(TOKEN_UNIT_STORAGE_KEY) === 'international'
-      ? 'international'
-      : 'chinese';
+    const saved = localStorage.getItem(TOKEN_UNIT_STORAGE_KEY);
+    return saved === 'chinese' || saved === 'international' ? saved : defaultTokenUnitMode();
   } catch {
-    return 'chinese';
+    return defaultTokenUnitMode();
   }
 }
 
@@ -55,7 +63,8 @@ export function formatCompactTokenCount(
 ): string {
   if (!Number.isFinite(value)) return '0';
 
-  if (mode === 'chinese') return formatChineseTokenCount(value);
+  const locale = displayLocale();
+  if (mode === 'chinese') return formatChineseTokenCount(value, locale);
 
   const absoluteValue = Math.abs(value);
   const unitIndex = TOKEN_COUNT_UNITS.findIndex(
@@ -63,7 +72,7 @@ export function formatCompactTokenCount(
   );
 
   if (unitIndex === -1) {
-    return Math.round(value).toLocaleString('en-US');
+    return Math.round(value).toLocaleString(locale);
   }
 
   let selectedIndex = unitIndex;
@@ -79,17 +88,17 @@ export function formatCompactTokenCount(
     scaledValue = roundCompactValue(value / unit.value);
   }
 
-  return `${scaledValue.toLocaleString('en-US', {
+  return `${scaledValue.toLocaleString(locale, {
     maximumFractionDigits: 1,
   })}${unit.suffix}`;
 }
 
-function formatChineseTokenCount(value: number): string {
+function formatChineseTokenCount(value: number, locale: string): string {
   const absoluteValue = Math.abs(value);
   const unitIndex = CHINESE_TOKEN_COUNT_UNITS.findIndex(
     (unit) => absoluteValue >= unit.value,
   );
-  if (unitIndex === -1) return Math.round(value).toLocaleString('zh-CN');
+  if (unitIndex === -1) return Math.round(value).toLocaleString(locale);
 
   let selectedIndex = unitIndex;
   let unit = CHINESE_TOKEN_COUNT_UNITS[selectedIndex];
@@ -100,7 +109,7 @@ function formatChineseTokenCount(value: number): string {
     scaledValue = Number((value / unit.value).toPrecision(4));
   }
 
-  return `${scaledValue.toLocaleString('zh-CN', {
+  return `${scaledValue.toLocaleString(locale, {
     maximumSignificantDigits: 4,
   })}${unit.suffix}`;
 }

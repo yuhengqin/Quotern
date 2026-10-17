@@ -14,15 +14,18 @@ import {
   type TudConfigView,
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
+import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
 import { StatusBanner } from '@/components/StatusBanner';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
+import { useLocalePreference } from '@/hooks/useLocalePreference';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   type SettingsTabId,
 } from '@/lib/shell-events';
 
-const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
-  { id: 'app', label: '应用' },
-  { id: 'about', label: '关于' },
+const TAB_ITEMS: { id: SettingsTabId; labelKey: string }[] = [
+  { id: 'app', labelKey: 'settings.tabs.app' },
+  { id: 'about', labelKey: 'settings.tabs.about' },
 ];
 
 /** See desktop SettingsPanel: panel height must fit under dialog chrome. */
@@ -39,6 +42,7 @@ export function SettingsPanel({
   const [toastQueue] = useState(
     () => new ToastQueue({ maxVisibleToasts: 1 }),
   );
+  const { t } = useTranslation();
   const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>('app');
   const tab = activeTab ?? uncontrolledTab;
   const setTab = onTabChange ?? setUncontrolledTab;
@@ -55,14 +59,14 @@ export function SettingsPanel({
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List aria-label="设置分类" className="w-fit">
+          <Tabs.List aria-label={t('settings.tabs.category')} className="w-fit">
             {TAB_ITEMS.map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
                 key={item.id}
               >
-                {item.label}
+                {t(item.labelKey)}
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
@@ -81,6 +85,8 @@ export function SettingsPanel({
 }
 
 function AppSettingsPanel() {
+  const { t } = useTranslation();
+  const { preference, locale, setPreference } = useLocalePreference();
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +102,8 @@ function AppSettingsPanel() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载配置失败');
+          console.error('[quotern-dashboard] failed to load config:', e);
+          setError('settings.loadConfigFailed');
         }
       })
       .finally(() => {
@@ -110,6 +117,9 @@ function AppSettingsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
+        <LanguagePreferenceControl value={preference} onChange={setPreference} />
+      </Surface>
+      <Surface className="rounded-xl p-4" variant="secondary">
         <RadioGroup
           name="token-unit-mode"
           value={getTokenUnitMode()}
@@ -121,14 +131,14 @@ function AppSettingsPanel() {
             window.location.reload();
           }}
         >
-          <Label>Token 数字单位</Label>
-          <Description>应用于用量概览、图表和分享卡。</Description>
+          <Label>{t('settings.tokenUnit.label')}</Label>
+          <Description>{t('settings.tokenUnit.description')}</Description>
           <Radio value="chinese">
             <Radio.Content>
               <Radio.Control>
                 <Radio.Indicator />
               </Radio.Control>
-              中文（1.872亿）
+              {t('settings.tokenUnit.chinese')}
             </Radio.Content>
           </Radio>
           <Radio value="international">
@@ -136,33 +146,33 @@ function AppSettingsPanel() {
               <Radio.Control>
                 <Radio.Indicator />
               </Radio.Control>
-              国际缩写（187.2M）
+              {t('settings.tokenUnit.international')}
             </Radio.Content>
           </Radio>
         </RadioGroup>
       </Surface>
-      {loading ? <p className="text-muted">加载配置…</p> : null}
-      {error ? <StatusBanner tone="error" title={error} /> : null}
+      {loading ? <p className="text-muted">{t('settings.loadingConfig')}</p> : null}
+      {error ? <StatusBanner tone="error" title={t(error)} /> : null}
       {!loading && !error && !config ? (
         <p className="text-sm text-muted">
-          当前为 Web 模式，设备信息仅在本机 CLI / 桌面端可见。
+          {t('settings.webDeviceHint')}
         </p>
       ) : null}
       {config ? (
         <Surface className="rounded-xl p-4" variant="secondary">
-          <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
+          <h3 className="mb-3 text-sm font-medium text-foreground">{t('settings.device.title')}</h3>
           <div className="flex flex-col gap-2 text-sm">
-            <InfoRow label="设备 ID" value={config.deviceId} />
+            <InfoRow label={t('settings.device.id')} value={config.deviceId} />
             <InfoRow
-              label="统计起点"
+              label={t('settings.device.statsSince')}
               value={config.statsSince.slice(0, 19).replace('T', ' ')}
             />
             <InfoRow
-              label="上次同步"
+              label={t('settings.device.lastSync')}
               value={
                 config.lastSyncAt
-                  ? new Date(config.lastSyncAt).toLocaleString()
-                  : '从未'
+                  ? new Date(config.lastSyncAt).toLocaleString(locale)
+                  : t('settings.device.never')
               }
             />
           </div>

@@ -13,7 +13,7 @@ test('legacy images are merged through Core and pending items are visible withou
   });
   assert.deepEqual(result.items.map(({ id }) => id), ['shared', 'imported']);
   assert.equal(result.pendingCount, 1);
-  assert.match(result.migrationNotice ?? '', /1/);
+  assert.deepEqual(result.migrationNotice, { key: 'share.migrationPending', count: 1 });
 });
 
 test('a failed import keeps the usable shared library and retry recovers after an unknown outcome', async () => {
@@ -27,7 +27,7 @@ test('a failed import keeps the usable shared library and retry recovers after a
   };
   const first = await loadSharedBackgroundLibrary(source);
   assert.deepEqual(first.items.map(({ id }) => id), ['shared']);
-  assert.match(first.migrationNotice ?? '', /重试/);
+  assert.deepEqual(first.migrationNotice, { key: 'share.migrationFailed' });
   failed = false;
   const retry = await loadSharedBackgroundLibrary(source);
   assert.equal(retry.migrationNotice, null);
@@ -40,7 +40,7 @@ test('unavailable legacy browser storage does not disable shared uploads, but un
     importLegacy: async () => { throw new Error('unexpected import'); },
   });
   assert.equal(result.items.length, 1);
-  assert.match(result.migrationNotice ?? '', /旧/);
+  assert.deepEqual(result.migrationNotice, { key: 'share.migrationFailed' });
   await assert.rejects(loadSharedBackgroundLibrary({
     list: async () => { throw new Error('Core unavailable'); }, legacy: async () => [],
     importLegacy: async () => { throw new Error('unexpected import'); },

@@ -14,6 +14,7 @@ export interface GrokRateLimitWindow {
   usedPercent: number;
   /** Unix timestamp in seconds. */
   resetsAt: number | null;
+  periodSeconds?: number | null;
 }
 
 export interface GrokSubscriptionSnapshot {
@@ -188,6 +189,7 @@ export function mapGrokBilling(value: unknown): Pick<
         label: periodLabel(period.kind, period.durationSeconds),
         usedPercent,
         resetsAt: period.end ? Math.floor(period.end.getTime() / 1_000) : null,
+        periodSeconds: period.durationSeconds,
       }];
     })
     .slice(0, 2);

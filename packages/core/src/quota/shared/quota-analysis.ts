@@ -1,3 +1,4 @@
+import { quotaWindowPeriodSeconds } from './quota.js';
 import type { QuotaAnalysis, QuotaPaceModel, QuotaProviderState, QuotaSample, QuotaWindow } from './quota.js';
 
 const DAY = 86400;
@@ -14,20 +15,24 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
   const add = (key: string, title: string, value: unknown, duration?: number) => {
     const row = record(value);
     if (row.unlimited === true) {
-      details.push({ id: key, label: title, text: row.exhausted === true ? '已用尽' : '无限', resetsAt: timestamp(row.resetsAt) });
+      const valueKind = row.exhausted === true ? 'exhausted' : 'unlimited';
+      details.push({ id: key, label: title, text: valueKind === 'exhausted' ? '已用尽' : '无限', valueKind, resetsAt: timestamp(row.resetsAt) });
       return;
     }
     const used = finite(row.usedPercent) ? row.usedPercent
       : finite(row.remainingPercent) ? 100 - row.remainingPercent : null;
     if (used === null || windows.some(window => window.id === key)) return;
-    windows.push({ id: key, label: title, usedPercent: Math.max(0, Math.min(100, used)),
+    const window: QuotaWindow = { id: key, label: title, usedPercent: Math.max(0, Math.min(100, used)),
       resetsAt: timestamp(row.resetsAt), durationSeconds: finite(row.durationSeconds) && row.durationSeconds > 0 ? row.durationSeconds : duration ?? null,
+      ...(finite(row.periodSeconds) && row.periodSeconds > 0 ? { periodSeconds: row.periodSeconds } : {}),
       ...(id === 'qoder' ? { timeKind: 'expiry' as const } : {}),
       ...(typeof row.groupLabel === 'string' ? { groupLabel: row.groupLabel } : {}),
       ...(id === 'deepseek' ? { valueText: finite(row.remaining) ? `¥${row.remaining.toFixed(2)}` : '余额未知', analysisEligible: false } : {}),
       ...(finite(row.used) && finite(row.limit) && row.limit > 0 ? { used: row.used, limit: row.limit,
         unit: row.unit === 'requests' || row.unit === 'credits' ? row.unit : 'tokens' } : {}),
-    });
+    };
+    window.periodSeconds = quotaWindowPeriodSeconds(window);
+    windows.push(window);
   };
   if (Array.isArray(raw.windows)) {
     for (const item of raw.windows) { const row = record(item); if (typeof row.id === 'string' && typeof row.label === 'string') add(row.id, row.label, row); }

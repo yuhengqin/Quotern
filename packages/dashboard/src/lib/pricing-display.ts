@@ -1,7 +1,18 @@
 import type { PricingCurrency } from './pricing-currency.ts';
 
-const compactRate = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4 });
-const exactRate = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 15 });
+/** Release dates are calendar dates, not instants. Keep their day stable across time zones. */
+export function formatPricingReleaseDate(value: string | undefined, locale: string): string {
+  if (!value || !/^\d{4}-\d{2}(?:-\d{2})?$/.test(value)) return '—';
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day ?? 1));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || (day != null && date.getUTCDate() !== day)) return '—';
+  return new Intl.DateTimeFormat(locale, { timeZone: 'UTC', year: 'numeric', month: 'numeric', ...(day != null ? { day: 'numeric' } : {}) }).format(date);
+}
+
+export function formatPricingTokens(value: number, locale: string): string {
+  if (!Number.isFinite(value)) return '0';
+  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
 
 /** Keep source suffixes verbatim; unrelated calling IDs are shown whole. */
 export function getPricingVariantSuffixes(canonicalModel: string, models: string[]): string[] {
@@ -47,7 +58,7 @@ export function splitPricingHighlight(text: string, query: string): Array<{ text
   return parts;
 }
 
-export function formatPricingDisplayRate(value: number | null, currency: PricingCurrency = 'USD', exchangeRate: number | null = null) {
+export function formatPricingDisplayRate(value: number | null, currency: PricingCurrency = 'USD', exchangeRate: number | null = null, locale = 'en-US') {
   const unavailable = { text: '—', exact: '—', approximate: false };
   if (value === null || !Number.isFinite(value) || value < 0) return unavailable;
   if (currency === 'CNY' && (exchangeRate === null || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) return unavailable;
@@ -57,5 +68,7 @@ export function formatPricingDisplayRate(value: number | null, currency: Pricing
   const exact = Number(converted.toPrecision(15));
   const approximate = Number(converted.toPrecision(4)) !== exact;
   const symbol = currency === 'USD' ? '$' : '¥';
+  const compactRate = new Intl.NumberFormat(locale, { maximumSignificantDigits: 4 });
+  const exactRate = new Intl.NumberFormat(locale, { maximumSignificantDigits: 15 });
   return { text: `${approximate ? '≈' : ''}${symbol}${compactRate.format(converted)}`, exact: `${symbol}${exactRate.format(exact)}`, approximate };
 }

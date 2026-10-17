@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildUsageReport } from 'quotern-core';
-import { parseUsageArgs } from '../dist/usage-args.js';
-import { formatUsageReport } from '../dist/usage-output.js';
+const outputDir = process.env.QUOTERN_CLI_TEST_DIST ?? '../dist';
+const { parseUsageArgs } = await import(`${outputDir}/usage-args.js`);
+const { formatUsageReport } = await import(`${outputDir}/usage-output.js`);
 import { sessionBuckets, sessionContext, sessionModelTotals } from './fixtures/usage-session.js';
 
 test('seven-day session regression preserves all models and provenance in a smaller single result', (t) => {

@@ -32,11 +32,11 @@ export function filterPricingCatalog(rows: PricingCatalogRow[], filters: Pricing
   });
 }
 
-export function formatContextWindow(value?: number): string {
+export function formatContextWindow(value?: number, locale = 'en-US'): string {
   if (value == null || !Number.isSafeInteger(value) || value <= 0) return '—';
   const divisor = value >= 1_000_000 ? 1_000_000 : value >= 1_000 ? 1_000 : 1;
   const suffix = divisor === 1_000_000 ? 'M' : divisor === 1_000 ? 'K' : '';
-  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value / divisor)}${suffix}`;
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value / divisor)}${suffix}`;
 }
 
 export function getRecentReleaseRange(days: number, now = new Date()): Pick<PricingFilters, 'releasedAfter' | 'releasedBefore'> {

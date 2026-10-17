@@ -3,9 +3,11 @@ import { MoonIcon, SunIcon, SunMoonIcon } from "lucide-react";
 import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { THEME_MODES, type ThemeMode } from "@/lib/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { useTranslation } from 'quotern-i18n/react';
 
 /** Dashboard top bar with theme controls. */
 export function DashboardHeader() {
+  const { t } = useTranslation();
   const { themeMode, setThemeMode } = useTheme();
 
   const changeTheme = (keys: Set<Key>) => {
@@ -21,7 +23,7 @@ export function DashboardHeader() {
 
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         <ToggleButtonGroup
-          aria-label="页面主题"
+          aria-label={t('desktop.header.theme')}
           className="rounded-full bg-default p-1"
           disallowEmptySelection
           isDetached
@@ -31,7 +33,7 @@ export function DashboardHeader() {
           onSelectionChange={changeTheme}
         >
           <ToggleButton
-            aria-label="跟随系统"
+            aria-label={t('desktop.header.themeSystem')}
             className="data-[selected=true]:bg-surface data-[selected=true]:text-foreground data-[selected=true]:shadow-sm"
             id="system"
             isIconOnly
@@ -40,7 +42,7 @@ export function DashboardHeader() {
             <SunMoonIcon className="size-4 scale-[1.2]" />
           </ToggleButton>
           <ToggleButton
-            aria-label="使用亮色模式"
+            aria-label={t('desktop.header.themeLight')}
             className="data-[selected=true]:bg-surface data-[selected=true]:text-foreground data-[selected=true]:shadow-sm"
             id="light"
             isIconOnly
@@ -49,7 +51,7 @@ export function DashboardHeader() {
             <SunIcon className="size-4" />
           </ToggleButton>
           <ToggleButton
-            aria-label="使用暗色模式"
+            aria-label={t('desktop.header.themeDark')}
             className="data-[selected=true]:bg-surface data-[selected=true]:text-foreground data-[selected=true]:shadow-sm"
             id="dark"
             isIconOnly

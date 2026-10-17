@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validQuotaPatch } from '../src/quota/readers/quota-store.js';
-import { QuotaManager, type QuotaReader } from '../src/quota/readers/quota-manager.js';
+import { QuotaManager, type QuotaNotification, type QuotaReader } from '../src/quota/readers/quota-manager.js';
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/quota/shared/quota.js';
 import { markQuotaIdentity } from '../src/quota/readers/quota-identity.js';
 import { markQuotaEvidence, quotaEvidence, selectQuotaObservation, observationsFromOMPRows, createOMPQuotaObservationReader } from '../src/quota/readers/quota-observations.js';
@@ -123,7 +123,7 @@ test('OMP transient read failures retain stale account cards and original observ
 
 test('multi-account threshold and reset notifications identify the profile', async () => {
   let clock = 1000, used = 10, reset = 2000;
-  const notices: { label: string; kind: string }[] = [];
+  const notices: QuotaNotification[] = [];
   const readers: QuotaReader[] = ['工作', '个人'].map(profileLabel => ({ id: 'codex', key: `codex@${profileLabel}`, profileLabel, label: 'Codex', interval: 180,
     async read() { return markQuotaIdentity({ status: 'ready', fetchedAt: clock, fiveHour: { usedPercent: used, resetsAt: reset, windowDurationMins: 300 } }, profileLabel); } }));
   const manager = new QuotaManager({ readers, store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history: {}, notice: null, async savePreferences() {}, async saveHistory() {} }, now: () => clock, notify: value => notices.push(value) });
@@ -131,6 +131,7 @@ test('multi-account threshold and reset notifications identify the profile', asy
   clock++; used = 95;
   await manager.refresh('manual');
   assert.deepEqual(notices.map(value => value.label).sort(), ['Codex · 个人', 'Codex · 工作']);
+  assert.ok(notices.every(value => value.windowId === 'five-hour' && value.windowPeriodSeconds === 18000));
   clock = 2001; used = 1; reset = 3000;
   await manager.refresh('manual');
   assert.deepEqual(notices.filter(value => value.kind === 'reset').map(value => value.label).sort(), ['Codex · 个人', 'Codex · 工作']);

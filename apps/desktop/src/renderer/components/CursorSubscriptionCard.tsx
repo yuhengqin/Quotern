@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   cursorRemainingPercent,
   type CursorSubscriptionSnapshot,
@@ -19,6 +20,7 @@ const INITIAL_SNAPSHOT: CursorSubscriptionSnapshot = {
 
 /** Cursor subscription pools from the locally signed-in desktop account. */
 export function CursorSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<CursorSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -31,13 +33,13 @@ export function CursorSubscriptionCard() {
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,
-        message: '暂时无法读取 Cursor 订阅信息',
+        message: t('desktop.provider.readSubscription', { provider: 'Cursor' }),
       });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -49,7 +51,7 @@ export function CursorSubscriptionCard() {
   const metrics: SubscriptionUsageMetric[] = snapshot.plan
     ? [{
         color: '#2b7eff',
-        label: 'Plan',
+        label: t('desktop.provider.metric.plan'),
         remainingPercent: cursorRemainingPercent(snapshot.plan.usedPercent),
         resetsAt: snapshot.plan.resetsAt,
       }]
@@ -64,7 +66,7 @@ export function CursorSubscriptionCard() {
         },
         {
           color: '#2b7eff',
-          label: 'Other',
+          label: t('desktop.provider.metric.other'),
           remainingPercent: snapshot.otherModels
             ? cursorRemainingPercent(snapshot.otherModels.usedPercent)
             : null,

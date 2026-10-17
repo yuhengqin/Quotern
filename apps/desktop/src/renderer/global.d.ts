@@ -109,6 +109,9 @@ declare global {
         mode: import('../shared/theme').ThemeMode;
         resolved: import('../shared/theme').Theme;
       }>;
+      getLocalePreference: () => Promise<import('../shared/locale').DesktopLocaleState>;
+      setLocalePreference: (preference: import('quotern-i18n').LocalePreference) => Promise<void>;
+      onLocaleChanged: (callback: (state: import('../shared/locale').DesktopLocaleState) => void) => () => void;
       setThemeMode: (mode: import('../shared/theme').ThemeMode) => void;
       onThemeChanged: (
         callback: (state: {

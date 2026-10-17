@@ -1,5 +1,6 @@
 import { ACHIEVEMENT_FAMILIES } from 'quotern-core/achievements';
-import type { AchievementProgress, AchievementSnapshot, EarnedAchievement } from 'quotern-core/achievements';
+import type { AchievementCategory, AchievementFamily, AchievementProgress, AchievementRecord, AchievementSnapshot, EarnedAchievement } from 'quotern-core/achievements';
+import { translate, type SupportedLocale } from 'quotern-i18n';
 import { sourceLabel } from '../lib/tokens.ts';
 export interface AchievementRecordGroup { id: string; family: AchievementProgress['family']; items: AchievementProgress[]; featured: AchievementProgress; next: AchievementProgress | null; earnedCount: number }
 export interface AchievementGroup extends AchievementRecordGroup { records: AchievementRecordGroup[]; earnedObjectCount: number }
@@ -18,9 +19,39 @@ export function achievementScopeLabel(item: Pick<AchievementProgress, 'family' |
   if (item.family === 'agent-loyalty') return item.scope || item.scopeLabel ? sourceLabel(item.scope ?? item.scopeLabel!) : null;
   return item.scopeLabel ?? null;
 }
-export function achievementDisplayName(item: Pick<AchievementProgress, 'title' | 'family' | 'scope' | 'scopeLabel' | 'privateScope'>, showProjects = true): string {
+export function achievementFamilyLabel(family: AchievementFamily, locale: SupportedLocale = 'zh-CN'): string {
+  return translate(locale, `achievement.family.${family}`);
+}
+export function achievementCategoryLabel(category: AchievementCategory, locale: SupportedLocale = 'zh-CN'): string {
+  return translate(locale, `achievement.category.${category}`);
+}
+
+type NamedAchievement = Pick<AchievementProgress, 'id' | 'family' | 'title' | 'tier' | 'target' | 'period'>;
+function knownBadgeKey(item: NamedAchievement): string | null {
+  const { family, id, target, period, tier } = item;
+  if (family === 'first') return id === 'first-record' ? 'first.1' : null;
+  if (family === 'monthly-full' || family === 'monthly-active') return period && id === `${family}-${period}` ? family : null;
+  if (family === 'annual') return period && id === `annual-${period}` ? 'annual' : null;
+  if (family === 'records') return id === 'record-longest-streak' || id === 'record-most-active-month' ? `records.${id.slice(7)}` : null;
+  if (family === 'agent-loyalty' || family === 'project') return id.startsWith(`${family}-`) && id.endsWith(`-${target}`) && [30, 100].includes(target) ? `${family}.${tier}` : null;
+  return id === `${family}-${target}` ? `${family}.${tier}` : null;
+}
+export function achievementTitle(item: NamedAchievement, locale: SupportedLocale = 'zh-CN'): string {
+  const key = knownBadgeKey(item);
+  if (!key) return item.title;
+  const period = item.period && item.family.startsWith('monthly-') ? formatAchievementMonth(item.period, locale) : item.period;
+  return translate(locale, `achievement.badge.${key}.title`, { period, year: item.period });
+}
+export function achievementDescription(item: Pick<AchievementProgress, 'id' | 'family' | 'title' | 'tier' | 'target' | 'period' | 'description'>, locale: SupportedLocale = 'zh-CN'): string {
+  return knownBadgeKey(item) ? translate(locale, `achievement.description.${item.family}`, { target: item.target }) : item.description;
+}
+export function achievementRecordLabel(record: Pick<AchievementRecord, 'id' | 'title'>, locale: SupportedLocale = 'zh-CN'): string {
+  return translate(locale, `achievement.badge.records.${record.id}.title`);
+}
+export function achievementDisplayName(item: Pick<AchievementProgress, 'id' | 'title' | 'family' | 'tier' | 'target' | 'period' | 'scope' | 'scopeLabel' | 'privateScope'>, showProjects = true, locale: SupportedLocale = 'zh-CN'): string {
   const scope = (item.privateScope || item.family === 'project') && !showProjects ? null : achievementScopeLabel(item);
-  return item.title + (scope && ['agent-loyalty', 'project'].includes(item.family) ? ' · ' + scope : '');
+  const title = achievementTitle(item, locale);
+  return scope && ['agent-loyalty', 'project'].includes(item.family) ? translate(locale, 'achievement.scopedName', { title, scope }) : title;
 }
 
 export function groupAchievements(snapshot: Pick<AchievementSnapshot, 'progress'> & Partial<Pick<AchievementSnapshot, 'coverage'>>): AchievementGroup[] {
@@ -56,21 +87,32 @@ export function recommendShowcase(snapshot: Pick<AchievementSnapshot, 'earned'>)
   const items = [...snapshot.earned].sort((a, b) => Number(['cost', 'duration'].includes(a.family)) - Number(['cost', 'duration'].includes(b.family)) || b.tier - a.tier || b.unlockedAt.localeCompare(a.unlockedAt));
   return distinctFamilyBadges(items).map(item => item.id);
 }
-export function achievementGroupSummary(group: AchievementGroup): string {
-  if (group.family === 'agent-loyalty') return group.earnedObjectCount ? '已与 ' + group.earnedObjectCount + ' 个 Agent 达成' : '在每个 Agent 留下自己的同行记录';
-  if (group.family === 'project') return group.earnedObjectCount ? '已在 ' + group.earnedObjectCount + ' 个项目达成' : '为持续投入的项目留下纪念';
-  if (group.family.startsWith('monthly-')) return '已收藏 ' + group.earnedCount + ' 个月';
-  if (group.family === 'annual') return '已收藏 ' + group.earnedCount + ' 个年份';
-  if (group.family === 'records') return '已留下 ' + group.earnedCount + ' 项个人纪录';
-  return '已点亮 ' + group.earnedCount + ' 个等级';
+export function achievementGroupSummary(group: AchievementGroup, locale: SupportedLocale = 'zh-CN'): string {
+  if (group.family === 'agent-loyalty') return translate(locale, group.earnedObjectCount ? 'achievement.group.agentOwned' : 'achievement.group.agentEmpty', { count: group.earnedObjectCount });
+  if (group.family === 'project') return translate(locale, group.earnedObjectCount ? 'achievement.group.projectOwned' : 'achievement.group.projectEmpty', { count: group.earnedObjectCount });
+  if (group.family.startsWith('monthly-')) return translate(locale, 'achievement.group.months', { count: group.earnedCount });
+  if (group.family === 'annual') return translate(locale, 'achievement.group.years', { count: group.earnedCount });
+  if (group.family === 'records') return translate(locale, 'achievement.group.records', { count: group.earnedCount });
+  return translate(locale, 'achievement.group.levels', { count: group.earnedCount });
 }
-export function formatAchievementAmount(value: number, unit: string): string {
-  if (unit === 'USD') return '$' + value.toFixed(2);
-  if (unit === '秒') return (value / 3600).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
-  if (unit === 'Token') return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-  return value.toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+export function formatAchievementDate(value: string, locale: SupportedLocale = 'zh-CN'): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(date);
 }
-export const achievementUnit = (item: Pick<AchievementProgress, 'unit'>) => item.unit === '秒' ? '小时' : item.unit === 'USD' ? '预估费用' : item.unit;
-export function achievementProgressText(item: AchievementProgress): string {
-  return formatAchievementAmount(item.value, item.unit) + ' / ' + formatAchievementAmount(item.target, item.unit) + ' ' + achievementUnit(item);
+export function formatAchievementMonth(value: string, locale: SupportedLocale = 'zh-CN'): string {
+  const date = new Date(`${value}-01T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', timeZone: 'UTC' }).format(date);
+}
+export function formatAchievementAmount(value: number, family: AchievementFamily, locale: SupportedLocale = 'zh-CN'): string {
+  if (family === 'cost') return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }).format(value);
+  if (family === 'duration') return (value / 3600).toLocaleString(locale, { maximumFractionDigits: 1 });
+  if (family === 'tokens') return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  return value.toLocaleString(locale, { maximumFractionDigits: 0 });
+}
+export function achievementUnit(item: Pick<AchievementProgress, 'family' | 'unit'>, locale: SupportedLocale = 'zh-CN'): string {
+  const key = ['active-days', 'streak', 'monthly-full', 'monthly-active', 'agent-loyalty', 'project', 'records'].includes(item.family) ? 'days' : item.family;
+  return translate(locale, `achievement.unit.${key}`);
+}
+export function achievementProgressText(item: AchievementProgress, locale: SupportedLocale = 'zh-CN'): string {
+  return translate(locale, 'achievement.progress', { value: formatAchievementAmount(item.value, item.family, locale), target: formatAchievementAmount(item.target, item.family, locale), unit: achievementUnit(item, locale) });
 }

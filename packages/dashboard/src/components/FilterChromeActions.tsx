@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { CircleDollarSign, RefreshCw, Settings, Share2 } from 'lucide-react';
 import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -29,10 +30,11 @@ function openGithubRepository(): void {
  * Public web shows share + theme; CLI also shows refresh / settings.
  */
 export function FilterChromeActions() {
+  const { t } = useTranslation();
   const toastQueue = useAppToastQueue();
   const cliBackend = isCliBackend();
   const [busy, setBusy] = useState(false);
-  const refreshLabel = cliBackend ? '同步数据' : '刷新数据';
+  const refreshLabel = t(cliBackend ? 'shell.syncData' : 'shell.refreshData');
   const refreshData = async () => {
     setBusy(true);
     try {
@@ -40,12 +42,12 @@ export function FilterChromeActions() {
         const result = await triggerSync();
         if (!result.ok) {
           toastQueue.add({
-            title: '同步失败，请稍后重试',
+            title: t('shell.syncFailed'),
             variant: 'danger',
           });
           return;
         }
-        toastQueue.add({ title: '同步成功', variant: 'success' });
+        toastQueue.add({ title: t('shell.syncSuccess'), variant: 'success' });
         // Electron IPC already pushes DATA_SYNCED; a second dispatch double-reloads charts.
         if (
           typeof (window as { tud?: { onDataSynced?: unknown } }).tud
@@ -58,7 +60,7 @@ export function FilterChromeActions() {
       }
     } catch {
       toastQueue.add({
-        title: '同步失败，请稍后重试',
+        title: t('shell.syncFailed'),
         variant: 'danger',
       });
     } finally {
@@ -70,7 +72,7 @@ export function FilterChromeActions() {
     <div className="flex items-center gap-1">
       <Tooltip closeDelay={80} delay={100}>
         <Tooltip.Trigger
-          aria-label="模型价格"
+          aria-label={t('shell.pricing')}
           className="button button--sm button--tertiary button--icon-only inline-flex size-8 min-h-8 min-w-8 shrink-0 p-0"
           render={(props) => (
             <Link
@@ -84,18 +86,18 @@ export function FilterChromeActions() {
           <CircleDollarSign className="size-4" aria-hidden />
         </Tooltip.Trigger>
         <Tooltip.Content placement="bottom">
-          <p>模型价格</p>
+          <p>{t('shell.pricing')}</p>
         </Tooltip.Content>
       </Tooltip>
       <ChromeAction
         icon={<LogoGithub className="size-4" />}
-        label="GitHub 仓库"
+        label={t('shell.githubRepository')}
         onPress={openGithubRepository}
       />
       <AchievementEntry />
       <ChromeAction
         icon={<Share2 className="size-4" aria-hidden />}
-        label="分享"
+        label={t('shell.share')}
         onPress={() => {
           void shareCurrentPage();
         }}
@@ -117,7 +119,7 @@ export function FilterChromeActions() {
           />
           <ChromeAction
             icon={<Settings className="size-4" aria-hidden />}
-            label="设置"
+            label={t('shell.settings')}
             onPress={() => dispatchOpenSettings()}
           />
         </>

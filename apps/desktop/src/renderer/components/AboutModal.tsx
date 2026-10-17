@@ -1,5 +1,6 @@
 import { CircleInfo } from '@gravity-ui/icons';
 import { Button, Modal } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   type ReactNode,
   useCallback,
@@ -25,6 +26,7 @@ export function AboutModal({
   listenForOpenEvent = true,
   hideTrigger = false,
 }: AboutModalProps = {}) {
+  const { t } = useTranslation();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
@@ -49,12 +51,12 @@ export function AboutModal({
       {!hideTrigger &&
         (trigger ?? (
           <Button
-            aria-label="关于"
+            aria-label={t('shell.about')}
             onPress={() => setOpen(true)}
             variant="tertiary"
           >
             <CircleInfo />
-            关于
+            {t('shell.about')}
           </Button>
         ))}
 
@@ -65,9 +67,9 @@ export function AboutModal({
           size="lg"
         >
           <Modal.Dialog>
-            <Modal.CloseTrigger aria-label="关闭关于" />
+            <Modal.CloseTrigger aria-label={t('shell.closeAbout')} />
             <Modal.Header>
-              <Modal.Heading>关于</Modal.Heading>
+              <Modal.Heading>{t('shell.about')}</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="pt-2">
               <AboutContent />

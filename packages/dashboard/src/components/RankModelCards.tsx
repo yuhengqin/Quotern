@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, Chip, Skeleton, Switch } from '@heroui/react';
+import { normalizeLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import { MyRankCard } from '@/components/MyRankCard';
 import { RankTitleDecor } from '@/components/RankDecorations';
 import type {
@@ -47,6 +49,7 @@ export function RankUserTable({
   refreshing?: boolean;
   showHideToggle?: boolean;
 }) {
+  const { t } = useTranslation();
   const board = global?.[metric] ?? null;
 
   return (
@@ -57,7 +60,7 @@ export function RankUserTable({
             className="text-2xl font-bold tracking-tight sm:text-3xl"
             id="rank-users-title"
           >
-            <RankTitleDecor>用户排行榜</RankTitleDecor>
+            <RankTitleDecor>{t('rank.table.title')}</RankTitleDecor>
           </h2>
           <MyRankCard
             cost={global?.cost ?? null}
@@ -80,7 +83,7 @@ export function RankUserTable({
               <Switch.Control>
                 <Switch.Thumb />
               </Switch.Control>
-              隐藏自己
+              {t('rank.table.hideSelf')}
             </Switch.Content>
           </Switch>
         ) : null}
@@ -116,6 +119,7 @@ function UserList({
   hideFromLeaderboard: boolean;
   profiles: Record<string, LeaderboardUserProfile>;
 }) {
+  const { t } = useTranslation();
   const rows = board?.rows ?? [];
   const currentUser = hideFromLeaderboard
     ? null
@@ -130,8 +134,8 @@ function UserList({
           'flex min-h-56 flex-col items-center justify-center gap-2 overflow-hidden text-center',
         )}
       >
-        <p className="text-sm">当前范围暂无用户排行数据</p>
-        <p className="text-xs text-muted">产生用量后再回来看看</p>
+        <p className="text-sm">{t('rank.table.empty')}</p>
+        <p className="text-xs text-muted">{t('rank.table.emptyHint')}</p>
       </div>
     );
   }
@@ -143,10 +147,10 @@ function UserList({
         className="flex items-center gap-2 px-4 py-2.5 text-[11px] text-muted sm:gap-5 sm:px-6 sm:py-3 sm:text-xs"
       >
         <span className="w-10 shrink-0 sm:w-12" />
-        <span className="min-w-0 flex-1">用户</span>
+        <span className="min-w-0 flex-1">{t('rank.table.user')}</span>
         <div className="flex shrink-0 items-center gap-2 sm:gap-8">
-          <span className="w-[3.25rem] text-right sm:w-24">总 Token</span>
-          <span className="w-[3.25rem] text-right sm:w-20">总费用</span>
+          <span className="w-[3.25rem] text-right sm:w-24">{t('rank.table.totalTokens')}</span>
+          <span className="w-[3.25rem] text-right sm:w-20">{t('rank.table.totalCost')}</span>
         </div>
       </div>
       <ol className="min-w-0">
@@ -196,7 +200,7 @@ function UserList({
                       size="sm"
                       variant="soft"
                     >
-                      <Chip.Label>我</Chip.Label>
+                      <Chip.Label>{t('rank.table.me')}</Chip.Label>
                     </Chip>
                   )}
                 </div>
@@ -262,9 +266,10 @@ function LazyAvatar({
 }
 
 function RankNumber({ rank }: { rank: number }) {
+  const { t } = useTranslation();
   return (
     <span
-      aria-label={`第 ${rank} 名`}
+      aria-label={t('rank.table.placeAria', { rank })}
       className={cn(
         'w-10 shrink-0 text-center font-bold tabular-nums leading-none sm:w-12',
         rank > 99 ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl',
@@ -286,11 +291,13 @@ function UsageMetrics({
   costUsd: number;
   tokens: number;
 }) {
+  const { i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.language);
   return (
     <div className="flex shrink-0 items-center gap-2 sm:gap-8">
       <span
         className="w-[3.25rem] truncate text-right text-xs font-medium tabular-nums text-foreground sm:w-24 sm:text-sm"
-        title={`${tokens.toLocaleString('zh-CN')} Token`}
+        title={`${tokens.toLocaleString(locale)} Token`}
       >
         {formatTokens(tokens)}
       </span>
@@ -305,8 +312,9 @@ function UsageMetrics({
 }
 
 function UserListSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div aria-label="用户排行榜加载中" className={cn(LIST_CARD, 'min-w-0 overflow-hidden')}>
+    <div aria-label={t('rank.table.loadingAria')} className={cn(LIST_CARD, 'min-w-0 overflow-hidden')}>
       <div className="flex items-center gap-2 px-4 py-2.5 sm:gap-5 sm:px-6 sm:py-3">
         <span className="w-10 shrink-0 sm:w-12" />
         <Skeleton className="h-3 w-8 rounded-md" />

@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button, Card, Modal, Tooltip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
+import type { SupportedLocale } from 'quotern-i18n';
 import { UNSAFE_PortalProvider } from 'react-aria/PortalProvider';
 import { Cell, Pie, PieChart } from 'recharts';
 import {
@@ -33,6 +35,8 @@ export function UsageDistributionCard({
   rows: DashboardDistributionRow[];
   className?: string;
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [metric, setMetric] =
     useState<DashboardDistributionMetric>('tokens');
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
@@ -77,7 +81,7 @@ export function UsageDistributionCard({
           </Card.Description>
         </div>
         <DashboardMetricTabs
-          ariaLabel={`${title}指标`}
+          ariaLabel={t('usage.distribution.metricAria', { title })}
           metrics={METRICS}
           selectedMetric={metric}
           onMetricChange={setMetric}
@@ -87,14 +91,14 @@ export function UsageDistributionCard({
       <Card.Content className="flex flex-col sm:flex-row sm:items-center">
         {rows.length === 0 ? (
           <p className="w-full py-12 text-center text-sm text-muted">
-            暂无数据
+            {t('usage.common.noData')}
           </p>
         ) : (
           <>
             <div className="relative mx-auto h-44 w-44 shrink-0 sm:mx-0">
               <div className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center text-center">
                 <span className="text-[11px] text-muted">
-                  {metric === 'tokens' ? 'Tokens' : '费用'}
+                  {metric === 'tokens' ? 'Tokens' : t('usage.common.cost')}
                 </span>
                 <strong className="text-lg font-semibold tracking-tight tabular-nums">
                   {formatDashboardMetricCompact(metric, visibleTotal)}
@@ -133,6 +137,7 @@ export function UsageDistributionCard({
                               {formatDashboardMetric(
                                 metric,
                                 Number(value),
+                                locale,
                               )}
                             </span>
                           </div>
@@ -174,7 +179,7 @@ export function UsageDistributionCard({
                   variant="ghost"
                   onPress={() => setIsAllOpen(true)}
                 >
-                  查看全部（{chartRows.length}）
+                  {t('usage.common.viewAllCount', { count: chartRows.length })}
                 </Button>
               ) : null}
             </div>
@@ -188,7 +193,7 @@ export function UsageDistributionCard({
             {/* Keep tooltips inside the active modal, outside its clipped dialog. */}
             <div className="contents" ref={tooltipContainerRef}>
               <Modal.Dialog>
-                <Modal.CloseTrigger aria-label="关闭" />
+                <Modal.CloseTrigger aria-label={t('usage.common.close')} />
                 <Modal.Header>
                   <Modal.Heading>{title}</Modal.Heading>
                 </Modal.Header>
@@ -230,6 +235,8 @@ function DistributionRowList({
   visibleTotal: number;
   onToggle: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   return (
     <div className="space-y-1">
       {rows.map((row) => {
@@ -248,7 +255,7 @@ function DistributionRowList({
           >
             <Tooltip.Trigger<'button'>
               render={(props) => <button {...props} />}
-              aria-label={hidden ? `显示 ${row.label}` : `隐藏 ${row.label}`}
+              aria-label={t(hidden ? 'usage.distribution.show' : 'usage.distribution.hide', { label: row.label })}
               aria-pressed={!hidden}
               className={cn(
                 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md px-1 py-1.5 text-left text-xs transition-opacity',
@@ -256,7 +263,7 @@ function DistributionRowList({
                   ? 'opacity-40 text-muted'
                   : 'text-foreground hover:bg-surface-secondary',
               )}
-              title={showDetails ? undefined : hidden ? `显示 ${row.label}` : `隐藏 ${row.label}`}
+              title={showDetails ? undefined : t(hidden ? 'usage.distribution.show' : 'usage.distribution.hide', { label: row.label })}
               type="button"
               onClick={() => onToggle(row.id)}
             >
@@ -271,7 +278,7 @@ function DistributionRowList({
                 </span>
               </div>
               <span className="text-right font-medium tabular-nums">
-                {formatDashboardMetric(metric, row.value)}
+                {formatDashboardMetric(metric, row.value, locale)}
               </span>
               <span className="w-11 text-right text-muted tabular-nums">
                 {hidden ? '—' : `${percentage.toFixed(1)}%`}
@@ -298,15 +305,17 @@ function DistributionRowList({
 }
 
 function DistributionRowDetails({ row }: { row: DashboardDistributionRow }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const metrics = row.localMetrics;
   const details = [
-    ['输入（未缓存）', metrics?.uncachedInputTokens],
-    ['缓存读取', metrics?.cacheReadTokens],
+    [t('usage.distribution.uncachedInput'), metrics?.uncachedInputTokens],
+    [t('usage.distribution.cacheRead'), metrics?.cacheReadTokens],
     ...((metrics?.cacheWriteTokens ?? 0) > 0
-      ? [['缓存写入', metrics?.cacheWriteTokens] as const]
+      ? [[t('usage.distribution.cacheWrite'), metrics?.cacheWriteTokens] as const]
       : []),
-    ['输出', metrics?.outputTokens],
-    ['推理', metrics?.reasoningOutputTokens],
+    [t('usage.common.output'), metrics?.outputTokens],
+    [t('usage.distribution.reasoning'), metrics?.reasoningOutputTokens],
   ] as const;
 
   return (
@@ -320,22 +329,22 @@ function DistributionRowDetails({ row }: { row: DashboardDistributionRow }) {
         <span className="min-w-0 break-all font-semibold">{row.label}</span>
       </div>
       <div className="flex flex-wrap gap-x-2 gap-y-1 text-muted tabular-nums">
-        <span>{formatDashboardMetric('tokens', row.tokens)} Token</span>
+        <span>{formatDashboardMetric('tokens', row.tokens, locale)} Token</span>
         <span>·</span>
-        <span>预估费用 {formatDashboardMetric('cost', row.costUsd)}</span>
+        <span>{t('usage.distribution.estimatedCost', { amount: formatDashboardMetric('cost', row.costUsd, locale) })}</span>
       </div>
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1.5 border-t border-border/60 pt-2.5">
         {details.map(([label, value]) => (
           <div className="contents" key={label}>
             <dt className="text-muted">{label}</dt>
             <dd className="text-right font-medium tabular-nums">
-              {value == null ? '—' : formatDashboardMetric('tokens', value)}
+              {value == null ? '—' : formatDashboardMetric('tokens', value, locale)}
             </dd>
           </div>
         ))}
       </dl>
       {details.some(([, value]) => value == null) ? (
-        <p className="text-[10px] text-muted">— 表示该明细暂未提供</p>
+        <p className="text-[10px] text-muted">{t('usage.distribution.missingDetail')}</p>
       ) : null}
     </div>
   );

@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { SupportedLocale } from 'quotern-i18n';
+import { NATIVE_MESSAGES, nativeText, type NativeMessageKey } from './native-messages';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
@@ -16,8 +18,22 @@ const PERIODIC_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const INSTALL_EXIT_TIMEOUT_MS = 30_000;
 const UPDATE_MARKER_FILENAME = 'auto-update.json';
 
-const PORTABLE_UPDATE_MESSAGE =
-  '点击前往 GitHub Release 下载便携版';
+let currentLocale: SupportedLocale = 'zh-CN';
+const UPDATE_MESSAGE_KEYS: readonly NativeMessageKey[] = [
+  'native.update.portable',
+  'native.update.unsupported',
+  'native.update.checkFailed',
+  'native.update.installFailed',
+  'native.update.restartTimedOut',
+];
+
+export function setAutoUpdateLocale(locale: SupportedLocale): void {
+  if (locale === currentLocale) return;
+  const key = UPDATE_MESSAGE_KEYS.find(candidate =>
+    Object.values(NATIVE_MESSAGES).some(messages => messages[candidate] === state.message));
+  currentLocale = locale;
+  if (key) setState({ ...state, message: nativeText(locale, key) });
+}
 
 let state: AutoUpdateState = {
   status: 'idle',
@@ -100,13 +116,13 @@ function setState(next: AutoUpdateState): void {
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
     ? error.message
-    : '检查更新失败，请稍后重试';
+    : nativeText(currentLocale, 'native.update.checkFailed');
 }
 
 function installErrorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
     ? error.message
-    : '自动安装更新失败，请稍后重试';
+    : nativeText(currentLocale, 'native.update.installFailed');
 }
 
 function clearInstallExitTimer(): void {
@@ -206,7 +222,7 @@ async function runInstallAttempt(attempt: InstallAttempt, version: string): Prom
     installExitTimer = setTimeout(() => {
       void recoverInstallAttempt(
         attempt,
-        '自动重启未完成，请点击“更新并重启”再次尝试。',
+        nativeText(currentLocale, 'native.update.restartTimedOut'),
       );
     }, INSTALL_EXIT_TIMEOUT_MS);
     installExitTimer.unref();
@@ -266,7 +282,7 @@ export function registerAutoUpdateIpc(): void {
     status: app.isPackaged ? 'idle' : 'unsupported',
     currentVersion: app.getVersion(),
     ...(!app.isPackaged
-      ? { message: '开发环境不检查更新，请安装正式构建包后测试' }
+      ? { message: nativeText(currentLocale, 'native.update.unsupported') }
       : {}),
   };
   registerIpc();
@@ -294,7 +310,7 @@ export async function initializeAutoUpdate(options: {
     currentVersion: app.getVersion(),
     ...(completedVersion ? { completedVersion } : {}),
     ...(!app.isPackaged
-      ? { message: '开发环境不检查更新，请安装正式构建包后测试' }
+      ? { message: nativeText(currentLocale, 'native.update.unsupported') }
       : {}),
   };
   // Window may already be open from early registerAutoUpdateIpc.
@@ -331,7 +347,7 @@ export async function initializeAutoUpdate(options: {
       currentVersion: app.getVersion(),
       version: info.version,
       checkedAt,
-      ...(isPortableExecutable ? { message: PORTABLE_UPDATE_MESSAGE } : {}),
+      ...(isPortableExecutable ? { message: nativeText(currentLocale, 'native.update.portable') } : {}),
     });
   });
   autoUpdater.on('update-not-available', (info) => {

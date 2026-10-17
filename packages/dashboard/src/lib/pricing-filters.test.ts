@@ -40,4 +40,5 @@ it('formats context capacity while preserving unknown as a dash', () => {
   assert.equal(formatContextWindow(8192), '8.19K');
   assert.equal(formatContextWindow(undefined), '—');
   assert.equal(formatContextWindow(0), '—');
+    assert.equal(formatContextWindow(1_050_000, 'de-DE'), '1,05M');
 });

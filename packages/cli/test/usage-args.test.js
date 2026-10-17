@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseUsageArgs } from '../dist/usage-args.js';
+const outputDir = process.env.QUOTERN_CLI_TEST_DIST ?? '../dist';
+const { parseUsageArgs } = await import(`${outputDir}/usage-args.js`);
 
 test('parseUsageArgs defaults to summary text output', () => {
   assert.deepEqual(parseUsageArgs([]), {
@@ -98,7 +99,7 @@ test('compact is a JSON presentation option and never enters the Core query', ()
   for (const args of [
     ['--compact'], ['--csv', '--compact'], ['--compact', '--format=text'],
     ['--json', '--compact', '--compact'], ['--json', '--compact=true'],
-  ]) assert.throws(() => parseUsageArgs(args), /compact/);
+  ]) assert.throws(() => parseUsageArgs([...args, '--lang', 'zh-CN']), /compact/);
 });
 
 test('parseUsageArgs validates dates and date-range constraints', () => {
@@ -110,7 +111,7 @@ test('parseUsageArgs validates dates and date-range constraints', () => {
     ['--from', '2026-03-01', '--to', '2026-03-02', '--days', '7'],
     ['--from=2026/03/01', '--to=2026-03-02'],
   ]) {
-    assert.throws(() => parseUsageArgs(args), /日期|--from|--to|--days/);
+    assert.throws(() => parseUsageArgs([...args, '--lang', 'zh-CN']), /日期|--from|--to|--days/);
   }
 });
 
@@ -127,7 +128,7 @@ test('parseUsageArgs validates periods, days, formats, sources, and positionals'
     ['--unknown'],
     ['daily', 'extra'],
   ]) {
-    assert.throws(() => parseUsageArgs(args), /周期|参数|格式|数据源|位置|整数|支持/);
+    assert.throws(() => parseUsageArgs([...args, '--lang', 'zh-CN']), /周期|参数|格式|数据源|位置|整数|支持/);
   }
 });
 
@@ -150,6 +151,6 @@ test('parseUsageArgs rejects missing, empty, and repeated option values', () => 
     ['--format=json', '--format=json'],
     ['--json', '--format=json'],
   ]) {
-    assert.throws(() => parseUsageArgs(args), /缺少|不能为空|重复|冲突|需要/);
+    assert.throws(() => parseUsageArgs([...args, '--lang', 'zh-CN']), /缺少|不能为空|重复|冲突|需要/);
   }
 });

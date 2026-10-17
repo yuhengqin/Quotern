@@ -18,6 +18,7 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type ThemeMode } from '../shared/theme';
+import type { LocalePreference } from 'quotern-i18n';
 import {
   DEFAULT_TRAY_USAGE_MODE,
   TRAY_USAGE_CHANGED_CHANNEL,
@@ -41,6 +42,8 @@ interface DesktopPrefs {
   launchHidden: boolean;
   /** 主题模式（system / light / dark）。缺省跟随系统。 */
   themeMode?: ThemeMode;
+  /** Product language; older preference files follow the OS. */
+  localePreference?: LocalePreference;
   /** Last dashboard time range, shared with the tray popover. */
   dashboardRange?: DashboardRange;
   /** macOS 托盘是否显示实时用量胶囊文字。缺省开启 (true)。 */
@@ -72,6 +75,9 @@ async function readPrefsFile(): Promise<DesktopPrefs | null> {
         ? parsed.launchHidden
         : true,
       themeMode: isThemeMode(parsed.themeMode) ? parsed.themeMode : 'system',
+      localePreference: parsed.localePreference === 'system' || parsed.localePreference === 'zh-CN'
+        || parsed.localePreference === 'en' || parsed.localePreference === 'ja' || parsed.localePreference === 'ko'
+        ? parsed.localePreference : 'system',
       dashboardRange: isDashboardRange(parsed.dashboardRange)
         ? parsed.dashboardRange
         : undefined,
@@ -109,6 +115,7 @@ async function patchPrefs(patch: Partial<DesktopPrefs>): Promise<DesktopPrefs> {
       openAtLogin: patch.openAtLogin ?? existing?.openAtLogin ?? true,
       launchHidden: patch.launchHidden ?? existing?.launchHidden ?? true,
       themeMode: patch.themeMode !== undefined ? patch.themeMode : existing?.themeMode,
+      localePreference: patch.localePreference ?? existing?.localePreference ?? 'system',
       dashboardRange: patch.dashboardRange !== undefined
         ? patch.dashboardRange
         : existing?.dashboardRange,
@@ -142,6 +149,18 @@ export function loadThemeMode(): Promise<ThemeMode> {
 
 export function saveThemeMode(mode: ThemeMode): Promise<void> {
   return patchPrefs({ themeMode: mode }).then(() => undefined);
+}
+
+/** Persisted language choice; shares the serialized desktop-prefs writer. */
+export function loadLocalePreference(): Promise<LocalePreference> {
+  return withPrefsLock(async () => {
+    const prefs = await readPrefsFile();
+    return prefs?.localePreference ?? 'system';
+  });
+}
+
+export function saveLocalePreference(preference: LocalePreference): Promise<void> {
+  return patchPrefs({ localePreference: preference }).then(() => undefined);
 }
 
 function broadcastTrayUsage(enabled: boolean): void {

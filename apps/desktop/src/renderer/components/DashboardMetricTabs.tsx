@@ -1,4 +1,5 @@
 import { Tabs } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import type {
   DashboardChartMetric,
   DashboardDistributionMetric,
@@ -6,10 +7,10 @@ import type {
 
 type MetricKey = DashboardChartMetric | DashboardDistributionMetric;
 
-const METRIC_LABELS: Record<MetricKey, string> = {
+const METRIC_LABEL_KEYS: Record<MetricKey, string> = {
   tokens: 'Token',
-  cost: '费用',
-  duration: '时长',
+  cost: 'usage.common.cost',
+  duration: 'usage.common.duration',
 };
 
 /** Compact HeroUI Tabs shared by the distribution and heatmap metric switchers. */
@@ -26,6 +27,7 @@ export function DashboardMetricTabs<TMetric extends MetricKey>({
   onMetricChange: (metric: TMetric) => void;
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <Tabs
       aria-label={ariaLabel}
@@ -40,7 +42,7 @@ export function DashboardMetricTabs<TMetric extends MetricKey>({
         >
           {metrics.map((metric) => (
             <Tabs.Tab id={metric} key={metric}>
-              <span className="text-xs font-normal">{METRIC_LABELS[metric]}</span>
+              <span className="text-xs font-normal">{metric === 'tokens' ? 'Token' : t(METRIC_LABEL_KEYS[metric])}</span>
               <Tabs.Indicator className="bg-accent" />
             </Tabs.Tab>
           ))}

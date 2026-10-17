@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { Xmark } from '@gravity-ui/icons';
 import {
   Button,
@@ -21,7 +22,7 @@ export {
 } from '../../shared/dashboard-range';
 
 const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
-  { id: 'today', label: '今天' },
+  { id: 'today', label: '' },
   { id: 'last-7-days', label: '7D' },
   { id: 'last-30-days', label: '30D' },
   { id: 'last-90-days', label: '90D' },
@@ -48,14 +49,15 @@ export function DashboardFilter({
   /** When true, ignore range/tool changes (e.g. while local range sync runs). */
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const availableTools = useMemo(
     () => tools.filter((tool) => tool.tokens > 0),
     [tools],
   );
 
   return (
-    <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label="筛选条件">
-      <div className="flex shrink-0 items-center rounded-full bg-surface-secondary p-0.5" role="group" aria-label="时间范围">
+    <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label={t('usage.filter.conditions')}>
+      <div className="flex shrink-0 items-center rounded-full bg-surface-secondary p-0.5" role="group" aria-label={t('usage.filter.timeRange')}>
         {RANGE_OPTIONS.map((option) => (
           <Button
             aria-pressed={!customRange && value === option.id}
@@ -65,7 +67,7 @@ export function DashboardFilter({
             size="sm"
             variant="ghost"
             onPress={() => onChange(option.id)}
-          >{option.label}</Button>
+          >{option.id === 'today' ? t('usage.range.today') : option.label}</Button>
         ))}
         <DashboardDateRangePicker value={customRange} initialDays={DASHBOARD_RANGE_DAYS[value]} disabled={disabled} onChange={onCustomRangeChange} />
       </div>
@@ -94,7 +96,7 @@ export function DashboardFilter({
 
 /** The dashboard's single, compact multi-select entry point for tools. */
 export function ToolChannelSelect({
-  ariaLabel = '筛选 Agent',
+  ariaLabel,
   tools,
   selectedTools,
   onChange,
@@ -104,6 +106,7 @@ export function ToolChannelSelect({
   selectedTools: string[];
   onChange: (sources: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const availableSources = useMemo(
     () => new Set(tools.map((tool) => tool.source)),
     [tools],
@@ -115,7 +118,7 @@ export function ToolChannelSelect({
   return (
     <ButtonGroup className="shrink-0">
       <Select
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? t('usage.filter.agent')}
         className="w-fit max-w-52 text-xs"
         selectionMode="multiple"
         value={value}
@@ -141,8 +144,8 @@ export function ToolChannelSelect({
               const selected = state.selectedItems
                 .map((item) => tools.find((tool) => tool.source === item.key))
                 .filter((tool): tool is Pick<DashboardToolUsageRow, 'source'> => Boolean(tool));
-              if (selected.length === 0) return '全部 Agent';
-              if (selected.length > 1) return `已选 ${selected.length} 个 Agent`;
+              if (selected.length === 0) return t('usage.filter.allAgents');
+              if (selected.length > 1) return t('usage.filter.selectedAgents', { count: selected.length });
 
               const [tool] = selected;
               return tool ? (
@@ -150,7 +153,7 @@ export function ToolChannelSelect({
                   <ProviderIcon provider={tool.source} size={18} />
                   <span className="truncate">{sourceLabel(tool.source)}</span>
                 </span>
-              ) : '全部 Agent';
+              ) : t('usage.filter.allAgents');
             }}
           </Select.Value>
           <Select.Indicator className="size-3.5 text-muted" />
@@ -159,7 +162,7 @@ export function ToolChannelSelect({
           className="w-50 rounded-xl bg-surface shadow-md"
           placement="bottom start"
         >
-          <ListBox aria-label="Agent 列表" selectionMode="multiple">
+          <ListBox aria-label={t('usage.filter.agentList')} selectionMode="multiple">
             {tools.map((tool) => (
               <ListBox.Item
                 className="py-1 rounded-lg px-1.5 text-xs gap-2!"
@@ -181,7 +184,7 @@ export function ToolChannelSelect({
       </Select>
       {hasSelection ? (
         <Button
-          aria-label="清空 Agent 筛选"
+          aria-label={t('usage.filter.clearAgents')}
           className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full p-0"
           size="sm"
           isIconOnly

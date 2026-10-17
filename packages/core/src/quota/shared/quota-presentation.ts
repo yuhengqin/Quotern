@@ -1,3 +1,4 @@
+import { quotaWindowPeriodSeconds } from './quota.js';
 import type { QuotaAnalysis, QuotaProviderState, QuotaWindow } from './quota.js';
 
 export function isQuotaStatusOnly(provider: Pick<QuotaProviderState, 'windows' | 'details' | 'resetCredits'>): boolean {
@@ -20,18 +21,10 @@ export function distinctQuotaAllowances(providers: QuotaProviderState[]): QuotaP
   return [...selected.values()];
 }
 
-/** Nominal month length is used only for presentation order, never for analysis. */
+/** Ordering and grouping use period metadata rather than display labels. */
 function periodOrder(window: QuotaWindow): number | null {
   if (window.timeKind === 'expiry' || window.analysisEligible === false) return null;
-  const label = window.label.trim();
-  const period = /^(\d+(?:\.\d+)?)\s*([hd])$/i.exec(label);
-  if (period) return Number(period[1]) * (period[2].toLowerCase() === 'h' ? 3600 : 86400);
-  if (/^(月限额|月度额度|月度共享额度)$/.test(label) || /^(monthly|limit_month_total)$/.test(window.id)) return 31 * 86400;
-  if (/^(周限额|周额度)$/.test(label) || /^(weekly|seven-day|limit_7d)$/.test(window.id)) return 7 * 86400;
-  if (/^(日限额|每日额度)$/.test(label) || window.id === 'daily') return 86400;
-  const hours = /^(\d+(?:\.\d+)?)\s*小时(?:限额|额度)$/.exec(label);
-  if (hours) return Number(hours[1]) * 3600;
-  return /^(five-hour|five_hour|limit_5h)$/.test(window.id) ? 18000 : null;
+  return quotaWindowPeriodSeconds(window);
 }
 
 export function sortQuotaWindows(windows: QuotaWindow[]): QuotaWindow[] {
@@ -44,7 +37,7 @@ export function sortQuotaWindows(windows: QuotaWindow[]): QuotaWindow[] {
 function quotaScope(providerId: string, window: QuotaWindow): string {
   if (window.timeKind === 'expiry') return window.id;
   if (providerId === 'codex' && window.id.startsWith('feature:')) return window.id.slice(0, window.id.lastIndexOf(':'));
-  if (window.groupLabel || window.id.startsWith('model:')) return window.id;
+  if (window.id.startsWith('model:')) return window.id;
   if (providerId === 'grok' && ['session', 'daily', 'weekly', 'monthly', 'billing'].includes(window.id)) return 'account';
   if (periodOrder(window) !== null && ['codex', 'claude', 'kimi', 'grok', 'zcode', 'minimax', 'opencode'].includes(providerId)) return 'account';
   return window.id;
@@ -100,10 +93,10 @@ export function quotaDisplayDetails(providerId: string, details: QuotaProviderSt
   if (providerId !== 'copilot') return details;
   const chat = details.find(detail => detail.id === 'chat');
   const completions = details.find(detail => detail.id === 'completions');
-  const merge = chat?.text === '无限' && completions?.text === '无限';
+  const merge = chat?.valueKind === 'unlimited' && completions?.valueKind === 'unlimited';
   return details.flatMap(detail => {
     if (merge && detail.id === 'completions') return [];
-    if (merge && detail.id === 'chat') return [{ id: 'chat-completions', label: '聊天与代码补全', text: '无限', resetsAt: null }];
+    if (merge && detail.id === 'chat') return [{ id: 'chat-completions', label: '聊天与代码补全', text: '无限', valueKind: 'unlimited', resetsAt: null }];
     return [{ ...detail, label: detail.id === 'completions' ? '代码补全' : detail.id === 'chat' && detail.label === 'Chat' ? '聊天' : detail.label }];
   });
 }

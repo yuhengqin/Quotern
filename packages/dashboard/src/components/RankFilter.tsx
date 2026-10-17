@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Label, ListBox, Select, Tabs, Tooltip } from '@heroui/react';
 import { Share2 } from 'lucide-react';
+import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { RankModelCascadeSelect } from '@/components/RankModelCascadeSelect';
 import { RankShareModal } from '@/components/RankShareModal';
@@ -14,12 +15,7 @@ import type {
 } from '@/lib/api';
 import type { RankRange } from '@/lib/leaderboard';
 
-const RANGE_OPTIONS: readonly { id: RankRange; label: string }[] = [
-  { id: 'today', label: '今天' },
-  { id: 'week', label: '本周' },
-  { id: 'month', label: '本月' },
-  { id: 'all', label: '全部' },
-];
+const RANGE_OPTIONS: readonly RankRange[] = ['today', 'week', 'month', 'all'];
 
 const FILTER_CONTROL_HEIGHT = '!h-8 !min-h-8';
 const FILTER_POPOVER = 'w-50 !max-h-64 overflow-hidden rounded-xl bg-surface shadow-md';
@@ -65,24 +61,25 @@ export function RankFilter({
   value: RankRange;
   onChange: (value: RankRange) => void;
 }) {
+  const { t } = useTranslation();
   const [isShareOpen, setIsShareOpen] = useState(false);
-  const toolLabel = tools.find((item) => item.key === tool)?.displayName ?? '全部 Agent';
-  const modelLabel = model || '全部模型';
+  const toolLabel = tools.find((item) => item.key === tool)?.displayName ?? t('rank.filter.allAgents');
+  const modelLabel = model || t('rank.filter.allModels');
 
   return (
     <div
-      aria-label="排行榜筛选"
+      aria-label={t('rank.filter.groupAria')}
       className="mb-4 flex w-full min-w-0 items-center gap-1.5 sm:gap-2"
     >
       {/* Mobile: compact range select. Desktop: tabs. */}
       <div className="shrink-0 sm:hidden">
         <RankSelect
-          ariaLabel="时间范围"
+          ariaLabel={t('rank.filter.range')}
           options={RANGE_OPTIONS.map((option) => ({
-            id: option.id,
-            label: option.label,
+            id: option,
+            label: t(`rank.range.${option}`),
           }))}
-          placeholder="时间范围"
+          placeholder={t('rank.filter.range')}
           value={value}
           onChange={(next) => onChange(next as RankRange)}
           allowEmpty={false}
@@ -95,12 +92,12 @@ export function RankFilter({
       >
         <Tabs.ListContainer>
           <Tabs.List
-            aria-label="时间范围"
+            aria-label={t('rank.filter.range')}
             className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
           >
             {RANGE_OPTIONS.map((option) => (
-              <Tabs.Tab id={option.id} key={option.id}>
-                <span className="text-xs font-normal">{option.label}</span>
+              <Tabs.Tab id={option} key={option}>
+                <span className="text-xs font-normal">{t(`rank.range.${option}`)}</span>
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
@@ -117,7 +114,7 @@ export function RankFilter({
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <Tooltip closeDelay={80} delay={100}>
           <Button
-            aria-label="GitHub 仓库"
+            aria-label={t('rank.filter.github')}
             className="size-8 min-h-8 min-w-8 shrink-0 p-0"
             isIconOnly
             onPress={openGithubRepository}
@@ -127,12 +124,12 @@ export function RankFilter({
             <LogoGithub className="size-4" />
           </Button>
           <Tooltip.Content placement="bottom">
-            <p>GitHub 仓库</p>
+            <p>{t('rank.filter.github')}</p>
           </Tooltip.Content>
         </Tooltip>
         <Tooltip closeDelay={80} delay={100}>
           <Button
-            aria-label="分享排行榜"
+            aria-label={t('rank.filter.shareAria')}
             className="size-8 min-h-8 min-w-8 shrink-0 p-0"
             isIconOnly
             onPress={() => setIsShareOpen(true)}
@@ -142,7 +139,7 @@ export function RankFilter({
             <Share2 className="size-4" />
           </Button>
           <Tooltip.Content placement="bottom">
-            <p>分享</p>
+            <p>{t('rank.filter.share')}</p>
           </Tooltip.Content>
         </Tooltip>
         <ThemeToggle />
@@ -173,17 +170,18 @@ function ToolSelect({
   tools: readonly { key: string; displayName: string }[];
   value: string;
 }) {
+  const { t } = useTranslation();
   const selected = tools.find((item) => item.key === value);
 
   return (
     <Select
-      aria-label="Agent 筛选"
+      aria-label={t('rank.filter.agentAria')}
       className="min-w-0 max-w-[7.5rem] shrink text-xs sm:max-w-52 sm:shrink-0"
       variant="secondary"
       value={value || 'all'}
       onChange={(key) => onChange(key === 'all' || key == null ? '' : String(key))}
     >
-      <Label className="sr-only">Agent 筛选</Label>
+      <Label className="sr-only">{t('rank.filter.agentAria')}</Label>
       <Select.Trigger
         className={`${FILTER_CONTROL_HEIGHT} !w-fit max-w-[7.5rem] items-center leading-none ps-2.5 pe-7 !text-xs font-normal sm:max-w-52 sm:ps-3 sm:pe-8`}
       >
@@ -195,16 +193,16 @@ function ToolSelect({
                 <span className="truncate">{selected.displayName}</span>
               </span>
             ) : (
-              '全部 Agent'
+              t('rank.filter.allAgents')
             )
           }
         </Select.Value>
         <Select.Indicator className="size-3.5 text-muted" />
       </Select.Trigger>
       <Select.Popover className={FILTER_POPOVER} placement="bottom start">
-        <ListBox aria-label="Agent 筛选" className={FILTER_POPOVER_LIST}>
-          <ListBox.Item id="all" textValue="全部 Agent">
-            全部 Agent
+        <ListBox aria-label={t('rank.filter.agentAria')} className={FILTER_POPOVER_LIST}>
+          <ListBox.Item id="all" textValue={t('rank.filter.allAgents')}>
+            {t('rank.filter.allAgents')}
             <ListBox.ItemIndicator />
           </ListBox.Item>
           {tools.map((item) => (

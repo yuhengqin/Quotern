@@ -24,6 +24,13 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import {
+  LOCALE_CHANGED_CHANNEL,
+  LOCALE_GET_CHANNEL,
+  LOCALE_SET_CHANNEL,
+  type DesktopLocaleState,
+} from '../shared/locale';
+import type { LocalePreference } from 'quotern-i18n';
 import { SHARE_BACKGROUNDS_CHANNEL, type SavedShareBackground, type ShareBackgroundRequest } from '../shared/share-backgrounds';
 import {
   TRAY_USAGE_CHANGED_CHANNEL,
@@ -250,6 +257,18 @@ const tudApi = {
 
   getTheme: (): Promise<{ mode: ThemeMode; resolved: Theme }> =>
     ipcRenderer.invoke(THEME_GET_CHANNEL),
+
+  getLocalePreference: (): Promise<DesktopLocaleState> =>
+    ipcRenderer.invoke(LOCALE_GET_CHANNEL),
+
+  setLocalePreference: (preference: LocalePreference): Promise<void> =>
+    ipcRenderer.invoke(LOCALE_SET_CHANNEL, preference),
+
+  onLocaleChanged: (callback: (state: DesktopLocaleState) => void) => {
+    const listener = (_event: unknown, state: DesktopLocaleState) => callback(state);
+    ipcRenderer.on(LOCALE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(LOCALE_CHANGED_CHANNEL, listener);
+  },
 
   setThemeMode: (mode: ThemeMode) =>
     ipcRenderer.send(THEME_SET_CHANNEL, mode),

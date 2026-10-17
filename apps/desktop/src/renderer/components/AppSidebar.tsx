@@ -8,6 +8,7 @@ import {
 } from '@gravity-ui/icons';
 import { Tooltip } from '@heroui/react';
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { isCliBackend, triggerSync } from '@/lib/api';
 import {
   dispatchDataSynced,
@@ -59,11 +60,12 @@ export function AppSidebar({
   collapsed,
   onToggleCollapsed,
 }: AppSidebarProps) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [busy, setBusy] = useState(false);
   const expanded = !collapsed || hovered;
   const cliBackend = isCliBackend();
-  const refreshLabel = cliBackend ? '同步数据' : '刷新数据';
+  const refreshLabel = t(cliBackend ? 'shell.syncData' : 'shell.refreshData');
 
   const refreshData = async () => {
     setBusy(true);
@@ -88,13 +90,13 @@ export function AppSidebar({
       onMouseLeave={() => setHovered(false)}
     >
       <nav
-        aria-label="快捷操作"
+        aria-label={t('shell.quickActions')}
         className="flex w-max flex-col items-stretch gap-0.5"
       >
         <SidebarAction
           expanded={expanded}
           icon={<Gear className="size-4.5 shrink-0" />}
-          label="设置"
+          label={t('shell.settings')}
           onPress={() => dispatchOpenSettings()}
         />
         <SidebarAction
@@ -116,7 +118,7 @@ export function AppSidebar({
         <SidebarAction
           expanded={expanded}
           icon={<NodesRight className="size-4.5 shrink-0" />}
-          label="分享"
+          label={t('shell.share')}
           onPress={() => {
             void shareCurrentPage();
           }}
@@ -124,7 +126,7 @@ export function AppSidebar({
         <SidebarAction
           expanded={expanded}
           icon={<CircleInfo className="size-4.5 shrink-0" />}
-          label="关于"
+          label={t('shell.about')}
           onPress={() => dispatchOpenAbout()}
         />
 
@@ -145,7 +147,7 @@ export function AppSidebar({
               <PinSlash className="size-4.5 shrink-0" />
             )
           }
-          label={collapsed ? '固定' : '取消固定'}
+          label={t(collapsed ? 'shell.pin' : 'shell.unpin')}
           onPress={onToggleCollapsed}
         />
       </nav>

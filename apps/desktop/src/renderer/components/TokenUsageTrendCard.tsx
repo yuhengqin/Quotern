@@ -1,5 +1,6 @@
 import { memo, useId, useMemo, useState } from 'react';
 import { Card, Tabs } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   Area,
   CartesianGrid,
@@ -35,11 +36,11 @@ type SeriesKey = (typeof SERIES_KEYS)[number];
 type TokenTrendView = 'all' | 'detail';
 
 const CHART_CONFIG = {
-  totalTokens: { label: '总 Token', color: '#1F6FE5' },
-  inputTokens: { label: '输入', color: '#71BD99' },
-  outputTokens: { label: '输出', color: '#397FEC' },
-  cachedInputTokens: { label: '缓存', color: '#E9A846' },
-  otherTokens: { label: '其他', color: '#8C7AE6' },
+  totalTokens: { label: 'usage.common.totalTokens', color: '#1F6FE5' },
+  inputTokens: { label: 'usage.common.input', color: '#71BD99' },
+  outputTokens: { label: 'usage.common.output', color: '#397FEC' },
+  cachedInputTokens: { label: 'usage.common.cache', color: '#E9A846' },
+  otherTokens: { label: 'usage.common.other', color: '#8C7AE6' },
 } satisfies ChartConfig;
 
 interface TokenUsageTrendCardProps {
@@ -58,6 +59,10 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
   dailyRows,
   dayScoped = false,
 }: TokenUsageTrendCardProps) {
+  const { t } = useTranslation();
+  const chartConfig = Object.fromEntries(
+    Object.entries(CHART_CONFIG).map(([key, value]) => [key, { ...value, label: t(value.label) }]),
+  ) as ChartConfig;
   const gradientId = useId().replace(/:/g, '');
   const [trendView, setTrendView] = useState<TokenTrendView>('all');
 
@@ -68,13 +73,13 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
 
   const title = hourly
     ? dayScoped
-      ? '当日 Token 用量'
-      : '今日 Token 用量'
-    : 'Token 用量';
+      ? t('usage.chart.dayTokens')
+      : t('usage.chart.todayTokens')
+    : t('usage.chart.tokens');
   const description =
     trendView === 'all'
-      ? '总 Token 用量趋势'
-      : '输入、输出、缓存与其他 Token 趋势';
+      ? t('usage.chart.totalTrend')
+      : t('usage.chart.breakdownTrend');
 
   return (
     <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
@@ -84,7 +89,7 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
           <Card.Description className="mt-1">{description}</Card.Description>
         </div>
         <Tabs
-          aria-label="Token 趋势展示方式"
+          aria-label={t('usage.chart.viewMode')}
           className="w-fit shrink-0 text-center"
           selectedKey={trendView}
           onSelectionChange={(key) =>
@@ -93,15 +98,15 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
         >
           <Tabs.ListContainer>
             <Tabs.List
-              aria-label="Token 趋势展示方式"
+              aria-label={t('usage.chart.viewMode')}
               className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:data-[selected=true]:text-accent-foreground"
             >
               <Tabs.Tab id="all">
-                <span className="text-xs font-normal">全部</span>
+                <span className="text-xs font-normal">{t('usage.common.all')}</span>
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
               <Tabs.Tab id="detail">
-                <span className="text-xs font-normal">详细</span>
+                <span className="text-xs font-normal">{t('usage.common.detail')}</span>
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             </Tabs.List>
@@ -110,11 +115,11 @@ export const TokenUsageTrendCard = memo(function TokenUsageTrendCard({
       </Card.Header>
       <Card.Content className="pt-4">
         {rows.length === 0 ? (
-          <p className="py-12 text-center text-sm text-muted">暂无数据</p>
+          <p className="py-12 text-center text-sm text-muted">{t('usage.common.noData')}</p>
         ) : (
           <ChartContainer
             className="h-[260px] w-full"
-            config={CHART_CONFIG}
+            config={chartConfig}
             initialDimension={{ width: 720, height: 260 }}
           >
             <ComposedChart
@@ -225,6 +230,7 @@ function TokenDayTooltip({
   active?: boolean;
   payload?: Array<{ payload?: Record<string, unknown> }>;
 }) {
+  const { t } = useTranslation();
   if (!active || !payload?.length) return null;
 
   const row = payload[0]?.payload as UsageTrendChartPoint | undefined;
@@ -246,7 +252,7 @@ function TokenDayTooltip({
               className="h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: CHART_CONFIG.totalTokens.color }}
             />
-            合计
+            {t('usage.common.total')}
           </span>
           <span className="font-mono tabular-nums text-foreground">
             {formatTokens(row.totalTokens)}
@@ -260,7 +266,7 @@ function TokenDayTooltip({
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: CHART_CONFIG[key].color }}
               />
-              {CHART_CONFIG[key].label}
+              {t(CHART_CONFIG[key].label)}
             </span>
             <span className="font-mono tabular-nums text-foreground">
               {formatTokens(Number(row[key] ?? 0))}

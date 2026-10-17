@@ -86,10 +86,10 @@ export function getPrimaryPricingVariant(group: PricingModelGroup): PricingVaria
   return group.apiVariants[0] ?? group.subscriptionVariants.find(variant => variant.row.model === group.model)!;
 }
 
-export function formatPricingContext(value?: number): string {
+export function formatPricingContext(value?: number, locale = 'en-US'): string {
   if (value != null && value > 0 && Number.isSafeInteger(value)) {
-    if (value >= 1_048_576 && value % 1_048_576 === 0) return `${value / 1_048_576}M`;
-    if (value >= 1_024 && value % 1_024 === 0) return `${value / 1_024}K`;
+    if (value >= 1_048_576 && value % 1_048_576 === 0) return `${new Intl.NumberFormat(locale).format(value / 1_048_576)}M`;
+    if (value >= 1_024 && value % 1_024 === 0) return `${new Intl.NumberFormat(locale).format(value / 1_024)}K`;
   }
-  return formatContextWindow(value);
+  return formatContextWindow(value, locale);
 }

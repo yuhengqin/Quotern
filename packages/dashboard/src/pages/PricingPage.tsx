@@ -3,13 +3,16 @@ import { useSearch } from '@tanstack/react-router';
 import { Xmark } from '@gravity-ui/icons';
 import { Check, Columns2, Info } from 'lucide-react';
 import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { PricingList } from '../components/PricingList';
 import { BackToUsageLink } from '../components/BackToUsageLink';
-import { PricingCalculator, PricingProviderFilter, PricingSortSelect, formatPricingScenario } from '../components/PricingTools';
+import { PricingCalculator, PricingProviderFilter, PricingSortSelect, PricingScenarioSummary } from '../components/PricingTools';
 import { PricingComparison } from '../components/PricingComparison';
 import { PricingMoreFilters, EMPTY_PRICING_FILTERS, type PricingAdvancedFilters } from '../components/PricingMoreFilters';
 import { StatusBanner } from '../components/StatusBanner';
 import { usePricingCurrency } from '../hooks/usePricingCurrency';
+import { formatPricingExchangeRate } from '../lib/pricing-currency';
+import { formatPricingReleaseDate } from '../lib/pricing-display';
 import { fetchModelBreakdown, type ModelBreakdownRow } from '../lib/api';
 import { fetchPricingCatalog, type PricingCatalogResponse } from '../lib/pricing-data';
 import { filterPricingCatalog, formatContextWindow } from '../lib/pricing-filters';
@@ -22,12 +25,15 @@ import {
 import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingComparison } from '../lib/pricing-workbench';
 
 function ActiveFilter({ children, onRemove, label }: { children: ReactNode; onRemove: () => void; label: string }) {
-  return <Button className="!h-6 !min-h-6 max-w-full !gap-1 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={onRemove} aria-label={`清除${label}筛选`}>
+  const { t } = useTranslation();
+  return <Button className="!h-6 !min-h-6 max-w-full !gap-1 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={onRemove} aria-label={t('pricing.filters.remove', { label })}>
     <span className="min-w-0 truncate">{children}</span><Xmark className="size-3 shrink-0" aria-hidden />
   </Button>;
 }
 
 export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (days: number) => Promise<{ models: ModelBreakdownRow[] }> }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language;
   const search = useSearch({ strict: false }) as { q?: string };
   const initialQuery = typeof search.q === 'string' ? search.q : '';
   const [query, setQuery] = useState(initialQuery);
@@ -48,7 +54,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   const [usage, setUsage] = useState<ModelBreakdownRow[]>([]);
   const [usageStatus, setUsageStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   const { currency, setCurrency, exchangeRate, exchangeStatus, refreshExchangeRate, setManualExchangeRate } = usePricingCurrency();
 
@@ -60,11 +66,11 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setError(null);
+    setError(false);
     void fetchPricingCatalog().then(data => {
       if (!cancelled) setCatalog(data);
-    }).catch((reason: unknown) => {
-      if (!cancelled) setError(reason instanceof Error ? reason.message : '模型价格加载失败');
+    }).catch(() => {
+      if (!cancelled) setError(true);
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [retry]);
@@ -94,7 +100,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   const selectedGroups = useMemo(() => selected.flatMap(id => modelGroups.find(group => group.id === id) ?? []), [selected, modelGroups]);
   const toggleComparison = (id: string) => {
     if (!selected.includes(id) && selected.length >= MAX_COMPARISON_MODELS) {
-      const notice = { title: <strong className="font-semibold">最多对比 4 个模型</strong>, variant: 'default' as const };
+      const notice = { title: <strong className="font-semibold">{t('pricing.compare.limit', { count: MAX_COMPARISON_MODELS })}</strong>, variant: 'default' as const };
       if (!comparisonLimitToast.current) {
         comparisonLimitToast.current = toastQueue.add(notice, { timeout: 2500, onClose: () => { comparisonLimitToast.current = null; } });
       }
@@ -108,94 +114,100 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   };
   const channelCount = groups.reduce((sum, group) => sum + group.entries.length, 0);
   const hasFilterChips = Boolean(query.trim() || providerFilters.length > 0 || advancedFilters.minContext || advancedFilters.releasedAfter || advancedFilters.releasedBefore || usedOnly);
+  const providerName = (key: string) => {
+    const provider = providers.find(item => item.key === key);
+    return provider?.key === 'unknown' ? t('pricing.provider.other') : provider?.label ?? key;
+  };
   const clearFilters = () => { setQuery(''); setDebouncedQuery(''); setProviderFilters([]); setAdvancedFilters(EMPTY_PRICING_FILTERS); setUsedOnly(false); };
   const sortKey = `${sort.column}:${sort.direction}`;
   const tableTimestamp = catalog?.generatedAt ?? catalog?.updatedAt;
-  const dateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleString('zh-CN', { hour12: false }) : '未知';
-  const shortDateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleDateString('zh-CN') : '未知';
+  const dateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleString(locale, { hour12: false }) : t('pricing.summary.unknownDate');
+  const shortDateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleDateString(locale) : t('pricing.summary.unknownDate');
   const comparisonHint = selectedGroups.length === MAX_COMPARISON_MODELS ? ''
-    : selectedGroups.length === 1 ? '还需选择 1 个' : '勾选 2～4 个模型对比';
+    : selectedGroups.length === 1 ? t('pricing.compare.needOne') : t('pricing.compare.hint');
+  const tableDateKind = catalog?.generatedAt ? t('pricing.summary.generatedAt') : t('pricing.summary.updatedAt');
+  const rateNote = currency === 'CNY' ? t('pricing.summary.rateNote') : '';
 
   return (
     <section className="flex h-[calc(100dvh-5rem)] min-h-0 min-w-0 flex-col gap-3">
       <Toast.Provider placement="top" queue={toastQueue} width={240} className="top-12 !w-60 !min-w-0 max-w-[calc(100vw-2rem)]" />
       <header className="shrink-0">
         <BackToUsageLink />
-        <div className="min-w-0"><h1 className="text-xl font-semibold">模型价格</h1><p className="mt-1 text-xs text-muted">API 参考价 · {currency} / 百万 Token</p></div>
+        <div className="min-w-0"><h1 className="text-xl font-semibold">{t('pricing.title')}</h1><p className="mt-1 text-xs text-muted">{t('pricing.subtitle', { currency })}</p></div>
       </header>
-      <div aria-label="价格筛选条件" className="flex shrink-0 flex-wrap items-center gap-2">
-        <SearchField aria-label="搜索模型名称或 ID" value={query} onChange={setQuery} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-72">
-          <Label className="sr-only">搜索模型名称或 ID</Label>
-          <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder="搜索模型名称或 ID" /><SearchField.ClearButton /></SearchField.Group>
+      <div aria-label={t('pricing.filters.aria')} className="flex shrink-0 flex-wrap items-center gap-2">
+        <SearchField aria-label={t('pricing.filters.search')} value={query} onChange={setQuery} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-72">
+          <Label className="sr-only">{t('pricing.filters.search')}</Label>
+          <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder={t('pricing.filters.search')} /><SearchField.ClearButton /></SearchField.Group>
         </SearchField>
         <PricingProviderFilter providers={providers} value={providerFilters} onChange={setProviderFilters} />
-        <Select aria-label="价格币种" value={currency} variant="secondary" onChange={key => { if (key === 'USD' || key === 'CNY') setCurrency(key); }} className="min-w-0 text-xs">
-          <Label className="sr-only">价格币种</Label>
+        <Select aria-label={t('pricing.filters.currency')} value={currency} variant="secondary" onChange={key => { if (key === 'USD' || key === 'CNY') setCurrency(key); }} className="min-w-0 text-xs">
+          <Label className="sr-only">{t('pricing.filters.currency')}</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover><ListBox aria-label="价格币种选项"><ListBox.Item id="USD" textValue="USD">USD · 美元<ListBox.ItemIndicator /></ListBox.Item><ListBox.Item id="CNY" textValue="CNY">CNY · 人民币<ListBox.ItemIndicator /></ListBox.Item></ListBox></Select.Popover>
+          <Select.Popover><ListBox aria-label={t('pricing.filters.currencyOptions')}><ListBox.Item id="USD" textValue="USD">{t('pricing.filters.usd')}<ListBox.ItemIndicator /></ListBox.Item><ListBox.Item id="CNY" textValue="CNY">{t('pricing.filters.cny')}<ListBox.ItemIndicator /></ListBox.Item></ListBox></Select.Popover>
         </Select>
         <PricingSortSelect value={sort} onChange={setSort} />
         <Button aria-pressed={usedOnly} isDisabled={usageStatus !== 'ready'} onPress={() => setUsedOnly(value => !value)} size="sm" variant={usedOnly ? 'secondary' : 'tertiary'} className={`!h-8 !min-h-8 shrink-0 !gap-1 !px-3 !text-xs ${usedOnly ? 'text-accent' : ''}`}>
-          {usedOnly && <Check className="size-3" aria-hidden />}近 30 天用过
+          {usedOnly && <Check className="size-3" aria-hidden />}{t('pricing.filters.used')}
         </Button>
         <PricingMoreFilters filters={advancedFilters} onChange={setAdvancedFilters} currency={currency} exchangeRate={exchangeRate} exchangeStatus={exchangeStatus} onManualRate={setManualExchangeRate} onRefreshRate={() => { void refreshExchangeRate(); }} />
         <PricingCalculator scenario={scenario} onChange={setScenario} enabled={estimateEnabled} onEnabledChange={setEstimateEnabled} />
       </div>
-      {hasFilterChips && <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label="已选筛选条件">
-        {query.trim() && <ActiveFilter label="搜索" onRemove={() => { setQuery(''); setDebouncedQuery(''); }}>搜索：{query.trim()}</ActiveFilter>}
-        {usedOnly && <ActiveFilter label="用量" onRemove={() => setUsedOnly(false)}>近 30 天有匹配用量</ActiveFilter>}
-        {providerFilters.map(key => <ActiveFilter key={key} label={providers.find(provider => provider.key === key)?.label ?? key} onRemove={() => setProviderFilters(providerFilters.filter(provider => provider !== key))}>{providers.find(provider => provider.key === key)?.label ?? key}</ActiveFilter>)}
-        {advancedFilters.minContext > 0 && <ActiveFilter label="上下文" onRemove={() => setAdvancedFilters({ ...advancedFilters, minContext: 0 })}>上下文 ≥ {formatContextWindow(advancedFilters.minContext)}</ActiveFilter>}
-        {(advancedFilters.releasedAfter || advancedFilters.releasedBefore) && <ActiveFilter label="发布时间" onRemove={() => setAdvancedFilters({ ...advancedFilters, releasedAfter: '', releasedBefore: '' })}>发布：{advancedFilters.releasedAfter || '不限'} ～ {advancedFilters.releasedBefore || '不限'}</ActiveFilter>}
-        <Button className="!h-6 !min-h-6 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={clearFilters}>清除全部筛选</Button>
+      {hasFilterChips && <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label={t('pricing.filters.selected')}>
+        {query.trim() && <ActiveFilter label={t('pricing.filters.search')} onRemove={() => { setQuery(''); setDebouncedQuery(''); }}>{t('pricing.filters.searchChip', { query: query.trim() })}</ActiveFilter>}
+        {usedOnly && <ActiveFilter label={t('pricing.filters.usage')} onRemove={() => setUsedOnly(false)}>{t('pricing.filters.usedChip')}</ActiveFilter>}
+        {providerFilters.map(key => <ActiveFilter key={key} label={providerName(key)} onRemove={() => setProviderFilters(providerFilters.filter(provider => provider !== key))}>{providerName(key)}</ActiveFilter>)}
+        {advancedFilters.minContext > 0 && <ActiveFilter label={t('pricing.filters.context')} onRemove={() => setAdvancedFilters({ ...advancedFilters, minContext: 0 })}>{t('pricing.filters.contextChip', { value: formatContextWindow(advancedFilters.minContext, locale) })}</ActiveFilter>}
+        {(advancedFilters.releasedAfter || advancedFilters.releasedBefore) && <ActiveFilter label={t('pricing.filters.release')} onRemove={() => setAdvancedFilters({ ...advancedFilters, releasedAfter: '', releasedBefore: '' })}>{t('pricing.filters.releaseChip', { start: advancedFilters.releasedAfter ? formatPricingReleaseDate(advancedFilters.releasedAfter, locale) : t('pricing.filters.unlimited'), end: advancedFilters.releasedBefore ? formatPricingReleaseDate(advancedFilters.releasedBefore, locale) : t('pricing.filters.unlimited') })}</ActiveFilter>}
+        <Button className="!h-6 !min-h-6 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={clearFilters}>{t('pricing.filters.clearAll')}</Button>
       </div>}
       {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-        <span role="status" aria-live="polite">{groups.length} 个模型</span>
-        {sort.column === 'usage' && <span>{usageStatus === 'loading' ? '用量加载中，暂按最新主推排序' : usageStatus === 'error' ? '用量暂不可用，暂按最新主推排序' : hasUsage ? '近 30 天 · 按 Token 用量排序' : '暂无近 30 天可匹配用量，暂按最新主推排序'}</span>}
-        {sort.column === 'latest' && <span>主推型号优先 · 按发布日期排序</span>}
-        {usageStatus !== 'ready' && sort.column !== 'usage' && <span>{usageStatus === 'error' ? '用量暂不可用' : '用量加载中'}</span>}
-        <span title={dateLabel}>价格表{catalog.generatedAt ? '生成于' : '文件更新于'} {shortDateLabel}</span>
+        <span role="status" aria-live="polite">{t('pricing.summary.count', { count: groups.length })}</span>
+        {sort.column === 'usage' && <span>{t(usageStatus === 'loading' ? 'pricing.summary.usageLoadingSort' : usageStatus === 'error' ? 'pricing.summary.usageErrorSort' : hasUsage ? 'pricing.summary.usageSort' : 'pricing.summary.noUsageSort')}</span>}
+        {sort.column === 'latest' && <span>{t('pricing.summary.latestSort')}</span>}
+        {usageStatus !== 'ready' && sort.column !== 'usage' && <span>{t(usageStatus === 'error' ? 'pricing.summary.usageError' : 'pricing.summary.usageLoading')}</span>}
+        <span title={dateLabel}>{t('pricing.summary.tableDate', { kind: tableDateKind, date: shortDateLabel })}</span>
         <Popover>
-          <Button variant="ghost" size="sm" className="!h-6 !min-h-6 !gap-1 !px-1 !text-[11px] text-muted"><Info className="size-3" aria-hidden />数据说明</Button>
+          <Button variant="ghost" size="sm" className="!h-6 !min-h-6 !gap-1 !px-1 !text-[11px] text-muted"><Info className="size-3" aria-hidden />{t('pricing.summary.dataInfo')}</Button>
           <Popover.Content placement="bottom start" className="max-w-80">
             <Popover.Dialog className="space-y-2 p-3 text-xs">
-              <Popover.Heading>价格数据说明</Popover.Heading>
-              <p>当前 {groups.length} / {modelGroups.length} 个模型，合并展示 {channelCount} 条渠道记录。</p>
-              <p className="text-muted">{catalog.source === 'bundled' ? '内置价格表' : '已发布价格表'} · {catalog.generatedAt ? '生成于' : '文件更新于'} {dateLabel}</p>
-              <p className="text-muted">来源：<a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">models.dev</a> 与人工补充</p>
-              <p className="text-muted">服务提供商表示供应渠道，可能提供其他品牌的模型。后缀保留原始调用名，不代表已核实的性能差异。</p>
-              <p className="text-muted">≈ 表示显示值已舍入，悬停或打开渠道详情可查看精确参考价。{currency === 'USD' ? '$0' : '¥0'} 表示 API 零价，— 表示未提供定价{currency === 'CNY' ? '或汇率暂不可用' : ''}。</p>
+              <Popover.Heading>{t('pricing.summary.dataHeading')}</Popover.Heading>
+              <p>{t('pricing.summary.countDetails', { visible: groups.length, total: modelGroups.length, channels: channelCount })}</p>
+              <p className="text-muted">{t(catalog.source === 'bundled' ? 'pricing.summary.bundled' : 'pricing.summary.published')} · {t('pricing.summary.tableDate', { kind: tableDateKind, date: dateLabel })}</p>
+              <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
+              <p className="text-muted">{t('pricing.summary.providerMeaning')}</p>
+              <p className="text-muted">{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
             </Popover.Dialog>
           </Popover.Content>
         </Popover>
       </div>}
-      {estimateEnabled && <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-[11px] text-muted" aria-label="当前试算用量">
-        <span>试算：{formatPricingScenario(scenario)}</span><Button size="sm" variant="ghost" isIconOnly aria-label="关闭费用试算" className="!size-6 !min-h-6 !min-w-6 !p-0" onPress={() => setEstimateEnabled(false)}><Xmark className="size-3" /></Button>
+      {estimateEnabled && <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-[11px] text-muted" aria-label={t('pricing.calculator.settings')}>
+        <span><PricingScenarioSummary scenario={scenario} withPrefix /></span><Button size="sm" variant="ghost" isIconOnly aria-label={t('pricing.calculator.close')} className="!size-6 !min-h-6 !min-w-6 !p-0" onPress={() => setEstimateEnabled(false)}><Xmark className="size-3" /></Button>
       </div>}
       {currency === 'CNY' && <div className="shrink-0 text-[11px] text-muted" role="status" aria-live="polite">
-        {exchangeRate ? <>$1 = ¥{exchangeRate.rate} · {exchangeRate.source === 'manual' ? '手动汇率' : <><a className="underline underline-offset-2" href="https://frankfurter.dev" target="_blank" rel="noreferrer">Frankfurter</a> · {exchangeRate.date}</>}{exchangeStatus === 'loading' ? ' · 更新中' : exchangeStatus === 'error' ? ' · 自动更新失败，保留当前汇率' : ''}</>
-          : exchangeStatus === 'loading' ? '正在获取 USD/CNY 参考汇率…' : '汇率暂不可用，请在“更多筛选”中重试或手动设置'}
+        {exchangeRate ? <>$1 = ¥{formatPricingExchangeRate(exchangeRate.rate, locale)} · {exchangeRate.source === 'manual' ? t('pricing.exchange.manual') : <><a className="underline underline-offset-2" href="https://frankfurter.dev" target="_blank" rel="noreferrer">Frankfurter</a> · {formatPricingReleaseDate(exchangeRate.date ?? undefined, locale)}</>}{exchangeStatus === 'loading' ? ` · ${t('pricing.exchange.updating')}` : exchangeStatus === 'error' ? ` · ${t('pricing.exchange.updateFailed')}` : ''}</>
+          : t(exchangeStatus === 'loading' ? 'pricing.exchange.loading' : 'pricing.exchange.unavailable')}
       </div>}
-      {loading ? <div aria-label="模型价格加载中" className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
-        : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title="模型价格加载失败" description={error} /><Button variant="outline" onPress={() => setRetry(value => value + 1)}>重试</Button></div>
+      {loading ? <div aria-label={t('pricing.loading')} className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
+        : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title={t('pricing.loadError')} /><Button variant="outline" onPress={() => setRetry(value => value + 1)}>{t('pricing.retry')}</Button></div>
           : <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
-            <div role="group" aria-label="模型对比操作" className={`grid h-[72px] shrink-0 grid-rows-[32px_28px] gap-1 rounded-xl border px-2 py-1 sm:h-14 sm:grid-rows-[16px_28px] ${selectedGroups.length ? 'border-accent/20 bg-accent-soft/30' : 'border-border/60 bg-surface-secondary/40'}`}>
+            <div role="group" aria-label={t('pricing.compare.operations')} className={`grid h-[72px] shrink-0 grid-rows-[32px_28px] gap-1 rounded-xl border px-2 py-1 sm:h-14 sm:grid-rows-[16px_28px] ${selectedGroups.length ? 'border-accent/20 bg-accent-soft/30' : 'border-border/60 bg-surface-secondary/40'}`}>
               <div id={comparisonStatusId} role="status" aria-live="polite" aria-atomic="true" className="min-w-0 text-[11px] leading-4">
-                {selectedGroups.length > 0 && <span className="mr-2 whitespace-nowrap font-medium">已选 {selectedGroups.length} / {MAX_COMPARISON_MODELS}</span>}
+                {selectedGroups.length > 0 && <span className="mr-2 whitespace-nowrap font-medium">{t('pricing.compare.selectedCount', { count: selectedGroups.length, max: MAX_COMPARISON_MODELS })}</span>}
                 <span className="text-muted">{comparisonHint}</span>
               </div>
               <div className="flex min-w-0 items-center gap-1.5">
-                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label="已选对比模型">
-                  {selectedGroups.length ? selectedGroups.map(group => <Button key={group.id} variant="tertiary" size="sm" className="!h-6 !min-h-6 max-w-40 shrink-0 !gap-1 !px-1.5 !text-[11px]" aria-label={`移除对比 ${getPricingModelName(group.model, group.displayName)}`} onPress={() => setSelected(current => current.filter(id => id !== group.id))}><span className="truncate">{getPricingModelName(group.model, group.displayName)}</span><Xmark className="size-3 shrink-0" aria-hidden /></Button>)
-                    : <span className="truncate text-[10px] text-muted">价格单位：{currency === 'USD' ? '$' : '¥'} / 百万 Token{estimateEnabled ? ' · 试算为总费用' : ''}</span>}
+                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label={t('pricing.compare.selectedModels')}>
+                  {selectedGroups.length ? selectedGroups.map(group => <Button key={group.id} variant="tertiary" size="sm" className="!h-6 !min-h-6 max-w-40 shrink-0 !gap-1 !px-1.5 !text-[11px]" aria-label={t('pricing.compare.remove', { name: getPricingModelName(group.model, group.displayName) })} onPress={() => setSelected(current => current.filter(id => id !== group.id))}><span className="truncate">{getPricingModelName(group.model, group.displayName)}</span><Xmark className="size-3 shrink-0" aria-hidden /></Button>)
+                    : <span className="truncate text-[10px] text-muted">{t('pricing.compare.unitHint', { symbol: currency === 'USD' ? '$' : '¥', estimateNote: estimateEnabled ? t('pricing.compare.estimateNote') : '' })}</span>}
                 </div>
-                <Button variant="ghost" size="sm" className="!h-7 !min-h-7 shrink-0 !px-2 !text-xs" isDisabled={selectedGroups.length === 0} onPress={() => setSelected([])}>清除已选</Button>
-                <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" aria-describedby={comparisonStatusId} isDisabled={selectedGroups.length < 2} onPress={() => setComparisonOpen(true)}><Columns2 className="size-3.5" aria-hidden />开始对比</Button>
+                <Button variant="ghost" size="sm" className="!h-7 !min-h-7 shrink-0 !px-2 !text-xs" isDisabled={selectedGroups.length === 0} onPress={() => setSelected([])}>{t('pricing.compare.clear')}</Button>
+                <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" aria-describedby={comparisonStatusId} isDisabled={selectedGroups.length < 2} onPress={() => setComparisonOpen(true)}><Columns2 className="size-3.5" aria-hidden />{t('pricing.compare.start')}</Button>
               </div>
             </div>
             <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}:${usedOnly}`} groups={groups} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} query={debouncedQuery} selected={selected} onCompare={toggleComparison} scenario={estimateEnabled ? scenario : null} />
           </div>}
-      <p className="shrink-0 text-[10px] text-muted">≈ 表示舍入 · — 表示未提供定价{currency === 'CNY' ? '或汇率暂不可用' : ''} · 订阅以渠道套餐为准</p>
+      <p className="shrink-0 text-[10px] text-muted">{t('pricing.summary.footnote', { rateNote })}</p>
       {comparisonOpen && selectedGroups.length >= 2 && <PricingComparison groups={selectedGroups} initialChannels={selectedChannels} onClose={() => setComparisonOpen(false)} scenario={scenario} onScenarioChange={value => { setScenario(value); setEstimateEnabled(true); }} currency={currency} exchangeRate={exchangeRate?.rate ?? null} usageStatus={usageStatus} />}
     </section>
   );

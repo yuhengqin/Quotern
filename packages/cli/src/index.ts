@@ -16,10 +16,8 @@ import {
   listenServer,
   loadConfig,
   POLL_INTERVAL_MS,
-  pollIntervalLabel,
   releaseRuntimeOwner,
   resolveLocalCollectSince,
-  runtimeKindLabel,
   saveConfig,
   setupClaudeHook,
   setupCodexHook,
@@ -56,6 +54,8 @@ import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js'
 import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
 import { parseUsageArgs } from './usage-args.js';
 import { formatUsageReport } from './usage-output.js';
+import type { SupportedLocale } from 'quotern-i18n';
+import { CliUserError, cliT, extractCliLanguage, previewCliLocale, systemCliLocale, userError } from './i18n/locale.js';
 
 export { parseArgs } from './args.js';
 
@@ -78,6 +78,22 @@ let runtimeDataDir: string | null = null;
 /** True only when this process wrote `tud.pid` as local collection owner. */
 let ownedPid = false;
 let runtimeRole: 'owner' | 'observer' = 'owner';
+let activeLocale: SupportedLocale = systemCliLocale();
+
+const t = (key: string, options?: Record<string, unknown>) => cliT(activeLocale, key, options);
+const runtimeLabel = (kind: 'cli' | 'desktop') => t(`common.kind.${kind}`);
+const count = (value: number) => new Intl.NumberFormat(activeLocale).format(value);
+const pollInterval = () => POLL_INTERVAL_MS < 60_000
+  ? t('common.second', { count: count(Math.max(1, Math.round(POLL_INTERVAL_MS / 1_000))) })
+  : t('common.minute', { count: count(Math.round(POLL_INTERVAL_MS / 60_000)) });
+function displayDate(value: string | null | undefined): string {
+  if (!value || !Number.isFinite(Date.parse(value))) return t('common.never');
+  return new Intl.DateTimeFormat(activeLocale, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value));
+}
+function diagnosticDetail(err: unknown): void {
+  if (process.env.QUOTERN_DEBUG !== '1') return;
+  console.error(t('common.debugDetails', { details: err instanceof Error ? err.message : String(err) }));
+}
 
 async function startPricingOverlayRefresh(
   dir: string,
@@ -100,21 +116,17 @@ async function startPricingOverlayRefresh(
       void current.aggregateCache
         .rebuildFromRows(current.bucketStore.getRows())
         .catch((err) => {
-          console.warn(
-            '定价覆盖层刷新后重建缓存失败:',
-            err instanceof Error ? err.message : err,
-          );
+          console.warn(t('start.pricingCacheFailed'));
+          diagnosticDetail(err);
         });
     },
     onError: (err) => {
-      console.warn(
-        '定价表远程刷新失败（继续用内置/上次覆盖）:',
-        err instanceof Error ? err.message : err,
-      );
+      console.warn(t('start.pricingRefreshFailed'));
+      diagnosticDetail(err);
     },
   });
   pricingRefreshStop = handle;
-  console.log(`定价覆盖层: ${url}（启动时拉取一次）`);
+  console.log(t('start.pricingOverlay', { url }));
   await handle.ready;
 }
 
@@ -175,9 +187,7 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
 
   const existing = await getRunningOwner(dir);
   if (existing != null && existing.pid !== process.pid && existing.kind === 'cli') {
-    throw new Error(
-      `服务已在运行（CLI pid ${existing.pid}），请先 quotern service stop 或结束该进程`,
-    );
+    throw userError(activeLocale, 'start.alreadyRunning', { pid: existing.pid });
   }
 
   // Desktop already owns local collection → serve panel only (observer).
@@ -201,23 +211,21 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
   config.serverHost = host;
   await saveConfig(dir, config);
 
-  console.log(`设备 UUID: ${config.deviceId}`);
+  console.log(t('start.device', { uuid: config.deviceId }));
 
   if (isObserver && existing) {
-    console.log(
-      `\n◎ 观察模式：${runtimeKindLabel(existing.kind)} (pid ${existing.pid}) 负责本地采集`,
-    );
-    console.log('  本进程只提供面板读数，不抢占 runtime、不轮询\n');
+    console.log(`\n◎ ${t('start.observer', { kind: runtimeLabel(existing.kind), pid: existing.pid })}`);
+    console.log(`  ${t('start.observerDetail')}\n`);
   }
 
   const { hookOk: claudeHookOk } = await setupClaudeHook(dir);
   const { hookOk: codexHookOk } = await setupCodexHook(dir);
   if (!isObserver) {
     if (!claudeHookOk) {
-      console.warn(`⚠ Claude Hook 未注册成功，将使用定时轮询（${pollIntervalLabel()}）同步`);
+      console.warn(t('start.hookFailed', { source: 'Claude', interval: pollInterval() }));
     }
     if (!codexHookOk) {
-      console.warn(`⚠ Codex Hook 未注册成功，将使用定时轮询（${pollIntervalLabel()}）同步`);
+      console.warn(t('start.hookFailed', { source: 'Codex', interval: pollInterval() }));
     }
   }
 
@@ -332,10 +340,8 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
             const wroteAny = results.some((r) => r.writtenBuckets.length > 0 || r.sessionsChanged);
             nextDelayMs = pollBackoff.noteRound(wroteAny);
           } catch (err) {
-            console.error(
-              '轮询同步失败:',
-              err instanceof Error ? err.message : err,
-            );
+            console.error(t('start.pollFailed'));
+            diagnosticDetail(err);
           } finally {
             scheduleNextPoll(nextDelayMs);
           }
@@ -344,35 +350,36 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
     };
     reArmPoll = () => scheduleNextPoll();
 
-    console.log('后台同步 Claude / Codex / Cursor 数据…');
+    console.log(t('start.backgroundSync'));
     void runSyncFn?.('startup')
       .catch((err) => {
-        console.error('启动同步失败:', err instanceof Error ? err.message : err);
+        console.error(t('start.startupSyncFailed'));
+        diagnosticDetail(err);
       })
       .finally(scheduleNextPoll);
   }
 
   const url = formatListenUrl(host, actualPort);
-  console.log(`\n✓ Quotern 已启动${isObserver ? '（观察模式）' : ''}`);
-  console.log(`  面板: ${url}`);
+  console.log(`\n${t('start.started', { observer: isObserver ? t('start.observerSuffix') : '' })}`);
+  console.log(`  ${t('start.panel', { url })}`);
   if (isWildcardListenHost(host)) {
-    console.log(`  监听: ${host}:${actualPort}（局域网可访问）`);
+    console.log(`  ${t('start.listen', { host, port: actualPort })}`);
   }
-  console.log(`  数据: ${dir}`);
-  console.log(`  调试日志: ${join(dir, 'logs')}`);
+  console.log(`  ${t('start.data', { dir })}`);
+  console.log(`  ${t('start.logs', { dir: join(dir, 'logs') })}`);
   if (isObserver) {
-    console.log('  本地采集: 由桌面端负责');
+    console.log(`  ${t('start.collectDesktop')}`);
   } else {
-    console.log(`  Claude Hook: ${claudeHookOk ? '已注册' : '轮询模式'}`);
-    console.log(`  Codex Hook: ${codexHookOk ? '已注册' : '轮询模式'}`);
+    console.log(`  ${t('start.hookState', { source: 'Claude', state: t(claudeHookOk ? 'common.active' : 'common.polling') })}`);
+    console.log(`  ${t('start.hookState', { source: 'Codex', state: t(codexHookOk ? 'common.active' : 'common.polling') })}`);
   }
-  console.log(`\n按 Ctrl+C 停止\n`);
+  console.log(`\n${t('start.ctrlC')}\n`);
 }
 
 async function cmdSync(source?: string): Promise<void> {
   // Reject unknown sources before touching config/log/lastSync state, so a
   // typo exits non-zero instead of refreshing "上次同步" with zero work done.
-  const filter = resolveSyncSource(source);
+  const filter = resolveSyncSource(source, activeLocale);
   const { dir, config } = await loadConfig();
   await touchStatsSince(dir, config);
   const scope = filter ?? 'all';
@@ -399,12 +406,10 @@ async function cmdSync(source?: string): Promise<void> {
     });
     for (const r of results) {
       if (r.skipped) {
-        console.log(`${r.source}: 跳过（${r.error ?? '无数据'}）`);
+        console.log(t('sync.skipped', { source: r.source }));
         continue;
       }
-      console.log(
-        `${r.source}: ${r.eventsParsed} 条消息, ${r.bucketsWritten} 个桶写入, ${r.filesProcessed} 个文件`,
-      );
+      console.log(t('sync.result', { source: r.source, messages: count(r.eventsParsed), buckets: count(r.bucketsWritten), files: count(r.filesProcessed) }));
     }
   } catch (err) {
     await appendJsonLog(logPath, {
@@ -426,31 +431,27 @@ async function cmdStatus(): Promise<void> {
   const host = config.serverHost || DEFAULT_HOST;
 
   if (owner != null) {
-    console.log(
-      `Runtime: ${runtimeKindLabel(owner.kind)} pid ${owner.pid}（本地采集）`,
-    );
+    console.log(t('status.owner', { kind: runtimeLabel(owner.kind), pid: owner.pid }));
   } else {
-    console.log('Runtime: 未运行');
+    console.log(t('status.runtime', { state: t('common.stopped') }));
   }
   if (panelUp) {
-    console.log(
-      `本进程面板: 运行中${runtimeRole === 'observer' ? '（观察模式，只读）' : ''}`,
-    );
+    console.log(t('status.localPanel', { observer: runtimeRole === 'observer' ? t('status.observerSuffix') : '' }));
   }
-  console.log(`面板: ${formatListenUrl(host, port)}`);
-  console.log(`数据目录: ${dir}`);
-  console.log(`设备 UUID: ${config.deviceId}`);
-  console.log(`statsSince: ${config.statsSince}`);
-  console.log(`上次同步: ${config.lastSyncAt ?? '从未'}`);
-  console.log(`Claude Hook: ${hooks.claude ? 'active' : 'poll 模式'}`);
-  console.log(`Codex Hook: ${hooks.codex ? 'active' : 'poll 模式'}`);
-  console.log(`Cursor: 轮询模式（无 Hook）`);
-  console.log(`调试日志: ${join(dir, 'logs')}`);
+  console.log(t('start.panel', { url: formatListenUrl(host, port) }));
+  console.log(t('status.dataDir', { dir }));
+  console.log(t('start.device', { uuid: config.deviceId }));
+  console.log(t('status.statsSince', { date: displayDate(config.statsSince) }));
+  console.log(t('status.lastSync', { date: displayDate(config.lastSyncAt) }));
+  console.log(t('start.hookState', { source: 'Claude', state: t(hooks.claude ? 'common.active' : 'common.polling') }));
+  console.log(t('start.hookState', { source: 'Codex', state: t(hooks.codex ? 'common.active' : 'common.polling') }));
+  console.log(t('status.cursor'));
+  console.log(t('start.logs', { dir: join(dir, 'logs') }));
 }
 
 async function cmdDoctor(port?: number): Promise<void> {
   const report = await runDoctorDiagnostics({ port });
-  printDoctorReport(report);
+  printDoctorReport(report, activeLocale);
 }
 
 async function cmdStop(): Promise<void> {
@@ -479,7 +480,7 @@ async function cmdStop(): Promise<void> {
   runtimeDataDir = null;
   runtime = null;
   runtimeRole = 'owner';
-  console.log(wasObserver ? '观察面板已停止' : '服务已停止');
+  console.log(t(wasObserver ? 'stop.observer' : 'stop.service'));
 }
 
 async function cmdService(
@@ -490,35 +491,42 @@ async function cmdService(
   const cliBinPath = resolveCliBinPath();
   switch (action) {
     case 'start':
-      await cmdServiceStart(cliBinPath, daysAgo, listen);
+      await cmdServiceStart(cliBinPath, daysAgo, listen, activeLocale);
       break;
     case 'stop':
-      await cmdServiceStop();
+      await cmdServiceStop(activeLocale);
       break;
     case 'status':
-      await cmdServiceStatus();
+      await cmdServiceStatus(activeLocale);
       break;
     default:
-      console.error('用法: quotern service <start|stop|status>');
+      console.error(t('arg.serviceUsage'));
       process.exit(1);
   }
 }
 
 async function main(): Promise<void> {
+  activeLocale = previewCliLocale(process.argv.slice(2));
   try {
     // Query before the runtime argument path: no startup, ownership or sync.
-    if (process.argv[2] === 'usage') {
-      const parsed = parseUsageArgs(process.argv.slice(3));
-      if (parsed.help) { printHelp(); return; }
+    const commandLine = extractCliLanguage(process.argv.slice(2));
+    if (commandLine.args[0] === 'usage') {
+      const parsed = parseUsageArgs([
+        ...commandLine.args.slice(1),
+        ...(commandLine.lang ? ['--lang', commandLine.lang] : []),
+      ]);
+      activeLocale = parsed.lang ?? activeLocale;
+      if (parsed.help) { printHelp(activeLocale); return; }
       const report = await readUsageReport(parsed.dataDir ? resolve(parsed.dataDir) : resolveDataDir(), parsed.query);
-      console.log(formatUsageReport(report, parsed.format, { compact: parsed.compact }));
+      console.log(formatUsageReport(report, parsed.format, { compact: parsed.compact, locale: activeLocale }));
       return;
     }
-    const { command, serviceAction, port, host, source, days } = parseArgs(process.argv);
-    const daysAgo = resolveDaysAgo(days);
+    const { command, serviceAction, port, host, source, days, lang } = parseArgs(process.argv);
+    activeLocale = lang ?? activeLocale;
+    const daysAgo = resolveDaysAgo(days, activeLocale);
     switch (command) {
       case 'help':
-        printHelp();
+        printHelp(activeLocale);
         break;
       case 'start':
         await cmdStart(port, host, daysAgo);
@@ -539,12 +547,16 @@ async function main(): Promise<void> {
         await cmdService(serviceAction, daysAgo, { port, host });
         break;
       default:
-        console.error(`未知命令: ${command}`);
-        console.error('使用 quotern --help 查看可用命令');
+        console.error(t('arg.unknownCommand', { value: command }));
+        console.error(t('arg.helpHint'));
         process.exit(1);
     }
   } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
+    if (err instanceof CliUserError) console.error(err.message);
+    else {
+      console.error(t('common.failed'));
+      diagnosticDetail(err);
+    }
     process.exit(1);
   }
 }

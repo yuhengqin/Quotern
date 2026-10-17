@@ -43,7 +43,8 @@
     "test": "tsc -p tsconfig.json && node --test \"test/**/*.test.js\""
   },
   "dependencies": {
-    "quotern-core": "workspace:*"
+    "quotern-core": "workspace:*",
+    "quotern-i18n": "workspace:*"
   },
   "devDependencies": {
     "quotern-dashboard": "workspace:*",

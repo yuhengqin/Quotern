@@ -11,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import sharp from 'sharp';
 import type { QuotaState } from '../shared/quota';
+import type { SupportedLocale } from 'quotern-i18n';
 import { quotaPopoverBounds, quotaTraySummary } from './tray-quota';
+import { nativeText } from './native-messages';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
 import {
   TRAY_WINDOW_WIDTH as POPOVER_WIDTH,
@@ -51,6 +53,7 @@ const TRAY_POPOVER_RESIZE_CHANNEL = 'tray-popover:resize';
 const POPOVER_INITIAL_HEIGHT = POPOVER_MIN_HEIGHT;
 
 export interface TrayPopoverOptions {
+  getLocale: () => SupportedLocale;
   showMainWindow: () => void;
   openSettings: () => void;
   /** Same as in-app「同步数据」→ POST tud-trigger-sync. */
@@ -61,6 +64,9 @@ export interface TrayPopoverOptions {
 }
 
 let tray: Tray | null = null;
+let trayMenu: Menu | null = null;
+let currentOptions: TrayPopoverOptions | null = null;
+let lastQuotaState: QuotaState | null = null;
 let popover: BrowserWindow | null = null;
 let lastHiddenAt = 0;
 let iconGeneration = 0;
@@ -92,26 +98,27 @@ function loadTrayIcon(): Electron.NativeImage {
 }
 
 function buildTrayMenu(options: TrayPopoverOptions): Menu {
+  const locale = options.getLocale();
   return Menu.buildFromTemplate([
     {
-      label: '显示主窗口',
+      label: nativeText(locale, 'native.tray.showMain'),
       click: () => options.showMainWindow(),
     },
     {
-      label: '同步数据',
+      label: nativeText(locale, 'native.tray.sync'),
       click: () => options.triggerSync(),
     },
     ...(!isMac && options.togglePet ? [{
-      label: '显示/隐藏桌面宠物',
+      label: nativeText(locale, 'native.tray.togglePet'),
       click: () => options.togglePet?.(),
     }] : []),
     {
-      label: '设置',
+      label: nativeText(locale, 'native.tray.settings'),
       click: () => options.openSettings(),
     },
     { type: 'separator' },
     {
-      label: '退出',
+      label: nativeText(locale, 'native.tray.quit'),
       click: () => app.quit(),
     },
   ]);
@@ -254,9 +261,11 @@ export function setTrayUsageTitle(text: string): void {
 }
 
 export function setTrayQuotaState(state: QuotaState): void {
+  lastQuotaState = state;
   if (!tray || tray.isDestroyed()) return;
-  const summary = quotaTraySummary(state.providers);
-  const incidents = state.providers.filter(provider => provider.service && !provider.service.stale && !['operational', 'unknown'].includes(provider.service.level)).map(provider => `${provider.label} 服务异常`);
+  const locale = currentOptions?.getLocale() ?? 'zh-CN';
+  const summary = quotaTraySummary(state.providers, locale);
+  const incidents = state.providers.filter(provider => provider.service && !provider.service.stale && !['operational', 'unknown'].includes(provider.service.level)).map(provider => nativeText(locale, 'native.tray.serviceIssue', { provider: provider.label }));
   tray.setToolTip(['Quotern', ...incidents, summary.text].join('\n').slice(0, 127));
   if (isMac || quotaLevel === summary.level) return;
   quotaLevel = summary.level;
@@ -272,19 +281,29 @@ export function setTrayQuotaState(state: QuotaState): void {
 
 export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
+  currentOptions = options;
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
-  const menu = buildTrayMenu(options);
+  trayMenu = buildTrayMenu(options);
 
   if (isMac || process.platform === 'win32') {
     tray.on('click', () => { options.onOpen?.(); togglePopover(); });
-    tray.on('right-click', () => tray?.popUpContextMenu(menu));
+    tray.on('right-click', () => { if (trayMenu) tray?.popUpContextMenu(trayMenu); });
     ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
     ipcMain.on(TRAY_POPOVER_RESIZE_CHANNEL, handlePopoverResize);
   } else {
-    tray.setContextMenu(menu);
+    tray.setContextMenu(trayMenu);
     tray.on('click', () => options.showMainWindow());
   }
+  if (lastQuotaState) setTrayQuotaState(lastQuotaState);
+}
+
+/** Rebuild native menu and tooltip when the Desktop language changes. */
+export function refreshTrayLocale(): void {
+  if (!tray || tray.isDestroyed() || !currentOptions) return;
+  trayMenu = buildTrayMenu(currentOptions);
+  if (!isMac && process.platform !== 'win32') tray.setContextMenu(trayMenu);
+  if (lastQuotaState) setTrayQuotaState(lastQuotaState);
 }
 
 export function disposeTrayPopover(): void {
@@ -304,4 +323,7 @@ export function disposeTrayPopover(): void {
     tray.destroy();
   }
   tray = null;
+  trayMenu = null;
+  currentOptions = null;
+  lastQuotaState = null;
 }

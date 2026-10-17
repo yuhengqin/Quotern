@@ -7,7 +7,12 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 const run = promisify(execFile);
-const bin = fileURLToPath(new URL('../bin/quotern.js', import.meta.url));
+const bin = fileURLToPath(new URL(
+  process.env.QUOTERN_CLI_TEST_DIST
+    ? `${process.env.QUOTERN_CLI_TEST_DIST}/index.js`
+    : '../bin/quotern.js',
+  import.meta.url,
+));
 
 test('usage queries persisted data while Desktop owns runtime without writing or starting a service', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'quotern-command-'));
@@ -40,7 +45,7 @@ test('usage queries persisted data while Desktop owns runtime without writing or
     const csv = await run(process.execPath, [bin, ...args, '--csv'], { timeout: 15_000 });
     assert.ok(csv.stdout.startsWith('period,label,source,model,'));
     await assert.rejects(run(process.execPath, [bin, 'usage', '--days', '0', '--json', '--data-dir', dir]), (error) => error.code === 1 && error.stdout === '' && /days/.test(error.stderr));
-    await assert.rejects(run(process.execPath, [bin, 'usage', '--data-dir', join(dir, 'missing')]), (error) => error.code === 1 && /配置/.test(error.stderr));
+    await assert.rejects(run(process.execPath, [bin, 'usage', '--data-dir', join(dir, 'missing'), '--lang', 'zh-CN']), (error) => error.code === 1 && /配置/.test(error.stderr));
     assert.deepEqual((await readdir(dir, { recursive: true })).sort(), before);
     for (const [file, value] of Object.entries(contents)) assert.equal(await readFile(join(dir, file), 'utf8'), value);
   } finally { await rm(dir, { recursive: true, force: true }); }

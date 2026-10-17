@@ -1,13 +1,19 @@
 import type { QuotaProviderState } from '../shared/quota';
+import type { SupportedLocale } from 'quotern-i18n';
+import { localizeQuotaWindowLabel } from 'quotern-i18n/quota';
+import { nativeText } from './native-messages';
 
-export function quotaTraySummary(providers: QuotaProviderState[]): { level: 0 | 1 | 2; text: string } {
+export function quotaTraySummary(providers: QuotaProviderState[], locale: SupportedLocale = 'zh-CN'): { level: 0 | 1 | 2; text: string } {
   const windows = providers.filter(provider => provider.status === 'ready' && !provider.stale)
     .flatMap(provider => provider.windows.filter(window => window.analysisEligible !== false).map(window => ({ provider, window })))
     .sort((a, b) => b.window.usedPercent - a.window.usedPercent);
   const tightest = windows[0];
-  if (!tightest) return { level: 0, text: '暂无有效额度读数' };
+  if (!tightest) return { level: 0, text: nativeText(locale, 'native.tray.noQuota') };
   return { level: tightest.window.usedPercent >= 90 ? 2 : tightest.window.usedPercent >= 70 ? 1 : 0,
-    text: `${tightest.provider.label} ${[tightest.window.groupLabel, tightest.window.label].filter(Boolean).join(' ')} 剩余 ${Math.round(100 - tightest.window.usedPercent)}%` };
+    text: nativeText(locale, 'native.tray.remaining', {
+      window: `${tightest.provider.label} ${localizeQuotaWindowLabel(locale, tightest.provider.providerId ?? tightest.provider.id, tightest.window)}`,
+      percent: Math.round(100 - tightest.window.usedPercent),
+    }) };
 }
 interface Rect { x: number; y: number; width: number; height: number }
 export function quotaPopoverBounds(icon: Rect, work: Rect, width: number, height: number): Rect {

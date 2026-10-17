@@ -1,0 +1,48 @@
+import type { SupportedLocale } from 'quotern-i18n';
+
+export const desktopShellMessages: Record<SupportedLocale, Record<string, string>> = {
+  'zh-CN': {
+    'desktop.shell.configReset': '配置文件已损坏并已重置',
+    'desktop.window.minimize': '最小化',
+    'desktop.window.restore': '还原窗口',
+    'desktop.window.maximize': '最大化',
+    'desktop.window.close': '关闭',
+    'desktop.header.theme': '页面主题',
+    'desktop.header.themeSystem': '跟随系统',
+    'desktop.header.themeLight': '使用亮色模式',
+    'desktop.header.themeDark': '使用暗色模式',
+  },
+  en: {
+    'desktop.shell.configReset': 'The damaged configuration file was reset',
+    'desktop.window.minimize': 'Minimize',
+    'desktop.window.restore': 'Restore window',
+    'desktop.window.maximize': 'Maximize',
+    'desktop.window.close': 'Close',
+    'desktop.header.theme': 'Page theme',
+    'desktop.header.themeSystem': 'Follow system',
+    'desktop.header.themeLight': 'Use light theme',
+    'desktop.header.themeDark': 'Use dark theme',
+  },
+  ja: {
+    'desktop.shell.configReset': '設定ファイルが破損していたため、リセットしました',
+    'desktop.window.minimize': '最小化',
+    'desktop.window.restore': 'ウィンドウを元に戻す',
+    'desktop.window.maximize': '最大化',
+    'desktop.window.close': '閉じる',
+    'desktop.header.theme': '画面のテーマ',
+    'desktop.header.themeSystem': 'システムに合わせる',
+    'desktop.header.themeLight': 'ライトテーマを使用',
+    'desktop.header.themeDark': 'ダークテーマを使用',
+  },
+  ko: {
+    'desktop.shell.configReset': '손상된 설정 파일을 초기화했습니다',
+    'desktop.window.minimize': '최소화',
+    'desktop.window.restore': '창 복원',
+    'desktop.window.maximize': '최대화',
+    'desktop.window.close': '닫기',
+    'desktop.header.theme': '페이지 테마',
+    'desktop.header.themeSystem': '시스템 설정 따르기',
+    'desktop.header.themeLight': '밝은 테마 사용',
+    'desktop.header.themeDark': '어두운 테마 사용',
+  },
+};

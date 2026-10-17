@@ -1,4 +1,5 @@
 import { Link } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
   APP_DISPLAY_NAME,
@@ -11,12 +12,13 @@ const FEEDBACK_URL = 'https://github.com/yuhengqin/Quotern/issues/new';
 
 /** Shared about body — version + supported tools. */
 export function AboutContent() {
+  const { t } = useTranslation();
   const version = appVersion();
 
   return (
     <div className="space-y-5">
       <section className="space-y-1.5">
-        <h3 className="text-sm font-medium text-foreground">版本信息</h3>
+        <h3 className="text-sm font-medium text-foreground">{t('about.versionTitle')}</h3>
         <p className="text-sm text-foreground/70">
           {APP_DISPLAY_NAME}{' '}
           <span className="font-mono text-foreground/90">v{version}</span>
@@ -24,22 +26,22 @@ export function AboutContent() {
       </section>
 
       <section className="space-y-1.5">
-        <h3 className="text-sm font-medium text-foreground">问题反馈</h3>
+        <h3 className="text-sm font-medium text-foreground">{t('about.feedbackTitle')}</h3>
         <Link
           className="w-fit text-sm text-accent"
           href={FEEDBACK_URL}
           rel="noopener noreferrer"
           target="_blank"
         >
-          提交问题反馈
+          {t('about.submitFeedback')}
           <Link.Icon />
         </Link>
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium text-foreground">支持的 Agent</h3>
+        <h3 className="text-sm font-medium text-foreground">{t('about.supportedAgents')}</h3>
         <p className="text-xs text-foreground/55">
-          同一系列的多端形态用括号标出。
+          {t('about.multiPlatformHint')}
         </p>
         <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {SUPPORTED_TOOLS.map((tool) => (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CircleQuestion } from '@gravity-ui/icons';
 import { Button, Card, Chip, Tooltip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
 import { getTokenUnitMode } from '@/lib/utils';
 import type {
@@ -16,9 +17,10 @@ export function DashboardMetricCards({
   changes: DashboardMetricChanges;
   summary: DashboardUsageSummary;
 }) {
+  const { t } = useTranslation();
   const metrics = [
     {
-      label: '预估费用',
+      label: t('usage.common.estimatedCost'),
       value: summary.totalCostUsd,
       changePct: changes.totalCostUsd,
       format: formatUsd,
@@ -26,7 +28,7 @@ export function DashboardMetricCards({
       showTokenHelp: false,
     },
     {
-      label: '总 Token',
+      label: t('usage.common.totalTokens'),
       value: summary.totalTokens,
       changePct: changes.totalTokens,
       format: formatTokens,
@@ -34,7 +36,7 @@ export function DashboardMetricCards({
       showTokenHelp: true,
     },
     {
-      label: '输入 Token',
+      label: t('usage.common.inputTokens'),
       value: summary.inputTokens,
       changePct: changes.inputTokens,
       format: formatTokens,
@@ -42,7 +44,7 @@ export function DashboardMetricCards({
       showTokenHelp: true,
     },
     {
-      label: '输出 Token',
+      label: t('usage.common.outputTokens'),
       value: summary.outputTokens,
       changePct: changes.outputTokens,
       format: formatTokens,
@@ -53,7 +55,7 @@ export function DashboardMetricCards({
 
   return (
     <section
-      aria-label="用量概览"
+      aria-label={t('usage.page.overview')}
       className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
     >
       {metrics.map((metric) => (
@@ -83,11 +85,12 @@ export function DashboardMetricCards({
 }
 
 function TokenFormatHelp() {
+  const { t } = useTranslation();
   const chinese = getTokenUnitMode() === 'chinese';
   return (
     <Tooltip closeDelay={80} delay={100}>
       <Button
-        aria-label="查看 Token 缩略换算规则"
+        aria-label={t('usage.metric.formatHelpAria')}
         className="h-5 min-h-5 w-5 min-w-5 rounded-full p-0 text-muted"
         isIconOnly
         size="sm"
@@ -101,35 +104,35 @@ function TokenFormatHelp() {
         showArrow
       >
         <p className="text-xs font-semibold text-foreground">
-          Token 缩略换算
+          {t('usage.metric.formatHelp')}
         </p>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
           {chinese ? (
             <>
               <dt className="font-medium tabular-nums">1万</dt>
-              <dd>= 10,000 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '10,000' })}</dd>
               <dt className="font-medium tabular-nums">1亿</dt>
-              <dd>= 100,000,000 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '100,000,000' })}</dd>
               <dt className="font-medium tabular-nums">1万亿</dt>
-              <dd>= 1,000,000,000,000 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000,000' })}</dd>
             </>
           ) : (
             <>
               <dt className="font-medium tabular-nums">1K</dt>
-              <dd>= 1,000 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000' })}</dd>
               <dt className="font-medium tabular-nums">1M</dt>
-              <dd>= 100 万 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000' })}</dd>
               <dt className="font-medium tabular-nums">1B</dt>
-              <dd>= 10 亿 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000' })}</dd>
               <dt className="font-medium tabular-nums">1T</dt>
-              <dd>= 1 万亿 Token</dd>
+              <dd>{t('usage.metric.equalTokens', { count: '1,000,000,000,000' })}</dd>
             </>
           )}
         </dl>
         <p className="mt-2 text-[11px] text-muted">
           {chinese
-            ? '最多保留四位有效数字，例如 1.872亿。'
-            : '最多保留一位小数，例如 125 万显示为 1.3M。'}
+            ? t('usage.metric.chinesePrecision')
+            : t('usage.metric.internationalPrecision')}
         </p>
       </Tooltip.Content>
     </Tooltip>
@@ -167,12 +170,12 @@ function AnimatedMetricValue({
 }
 
 function MetricTrend({ changePct }: { changePct: number }) {
+  const { t } = useTranslation();
   const isIncrease = changePct >= 0;
-  const direction = isIncrease ? '上涨' : '下降';
 
   return (
     <Chip
-      aria-label={`${direction} ${Math.abs(changePct).toFixed(2)}%`}
+      aria-label={t(isIncrease ? 'usage.overview.increaseAria' : 'usage.overview.decreaseAria', { value: `${Math.abs(changePct).toFixed(2)}%` })}
       className="shrink-0"
       color={isIncrease ? 'success' : 'danger'}
       size="sm"

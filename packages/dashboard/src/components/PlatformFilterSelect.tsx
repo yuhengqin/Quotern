@@ -4,6 +4,7 @@ import { Button, Popover } from '@heroui/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { sourceLabel } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'quotern-i18n/react';
 
 /**
  * Text-only multi-select used by Token / Daily / Heatmap platform filters.
@@ -18,18 +19,19 @@ export function PlatformFilterSelect({
   value: string[];
   onChange: (keys: string[]) => void;
 }) {
+  const { t } = useTranslation();
   if (allSources.length === 0) return null;
 
   const selected = new Set(value);
   const allSelected = value.length === allSources.length;
   const isFiltered = !allSelected && value.length > 0;
 
-  let label = '全部 Agent';
-  if (value.length === 0) label = '选择 Agent';
+  let label = t('usage.filter.allAgents');
+  if (value.length === 0) label = t('usage.filter.selectAgents');
   else if (!allSelected && value.length === 1) {
     label = sourceLabel(value[0] ?? '');
   } else if (!allSelected) {
-    label = `已选 ${value.length} 个 Agent`;
+    label = t('usage.filter.selectedAgents', { count: value.length });
   }
 
   const toggleSource = (source: string) => {
@@ -42,7 +44,7 @@ export function PlatformFilterSelect({
   return (
     <Popover>
       <Button
-        aria-label={`筛选 Agent：${label}`}
+        aria-label={t('usage.filter.agentsAria', { label })}
         className={cn(
           'h-auto min-h-0 max-w-36 gap-1 rounded-none border-0 bg-transparent p-0',
           'text-xs font-medium text-muted shadow-none',
@@ -69,7 +71,7 @@ export function PlatformFilterSelect({
         <Popover.Dialog className="p-0 outline-none">
           <div className="flex items-center justify-between gap-2 px-3 py-2">
             <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
-              选择 Agent
+              {t('usage.filter.selectAgents')}
             </Popover.Heading>
             <div className="flex items-center gap-1">
               <button
@@ -77,14 +79,14 @@ export function PlatformFilterSelect({
                 type="button"
                 onClick={() => onChange([...allSources])}
               >
-                全部
+                {t('usage.filter.all')}
               </button>
               <button
                 className="rounded-md px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
                 type="button"
                 onClick={() => onChange([])}
               >
-                清空
+                {t('usage.filter.clear')}
               </button>
             </div>
           </div>
@@ -181,6 +183,7 @@ export function KeyFilterSelect({
   triggerIcon?: (keys: string[]) => ReactNode;
   renderOption: (key: string) => ReactNode;
 }) {
+  const { t } = useTranslation();
   if (allKeys.length === 0) return null;
 
   const selected = new Set(value);
@@ -200,7 +203,7 @@ export function KeyFilterSelect({
   return (
     <Popover>
       <Button
-        aria-label={`筛选：${label}`}
+        aria-label={t('usage.filter.genericAria', { label })}
         className={cn(
           'h-auto min-h-0 max-w-36 gap-1 rounded-none border-0 bg-transparent p-0',
           'text-xs font-medium text-muted shadow-none',
@@ -233,14 +236,14 @@ export function KeyFilterSelect({
                 type="button"
                 onClick={() => onChange([...allKeys])}
               >
-                全部
+                {t('usage.filter.all')}
               </button>
               <button
                 className="rounded-md px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
                 type="button"
                 onClick={() => onChange([])}
               >
-                清空
+                {t('usage.filter.clear')}
               </button>
             </div>
           </div>

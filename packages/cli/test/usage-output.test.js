@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { formatUsageReport } from '../dist/usage-output.js';
+const outputDir = process.env.QUOTERN_CLI_TEST_DIST ?? '../dist';
+const { formatUsageReport } = await import(`${outputDir}/usage-output.js`);
 
 function makeReport(overrides = {}) {
   const localMetrics = {
@@ -130,14 +131,14 @@ test('display timestamps use the report time zone including date rollover and da
     const compact = JSON.parse(formatUsageReport(report, 'json', { compact: true }));
     assert.equal(compact.coverage.lastSyncAt, stamp);
     assert.equal(compact.coverage.display.lastSyncAt, expected);
-    assert.ok(formatUsageReport(report, 'text').includes(`最近同步完成\t${expected}`));
+    assert.ok(formatUsageReport(report, 'text', { locale: 'zh-CN' }).includes(`最近同步完成\t${expected}`));
   }
   const report = makeReport();
   const compact = JSON.parse(formatUsageReport(report, 'json', { compact: true }));
   assert.equal(compact.coverage.display.lastSyncAt, null);
   assert.equal(compact.coverage.display.readAt, '2026-10-02 08:00:00 (Asia/Shanghai)');
   assert.equal(compact.coverage.display.collectSince, '2026-10-01 08:00:00 (Asia/Shanghai)');
-  assert.ok(formatUsageReport(report, 'text').includes('报告读取时间\t2026-10-02 08:00:00 (Asia/Shanghai)'));
+  assert.ok(formatUsageReport(report, 'text', { locale: 'zh-CN' }).includes('报告读取时间\t2026-10-02 08:00:00 (Asia/Shanghai)'));
 });
 
 test('formatUsageReport emits CSV with quoting, formula protection, nulls, and zeroes', () => {
@@ -164,10 +165,10 @@ test('formatUsageReport emits CSV with quoting, formula protection, nulls, and z
 test('formatUsageReport text marks unknown costs and removes terminal controls', () => {
   const report = makeReport();
   report.rows[0] = { ...report.rows[0], label: 'Model\u001b[31m', source: 'source\tname' };
-  const text = formatUsageReport(report, 'text');
+  const text = formatUsageReport(report, 'text', { locale: 'zh-CN' });
   const lines = text.split('\n');
 
-  assert.equal(lines[0], 'Quotern usage · daily');
+  assert.equal(lines[0], 'Quotern 用量 · 每日');
   assert.equal(lines[1], '2026-10-01 – 2026-10-02 · Asia/Shanghai');
   assert.equal(lines[2], 'Model[31m\tsourcename\t0\t未知（已知 $0.000000）');
   assert.ok(lines.includes('最近同步完成\t未知'));

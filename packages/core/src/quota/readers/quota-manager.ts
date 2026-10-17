@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { analyzeQuota, evaluateQuotaAlerts, normalizeQuotaSnapshot, type QuotaAlertKind, type QuotaObservation } from '../shared/quota-analysis.js';
-import type { QuotaPreferences, QuotaPreferencePatch, QuotaProfile, QuotaProviderState, QuotaServiceStatus, QuotaState } from '../shared/quota.js';
+import { quotaWindowPeriodSeconds, type QuotaPreferences, type QuotaPreferencePatch, type QuotaProfile, type QuotaProviderState, type QuotaServiceStatus, type QuotaState } from '../shared/quota.js';
 import type { SubscriptionChannelId } from '../shared/subscription-channels.js';
 import { quotaIdentity, quotaEvidence } from './quota-identity.js';
 import { quotaReadRetryAfter } from './quota-fetch-state.js';
@@ -10,7 +10,19 @@ export interface QuotaReader {
   id: SubscriptionChannelId; label: string; interval: number; read(): Promise<unknown>; statusUrl?: string;
   key?: string; profileLabel?: string; profileId?: string; observationOnly?: boolean;
 }
-export interface QuotaNotification { provider: string; label: string; window: string; kind: QuotaAlertKind; resetsAt: number | null; usedPercent: number }
+export interface QuotaNotification {
+  provider: string;
+  label: string;
+  /** Legacy display label retained for custom pools and existing consumers. */
+  window: string;
+  windowId: string;
+  windowLabel: string;
+  windowGroupLabel?: string;
+  windowPeriodSeconds: number | null;
+  kind: QuotaAlertKind;
+  resetsAt: number | null;
+  usedPercent: number;
+}
 interface Slot {
   reader: QuotaReader; state: QuotaProviderState; identity: string | null; captured: number;
   observations: Map<string, QuotaObservation>; attempted: number | null; blockedUntil: number; failures: number;
@@ -192,7 +204,7 @@ export class QuotaManager {
           if (this.sentAlerts.has(alertKey)) continue;
           this.sentAlerts.add(alertKey);
           if (this.sentAlerts.size > 5000) this.sentAlerts.delete(this.sentAlerts.values().next().value!);
-          try { this.deps.notify({ provider: slot.reader.id, label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
+          try { this.deps.notify({ provider: slot.reader.id, label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), windowId: window.id, windowLabel: window.label, windowGroupLabel: window.groupLabel, windowPeriodSeconds: quotaWindowPeriodSeconds(window), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
           catch { this.notice = '系统通知暂不可用，额度卡片仍会继续更新。'; }
         }
       }

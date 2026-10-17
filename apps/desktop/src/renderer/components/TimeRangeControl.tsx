@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   TIME_RANGE_OPTIONS,
   type TimeRangeKey,
@@ -18,12 +19,13 @@ export function TimeRangeControl({
   rangeLabel,
   className,
 }: TimeRangeControlProps) {
+  const { t } = useTranslation();
   return (
     <div className={cn('flex flex-wrap items-center gap-2.5', className)}>
       <div
         className="inline-flex rounded-[10px] bg-surface-secondary p-0.5"
         role="group"
-        aria-label="时间区间"
+        aria-label={t('usage.filter.timeRange')}
       >
         {TIME_RANGE_OPTIONS.map((opt) => {
           const active = value === opt.key;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { qoderRemainingPercent, type QoderSubscriptionSnapshot } from '../../shared/qoder-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
@@ -9,6 +10,7 @@ const INITIAL_SNAPSHOT: QoderSubscriptionSnapshot = {
 
 /** Qoder's official logged-in account credits; BYOK values are excluded. */
 export function QoderSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<QoderSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -21,9 +23,9 @@ export function QoderSubscriptionCard() {
       };
       setSnapshot(await qoderBridge.getQoderSubscription());
     }
-    catch { setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 Qoder 订阅信息' }); }
+    catch { setSnapshot({ ...INITIAL_SNAPSHOT, message: t('desktop.provider.readSubscription', { provider: 'Qoder' }) }); }
     finally { requestInFlight.current = false; setLoading(false); }
-  }, []);
+  }, [t]);
   useEffect(() => {
     void reload();
     const onFocus = () => void reload();
@@ -34,7 +36,9 @@ export function QoderSubscriptionCard() {
     icon: <SubscriptionBrandIcon brand="qoder" />,
     metrics: snapshot.limits.map((limit, index) => ({
       color: index === 0 && snapshot.limits.length > 1 ? '#7dcf00' : '#2b7eff',
-      label: limit.id === 'plan' ? 'Credits' : 'Add-on',
+      label: limit.id === 'plan'
+        ? t('desktop.provider.metric.credits')
+        : t('desktop.provider.metric.addOn'),
       remainingPercent: qoderRemainingPercent(limit.usedPercent),
       resetDisplay: 'days-only',
       resetsAt: limit.resetsAt,

@@ -2,6 +2,7 @@ import { memo, useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleQuestion, Folder } from '@gravity-ui/icons';
 import { Button, Card, Modal, Switch, Tooltip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { CHART_TOOLTIP_SURFACE_CLASSNAME } from '@/components/ChartPrimitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DashboardProjectUsageRow } from '@/lib/dashboard-mock-data';
@@ -17,15 +18,12 @@ import { cn } from '@/lib/utils';
 
 const PROJECT_ROW_HEIGHT = 56;
 const MAX_VISIBLE_PROJECT_ROWS = 5;
-const PROJECT_HELP =
-  '按工作目录查看用量。仅本地展示，不上报。部分 Agent（如 Cursor）暂无项目信息。';
-
 function percentage(part: number, total: number) {
   if (total <= 0) return 0;
   return Math.round((part / total) * 1_000) / 10;
 }
 
-function isUnknownProject(row: DashboardProjectUsageRow): boolean {
+function isUnknownProject(row: Pick<DashboardProjectUsageRow, 'project' | 'label'>): boolean {
   return row.project === 'unknown' || row.label === '未知项目';
 }
 
@@ -34,6 +32,7 @@ export const ProjectUsagePanel = memo(function ProjectUsagePanel({
 }: {
   rows: DashboardProjectUsageRow[];
 }) {
+  const { t } = useTranslation();
   const headingId = useId();
   const [isAllOpen, setIsAllOpen] = useState(false);
   const [showUnknown, setShowUnknown] = useState(false);
@@ -77,11 +76,11 @@ export const ProjectUsagePanel = memo(function ProjectUsagePanel({
       <Card.Header className="flex-row flex-nowrap items-start justify-between gap-3 pb-0">
         <div className="min-w-0 flex-1">
           <Card.Title className="flex items-center gap-1.5" id={headingId}>
-            <span>项目分布</span>
+            <span>{t('usage.project.heading')}</span>
             <ProjectHelpTooltip />
           </Card.Title>
           <Card.Description className="mt-1">
-            按项目比较总 Token
+            {t('usage.project.description')}
           </Card.Description>
         </div>
         {hasUnknown ? (
@@ -95,7 +94,7 @@ export const ProjectUsagePanel = memo(function ProjectUsagePanel({
               <Switch.Control>
                 <Switch.Thumb />
               </Switch.Control>
-              未知项目
+              {t('usage.project.unknown')}
             </Switch.Content>
           </Switch>
         ) : null}
@@ -104,13 +103,13 @@ export const ProjectUsagePanel = memo(function ProjectUsagePanel({
       <Card.Content className="pt-2">
         {rows.length === 0 ? (
           <p className="flex min-h-52 items-center justify-center px-4 text-center text-sm text-muted">
-            暂无项目用量
+            {t('usage.project.empty')}
           </p>
         ) : filteredRows.length === 0 || chart.rows.length === 0 ? (
           <p className="mt-4 flex min-h-40 items-center justify-center px-4 text-center text-sm text-muted">
             {hasUnknown && !showUnknown
-              ? '当前仅有未知项目，可开启「未知项目」查看'
-              : '当前范围暂无项目用量'}
+              ? t('usage.project.onlyUnknown')
+              : t('usage.project.filteredEmpty')}
           </p>
         ) : (
           <div aria-labelledby={headingId} className="min-w-0" role="region">
@@ -127,7 +126,7 @@ export const ProjectUsagePanel = memo(function ProjectUsagePanel({
                 variant="ghost"
                 onPress={() => setIsAllOpen(true)}
               >
-                查看全部（{chart.rows.length}）
+                {t('usage.common.viewAllCount', { count: chart.rows.length })}
               </Button>
             ) : null}
             <AccessibleProjectDetails rows={chart.rows} series={chart.series} />
@@ -139,9 +138,9 @@ export const ProjectUsagePanel = memo(function ProjectUsagePanel({
         <Modal.Backdrop>
           <Modal.Container size="lg">
             <Modal.Dialog>
-              <Modal.CloseTrigger aria-label="关闭" />
+              <Modal.CloseTrigger aria-label={t('usage.common.close')} />
               <Modal.Header>
-                <Modal.Heading>项目分布</Modal.Heading>
+                <Modal.Heading>{t('usage.project.heading')}</Modal.Heading>
               </Modal.Header>
               <Modal.Body>
                 <div className="max-h-[60vh] overflow-y-auto pr-1">
@@ -190,10 +189,11 @@ function ProjectStackedList({
 }
 
 function ProjectHelpTooltip() {
+  const { t } = useTranslation();
   return (
     <Tooltip closeDelay={80} delay={100}>
       <Button
-        aria-label="查看项目分布说明"
+        aria-label={t('usage.project.helpAria')}
         className="h-5 min-h-5 w-5 min-w-5 rounded-full p-0 text-muted"
         isIconOnly
         size="sm"
@@ -202,7 +202,7 @@ function ProjectHelpTooltip() {
         <CircleQuestion className="h-3.5 w-3.5" />
       </Button>
       <Tooltip.Content className="max-w-64 p-3" placement="top" showArrow>
-        <p className="text-xs leading-relaxed text-foreground">{PROJECT_HELP}</p>
+        <p className="text-xs leading-relaxed text-foreground">{t('usage.project.help')}</p>
       </Tooltip.Content>
     </Tooltip>
   );
@@ -213,6 +213,7 @@ function ProjectLabelColumn({
 }: {
   rows: ProjectModelStackedChartRow[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="min-w-0">
       {rows.map((row) => (
@@ -230,21 +231,21 @@ function ProjectLabelColumn({
           <span className="min-w-0">
             <Tooltip closeDelay={80} delay={200}>
               <button
-                aria-label={row.label}
+                aria-label={isUnknownProject(row) ? t('usage.project.unknown') : row.label}
                 className="block max-w-full truncate text-left text-xs font-normal text-foreground sm:text-sm"
                 type="button"
               >
-                {row.label}
+                {isUnknownProject(row) ? t('usage.project.unknown') : row.label}
               </button>
               <Tooltip.Content className="max-w-72 p-2" placement="top" showArrow>
-                <p className="break-all text-xs text-foreground">{row.label}</p>
+                <p className="break-all text-xs text-foreground">{isUnknownProject(row) ? t('usage.project.unknown') : row.label}</p>
               </Tooltip.Content>
             </Tooltip>
             <span
               aria-hidden="true"
               className="mt-0.5 block truncate text-[9px] text-muted tabular-nums sm:text-[11px]"
             >
-              {row.modelCount} 个模型 · {formatUsd(row.costUsd)}
+              {t('usage.common.modelCount', { count: row.modelCount })} · {formatUsd(row.costUsd)}
             </span>
           </span>
         </div>
@@ -270,6 +271,7 @@ function ProjectStackedBars({
   rows: ProjectModelStackedChartRow[];
   series: ProjectModelChartSeries[];
 }) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState<HoveredSegment | null>(null);
 
   return (
@@ -383,7 +385,7 @@ function ProjectStackedBars({
                 {formatPct(hovered.segment.pct)}
               </span>
               <span className="text-[10px] text-muted">
-                占 {hovered.row.label} Token
+                {t('usage.project.shareOfProject', { project: isUnknownProject(hovered.row) ? t('usage.project.unknown') : hovered.row.label })}
               </span>
             </div>
           </div>,
@@ -425,15 +427,19 @@ function AccessibleProjectDetails({
   rows: ProjectModelStackedChartRow[];
   series: ProjectModelChartSeries[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="sr-only">
-      <h4>项目与模型精确用量</h4>
+      <h4>{t('usage.project.accessibleHeading')}</h4>
       <ol>
         {rows.map((row) => (
           <li key={row.project}>
-            {row.label}：{formatTokens(row.tokens)}，
-            {formatUsd(row.costUsd)}，占全部 Token {formatPct(row.pct)}，
-            {row.modelCount} 个模型。
+            {t('usage.project.accessibleRow', {
+              project: isUnknownProject(row) ? t('usage.project.unknown') : row.label,
+              tokens: formatTokens(row.tokens), cost: formatUsd(row.costUsd),
+              percent: formatPct(row.pct),
+              models: t('usage.common.modelCount', { count: row.modelCount }),
+            })}
             <ul>
               {series.map((item) => {
                 const segment = row.segments[item.key];
@@ -441,12 +447,13 @@ function AccessibleProjectDetails({
 
                 return (
                   <li key={item.key}>
-                    {segment.source
-                      ? `${sourceLabel(segment.source)} · ${segment.model}`
-                      : segment.model}
-                    ：{formatTokens(segment.tokens)}，
-                    {formatUsd(segment.costUsd)}，占当前项目 Token{' '}
-                    {formatPct(segment.pct)}。
+                    {t('usage.project.accessibleModelRow', {
+                      model: segment.source
+                        ? `${sourceLabel(segment.source)} · ${segment.model}`
+                        : segment.model,
+                      tokens: formatTokens(segment.tokens),
+                      cost: formatUsd(segment.costUsd), percent: formatPct(segment.pct),
+                    })}
                   </li>
                 );
               })}

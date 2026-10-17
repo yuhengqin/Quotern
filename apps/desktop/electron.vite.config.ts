@@ -39,7 +39,7 @@ const sharedRenderPlugins = () => [
  *
  * Main 嵌入 quotern-core（读 ~/.ai-usage，内存 local-api）；renderer 经 IPC 取数。
  *
- * quotern-core / hono 为纯 ESM（exports 仅有 import），Electron main 产物是 CJS，
+ * quotern-core / quotern-i18n / hono 为纯 ESM（exports 仅有 import），Electron main 产物是 CJS，
  * 不能 require 它们 — 打进 main bundle，避免 ERR_PACKAGE_PATH_NOT_EXPORTED。
  */
 export default defineConfig({
@@ -48,6 +48,7 @@ export default defineConfig({
       externalizeDepsPlugin({
         exclude: [
           'quotern-core',
+          'quotern-i18n',
           'electron-updater',
           'hono',
           'yauzl',

@@ -8,7 +8,18 @@ import { mapOpenCodeUsage } from '../shared/opencode-subscription';
 test('tray risk ignores stale and monetary balances and names the limiting quota', () => {
   const a = normalizeQuotaSnapshot('codex', 'Codex', { status: 'ready', fiveHour: { usedPercent: 95 } });
   const b = normalizeQuotaSnapshot('claude', 'Claude', { status: 'ready', stale: true, fiveHour: { usedPercent: 100 } });
-  assert.deepEqual(quotaTraySummary([a, b]), { level: 2, text: 'Codex 5h 剩余 5%' });
+  assert.deepEqual(quotaTraySummary([a, b]), { level: 2, text: 'Codex 5 小时限额 剩余 5%' });
+});
+test('tray tooltip summary follows the selected native language', () => {
+  const provider = normalizeQuotaSnapshot('codex', 'Codex', { status: 'ready', fiveHour: { usedPercent: 95 } });
+  assert.deepEqual((quotaTraySummary as (...args: any[]) => any)([provider], 'en'), {
+    level: 2,
+    text: 'Codex 5-hour limit: 5% remaining',
+  });
+  assert.deepEqual((quotaTraySummary as (...args: any[]) => any)([], 'ko'), {
+    level: 0,
+    text: '사용 가능한 한도 정보 없음',
+  });
 });
 test('all model pools survive normalization and the exhausted fourth pool determines tray risk', () => {
   const limits = mapAntigravityModels({ data: { models: {

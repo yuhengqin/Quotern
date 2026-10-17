@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
   applyPlatformFilterChange,
@@ -56,12 +57,6 @@ const TOOLTIP_HIDE_DELAY_MS = 80;
 const TOOLTIP_FLIP_THRESHOLD_PX = 340;
 /** Half of the tooltip width (`w-72` = 288px) plus a small margin. */
 const TOOLTIP_HALF_WIDTH_PX = 156;
-
-const DAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
-const MONTH_LABELS = [
-  '1月', '2月', '3月', '4月', '5月', '6月',
-  '7月', '8月', '9月', '10月', '11月', '12月',
-];
 
 interface ActivityHeatmapProps {
   days: DailyUsageRow[];
@@ -140,13 +135,14 @@ function HeatmapTooltipContent({
   modelEntries: TooltipModelEntry[];
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const shown = modelEntries;
 
   return (
     <div className="grid min-w-0 gap-2 text-xs">
       <div className="flex items-center justify-between gap-4">
         <span className="font-medium text-foreground">{cell.day}</span>
-        <span className="text-[10px] text-muted">等级 {cell.level}</span>
+        <span className="text-[10px] text-muted">{t('usage.heatmap.level', { level: cell.level })}</span>
       </div>
       <div className="flex items-center gap-2">
         <span
@@ -154,7 +150,7 @@ function HeatmapTooltipContent({
           className="size-2.5 shrink-0 rounded-full"
           style={{ background: heatmapColors[cell.level] }}
         />
-        <span className="flex-1 text-muted">总用量</span>
+        <span className="flex-1 text-muted">{t('usage.heatmap.total')}</span>
         <span
           className="font-mono font-medium tabular-nums text-foreground"
           title={formatTokensExact(cell.value)}
@@ -164,14 +160,14 @@ function HeatmapTooltipContent({
       </div>
 
       {isLoading ? (
-        <div aria-label="正在加载模型明细" className="grid gap-2 pt-0.5">
+        <div aria-label={t('usage.heatmap.loadingModels')} className="grid gap-2 pt-0.5">
           <span className="h-2.5 w-14 animate-pulse rounded bg-surface-secondary" />
           <span className="h-3 w-full animate-pulse rounded bg-surface-secondary" />
           <span className="h-1 w-full animate-pulse rounded bg-surface-secondary" />
         </div>
       ) : shown.length > 0 ? (
         <div className="grid gap-2">
-          <span className="text-[10px] font-medium text-muted">模型明细</span>
+          <span className="text-[10px] font-medium text-muted">{t('usage.heatmap.models')}</span>
           {shown.map(({ key, name, source, val }) => {
             const total = cell.value || 1;
             const pct = Math.round((val / total) * 100);
@@ -269,6 +265,7 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
   onFocus: (event: ReactFocusEvent<HTMLDivElement>) => void;
   onBlur: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -292,7 +289,7 @@ const HeatmapCellsGrid = memo(function HeatmapCellsGrid({
           const isSelected = selectedDate === cell.day;
           return (
             <button
-              aria-label={`${cell.day}，${formatTokensExact(cell.value)} Token`}
+              aria-label={t('usage.heatmap.dayTokens', { date: cell.day, tokens: formatTokensExact(cell.value) })}
               aria-pressed={onSelectDate ? isSelected : undefined}
               className={
                 isSelected
@@ -334,6 +331,8 @@ export function ActivityHeatmap({
   selectedDate = null,
   onSelectDate,
 }: ActivityHeatmapProps) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'zh-CN';
   const { theme } = useTheme();
   /** Uncontrolled fallback when parent does not own the filter. */
   const [internalSources, setInternalSources] = useState<string[] | null>(
@@ -418,9 +417,14 @@ export function ActivityHeatmap({
   const heatmapColors = HEATMAP_STOPS_LIGHT;
   void theme;
 
+  const monthLabels = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' });
+    return Array.from({ length: 12 }, (_, month) =>
+      formatter.format(new Date(Date.UTC(2024, month, 1))));
+  }, [locale]);
   const monthMarkers = useMemo(
-    () => buildMonthMarkers(visible.length, heatmap.to, MONTH_LABELS),
-    [visible.length, heatmap.to],
+    () => buildMonthMarkers(visible.length, heatmap.to, monthLabels),
+    [visible.length, heatmap.to, monthLabels],
   );
 
   const [tooltip, setTooltip] = useState<TooltipAnchor | null>(null);
@@ -540,7 +544,7 @@ export function ActivityHeatmap({
   if (!weeks.length) {
     return (
       <div className="w-full py-8 text-center text-sm text-muted">
-        暂无用量数据
+        {t('usage.heatmap.empty')}
       </div>
     );
   }
@@ -598,7 +602,7 @@ export function ActivityHeatmap({
 
       {selectedSources != null && activeSources.length === 0 ? (
         <div className="w-full py-8 text-center text-sm text-muted">
-          请至少选择一个 Agent
+          {t('usage.heatmap.selectAgent')}
         </div>
       ) : (
         <>
@@ -638,9 +642,9 @@ export function ActivityHeatmap({
                   rowGap: CELL_GAP,
                 }}
               >
-                {DAY_LABELS.map((l) => (
-                  <span key={l} className="flex items-center" style={{ lineHeight: 1 }}>
-                    {l}
+                {Array.from({ length: 7 }, (_, day) => (
+                  <span key={day} className="flex items-center" style={{ lineHeight: 1 }}>
+                    {t(`usage.heatmap.weekday.${day}`)}
                   </span>
                 ))}
               </div>
@@ -664,7 +668,7 @@ export function ActivityHeatmap({
           {getTimezoneLabel()}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted">少</span>
+          <span className="text-[10px] text-muted">{t('usage.heatmap.low')}</span>
           <div className="flex gap-1">
             {heatmapColors.map((c, i) => (
               <span
@@ -674,7 +678,7 @@ export function ActivityHeatmap({
               />
             ))}
           </div>
-          <span className="text-[10px] text-muted">多</span>
+          <span className="text-[10px] text-muted">{t('usage.heatmap.high')}</span>
         </div>
       </div>
 

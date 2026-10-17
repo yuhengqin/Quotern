@@ -4,9 +4,11 @@ import {
   loadShowTrayUsage,
   loadTrayUsageMode,
   loadThemeMode,
+  loadLocalePreference,
   onTrayUsagePrefChanged,
   registerAutostartIpc,
   saveThemeMode,
+  saveLocalePreference,
   shouldStartHidden,
   unregisterAutostartIpc,
 } from './autostart';
@@ -29,6 +31,7 @@ import {
   resetTrayPopoverQuitting,
   setTrayUsageTitle,
   setTrayQuotaState,
+  refreshTrayLocale,
 } from './TrayPopover';
 import { formatTrayUsage } from '../shared/tray-usage';
 import { registerLocalApiIpc } from './local-api-ipc';
@@ -59,6 +62,7 @@ import {
   disposeAutoUpdate,
   initializeAutoUpdate,
   registerAutoUpdateIpc,
+  setAutoUpdateLocale,
 } from './auto-update';
 import { createMainWindowLauncher } from './main-window-launcher';
 import { restoreNativeTrapHandler } from './native-crash-signals';
@@ -68,6 +72,10 @@ import { PetController } from './pet-controller';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
 import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
+import { isLocalePreference, registerMessages, resolveLocale } from 'quotern-i18n';
+import { LOCALE_CHANGED_CHANNEL, LOCALE_GET_CHANNEL, LOCALE_SET_CHANNEL } from '../shared/locale';
+import { createLocaleController } from './locale-controller';
+import { NATIVE_MESSAGES } from './native-messages';
 import {
   DEFAULT_DATA_DIR,
   evictRuntimeKind,
@@ -230,6 +238,36 @@ let disposeTrayUsageSync: (() => void) | null = null;
 let onPowerResumeListener: (() => void) | null = null;
 let petController: PetController | null = null;
 let trayUsageRefreshGeneration = 0;
+
+const localeController = createLocaleController({
+  readPreference: loadLocalePreference,
+  writePreference: saveLocalePreference,
+  preferredLanguages: () => {
+    try { return app.getPreferredSystemLanguages(); }
+    catch { return [app.getLocale()]; }
+  },
+  resolve: resolveLocale,
+  broadcast: state => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(LOCALE_CHANGED_CHANNEL, state);
+    }
+    setAutoUpdateLocale(state.resolved);
+    refreshTrayLocale();
+    petController?.setLocale(state.resolved);
+  },
+});
+
+function getNativeLocale() { return localeController.getState().resolved; }
+
+function registerLocaleIpc(): void {
+  ipcMain.removeHandler(LOCALE_GET_CHANNEL);
+  ipcMain.removeHandler(LOCALE_SET_CHANNEL);
+  ipcMain.handle(LOCALE_GET_CHANNEL, () => localeController.getState());
+  ipcMain.handle(LOCALE_SET_CHANNEL, async (_event, preference: unknown) => {
+    if (!isLocalePreference(preference)) throw new Error('invalid locale preference');
+    await localeController.setPreference(preference);
+  });
+}
 
 async function refreshTrayUsage(): Promise<void> {
   if (process.platform !== 'darwin') return;
@@ -407,8 +445,9 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   app.whenReady().then(async () => {
     // Listen before preferences or services can yield. The hidden-login flag
     // controls only the default first window, never a subsequent user open.
-    app.on('activate', showMainWindow);
+    app.on('activate', () => { localeController.refreshSystem(); showMainWindow(); });
     app.on('browser-window-focus', () => {
+      localeController.refreshSystem();
       pokeSyncOnForeground();
     });
 
@@ -430,6 +469,14 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       nativeTheme.shouldUseDarkColors,
     );
 
+    registerMessages(NATIVE_MESSAGES);
+    try {
+      await localeController.initialize();
+    } catch (err) {
+      console.error('[tud-desktop] failed to load locale preference:', err);
+    }
+    setAutoUpdateLocale(getNativeLocale());
+
     ipcMain.removeAllListeners('app:quit');
     ipcMain.on('app:quit', () => app.quit());
 
@@ -438,6 +485,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     });
     registerOpenExternalIpc();
     registerThemeIpc();
+    registerLocaleIpc();
     registerShareCardIpc();
     registerShareBackgroundIpc();
     registerAutostartIpc();
@@ -458,7 +506,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeOpenCodeSubscriptionIpc = registerOpenCodeSubscriptionIpc();
     disposeTraeSubscriptionIpc = registerTraeSubscriptionIpc();
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
-    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, onChanged: state => {
+    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, getLocale: getNativeLocale, onChanged: state => {
       setTrayQuotaState(state);
       petController?.updateQuotaState(state);
     } });
@@ -475,6 +523,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         },
         openSettings: () => void openSettings({ tab: 'app' }),
         getDark: () => currentTheme === 'dark',
+        getLocale: getNativeLocale,
         getQuotaState: getQuotaRuntimeState,
       });
       try {
@@ -502,6 +551,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       console.error('[tud-desktop] failed to open initial window:', err);
     });
     createTrayPopover({
+      getLocale: getNativeLocale,
       showMainWindow,
       openSettings: () => openSettings(),
       triggerSync,
@@ -589,6 +639,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   app.on('will-quit', () => {
     quotaRuntime?.dispose(); quotaRuntime = null;
     ipcMain.removeHandler(THEME_GET_CHANNEL);
+    ipcMain.removeHandler(LOCALE_GET_CHANNEL);
+    ipcMain.removeHandler(LOCALE_SET_CHANNEL);
     ipcMain.removeHandler(SHARE_CARD_COPY_IMAGE_CHANNEL);
     ipcMain.removeAllListeners(THEME_SET_CHANNEL);
     nativeTheme.removeListener('updated', onNativeThemeUpdated);

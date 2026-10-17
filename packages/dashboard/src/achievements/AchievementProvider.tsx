@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AchievementSnapshot, AchievementOperation, AchievementNotice, AchievementPreferences, AchievementFamily } from 'quotern-core/achievements';
+import { normalizeLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import type { AchievementShareSelection } from './share-model';
@@ -23,6 +25,8 @@ export function useAchievements(): AchievementContextValue {
   return value;
 }
 export function AchievementProvider({ request, children }: { request: AchievementRequest; children: ReactNode }) {
+  const { t, i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.language);
   const queue = useAppToastQueue();
   const [snapshot, setSnapshot] = useState<AchievementSnapshot | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
@@ -42,8 +46,8 @@ export function AchievementProvider({ request, children }: { request: Achievemen
     if (!keepFamily) setFamilyDetail(null);
     setDetailIds(ids);
     const owned = ids.filter(id => snapshotRef.current?.earned.some(item => item.id === id));
-    if (owned.length) void apply({ operation: 'seen', ids: owned }).catch(() => queue.add({ title: '已读状态未保存，可稍后重试', variant: 'warning' }));
-  }, [apply, queue]);
+    if (owned.length) void apply({ operation: 'seen', ids: owned }).catch(() => queue.add({ title: t('achievement.notice.seenFailed'), variant: 'warning' }));
+  }, [apply, queue, t]);
   const refresh = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current;
     const pending = (async () => {
@@ -54,18 +58,18 @@ export function AchievementProvider({ request, children }: { request: Achievemen
         if (result.notice?.ids.length) {
           const ids = result.notice.ids;
           queue.add({
-            title: result.notice.historical ? '你的记录，已经值得收藏' : ids.length === 1 ? '新成就已点亮' : '新点亮 ' + ids.length + ' 枚成就',
-            description: result.notice.historical ? '从已有记录中发现了 ' + ids.length + ' 枚成就。' : ids.length === 1 ? (() => { const item = result.snapshot.earned.find(item => item.id === ids[0]); return item ? achievementDisplayName(item) : undefined; })() : '这些同行的时刻，已为你保存。',
-            actionProps: { children: '查看成就', onPress: () => openCelebration(ids) },
+            title: result.notice.historical ? t('achievement.notice.historicalTitle') : ids.length === 1 ? t('achievement.notice.singleTitle') : t('achievement.notice.multiTitle', { count: ids.length }),
+            description: result.notice.historical ? t('achievement.notice.historicalDescription', { count: ids.length }) : ids.length === 1 ? (() => { const item = result.snapshot.earned.find(item => item.id === ids[0]); return item ? achievementDisplayName(item, true, locale) : undefined; })() : t('achievement.notice.multiDescription'),
+            actionProps: { children: t('achievement.notice.view'), onPress: () => openCelebration(ids) },
           }, { timeout: 8000 });
         }
-      } catch (reason) { if (alive.current) setError(reason instanceof Error ? reason.message : '成就收藏暂时不可用'); }
+      } catch { if (alive.current) setError(t('achievement.notice.unavailable')); }
       finally { if (alive.current) setLoading(false); }
     })();
     inFlight.current = pending;
     void pending.finally(() => { if (inFlight.current === pending) inFlight.current = null; });
     return pending;
-  }, [apply, openCelebration, queue]);
+  }, [apply, openCelebration, queue, t, locale]);
   useEffect(() => {
     alive.current = true;
     void refresh();
@@ -81,15 +85,15 @@ export function AchievementProvider({ request, children }: { request: Achievemen
   const updatePreferences = useCallback(async (preferences: Partial<AchievementPreferences>) => {
     setBusy(true);
     try { await apply({ operation: 'preferences', ...preferences }); }
-    catch (reason) { queue.add({ title: reason instanceof Error ? reason.message : '设置保存失败，请重试', variant: 'danger' }); throw reason; }
+    catch (reason) { queue.add({ title: t('achievement.notice.settingsFailed'), variant: 'danger' }); throw reason; }
     finally { if (alive.current) setBusy(false); }
-  }, [apply, queue]);
+  }, [apply, queue, t]);
   const updateProject = useCallback(async (operation: Omit<Extract<AchievementOperation, { operation: 'project' }>, 'operation'>) => {
     setBusy(true);
     try { await apply({ operation: 'project', ...operation }); }
-    catch (reason) { queue.add({ title: reason instanceof Error ? reason.message : '项目设置保存失败，请重试', variant: 'danger' }); throw reason; }
+    catch (reason) { queue.add({ title: t('achievement.notice.projectFailed'), variant: 'danger' }); throw reason; }
     finally { if (alive.current) setBusy(false); }
-  }, [apply, queue]);
+  }, [apply, queue, t]);
   const value = useMemo<AchievementContextValue>(() => ({
     snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, familyDetail,
     openFamily: family => { setShareSelection(null); setDetailIds([]); setFamilyDetail(family); }, closeFamily: () => setFamilyDetail(null),

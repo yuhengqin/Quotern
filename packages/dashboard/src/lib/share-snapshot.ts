@@ -6,6 +6,7 @@ import { localDateNow } from './stats-timezone.ts';
 import { sourceLabel } from './tokens.ts';
 import { formatDashboardDateRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { filterModelRowsBySources, filterTrendRowsBySources, normalizeSourceId, summarizeTrendRows } from './usage-filter.ts';
+import { translate, type SupportedLocale } from 'quotern-i18n';
 
 export interface ShareFilters {
   rangeDays: number;
@@ -28,14 +29,19 @@ export function buildShareDataFromDataset(
 }
 
 export const SHARE_RANGE_OPTIONS = [
-  { days: 1, label: '今天' },
-  { days: 7, label: '近 7 天' },
-  { days: 30, label: '近 30 天' },
-  { days: 90, label: '近 90 天' },
+  { days: 1, key: 'share.range.today' },
+  { days: 7, key: 'share.range.last7' },
+  { days: 30, key: 'share.range.last30' },
+  { days: 90, key: 'share.range.last90' },
 ] as const;
 
+export function shareRangeLabel(days: number, locale: SupportedLocale): string {
+  const option = SHARE_RANGE_OPTIONS.find((item) => item.days === days);
+  return option ? translate(locale, option.key) : '';
+}
+
 /** Reuse the dashboard's date projection and Agent accounting for every export. */
-export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilters) {
+export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilters, locale: SupportedLocale = 'zh-CN') {
   const { rangeDays, selectedDate } = filters;
   const view = selectedDate ? projectDashboardForDate({
     ...data,
@@ -70,8 +76,8 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
   return {
     summary,
     details,
-    rangeLabel: selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : SHARE_RANGE_OPTIONS.find((option) => option.days === rangeDays)?.label ?? ''),
-    toolLabel: selectedSources.length > 0 ? selectedSources.map(sourceLabel).join('、') : '全部 Agent',
+    rangeLabel: selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : shareRangeLabel(rangeDays, locale)),
+    toolLabel: selectedSources.length > 0 ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedSources.map(sourceLabel)) : translate(locale, 'share.allAgents'),
     tools: view.toolModelUsage,
   };
 }

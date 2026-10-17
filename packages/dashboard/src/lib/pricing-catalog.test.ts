@@ -50,6 +50,7 @@ describe('pricing catalog helpers', () => {
   it('labels subscription pricing and sorts it after known API prices', () => {
     const plan = { ...rows[0]!, model: 'plan/model', billingMode: 'subscription' as const, input: 0 };
     assert.equal(formatCatalogPricingRate(plan, 'input'), '订阅制');
+    assert.equal(formatCatalogPricingRate(plan, 'input', 'USD', null, 'en'), 'Subscription');
     assert.equal(formatCatalogPricingRate(plan, 'output'), '—');
     assert.equal(formatCatalogPricingRate({ ...plan, billingMode: 'api' }, 'input'), '$0');
     for (const direction of ['ascending', 'descending'] as const) {

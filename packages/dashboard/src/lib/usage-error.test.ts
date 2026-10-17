@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { registerMessages } from 'quotern-i18n';
+import { usageMessages } from '../i18n/usage-messages.ts';
 import { usageErrorDescription, usageErrorTitle } from './usage-error.ts';
+
+registerMessages(usageMessages);
 
 test('range failures show actionable Chinese messages instead of internal codes', () => {
   assert.equal(usageErrorDescription('INVALID_RANGE_DAYS'), '所选时间范围无法加载，请重新选择日期或重启 Quotern 后重试。');
@@ -28,4 +32,11 @@ test('empty results remain distinct from failed requests', () => {
 test('desktop runtime recovery retains its localized status', () => {
   assert.equal(usageErrorTitle('本地服务正在恢复，请稍候'), '本地服务正在恢复，请稍候');
   assert.equal(usageErrorDescription('本地服务正在恢复，请稍候'), '本地服务正在恢复，请稍候');
+});
+
+test('localized usage errors keep semantic failure branches and hide raw diagnostics', () => {
+  assert.equal(usageErrorDescription('INVALID_DATE_RANGE', 'en'), 'Invalid date range. Choose the start and end dates again.');
+  assert.equal(usageErrorTitle('INVALID_RANGE_DAYS:128', 'ja'), '使用状況データを読み込めません');
+  assert.equal(usageErrorDescription('SQLITE_BUSY: database is locked', 'ko'), '사용량 데이터를 불러오지 못했습니다. 잠시 후 다시 시도하세요.');
+  assert.equal(usageErrorDescription('LOCAL_RUNTIME_NOT_READY', 'en'), 'The local service is recovering. Please wait.');
 });

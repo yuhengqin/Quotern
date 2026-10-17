@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
+import type { SupportedLocale } from 'quotern-i18n';
 import {
   DASHBOARD_RANGE_DAYS,
   DashboardFilter,
@@ -43,13 +45,6 @@ import {
   summarizeTrendRows,
 } from '@/lib/usage-filter';
 
-const SHARE_RANGE_LABELS: Record<DashboardRange, string> = {
-  today: '今天',
-  'last-7-days': '近 7 天',
-  'last-30-days': '近 30 天',
-  'last-90-days': '近 90 天',
-};
-
 /**
  * Tabs `range` updates immediately; data fetch waits until after paint so
  * selected background + label colors can commit without contending with I/O.
@@ -69,6 +64,8 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** HeroUI dashboard backed by the same usage dataset as the root route. */
 export function DashboardPage() {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [range, setRange] = useLocalStorage<DashboardRange>(
     'tud.dashboardRange',
     'last-7-days',
@@ -96,11 +93,13 @@ export function DashboardPage() {
   const dayScoped = selectedDate != null || Boolean(customRange && rangeDays === 1 && customRange.end !== localDateNow());
   const isHourly = dayScoped || rangeDays === 1;
   const shareRangeLabel = selectedDate
-    ? formatFilterDayLabel(selectedDate)
-    : customRange ? formatDashboardDateRange(customRange) : SHARE_RANGE_LABELS[range];
+    ? formatFilterDayLabel(selectedDate, locale)
+    : customRange ? formatDashboardDateRange(customRange)
+      : range === 'today' ? t('usage.range.today')
+        : t('usage.range.lastDays', { count: DASHBOARD_RANGE_DAYS[range] });
   const shareToolLabel = selectedTools.length > 0
-    ? selectedTools.map(sourceLabel).join('、')
-    : '全部 Agent';
+    ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedTools.map(sourceLabel))
+    : t('usage.filter.allAgents');
   const showProjectDistribution = isCliBackend();
 
   useEffect(() => {
@@ -169,9 +168,9 @@ export function DashboardPage() {
     : visibleTrendRows.dailyRows;
   const metricTrendPeriodLabel = isHourly
     ? dayScoped
-      ? '当日小时'
-      : '今日小时'
-    : customRange ? formatDashboardDateRange(customRange) : `近 ${rangeDays} 日`;
+      ? t('usage.range.dayHours')
+      : t('usage.range.todayHours')
+    : customRange ? formatDashboardDateRange(customRange) : t('usage.range.lastDaysShort', { count: rangeDays });
   const visibleProjectRows = useMemo(
     () => filterProjectRowsBySources(view.projectModelUsage, selectedTools),
     [selectedTools, view.projectModelUsage],
@@ -296,16 +295,16 @@ export function DashboardPage() {
       {selectedDate && (
         <div className="mb-4">
           <Chip className="gap-1.5" size="sm" variant="soft">
-            <Chip.Label>当前筛选：{formatFilterDayLabel(selectedDate)}</Chip.Label>
+            <Chip.Label>{t('usage.page.filteredDate', { date: formatFilterDayLabel(selectedDate, locale) })}</Chip.Label>
             <Button
-              aria-label="清除日期筛选"
+              aria-label={t('usage.page.clearDate')}
               className="h-5 min-w-0 gap-0.5 px-1.5 text-xs"
               size="sm"
               variant="ghost"
               onPress={() => setSelectedDate(null)}
             >
               <Xmark className="size-3.5" />
-              清除
+              {t('usage.page.clear')}
             </Button>
           </Chip>
         </div>
@@ -313,7 +312,7 @@ export function DashboardPage() {
 
       {source === 'api' && error && !loading && (
         <div className="mb-4">
-          <StatusBanner description={usageErrorDescription(error)} title={usageErrorTitle(error)} tone="warn" />
+          <StatusBanner description={usageErrorDescription(error, locale)} title={usageErrorTitle(error, locale)} tone="warn" />
         </div>
       )}
 
@@ -344,7 +343,7 @@ export function DashboardPage() {
           <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section
-            aria-label="用量图表"
+            aria-label={t('usage.page.charts')}
             className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2"
           >
             <TokenUsageTrendCard
@@ -376,14 +375,14 @@ export function DashboardPage() {
             />
             */}
             <UsageDistributionCard
-              description="按 Agent 查看用量占比"
+              description={t('usage.page.agentDistributionDesc')}
               rows={visibleDistributions.tools}
-              title="Agent 分布"
+              title={t('usage.page.agentDistribution')}
             />
             <UsageDistributionCard
-              description="按模型查看 Token 与费用占比"
+              description={t('usage.page.modelDistributionDesc')}
               rows={visibleDistributions.models}
-              title="模型分布"
+              title={t('usage.page.modelDistribution')}
             />
           </section>
         </div>
@@ -393,7 +392,8 @@ export function DashboardPage() {
 }
 
 /** `YYYY-MM-DD` → `X月X日` (UTC calendar parts, same as heatmap cells). */
-function formatFilterDayLabel(date: string): string {
-  const [, month = '1', day = '1'] = date.slice(0, 10).split('-');
-  return `${Number(month)}月${Number(day)}日`;
+function formatFilterDayLabel(date: string, locale: SupportedLocale): string {
+  return new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${date.slice(0, 10)}T00:00:00Z`),
+  );
 }

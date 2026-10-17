@@ -7,6 +7,7 @@ import {
   SunIcon,
   XIcon,
 } from 'lucide-react';
+import { useTranslation } from 'quotern-i18n/react';
 import { useTheme } from '@/hooks/useTheme';
 import type { ThemeMode } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -17,10 +18,10 @@ const glassShell =
 const fabBtn =
   'flex size-10 items-center justify-center rounded-[10px] text-muted opacity-45 transition-all duration-150 hover:bg-white/60 hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-white/10';
 
-const THEME_MODE_META: Record<ThemeMode, { icon: typeof SunMoonIcon; label: string }> = {
-  system: { icon: SunMoonIcon, label: '跟随系统' },
-  light: { icon: SunIcon, label: '浅色' },
-  dark: { icon: MoonIcon, label: '深色' },
+const THEME_MODE_ICON: Record<ThemeMode, typeof SunMoonIcon> = {
+  system: SunMoonIcon,
+  light: SunIcon,
+  dark: MoonIcon,
 };
 
 interface ActionRailProps {
@@ -39,8 +40,10 @@ export function ActionRail({
   refreshing,
   refreshLabel,
 }: ActionRailProps) {
+  const { t } = useTranslation();
   const { themeMode, toggleTheme } = useTheme();
-  const { icon: ThemeModeIcon, label: modeLabel } = THEME_MODE_META[themeMode];
+  const ThemeModeIcon = THEME_MODE_ICON[themeMode];
+  const modeLabel = t(`shell.theme.${themeMode}`);
 
   return (
     <div className={cn(glassShell, 'flex flex-col gap-0.5 p-1.5')}>
@@ -62,8 +65,8 @@ export function ActionRail({
       <button
         type="button"
         onClick={toggleTheme}
-        aria-label={`切换主题：当前${modeLabel}`}
-        title={`主题：${modeLabel}`}
+        aria-label={t('shell.theme.toggleCurrent', { mode: modeLabel })}
+        title={t('shell.theme.current', { mode: modeLabel })}
         className={fabBtn}
       >
         <ThemeModeIcon className={themeMode === 'system' ? 'size-4 scale-[1.2]' : 'size-4'} />
@@ -72,8 +75,8 @@ export function ActionRail({
       <button
         type="button"
         onClick={onToggleSettings}
-        aria-label={settingsOpen ? '关闭设置' : '打开设置'}
-        title={settingsOpen ? '关闭设置' : '设置'}
+        aria-label={t(settingsOpen ? 'shell.closeSettings' : 'shell.openSettings')}
+        title={t(settingsOpen ? 'shell.closeSettings' : 'shell.settings')}
         className={cn(fabBtn, settingsOpen && 'bg-white/70 opacity-100 text-foreground dark:bg-white/15')}
       >
         {settingsOpen ? <XIcon className="size-4" /> : <SettingsIcon className="size-4" />}

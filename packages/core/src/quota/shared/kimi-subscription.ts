@@ -14,6 +14,7 @@ export interface KimiRateLimitWindow {
   usedPercent: number;
   /** Unix timestamp in seconds. */
   resetsAt: number | null;
+  periodSeconds?: number | null;
 }
 
 export interface KimiSubscriptionSnapshot {
@@ -63,6 +64,16 @@ function windowLabel(window: Record<string, unknown> | null, fallback: string): 
   return fallback;
 }
 
+function windowSeconds(window: Record<string, unknown> | null): number | null {
+  if (!window) return null;
+  const duration = finiteNumber(window.duration);
+  const unit = String(window.timeUnit ?? window.unit ?? '').toLowerCase();
+  if (duration === null || duration <= 0) return null;
+  const scale = unit.includes('minute') ? 60 : unit.includes('hour') ? 3600
+    : unit.includes('day') ? 86400 : unit.includes('week') ? 7 * 86400 : null;
+  return scale === null ? null : duration * scale;
+}
+
 function toWindow(
   value: unknown,
   fallback: string,
@@ -81,6 +92,7 @@ function toWindow(
     label,
     usedPercent: boundedPercent(used / limit * 100),
     resetsAt: resetAt(record.resetTime ?? record.reset_at ?? record.resetAt),
+    periodSeconds: windowSeconds(window),
   };
 }
 
@@ -101,6 +113,7 @@ export function mapKimiUsage(value: unknown): KimiRateLimitWindow[] {
       label,
       usedPercent: boundedPercent(ratio * 100),
       resetsAt: resetAt(entry?.reset_time),
+      periodSeconds: key === 'limit_5h' ? 18000 : key === 'limit_7d' ? 604800 : 31 * 86400,
     });
   }
   const summary = toWindow(payload.usage, '7d', { duration: 1, unit: 'week' });
@@ -115,16 +128,15 @@ export function mapKimiUsage(value: unknown): KimiRateLimitWindow[] {
     }
   }
 
-  const byLabel = new Map<string, KimiRateLimitWindow>();
+  const selected = new Map<string, KimiRateLimitWindow>();
   for (const item of limits) {
-    const canonical = item.label.toLowerCase();
-    if (!byLabel.has(canonical)) byLabel.set(canonical, item);
+    // A named limit can be a separate pool with the same reset cycle as the
+    // account limit. Its period alone is not proof that the limits are equal.
+    const key = item.label.toLowerCase();
+    if (!selected.has(key)) selected.set(key, item);
   }
-  return [...byLabel.values()]
-    .sort((left, right) => {
-      const rank = (label: string) => label === '5h' ? 0 : label === '7d' ? 1 : 2;
-      return rank(left.label) - rank(right.label);
-    })
+  return [...selected.values()]
+    .sort((left, right) => (left.periodSeconds ?? Number.POSITIVE_INFINITY) - (right.periodSeconds ?? Number.POSITIVE_INFINITY))
     .slice(0, 3);
 }
 

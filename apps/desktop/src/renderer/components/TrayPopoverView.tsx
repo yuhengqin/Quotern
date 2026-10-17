@@ -6,8 +6,10 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { formatDistanceToNow } from 'date-fns';
+import { enUS, ja, ko, zhCN } from 'date-fns/locale';
+import { normalizeLocale, translate, type SupportedLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   Button,
   Card,
@@ -69,6 +71,8 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** Dedicated React surface loaded inside the native tray popover window. */
 export function TrayPopoverView() {
+  const { t, i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.resolvedLanguage);
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
@@ -257,11 +261,13 @@ export function TrayPopoverView() {
     };
   }, [loading, error]);
 
-  const comparisonLabel = range === 'today' ? '较昨日同期' : `较前 ${rangeDays} 天`;
+  const comparisonLabel = range === 'today'
+    ? t('desktop.tray.comparedYesterday')
+    : t('desktop.tray.comparedPreviousDays', { count: rangeDays });
   const metrics = useMemo(
     () => [
       {
-        label: '预估费用',
+        label: t('usage.common.estimatedCost'),
         value: visibleSummary.totalCostUsd,
         trend: visibleMetricTrends.totalCostUsd,
         trendDisplay: 'percent' as const,
@@ -269,7 +275,7 @@ export function TrayPopoverView() {
         exactFormat: formatUsd,
       },
       {
-        label: '总 Token',
+        label: t('usage.common.totalTokens'),
         value: visibleSummary.totalTokens,
         trend: visibleMetricTrends.totalTokens,
         trendDisplay: 'percent' as const,
@@ -277,7 +283,7 @@ export function TrayPopoverView() {
         exactFormat: formatTokensExact,
       },
       {
-        label: '输入 Token',
+        label: t('usage.common.inputTokens'),
         value: visibleSummary.inputTokens,
         trend: visibleMetricTrends.inputTokens,
         trendDisplay: 'tokens' as const,
@@ -285,7 +291,7 @@ export function TrayPopoverView() {
         exactFormat: formatTokensExact,
       },
       {
-        label: '输出 Token',
+        label: t('usage.common.outputTokens'),
         value: visibleSummary.outputTokens,
         trend: visibleMetricTrends.outputTokens,
         trendDisplay: 'tokens' as const,
@@ -293,7 +299,7 @@ export function TrayPopoverView() {
         exactFormat: formatTokensExact,
       },
     ] as const,
-    [visibleMetricTrends, visibleSummary],
+    [t, visibleMetricTrends, visibleSummary],
   );
 
   const topTools = useMemo(
@@ -375,7 +381,7 @@ export function TrayPopoverView() {
         className="tray-popover__header flex flex-col gap-2 px-4 py-2"
       >
         <div className="flex items-center justify-between">
-          <h1 className="text-sm font-semibold text-foreground">用量概览</h1>
+          <h1 className="text-sm font-semibold text-foreground">{t('desktop.tray.overview')}</h1>
           <ThemeToggle />
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -391,11 +397,11 @@ export function TrayPopoverView() {
           >
             <Tabs.ListContainer>
               <Tabs.List
-                aria-label="时间范围"
+                aria-label={t('usage.filter.timeRange')}
                 className="w-fit *:h-6 *:w-fit *:px-3 *:text-sm *:font-normal *:transition-none! *:data-[selected=true]:text-accent-foreground"
               >
                 <Tabs.Tab className="transition-none!" id="today">
-                  <span className="text-xs font-normal">今天</span>
+                  <span className="text-xs font-normal">{t('usage.range.today')}</span>
                   <Tabs.Indicator className="bg-accent transition-none!" />
                 </Tabs.Tab>
                 <Tabs.Tab className="transition-none!" id="last-7-days">
@@ -436,12 +442,12 @@ export function TrayPopoverView() {
             </div>
           ) : error ? (
             <div className="flex min-h-40 items-center justify-center px-2 text-center text-xs text-muted">
-              {error}
+              {t('desktop.tray.loadFailed')}
             </div>
           ) : (
             <div className="tray-popover__usage relative isolate grid min-h-40 gap-3">
               <DashboardRangeSyncOverlay visible={refreshing} />
-              <section aria-label="用量指标" className="grid grid-cols-2 gap-2">
+              <section aria-label={t('desktop.tray.usageMetrics')} className="grid grid-cols-2 gap-2">
                 {metrics.slice(0, 2).map((metric) => (
                   <Card
                     key={metric.label}
@@ -472,9 +478,9 @@ export function TrayPopoverView() {
                   </Card>
                 ))}
                 <div className="col-span-full grid grid-cols-2 divide-x divide-separator rounded-xl bg-surface/60 py-2">
-                  {metrics.slice(2).map((metric) => (
+                  {metrics.slice(2).map((metric, index) => (
                     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 px-3" key={metric.label}>
-                      <p className="text-xs text-muted">{metric.label === '输入 Token' ? '输入' : '输出'}</p>
+                      <p className="text-xs text-muted">{t(index === 0 ? 'usage.common.input' : 'usage.common.output')}</p>
                       <AnimatedMetricValue
                         compact
                         exactFormat={metric.exactFormat}
@@ -504,7 +510,7 @@ export function TrayPopoverView() {
               {topTools.length > 0 && (
                 <DistributionMiniCard
                   rows={topTools}
-                  title="Agent 分布 Top 3"
+                  title={t('desktop.tray.agentTop3')}
                   totalTokens={visibleSummary.totalTokens}
                 />
               )}
@@ -512,7 +518,7 @@ export function TrayPopoverView() {
               {topModels.length > 0 && (
                 <DistributionMiniCard
                   rows={topModels}
-                  title="模型分布 Top 3"
+                  title={t('desktop.tray.modelTop3')}
                   totalTokens={modelProgressTotal}
                 />
               )}
@@ -533,9 +539,11 @@ export function TrayPopoverView() {
         </span>
         <span
           className="min-w-0 truncate text-xs text-muted"
-          title={lastSyncAt ? new Date(lastSyncAt).toLocaleString() : undefined}
+          title={lastSyncAt && Number.isFinite(new Date(lastSyncAt).getTime())
+            ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSyncAt))
+            : undefined}
         >
-          最近同步：{formatLastSyncTime(lastSyncAt, now)}
+          {t('desktop.tray.lastSynced', { time: formatLastSyncTime(lastSyncAt, now, locale) })}
         </span>
         <Button
           type="button"
@@ -544,7 +552,7 @@ export function TrayPopoverView() {
           variant="secondary"
           onPress={() => window.tud?.showMainWindow?.()}
         >
-          打开主窗口
+          {t('desktop.tray.openMain')}
           <span aria-hidden="true">↗</span>
         </Button>
       </footer>
@@ -554,8 +562,9 @@ export function TrayPopoverView() {
 
 /** Preserve the tray's final content rhythm while the first dataset loads. */
 function TrayLoadingSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div aria-label="用量数据加载中" className="grid gap-3" role="status">
+    <div aria-label={t('desktop.tray.loading')} className="grid gap-3" role="status">
       <section aria-hidden="true" className="grid grid-cols-2 gap-2">
         {Array.from({ length: 2 }, (_, index) => (
           <Card className="min-w-0 overflow-hidden rounded-xl px-3 py-2.5" key={index}>
@@ -605,20 +614,22 @@ function TrayLoadingSkeleton() {
   );
 }
 
-function formatLastSyncTime(lastSyncAt: string | null, now: number): string {
-  if (!lastSyncAt) return '从未';
+function formatLastSyncTime(lastSyncAt: string | null, now: number, locale: SupportedLocale): string {
+  if (!lastSyncAt) return translate(locale, 'desktop.tray.never');
   const date = new Date(lastSyncAt);
   const timestamp = date.getTime();
-  if (Number.isNaN(timestamp)) return '未知';
+  if (Number.isNaN(timestamp)) return translate(locale, 'desktop.tray.unknown');
 
   const elapsedSeconds = Math.max(0, Math.floor((now - timestamp) / 1_000));
-  if (elapsedSeconds < 60) return '刚刚';
+  if (elapsedSeconds < 60) return translate(locale, 'desktop.tray.justNow');
 
   if (elapsedSeconds < 7 * 24 * 60 * 60) {
-    return formatDistanceToNow(date, { addSuffix: true, locale: zhCN });
+    return formatDistanceToNow(date, { addSuffix: true, locale: { 'zh-CN': zhCN, en: enUS, ja, ko }[locale] });
   }
 
-  return format(date, 'M/d HH:mm', { locale: zhCN });
+  return new Intl.DateTimeFormat(locale, {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(date);
 }
 
 function MetricTrend({
@@ -632,22 +643,29 @@ function MetricTrend({
   display: 'percent' | 'tokens';
   trend: { changePct: number; changeValue: number };
 }) {
+  const { t } = useTranslation();
   const isIncrease = trend.changeValue > 0;
   const unchanged = trend.changeValue === 0;
-  const direction = unchanged ? '持平' : isIncrease ? '增加' : '减少';
+  const direction = t(isIncrease ? 'desktop.tray.increased' : 'desktop.tray.decreased');
+  const absoluteValue = display === 'tokens'
+    ? formatTokens(Math.abs(trend.changeValue))
+    : `${Math.abs(trend.changePct).toFixed(1)}%`;
   const label =
     display === 'tokens'
       ? `${isIncrease ? '+' : '−'}${formatTokens(Math.abs(trend.changeValue))}`
       : `${Math.abs(trend.changePct).toFixed(1)}%`;
+  const description = unchanged
+    ? t('desktop.tray.trendNoChange', { comparison: comparisonLabel })
+    : t('desktop.tray.trendDescription', { comparison: comparisonLabel, direction, value: absoluteValue });
 
   return (
     <span
-      aria-label={`${comparisonLabel}，${direction}${unchanged ? '' : ` ${label}`}`}
-      title={`${comparisonLabel}，${direction}${unchanged ? '' : ` ${label}`}`}
+      aria-label={description}
+      title={description}
       className={`inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[11px] leading-5 tabular-nums text-muted ${compact ? '' : 'rounded-md bg-default/50 px-1.5'}`}
     >
       {!unchanged && <span aria-hidden="true">{isIncrease ? '↑' : '↓'}</span>}
-      {unchanged ? '持平' : label}
+      {unchanged ? t('desktop.tray.unchanged') : label}
     </span>
   );
 }
@@ -687,6 +705,7 @@ function DistributionMiniCard({
   rows: Array<{ id: string; label: string; color: string; tokens: number; costUsd: number }>;
   totalTokens: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Card className="min-w-0 rounded-xl p-3">
       <Card.Content className="grid gap-2.5 p-0">
@@ -702,7 +721,7 @@ function DistributionMiniCard({
                 {row.label}
               </span>
               <ProgressBar
-                aria-label={`${row.label} 占比 ${pct.toFixed(1)}%`}
+                aria-label={t('desktop.tray.sharePercent', { name: row.label, percent: pct.toFixed(1) })}
                 className="w-full"
                 maxValue={100}
                 size="sm"

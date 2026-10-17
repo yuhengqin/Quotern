@@ -3,6 +3,7 @@ import { getModelProvider, type ModelProvider } from './model-provider.ts';
 import { isModelReleaseDate, resolvePricingModelId, type PricingData } from 'quotern-core/pricing-matcher';
 import type { ModelBreakdownRow } from './api.ts';
 import { formatConvertedPricingRate, type PricingCurrency } from './pricing-currency.ts';
+import { pricingMessages } from '../i18n/pricing-messages.ts';
 
 export const PRICING_PAGE_SIZE = 100;
 
@@ -219,13 +220,13 @@ export function getPricingChannel(model: string): string | null {
   return null;
 }
 
-export function formatPricingRate(value: number | null, currency: PricingCurrency = 'USD', exchangeRate: number | null = null): string {
-  return formatConvertedPricingRate(value, currency, exchangeRate);
+export function formatPricingRate(value: number | null, currency: PricingCurrency = 'USD', exchangeRate: number | null = null, locale = 'en-US'): string {
+  return formatConvertedPricingRate(value, currency, exchangeRate, locale);
 }
 
-export function formatCatalogPricingRate(row: PricingCatalogRow, key: 'input' | 'output' | 'cacheRead' | 'cacheWrite', currency: PricingCurrency = 'USD', exchangeRate: number | null = null): string {
-  if (row.billingMode === 'subscription') return key === 'input' ? '订阅制' : '—';
-  return formatPricingRate(row[key], currency, exchangeRate);
+export function formatCatalogPricingRate(row: PricingCatalogRow, key: 'input' | 'output' | 'cacheRead' | 'cacheWrite', currency: PricingCurrency = 'USD', exchangeRate: number | null = null, locale: keyof typeof pricingMessages = 'zh-CN'): string {
+  if (row.billingMode === 'subscription') return key === 'input' ? pricingMessages[locale]['pricing.list.subscriptionOnly'] : '—';
+  return formatPricingRate(row[key], currency, exchangeRate, locale);
 }
 
 export function getPageCount(totalItems: number, pageSize = PRICING_PAGE_SIZE): number {

@@ -1,4 +1,6 @@
 import { resolveSyncSource } from './args.js';
+import type { SupportedLocale } from 'quotern-i18n';
+import { extractCliLanguage, systemCliLocale, userError } from './i18n/locale.js';
 
 export type UsagePeriod =
   | 'summary'
@@ -24,6 +26,7 @@ export interface ParsedUsageArgs {
   compact?: boolean;
   dataDir?: string;
   help: boolean;
+  lang?: SupportedLocale;
 }
 
 const PERIODS: readonly UsagePeriod[] = [
@@ -44,6 +47,7 @@ function readOptionValue(
   args: string[],
   index: number,
   option: string,
+  locale: SupportedLocale,
 ): OptionValue {
   const token = args[index];
   const equalPrefix = `${option}=`;
@@ -55,52 +59,52 @@ function readOptionValue(
   } else {
     const next = args[index + 1];
     if (next == null || next.startsWith('-')) {
-      throw new Error(`${option} 缺少参数值`);
+      throw userError(locale, 'usage.missing', { option });
     }
     value = next;
     nextIndex += 1;
   }
 
   if (!value.trim()) {
-    throw new Error(`${option} 参数不能为空`);
+    throw userError(locale, 'usage.empty', { option });
   }
 
   return { value, nextIndex };
 }
 
-function validateDays(raw: string): number {
+function validateDays(raw: string, locale: SupportedLocale): number {
   const value = raw.trim();
   if (!/^\d+$/.test(value)) {
-    throw new Error(`--days 必须是 1 到 3660 之间的整数: ${raw}`);
+    throw userError(locale, 'usage.daysRange', { value: raw });
   }
   const days = Number(value);
   if (!Number.isSafeInteger(days) || days < 1 || days > 3660) {
-    throw new Error(`--days 必须是 1 到 3660 之间的整数: ${raw}`);
+    throw userError(locale, 'usage.daysRange', { value: raw });
   }
   return days;
 }
 
-function validateDate(option: '--from' | '--to', raw: string): string {
+function validateDate(option: '--from' | '--to', raw: string, locale: SupportedLocale): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    throw new Error(`${option} 日期必须使用真实的 YYYY-MM-DD 日期: ${raw}`);
+    throw userError(locale, 'usage.dateInvalid', { option, value: raw });
   }
   const parsed = new Date(`${raw}T00:00:00.000Z`);
   if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== raw) {
-    throw new Error(`${option} 日期必须使用真实的 YYYY-MM-DD 日期: ${raw}`);
+    throw userError(locale, 'usage.dateInvalid', { option, value: raw });
   }
   return raw;
 }
 
-function parseSources(rawValues: string[]): string[] | undefined {
+function parseSources(rawValues: string[], locale: SupportedLocale): string[] | undefined {
   const tokens = rawValues.flatMap((raw) => raw.split(',').map((item) => item.trim()));
   if (tokens.some((item) => item.length === 0)) {
-    throw new Error('--source 参数不能为空，多个数据源请用逗号分隔');
+    throw userError(locale, 'usage.sourceEmpty');
   }
 
   let includesAll = false;
   const sources: string[] = [];
   for (const token of tokens) {
-    const source = resolveSyncSource(token);
+    const source = resolveSyncSource(token, locale);
     if (source === undefined) {
       includesAll = true;
     } else if (!sources.includes(source)) {
@@ -109,14 +113,16 @@ function parseSources(rawValues: string[]): string[] | undefined {
   }
 
   if (includesAll && sources.length > 0) {
-    throw new Error('--source 的 all 不能与其他数据源混合');
+    throw userError(locale, 'usage.sourceAllMixed');
   }
   return includesAll ? undefined : sources;
 }
 
-export function parseUsageArgs(args: string[]): ParsedUsageArgs {
+export function parseUsageArgs(inputArgs: string[]): ParsedUsageArgs {
+  const { args, lang } = extractCliLanguage(inputArgs);
+  const locale = lang ?? systemCliLocale();
   if (args.includes('--help') || args.includes('-h')) {
-    return { query: { period: 'summary' }, format: 'text', dataDir: undefined, help: true };
+    return { query: { period: 'summary' }, format: 'text', dataDir: undefined, help: true, ...(lang ? { lang } : {}) };
   }
 
   let period: UsagePeriod | undefined;
@@ -133,7 +139,7 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
 
   const markSeen = (option: string): void => {
     if (seenOptions.has(option)) {
-      throw new Error(`${option} 参数重复`);
+      throw userError(locale, 'usage.duplicate', { option });
     }
     seenOptions.add(option);
   };
@@ -141,9 +147,9 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
   const setFormat = (next: UsageFormat, option: string): void => {
     if (format !== undefined) {
       if (format !== next) {
-        throw new Error(`格式参数互相冲突: ${format} 与 ${next}`);
+        throw userError(locale, 'usage.formatConflict', { first: format, second: next });
       }
-      throw new Error(`${option} 参数重复`);
+      throw userError(locale, 'usage.duplicate', { option });
     }
     format = next;
   };
@@ -173,18 +179,18 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
       option === '--format'
     ) {
       markSeen(option);
-      const { value, nextIndex } = readOptionValue(args, index, option);
+      const { value, nextIndex } = readOptionValue(args, index, option, locale);
       index = nextIndex;
 
       switch (option) {
         case '--days':
-          days = validateDays(value);
+          days = validateDays(value, locale);
           break;
         case '--from':
-          fromDate = validateDate('--from', value);
+          fromDate = validateDate('--from', value, locale);
           break;
         case '--to':
-          toDate = validateDate('--to', value);
+          toDate = validateDate('--to', value, locale);
           break;
         case '--source':
           sourceValues.push(value);
@@ -200,7 +206,7 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
           break;
         case '--format':
           if (value !== 'text' && value !== 'json' && value !== 'csv') {
-            throw new Error(`--format 仅支持 text、json 或 csv: ${value}`);
+            throw userError(locale, 'usage.formatInvalid', { value });
           }
           setFormat(value, option);
           break;
@@ -209,28 +215,28 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
     }
 
     if (token.startsWith('-')) {
-      throw new Error(`未知参数: ${token}`);
+      throw userError(locale, 'usage.unknownOption', { value: token });
     }
     if (period !== undefined) {
-      throw new Error(`多余的位置参数: ${token}`);
+      throw userError(locale, 'usage.extraArgument', { value: token });
     }
     if (!PERIODS.includes(token as UsagePeriod)) {
-      throw new Error(`未知 usage 周期: ${token}；可用值: ${PERIODS.join(' | ')}`);
+      throw userError(locale, 'usage.unknownPeriod', { value: token, periods: PERIODS.join(' | ') });
     }
     period = token as UsagePeriod;
   }
 
   if ((fromDate === undefined) !== (toDate === undefined)) {
-    throw new Error('--from 和 --to 必须同时提供');
+    throw userError(locale, 'usage.rangePair');
   }
   if (fromDate !== undefined && toDate !== undefined && fromDate > toDate) {
-    throw new Error('--from 不能晚于 --to');
+    throw userError(locale, 'usage.rangeOrder');
   }
   if (fromDate !== undefined && days !== undefined) {
-    throw new Error('--from/--to 日期范围不能与显式 --days 同时使用');
+    throw userError(locale, 'usage.rangeDays');
   }
   if (compact && format !== 'json') {
-    throw new Error('--compact 仅支持 JSON 输出，请同时指定 --format json 或 --json');
+    throw userError(locale, 'usage.compactJson');
   }
 
   const query: ParsedUsageArgs['query'] = { period: period ?? 'summary' };
@@ -238,7 +244,7 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
   if (fromDate !== undefined) query.fromDate = fromDate;
   if (toDate !== undefined) query.toDate = toDate;
   if (sourceValues.length > 0) {
-    const sources = parseSources(sourceValues);
+    const sources = parseSources(sourceValues, locale);
     if (sources !== undefined) query.sources = sources;
   }
   if (model !== undefined) query.model = model;
@@ -250,5 +256,6 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
     ...(compact ? { compact: true } : {}),
     dataDir,
     help: false,
+    ...(lang ? { lang } : {}),
   };
 }

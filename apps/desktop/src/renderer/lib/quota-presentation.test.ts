@@ -84,13 +84,13 @@ test('keeps independent model and feature forecasts separate from account foreca
 
 test('only merges explicitly unlimited Copilot chat and completions, preserving finite, unknown and exhausted entries', () => {
   const details: QuotaProviderState['details'] = [
-    { id: 'chat', label: 'Chat', text: '无限', resetsAt: null },
-    { id: 'completions', label: '内联建议', text: '无限', resetsAt: null },
+    { id: 'chat', label: 'Chat', text: '无限', valueKind: 'unlimited', resetsAt: null },
+    { id: 'completions', label: '内联建议', text: '无限', valueKind: 'unlimited', resetsAt: null },
   ];
   const select = quotaDisplayDetails;
-  assert.deepEqual(select('copilot', details), [{ id: 'chat-completions', label: '聊天与代码补全', text: '无限', resetsAt: null }]);
+  assert.deepEqual(select('copilot', details), [{ id: 'chat-completions', label: '聊天与代码补全', text: '无限', valueKind: 'unlimited', resetsAt: null }]);
   for (const text of ['50%', '未知', '已用尽']) {
-    assert.equal(select('copilot', [details[0], { ...details[1], text }]).length, 2);
+    assert.equal(select('copilot', [details[0], { ...details[1], text, valueKind: text === '已用尽' ? 'exhausted' : undefined }]).length, 2);
   }
   assert.equal(select('copilot', [details[0]]).length, 1);
   assert.equal(select('cursor', details).length, 2);

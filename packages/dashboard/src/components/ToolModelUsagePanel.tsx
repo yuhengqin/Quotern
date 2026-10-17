@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { createPortal } from 'react-dom';
 import { Card } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { CHART_TOOLTIP_SURFACE_CLASSNAME } from '@/components/ChartPrimitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DashboardToolUsageRow } from '@/lib/dashboard-mock-data';
@@ -28,6 +29,7 @@ export function ToolModelUsagePanel({
 }: {
   rows: DashboardToolUsageRow[];
 }) {
+  const { t } = useTranslation();
   const headingId = useId();
   const viewTotalTokens = useMemo(
     () => rows.reduce((sum, row) => sum + row.tokens, 0),
@@ -57,20 +59,20 @@ export function ToolModelUsagePanel({
     <Card className="min-w-0 overflow-hidden rounded-2xl">
       <Card.Header className="flex-row items-start justify-between gap-3 pb-0">
         <div className="min-w-0">
-          <Card.Title id={headingId}>Agent 与模型用量</Card.Title>
+          <Card.Title id={headingId}>{t('usage.tool.heading')}</Card.Title>
           <Card.Description className="mt-1">
-            按 Agent 比较总 Token
+            {t('usage.tool.description')}
           </Card.Description>
         </div>
         <Link to="/pricing" search={{ q: '' }} className="shrink-0 rounded px-1 py-1 text-xs text-muted underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent">
-          查看价格
+          {t('usage.tool.viewPrices')}
         </Link>
       </Card.Header>
 
       <Card.Content className="pt-2">
         {rows.length === 0 ? (
           <p className="flex min-h-52 items-center justify-center px-4 text-center text-sm text-muted">
-            暂无 Agent 或模型用量
+            {t('usage.tool.empty')}
           </p>
         ) : (
           <div
@@ -80,13 +82,13 @@ export function ToolModelUsagePanel({
           >
             {chart.rows.length === 0 ? (
               <p className="mt-4 flex min-h-40 items-center justify-center px-4 text-center text-sm text-muted">
-                当前筛选暂无用量
+                {t('usage.tool.filteredEmpty')}
               </p>
             ) : (
               <>
                 <div
                   aria-label={
-                    hasScrollableRows ? 'Agent 用量列表，可纵向滚动' : undefined
+                    hasScrollableRows ? t('usage.tool.scrollAria') : undefined
                   }
                   className="min-w-0 overscroll-contain overflow-y-auto pr-1 focus:[outline:none]"
                   style={{
@@ -123,6 +125,7 @@ export function ToolModelUsagePanel({
 }
 
 function ToolLabelColumn({ rows }: { rows: ToolModelStackedChartRow[] }) {
+  const { t } = useTranslation();
   return (
     <div className="min-w-0" aria-hidden="true">
       {rows.map((row) => (
@@ -143,9 +146,9 @@ function ToolLabelColumn({ rows }: { rows: ToolModelStackedChartRow[] }) {
             </span>
             <span
               className="mt-0.5 block truncate text-[9px] text-muted tabular-nums sm:text-[11px]"
-              title={`${row.modelCount} 个模型 · ${formatUsd(row.costUsd)}`}
+              title={`${t('usage.common.modelCount', { count: row.modelCount })} · ${formatUsd(row.costUsd)}`}
             >
-              {row.modelCount} 个模型 · {formatUsd(row.costUsd)}
+              {t('usage.common.modelCount', { count: row.modelCount })} · {formatUsd(row.costUsd)}
             </span>
           </span>
         </div>
@@ -171,6 +174,7 @@ function ToolStackedBars({
   rows: ToolModelStackedChartRow[];
   series: ToolModelChartSeries[];
 }) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState<HoveredSegment | null>(null);
 
   return (
@@ -282,7 +286,7 @@ function ToolStackedBars({
                 {formatPct(hovered.segment.pct)}
               </span>
               <span className="text-[10px] text-muted">
-                占 {sourceLabel(hovered.row.source)} Token
+                {t('usage.tool.shareOfAgent', { agent: sourceLabel(hovered.row.source) })}
               </span>
             </div>
           </div>,
@@ -320,15 +324,18 @@ function AccessibleUsageDetails({
   rows: ToolModelStackedChartRow[];
   series: ToolModelChartSeries[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="sr-only">
-      <h4>Agent 与模型精确用量</h4>
+      <h4>{t('usage.tool.accessibleHeading')}</h4>
       <ol>
         {rows.map((row) => (
           <li key={row.source}>
-            {sourceLabel(row.source)}：{formatTokens(row.tokens)}，
-            {formatUsd(row.costUsd)}，占全部 Token {formatPct(row.pct)}，
-            {row.modelCount} 个模型。
+            {t('usage.tool.accessibleRow', {
+              agent: sourceLabel(row.source), tokens: formatTokens(row.tokens),
+              cost: formatUsd(row.costUsd), percent: formatPct(row.pct),
+              models: t('usage.common.modelCount', { count: row.modelCount }),
+            })}
             <ul>
               {series.map((item) => {
                 const segment = row.segments[item.key];
@@ -336,9 +343,10 @@ function AccessibleUsageDetails({
 
                 return (
                   <li key={item.key}>
-                    {segment.model}：{formatTokens(segment.tokens)}，
-                    {formatUsd(segment.costUsd)}，占当前 Agent Token{' '}
-                    {formatPct(segment.pct)}。
+                    {t('usage.tool.accessibleModelRow', {
+                      model: segment.model, tokens: formatTokens(segment.tokens),
+                      cost: formatUsd(segment.costUsd), percent: formatPct(segment.pct),
+                    })}
                   </li>
                 );
               })}

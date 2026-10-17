@@ -1,5 +1,6 @@
 import { Gear } from "@gravity-ui/icons";
 import { Button, Modal } from "@heroui/react";
+import { useTranslation } from "quotern-i18n/react";
 import {
   type ReactNode,
   useCallback,
@@ -37,6 +38,7 @@ export function BackendConfigModal({
   activeTab: controlledTab,
   onTabChange,
 }: BackendConfigModalProps = {}) {
+  const { t } = useTranslation();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>("app");
   const isControlled = controlledOpen !== undefined;
@@ -75,12 +77,12 @@ export function BackendConfigModal({
       {!hideTrigger &&
         (trigger ?? (
           <Button
-            aria-label="设置"
+            aria-label={t('shell.settings')}
             onPress={() => setOpen(true)}
             variant="tertiary"
           >
             <Gear />
-            设置
+            {t('shell.settings')}
           </Button>
         ))}
 
@@ -95,12 +97,12 @@ export function BackendConfigModal({
           size="lg"
         >
           <Modal.Dialog
-            aria-label="设置"
+            aria-label={t('shell.settings')}
             className="flex max-h-[90vh] w-full flex-col overflow-hidden sm:w-[640px] sm:max-w-[640px]"
           >
-            <Modal.CloseTrigger aria-label="关闭设置" />
+            <Modal.CloseTrigger aria-label={t('shell.closeSettings')} />
             <Modal.Header>
-              <Modal.Heading>设置</Modal.Heading>
+              <Modal.Heading>{t('shell.settings')}</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="min-h-0 flex-1 overflow-hidden p-0">
               <SettingsPanel activeTab={activeTab} onTabChange={setTab} />

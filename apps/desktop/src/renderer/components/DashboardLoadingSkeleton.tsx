@@ -1,4 +1,5 @@
 import { Card, Skeleton } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 
 /** Compact chart-card placeholder used while staggered reveal catches up. */
 export function DashboardChartSlotSkeleton() {
@@ -51,8 +52,9 @@ export function DashboardOverviewSlotSkeleton() {
 
 /** Layout-stable placeholder for the dashboard's initial data request. */
 export function DashboardLoadingSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div aria-label="用量数据加载中" className="w-full" role="status">
+    <div aria-label={t('usage.page.loading')} className="w-full" role="status">
       <DashboardOverviewSlotSkeleton />
 
       <section aria-hidden="true" className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">

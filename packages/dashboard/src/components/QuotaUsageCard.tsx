@@ -1,35 +1,42 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Card, Chip, Modal, ProgressBar, Tooltip } from '@heroui/react';
 import { Button as AriaButton } from 'react-aria-components';
+import { translate, type SupportedLocale } from 'quotern-i18n';
+import { localizeQuotaDetail, localizeQuotaPaceDescription, localizeQuotaPaceLabel, localizeQuotaValueText, localizeQuotaWindowLabel } from 'quotern-i18n/quota';
+import { useTranslation } from 'quotern-i18n/react';
 import { RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from 'quotern-core/quota/shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime } from '../lib/subscription-time';
-import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaPaceDescription, quotaPaceLabel, quotaTrendWindows, quotaWindowLabel, sortQuotaWindows } from '../lib/quota-presentation';
+import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows } from '../lib/quota-presentation';
 
-const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { label: string; dotClassName: string }> = {
-  operational: { label: '服务正常', dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
-  minor: { label: '轻微异常', dotClassName: 'bg-yellow-500 dark:bg-yellow-400' },
-  major: { label: '严重异常', dotClassName: 'bg-orange-500 dark:bg-orange-400' },
-  critical: { label: '重大故障', dotClassName: 'bg-red-600 dark:bg-red-400' },
-  maintenance: { label: '维护中', dotClassName: 'bg-blue-500 dark:bg-blue-400' },
-  unknown: { label: '状态未确认', dotClassName: 'bg-gray-500 dark:bg-gray-400' },
+const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string }> = {
+  operational: { dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
+  minor: { dotClassName: 'bg-yellow-500 dark:bg-yellow-400' },
+  major: { dotClassName: 'bg-orange-500 dark:bg-orange-400' },
+  critical: { dotClassName: 'bg-red-600 dark:bg-red-400' },
+  maintenance: { dotClassName: 'bg-blue-500 dark:bg-blue-400' },
+  unknown: { dotClassName: 'bg-gray-500 dark:bg-gray-400' },
 };
 const DETAILS_HINT_DELAY_MS = 800;
 
-function clock(at: number) { return new Date(at * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); }
-function queryDate(at: number, now = new Date()) {
+function clock(at: number, locale: SupportedLocale) { return new Date(at * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }); }
+function queryDate(at: number, locale: SupportedLocale, now = new Date()) {
   const date = new Date(at * 1000);
   return date.toDateString() === now.toDateString()
-    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-    : date.toLocaleDateString('zh-CN');
+    ? date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+    : date.toLocaleDateString(locale);
 }
-function duration(until: number) {
+function duration(until: number, locale: SupportedLocale) {
   const minutes = Math.max(1, Math.ceil((until - Date.now() / 1000) / 60));
-  return minutes < 60 ? `${minutes} 分钟` : minutes < 1440 ? `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ''}` : `${Math.ceil(minutes / 1440)} 天`;
+  if (minutes < 60) return translate(locale, 'usage.common.minutes', { count: minutes });
+  if (minutes < 1440) return minutes % 60
+    ? translate(locale, 'usage.common.hoursMinutes', { hours: Math.floor(minutes / 60), minutes: minutes % 60 })
+    : translate(locale, 'usage.common.hours', { count: Math.floor(minutes / 60) });
+  return translate(locale, 'usage.common.days', { count: Math.ceil(minutes / 1440) });
 }
 
-function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecasts: Map<string, number>, trendWindows: Set<string>) {
+function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecasts: Map<string, number>, trendWindows: Set<string>, locale: SupportedLocale) {
   if (provider.stale || provider.status !== 'ready') return null;
   const rows = provider.windows.filter(window => window.analysisEligible !== false)
     .map(window => ({ window, analysis: provider.analyses[window.id] })).filter(row => row.analysis);
@@ -38,8 +45,8 @@ function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecast
   const row = eta ?? rows.find(row => row.analysis.paceDifference !== null)
     ?? (showTrend ? rows.find(row => trendWindows.has(row.window.id) && row.analysis.trend.length >= 3) : undefined);
   if (!row) return null;
-  const text = eta ? `预计约 ${duration(row.analysis.etaAt!)}后耗尽` : quotaPaceLabel(row.analysis) ?? '最近 6 小时额度趋势';
-  return { text, label: quotaWindowLabel(provider.providerId ?? provider.id, row.window), description: eta ? null : quotaPaceDescription(row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
+  const text = eta ? translate(locale, 'usage.quota.exhaustedIn', { duration: duration(row.analysis.etaAt!, locale) }) : localizeQuotaPaceLabel(locale, row.analysis) ?? translate(locale, 'usage.quota.trendSixHours');
+  return { text, label: localizeQuotaWindowLabel(locale, provider.providerId ?? provider.id, row.window), description: eta ? null : localizeQuotaPaceDescription(locale, row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
 }
 
 export interface QuotaUsageCardProps {
@@ -53,9 +60,11 @@ export interface QuotaUsageCardProps {
 function openExternal(url: string) { window.open(url, '_blank', 'noopener,noreferrer'); }
 
 export function QuotaUsageCard({ provider, preferences, statusRow = false, onRefresh, onOpenExternal = openExternal }: QuotaUsageCardProps) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const providerType = provider.providerId ?? provider.id;
   const proof = provider.provenance;
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'refreshFailed' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
@@ -101,30 +110,33 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
     };
   }, [hintVisible, detailsOpen, hintSource]);
   const status = provider.service;
-  const service = status ? SERVICE_STATUS[status.stale ? 'unknown' : status.level] : null;
+  const serviceLevel = status?.stale ? 'unknown' : status?.level;
+  const service = serviceLevel ? { ...SERVICE_STATUS[serviceLevel], label: t(`usage.quota.service.${serviceLevel}`) } : null;
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
   const severeServiceWarning = serviceWarning && (status?.level === 'major' || status?.level === 'critical') ? serviceWarning : null;
   const hasReading = provider.windows.length > 0 || provider.details.length > 0;
   const compact = isQuotaStatusOnly(provider);
   const grouped = compact && statusRow;
   const headerService = grouped ? serviceWarning : service;
-  const planSummary = grouped ? '' : [provider.planLabel, !compact && provider.resetCredits !== null ? `可重置 ${provider.resetCredits} 次` : null].filter(Boolean).join(' · ');
+  const planSummary = grouped ? '' : [provider.planLabel, !compact && provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ');
   const windows = sortQuotaWindows(provider.windows);
   const details = quotaDisplayDetails(providerType, provider.details);
   const forecasts = quotaForecasts(providerType, provider.windows, provider.analyses, Date.now() / 1000);
   const trendWindows = quotaTrendWindows(providerType, provider.windows);
-  const summary = quotaSummary(provider, preferences.showSparkline, forecasts, trendWindows);
+  const summary = quotaSummary(provider, preferences.showSparkline, forecasts, trendWindows, locale);
   const commonReset = commonQuotaResetAt(provider.windows);
-  const message = provider.status === 'custom-provider' ? '自定义模型无法获取配额'
-    : provider.status === 'expired' ? '登录已过期，请重新登录'
-      : provider.stale ? '读数可能已过期'
-        : provider.message ?? (compact ? '暂未提供可展示的额度读数' : null);
+  const message = provider.status === 'custom-provider' ? t('usage.quota.customProvider')
+    : provider.status === 'expired' ? t('usage.quota.expired')
+      : provider.stale ? t('usage.quota.stale')
+        : provider.message ? locale === 'zh-CN' ? provider.message : t('usage.quota.noReading')
+          : compact ? t('usage.quota.noReading') : null;
+  const errorMessage = error ? t('usage.quota.refreshFailed') : null;
   const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
   const busy = provider.refreshing || refreshing;
   const lastQuery = provider.queriedAt ?? provider.fetchedAt;
   const refresh = async () => {
     try { setError(null); setRefreshing(true); await onRefresh(provider.id); }
-    catch { setError('刷新失败，请稍后重试'); }
+    catch { setError('refreshFailed'); }
     finally { setRefreshing(false); }
   };
   const hasSelectedText = (card: HTMLElement) => {
@@ -158,7 +170,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
         if (target.closest('button, a, input, select, textarea, [role="button"], [role="link"]') || hasSelectedText(event.currentTarget)) return;
         openDetails();
       }}>
-    <AriaButton ref={triggerRef} type="button" aria-label={`查看 ${provider.label} 额度详情`} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
+    <AriaButton ref={triggerRef} type="button" aria-label={t('usage.quota.detailsAria', { provider: provider.label })} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
       onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
@@ -173,55 +185,55 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
         </div>
         {status && headerService && <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpenExternal={onOpenExternal} iconOnly />}
       </div>
-      {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">OMP 本地记录 · {provider.provenance.observedAt ? queryDate(provider.provenance.observedAt) : '时间未知'} 观察{provider.provenance.identityVerified ? '' : ' · 账号未核实'}</p>}
+      {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">{t('usage.quota.ompRecord', { date: provider.provenance.observedAt ? queryDate(provider.provenance.observedAt, locale) : t('usage.quota.timeUnknown') })}{provider.provenance.identityVerified ? '' : ` · ${t('usage.quota.identityUnverified')}`}</p>}
       {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
       {hasReading && <div className="flex flex-col gap-3">
         {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} stale={provider.stale} hideReset={commonReset !== null} />)}
-        {details.map(detail => <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
+        {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
       </div>}
-      {summary && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={`${summary.label}：${summary.description ?? summary.text}；点击卡片查看完整分析`}>
+      {summary && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={t('usage.quota.summaryTitle', { window: summary.label, description: summary.description ?? summary.text })}>
         {!summary.warning && summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
         <p className={`min-w-0 truncate text-[11px] ${summary.warning ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>{summary.text}</p>
       </div>}
       {(message || error) && <div className={`flex items-center justify-between gap-2 ${grouped ? 'min-w-0 flex-1' : compact ? 'min-h-8' : ''}`}>
-        <p role="status" className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? error ?? message ?? undefined : undefined}>{error ?? message}</p>
-        {(retryable || error) && <Button data-quota-action data-quota-retry aria-label={`重试读取 ${provider.label} 额度`} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? '重试中' : '重试'}</Button>}
+        <p role="status" className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? errorMessage ?? message ?? undefined : undefined}>{errorMessage ?? message}</p>
+        {(retryable || error) && <Button data-quota-action data-quota-retry aria-label={t('usage.quota.retryAria', { provider: provider.label })} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? t('usage.quota.retrying') : t('usage.quota.retry')}</Button>}
       </div>}
       {severeServiceWarning && <p role="status" className={`flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 ${grouped ? 'w-full' : ''}`}>
-        官方服务{severeServiceWarning.label}
+        {t('usage.quota.officialService', { status: severeServiceWarning.label })}
       </p>}
-      {provider.windows.length > 3 && <span className="text-[10px] text-muted">另有 {provider.windows.length - 3} 个窗口</span>}
+      {provider.windows.length > 3 && <span className="text-[10px] text-muted">{t('usage.quota.moreWindows', { count: provider.windows.length - 3 })}</span>}
     </Card.Content>
-    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>点击查看详情</span>
+    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>{t('usage.quota.openDetails')}</span>
     </Card>
           <Modal.Backdrop isOpen={detailsOpen} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">
-              <Modal.Dialog aria-label={`${provider.label} 额度详情`} className="w-full max-w-md">
-                <Modal.CloseTrigger aria-label="关闭额度详情" />
+              <Modal.Dialog aria-label={t('usage.quota.details', { provider: provider.label })} className="w-full max-w-md">
+                <Modal.CloseTrigger aria-label={t('usage.quota.closeDetails')} />
                 <Modal.Header>
-                  <Modal.Heading>{provider.label} 额度详情</Modal.Heading>
+                  <Modal.Heading>{t('usage.quota.details', { provider: provider.label })}</Modal.Heading>
                 </Modal.Header>
                 <Modal.Body className="flex flex-col gap-5">
-                  {(provider.planLabel || provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, provider.resetCredits !== null ? `可重置 ${provider.resetCredits} 次` : null].filter(Boolean).join(' · ')}</p>}
+                  {(provider.planLabel || provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ')}</p>}
                   {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
                   {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} onOpenExternal={onOpenExternal} />}
                   <div className="flex flex-col gap-5">
                     {windows.map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale} hideReset={commonReset !== null} detailed />)}
-                    {details.map(detail => <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{detail.label}</span><span>{detail.text}</span></div>)}
+                    {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
                   </div>
-                  {(message || error) && <p role="status" className="text-sm text-muted">{error ?? message}</p>}
-                  {compact && provider.status === 'expired' && <p className="text-xs text-muted">请在 {provider.label} 客户端重新登录，再刷新这里的额度。</p>}
-                  {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">当前使用自定义模型服务，无法读取官方订阅额度。</p>}
+                  {(message || error) && <p role="status" className="text-sm text-muted">{errorMessage ?? message}</p>}
+                  {compact && provider.status === 'expired' && <p className="text-xs text-muted">{t('usage.quota.signIn', { provider: provider.label })}</p>}
+                  {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">{t('usage.quota.customModelNote')}</p>}
                   <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
-                    <div className="flex flex-wrap justify-between gap-2"><dt>读取来源</dt><dd>{proof?.observer ?? '本机读取'}</dd></div>
-                    <div className="flex flex-wrap justify-between gap-2"><dt>数据观察时间</dt><dd>{(proof?.observedAt ?? provider.fetchedAt) !== null ? queryDate((proof?.observedAt ?? provider.fetchedAt)!) : '暂无记录'}</dd></div>
-                    <div className="flex flex-wrap justify-between gap-2"><dt>账号归属</dt><dd>{proof?.identityVerified ? '来源身份已核对' : '未取得跨来源身份凭据'}</dd></div>
-                    <div className="flex flex-wrap justify-between gap-2"><dt>最近查询</dt><dd>{lastQuery !== null ? queryDate(lastQuery) : busy ? '正在查询' : '暂无记录'}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.source')}</dt><dd>{proof?.source === 'native' ? `${provider.label} · ${t('usage.quota.localReading')}` : proof?.observer ?? t('usage.quota.localReading')}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.observedAt')}</dt><dd>{(proof?.observedAt ?? provider.fetchedAt) !== null ? queryDate((proof?.observedAt ?? provider.fetchedAt)!, locale) : t('usage.quota.noRecord')}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.account')}</dt><dd>{proof?.identityVerified ? t('usage.quota.identityVerified') : t('usage.quota.noIdentityEvidence')}</dd></div>
+                    <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.lastQuery')}</dt><dd>{lastQuery !== null ? queryDate(lastQuery, locale) : busy ? t('usage.quota.querying') : t('usage.quota.noRecord')}</dd></div>
                   </dl>
                 </Modal.Body>
                 <Modal.Footer>
-                  <Button aria-label={`刷新 ${provider.label} 额度`} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
-                    <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? '正在刷新' : '刷新额度'}
+                  <Button aria-label={t('usage.quota.refreshAria', { provider: provider.label })} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
+                    <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? t('usage.quota.refreshing') : t('usage.quota.refresh')}
                   </Button>
                 </Modal.Footer>
               </Modal.Dialog>
@@ -230,13 +242,15 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   </>;
 }
 
-function QuotaServiceStatusLink({ label, status, service, onOpenExternal, iconOnly = false }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']]; onOpenExternal: (url: string) => unknown; iconOnly?: boolean }) {
+function QuotaServiceStatusLink({ label, status, service, onOpenExternal, iconOnly = false }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']] & { label: string }; onOpenExternal: (url: string) => unknown; iconOnly?: boolean }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [open, setOpen] = useState(false);
   return <Tooltip isOpen={open} onOpenChange={setOpen}>
     <Button size="sm" variant="tertiary" isIconOnly={iconOnly}
       data-quota-action
       className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${iconOnly ? 'size-6 min-w-6 p-0' : 'h-auto min-h-6 w-fit px-0'}`}
-      aria-label={`${label} 官方服务状态：${service.label}，查看官方状态页`}
+      aria-label={t('usage.quota.statusAria', { provider: label, status: service.label })}
       onHoverStart={() => setOpen(true)} onHoverEnd={() => setOpen(false)}
       onFocus={event => { if (event.target.matches(':focus-visible')) setOpen(true); }} onBlur={() => setOpen(false)}
       onPress={() => { setOpen(false); void onOpenExternal(status.url); }}>
@@ -245,39 +259,44 @@ function QuotaServiceStatusLink({ label, status, service, onOpenExternal, iconOn
     </Button>
     <Tooltip.Content className="max-w-64 text-xs">
       <div className="flex flex-col gap-1">
-        <p>官方整体状态：{service.label}</p>
-        <p className="text-muted">具体产品与地区的影响以官方状态页为准。</p>
-        {status.stale && <p className="text-muted">最近一次查询未成功，上次结果已过期。</p>}
-        <p className="text-muted">{status.checkedAt ? `上次检查 ${new Date(status.checkedAt * 1000).toLocaleString('zh-CN')}` : '尚未取得有效状态'}</p>
+        <p>{t('usage.quota.overallStatus', { status: service.label })}</p>
+        <p className="text-muted">{t('usage.quota.statusNote')}</p>
+        {status.stale && <p className="text-muted">{t('usage.quota.statusStale')}</p>}
+        <p className="text-muted">{status.checkedAt ? t('usage.quota.checkedAt', { date: new Date(status.checkedAt * 1000).toLocaleString(locale) }) : t('usage.quota.noStatus')}</p>
       </div>
     </Tooltip.Content>
   </Tooltip>;
 }
 
 function QuotaCommonResetTime({ at }: { at: number }) {
-  return <p data-quota-common-reset className="text-xs tabular-nums text-muted" title={formatSubscriptionResetTime(at, new Date(), true) ?? undefined}>统一重置：{formatSubscriptionResetTime(at)}</p>;
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+  return <p data-quota-common-reset className="text-xs tabular-nums text-muted" title={formatSubscriptionResetTime(at, new Date(), true, locale) ?? undefined}>{t('usage.quota.commonReset', { time: formatSubscriptionResetTime(at, new Date(), false, locale) })}</p>;
 }
 
 function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, hideReset = false }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; hideReset?: boolean }) {
-  const label = quotaWindowLabel(providerId, window);
-  const reset = hideReset ? null : formatSubscriptionResetTime(window.resetsAt);
-  const paceText = analysis ? quotaPaceLabel(analysis) : null;
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+  const label = localizeQuotaWindowLabel(locale, providerId, window);
+  const reset = hideReset ? null : formatSubscriptionResetTime(window.resetsAt, new Date(), false, locale);
+  const paceText = analysis ? localizeQuotaPaceLabel(locale, analysis) : null;
+  const valueText = window.valueText ? localizeQuotaValueText(locale, window.valueText) : null;
   const color = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
   return <div className="flex min-w-0 flex-col gap-1">
     <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
       <span className="min-w-0 truncate text-muted" title={label}>{label}</span>
-      {reset && <span className="shrink-0 text-[10px] tabular-nums text-muted" title={formatSubscriptionResetTime(window.resetsAt, new Date(), true) ?? undefined}>{reset}{window.timeKind === 'expiry' ? '到期' : '重置'}</span>}
+      {reset && <span className="shrink-0 text-[10px] tabular-nums text-muted" title={formatSubscriptionResetTime(window.resetsAt, new Date(), true, locale) ?? undefined}>{reset} {window.timeKind === 'expiry' ? t('usage.quota.expiry') : t('usage.quota.reset')}</span>}
     </div>
     <div className="flex min-w-0 items-center gap-3">
-      <ProgressBar aria-label={`${label}，${window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}`} className="min-w-0 flex-1" value={100 - window.usedPercent} size="sm"
+      <ProgressBar aria-label={`${label}: ${valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}`} className="min-w-0 flex-1" value={100 - window.usedPercent} size="sm"
         style={{ gap: 0, gridTemplateAreas: '"track"', gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto' }}>
         <ProgressBar.Track className="h-1.5 rounded-full bg-surface-secondary"><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} /></ProgressBar.Track>
       </ProgressBar>
-      <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground" aria-label={window.valueText ?? `剩余 ${Math.round(100 - window.usedPercent)}%`}>{window.valueText ?? `${Math.round(100 - window.usedPercent)}%`}</span>
+      <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground" aria-label={valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}>{valueText ?? `${Math.round(100 - window.usedPercent)}%`}</span>
     </div>
-    {detailed && window.used !== undefined && window.limit !== undefined && <p className="text-[10px] text-muted">{window.used.toLocaleString()} / {window.limit.toLocaleString()} {window.unit === 'requests' ? '次' : window.unit === 'credits' ? '额度' : 'Token'}</p>}
-    {detailed && !stale && paceText && <p className="text-[11px] text-muted" title={quotaPaceDescription(window, analysis!) ?? undefined}>{paceText}</p>}
-    {detailed && !stale && etaAt && <p data-quota-forecast className="text-xs text-amber-700 dark:text-amber-400">按近期速度，预计约 {duration(etaAt)}后耗尽</p>}
+    {detailed && window.used !== undefined && window.limit !== undefined && <p className="text-[10px] text-muted">{window.used.toLocaleString(locale)} / {window.limit.toLocaleString(locale)} {window.unit === 'requests' ? t('usage.quota.requestUnit') : window.unit === 'credits' ? t('usage.quota.creditUnit') : 'Token'}</p>}
+    {detailed && !stale && paceText && <p className="text-[11px] text-muted" title={localizeQuotaPaceDescription(locale, window, analysis!) ?? undefined}>{paceText}</p>}
+    {detailed && !stale && etaAt && <p data-quota-forecast className="text-xs text-amber-700 dark:text-amber-400">{t('usage.quota.forecast', { duration: duration(etaAt, locale) })}</p>}
     {detailed && showSparkline && analysis && analysis.trend.length >= 3 && <QuotaSparkline samples={analysis.trend} label={label} />}
   </div>;
 }
@@ -290,11 +309,13 @@ function QuotaTrendPreview({ samples }: { samples: QuotaSample[] }) {
 }
 
 function QuotaSparkline({ samples, label }: { samples: QuotaSample[]; label: string }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [selected, setSelected] = useState<number | null>(null);
   const first = samples[0].at, span = Math.max(1, samples.at(-1)!.at - first);
   const point = selected === null ? null : samples[Math.min(selected, samples.length - 1)];
   return <div className="flex min-h-9 items-center gap-2">
-    <svg role="img" aria-label={`${label} 最近六小时剩余额度趋势，左右方向键查看读数`} tabIndex={0} viewBox="0 0 160 36" className="h-9 w-40 shrink-0 rounded text-accent outline-offset-2 focus-visible:outline-2"
+    <svg role="img" aria-label={t('usage.quota.sparklineAria', { label })} tabIndex={0} viewBox="0 0 160 36" className="h-9 w-40 shrink-0 rounded text-accent outline-offset-2 focus-visible:outline-2"
       onPointerMove={event => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const at = first + Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width))) * span;
@@ -305,6 +326,6 @@ function QuotaSparkline({ samples, label }: { samples: QuotaSample[]; label: str
       <polyline fill="none" stroke="currentColor" strokeWidth="1.5" points={samples.map(sample => `${3 + (sample.at - first) / span * 154},${3 + sample.usedPercent / 100 * 30}`).join(' ')} />
       {point && <circle fill="currentColor" cx={3 + (point.at - first) / span * 154} cy={3 + point.usedPercent / 100 * 30} r="2.5" />}
     </svg>
-    <span className="min-w-0 truncate text-[10px] tabular-nums text-muted">{point ? `${clock(point.at)} · 剩余 ${Math.round(100 - point.usedPercent)}%` : '近 6h'}</span>
+    <span className="min-w-0 truncate text-[10px] tabular-nums text-muted">{point ? t('usage.quota.sparklinePoint', { time: clock(point.at, locale), percent: Math.round(100 - point.usedPercent) }) : t('usage.quota.sparklineRange')}</span>
   </div>;
 }

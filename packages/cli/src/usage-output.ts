@@ -1,4 +1,6 @@
 import type { UsageReport } from 'quotern-core';
+import type { SupportedLocale } from 'quotern-i18n';
+import { cliT, systemCliLocale } from './i18n/locale.js';
 
 const CSV_HEADERS = [
   'period',
@@ -65,8 +67,43 @@ function cleanText(value: unknown): string {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
 }
 
-function money(value: number): string {
-  return `$${value.toFixed(6)}`;
+function money(value: number, locale: SupportedLocale): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol',
+    minimumFractionDigits: 6, maximumFractionDigits: 6,
+  }).format(value);
+}
+
+function displayTextDate(value: string, locale: SupportedLocale): string {
+  const date = new Date(`${value}T12:00:00.000Z`);
+  if (Number.isNaN(date.valueOf())) return value;
+  if (locale === 'zh-CN') {
+    const parts = new Intl.DateTimeFormat(locale, {
+      timeZone: 'UTC', numberingSystem: 'latn',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(date);
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric',
+  }).format(date);
+}
+
+function displayTextTimestamp(value: string | null, timeZone: string, locale: SupportedLocale): string | null {
+  if (value === null || !Number.isFinite(Date.parse(value))) return null;
+  if (locale === 'zh-CN') {
+    const parts = new Intl.DateTimeFormat(locale, {
+      timeZone, numberingSystem: 'latn', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(value));
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+    return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}:${part('second')} (${timeZone})`;
+  }
+  return `${new Intl.DateTimeFormat(locale, {
+    timeZone, year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).format(new Date(value))} (${timeZone})`;
 }
 
 function displayTimestamp(value: string | null, timeZone: string): string | null {
@@ -115,31 +152,38 @@ function compactReport(report: UsageReport) {
   };
 }
 
-function formatText(report: UsageReport): string {
-  const display = displayCoverage(report);
+function formatText(report: UsageReport, locale: SupportedLocale): string {
+  const display = {
+    collectSince: displayTextTimestamp(report.coverage.collectSince, report.timeZone, locale),
+    lastSyncAt: displayTextTimestamp(report.coverage.lastSyncAt, report.timeZone, locale),
+    readAt: displayTextTimestamp(report.coverage.readAt, report.timeZone, locale),
+  };
+  const label = (key: string) => cliT(locale, `report.${key}`);
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const unknown = label('unknown');
   const lines = [
-    `Quotern usage · ${cleanText(report.period)}`,
-    `${cleanText(report.fromDate)} – ${cleanText(report.toDate)} · ${cleanText(report.timeZone)}`,
+    cliT(locale, 'report.title', { period: label(`period.${report.period}`) }),
+    `${cleanText(displayTextDate(report.fromDate, locale))} – ${cleanText(displayTextDate(report.toDate, locale))} · ${cleanText(report.timeZone)}`,
     ...report.rows.map((row) => {
       const cost = row.costUsd === null
-        ? `未知（已知 ${money(row.knownCostUsd)}）`
-        : money(row.costUsd);
-      return [row.label, row.source ?? '', row.tokens, cost].map(cleanText).join('\t');
+        ? cliT(locale, 'report.unknownCost', { known: money(row.knownCostUsd, locale) })
+        : money(row.costUsd, locale);
+      return [row.label, row.source ?? '', number(row.tokens), cost].map(cleanText).join('\t');
     }),
     '',
-    `来源报告费用\t${money(report.summary.costExplanation.reportedCostUsd)}`,
-    `按费率估算费用\t${money(report.summary.costExplanation.estimatedCostUsd)}`,
-    `未定价 tokens\t${report.summary.costExplanation.unpricedTokens}`,
-    `默认费率 tokens\t${report.summary.costExplanation.defaultPricedTokens}`,
+    `${label('reportedCost')}\t${money(report.summary.costExplanation.reportedCostUsd, locale)}`,
+    `${label('estimatedCost')}\t${money(report.summary.costExplanation.estimatedCostUsd, locale)}`,
+    `${label('unpricedTokens')}\t${number(report.summary.costExplanation.unpricedTokens)}`,
+    `${label('defaultPricedTokens')}\t${number(report.summary.costExplanation.defaultPricedTokens)}`,
     ...(['recorded', 'estimated', 'ledger', 'mixed', 'unknown'] as const).map(
-      (quality) => `${quality} tokens\t${report.summary.costExplanation.tokenQualityTokens[quality]}`,
+      (quality) => `${label(`quality.${quality}`)} tokens\t${number(report.summary.costExplanation.tokenQualityTokens[quality])}`,
     ),
-    `覆盖起点\t${cleanText(display.collectSince ?? '未知')} · limited=${report.coverage.limited}`,
-    `最近同步完成\t${cleanText(display.lastSyncAt ?? '未知')}`,
-    `报告读取时间\t${cleanText(display.readAt ?? '未知')}`,
-    `快照\t${cleanText(report.coverage.snapshot)}${report.coverage.snapshot === 'persisted' ? '（读取时已落盘快照）' : ''}`,
-    '提示\t最近同步完成时间不代表所有来源的数据均已更新至此时。',
-    '提示\t费用信息包含来源报告与费率估算，不是实际账单。',
+    `${label('coverage')}\t${cleanText(display.collectSince ?? unknown)} · ${label(report.coverage.limited ? 'limited' : 'complete')}`,
+    `${label('lastSync')}\t${cleanText(display.lastSyncAt ?? unknown)}`,
+    `${label('readAt')}\t${cleanText(display.readAt ?? unknown)}`,
+    `${label('snapshot')}\t${label(report.coverage.snapshot === 'persisted' ? 'snapshotPersisted' : 'snapshotRuntime')}`,
+    `${label('tip')}\t${label('syncCaveat')}`,
+    `${label('tip')}\t${label('costCaveat')}`,
   ];
   return lines.join('\n');
 }
@@ -147,9 +191,9 @@ function formatText(report: UsageReport): string {
 export function formatUsageReport(
   report: UsageReport,
   format: 'text' | 'json' | 'csv',
-  options: { compact?: boolean } = {},
+  options: { compact?: boolean; locale?: SupportedLocale } = {},
 ): string {
   if (format === 'json') return options.compact ? JSON.stringify(compactReport(report)) : JSON.stringify(report, null, 2);
   if (format === 'csv') return formatCsv(report);
-  return formatText(report);
+  return formatText(report, options.locale ?? systemCliLocale());
 }

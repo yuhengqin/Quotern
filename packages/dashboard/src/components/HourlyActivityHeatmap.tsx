@@ -5,6 +5,8 @@ import {
   type HeatMapDatum,
 } from '@nivo/heatmap';
 import { Card } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
+import type { SupportedLocale } from 'quotern-i18n';
 import { DashboardMetricTabs } from '@/components/DashboardMetricTabs';
 import {
   DASHBOARD_HOURS,
@@ -27,28 +29,25 @@ const METRICS: Record<
   DashboardChartMetric,
   {
     field: 'totalTokens' | 'costUsd' | 'durationMinutes';
-    label: string;
-    format: (value: number) => string;
+    labelKey: string;
   }
 > = {
   tokens: {
     field: 'totalTokens',
-    label: 'Token',
-    format: (value) => `${formatDashboardMetric('tokens', value)} Token`,
+    labelKey: 'usage.common.totalTokens',
   },
   cost: {
     field: 'costUsd',
-    label: '费用',
-    format: (value) => formatDashboardMetric('cost', value),
+    labelKey: 'usage.common.cost',
   },
   duration: {
     field: 'durationMinutes',
-    label: '时长',
-    format: (value) => formatDashboardMetric('duration', value),
+    labelKey: 'usage.common.duration',
   },
 };
 
 const ACTIVITY_METRICS = ['tokens', 'cost', 'duration'] as const;
+const WEEKDAY_KEYS = ['usage.weekday.mon', 'usage.weekday.tue', 'usage.weekday.wed', 'usage.weekday.thu', 'usage.weekday.fri', 'usage.weekday.sat', 'usage.weekday.sun'] as const;
 
 /** Demo 7×24 activity view with metric switching and HeroUI theme colors. */
 export function HourlyActivityHeatmap({
@@ -56,14 +55,19 @@ export function HourlyActivityHeatmap({
 }: {
   rows: DashboardHourlyUsageRow[];
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [metric, setMetric] =
     useState<DashboardChartMetric>('tokens');
   const selectedMetric = METRICS[metric];
+  const formatMetric = (value: number) => metric === 'tokens'
+    ? `${formatDashboardMetric('tokens', value, locale)} Token`
+    : formatDashboardMetric(metric, value, locale);
 
   const data = useMemo(
     () =>
-      DASHBOARD_WEEKDAYS.map((day) => ({
-        id: day,
+      DASHBOARD_WEEKDAYS.map((day, index) => ({
+        id: t(WEEKDAY_KEYS[index]!),
         data: rows
           .filter((row) => row.day === day)
           .map((row) => ({
@@ -72,7 +76,7 @@ export function HourlyActivityHeatmap({
             y: row[selectedMetric.field],
           })),
       })),
-    [rows, selectedMetric.field],
+    [rows, selectedMetric.field, t],
   );
 
   const maxValue = useMemo(
@@ -89,16 +93,16 @@ export function HourlyActivityHeatmap({
       <Card.Header className="pb-0">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <Card.Title>分时活跃</Card.Title>
+            <Card.Title>{t('usage.chart.hourlyActivity')}</Card.Title>
             <DashboardMetricTabs
-              ariaLabel="分时活跃指标"
+              ariaLabel={t('usage.chart.hourlyMetric')}
               metrics={ACTIVITY_METRICS}
               selectedMetric={metric}
               onMetricChange={setMetric}
             />
           </div>
           <Card.Description className="mt-1">
-            按星期与小时查看活跃度分布
+            {t('usage.chart.hourlyDescription')}
           </Card.Description>
         </div>
       </Card.Header>
@@ -108,7 +112,7 @@ export function HourlyActivityHeatmap({
           {/* Nivo 0.99's default ExtraProps type rejects the standard series shape. */}
           <ResponsiveHeatMap<ActivityDatum, object>
             animate={false}
-            ariaLabel={`分时活跃热力图，当前指标：${selectedMetric.label}`}
+            ariaLabel={t('usage.chart.hourlyAria', { metric: metric === 'tokens' ? 'Token' : t(selectedMetric.labelKey) })}
             axisBottom={null}
             axisLeft={{
               tickPadding: 10,
@@ -165,9 +169,9 @@ export function HourlyActivityHeatmap({
               },
             }}
             tooltip={({ cell }) => (
-              <ActivityTooltip cell={cell} metric={metric} />
+              <ActivityTooltip cell={cell} formatMetric={formatMetric} />
             )}
-            valueFormat={selectedMetric.format}
+            valueFormat={formatMetric}
             // Nivo forwards these ratios to d3.scaleBand (valid range: 0–1).
             xInnerPadding={INNER_PADDING}
             xOuterPadding={OUTER_PADDING}
@@ -177,10 +181,10 @@ export function HourlyActivityHeatmap({
         </div>
 
         <div
-          aria-label="活跃度颜色图例，从低到高"
+          aria-label={t('usage.chart.intensityLegend')}
           className="mt-2 flex items-center justify-end gap-2 text-xs text-muted"
         >
-          <span>低</span>
+          <span>{t('usage.chart.low')}</span>
           <span
             aria-hidden="true"
             className="h-2 w-28 rounded-full"
@@ -188,7 +192,7 @@ export function HourlyActivityHeatmap({
               background: `linear-gradient(90deg, ${getHeatmapColor(0, 1)}, ${getHeatmapColor(1, 1)})`,
             }}
           />
-          <span>高</span>
+          <span>{t('usage.chart.high')}</span>
         </div>
       </Card.Content>
     </Card>
@@ -197,18 +201,20 @@ export function HourlyActivityHeatmap({
 
 function ActivityTooltip({
   cell,
-  metric,
+  formatMetric,
 }: {
   cell: ComputedCell<ActivityDatum>;
-  metric: DashboardChartMetric;
+  formatMetric: (value: number) => string;
 }) {
+  const { t } = useTranslation();
+  const dayIndex = DASHBOARD_WEEKDAYS.indexOf(cell.data.day);
   return (
     <div className="min-w-40 rounded-[10px] bg-overlay px-3 py-2.5 text-overlay-foreground">
       <p className="text-xs text-muted">
-        {cell.data.day} · {cell.data.hourLabel}:00
+        {dayIndex >= 0 ? t(WEEKDAY_KEYS[dayIndex]!) : cell.data.day} · {cell.data.hourLabel}:00
       </p>
       <p className="mt-1 text-sm font-semibold tabular-nums">
-        {METRICS[metric].format(cell.value ?? 0)}
+        {formatMetric(cell.value ?? 0)}
       </p>
     </div>
   );

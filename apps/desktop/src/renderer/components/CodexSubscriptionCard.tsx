@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
-import { format } from 'date-fns';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   codexRemainingPercent,
   type CodexSubscriptionSnapshot,
@@ -11,6 +11,7 @@ import {
 } from '../lib/codex-subscription-state';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
+import { subscriptionMessageKey } from '../i18n/desktop-subscription-messages';
 
 const UNAVAILABLE_SNAPSHOT: CodexSubscriptionSnapshot = {
   status: 'unavailable',
@@ -20,11 +21,12 @@ const UNAVAILABLE_SNAPSHOT: CodexSubscriptionSnapshot = {
   planLabel: null,
   fiveHour: null,
   weekly: null,
-  message: '暂时无法读取 Codex 订阅额度，请稍后重试',
+  message: 'desktop.provider.codexReadFailed',
 };
 
 /** Compact local ChatGPT/Codex allowance summary for macOS desktop surfaces. */
 export function CodexSubscriptionCard() {
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState(INITIAL_CODEX_SUBSCRIPTION_STATE);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -62,6 +64,8 @@ export function CodexSubscriptionCard() {
   if (!snapshot) return null;
   const failed = snapshot.message !== null;
   const stale = snapshot.stale;
+  const messageKey = snapshot.message ? subscriptionMessageKey(snapshot.message) : null;
+  const feedbackMessage = messageKey ? t(messageKey) : snapshot.message;
 
   return (
     <SubscriptionUsageCard
@@ -94,26 +98,30 @@ export function CodexSubscriptionCard() {
       feedback={failed ? (
         <div className="grid gap-2 text-xs leading-relaxed">
           <div className="grid gap-1" role="status">
-            <p className="font-medium text-foreground">订阅额度暂不可用</p>
-            <p className="break-words text-muted">{snapshot.message ?? UNAVAILABLE_SNAPSHOT.message}</p>
+            <p className="font-medium text-foreground">{t('desktop.provider.codex.unavailable')}</p>
+            <p className="break-words text-muted">{feedbackMessage ?? t('desktop.provider.codexReadFailed')}</p>
             {stale && lastUpdatedAt !== null ? (
               <p className="text-muted">
-                显示上次额度，更新于 {format(lastUpdatedAt, 'M月d日 HH:mm')}
+                {t('desktop.provider.codex.staleSince', {
+                  date: new Intl.DateTimeFormat(i18n.resolvedLanguage || 'zh-CN', {
+                    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+                  }).format(lastUpdatedAt),
+                })}
               </p>
             ) : null}
-            <p className="text-muted">订阅额度与本地 Token 统计分开读取。</p>
+            <p className="text-muted">{t('desktop.provider.codex.separateFromTokens')}</p>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-muted">自动重试已暂停</span>
+            <span className="text-muted">{t('desktop.provider.codex.autoRetryPaused')}</span>
             <Button
-              aria-label="重试读取 Codex 订阅额度"
+              aria-label={t('desktop.provider.codex.retryAria')}
               isDisabled={loading}
               isPending={loading}
               onPress={() => void reload(true)}
               size="sm"
               variant="outline"
             >
-              {loading ? '重试中…' : '重试'}
+              {loading ? t('desktop.provider.retrying') : t('desktop.provider.retry')}
             </Button>
           </div>
         </div>

@@ -37,7 +37,7 @@ function defaultPath(nodePath: string): string {
   return [...new Set(parts)].join(':');
 }
 
-function buildPlist(cliBinPath: string, dataDir: string): string {
+export function buildMacosPlist(cliBinPath: string, dataDir: string): string {
   const { nodePath, args } = resolveServiceCommand(cliBinPath);
   const logPath = daemonLogPath(dataDir);
   const home = homedir();
@@ -61,10 +61,6 @@ ${programArgs}
   <dict>
     <key>HOME</key>
     <string>${escapeXml(home)}</string>
-    <key>LANG</key>
-    <string>en_US.UTF-8</string>
-    <key>LC_ALL</key>
-    <string>en_US.UTF-8</string>
     <key>PATH</key>
     <string>${escapeXml(defaultPath(nodePath))}</string>
   </dict>
@@ -103,7 +99,7 @@ export async function registerMacosAutostart(cliBinPath: string, dataDir: string
   // Unload existing before rewrite so KeepAlive does not fight us.
   await unregisterMacosAutostart();
 
-  await writeFile(plistPath, buildPlist(cliBinPath, dataDir), 'utf8');
+  await writeFile(plistPath, buildMacosPlist(cliBinPath, dataDir), 'utf8');
 
   const domain = `gui/${uid()}`;
   const service = `${domain}/${MACOS_LABEL}`;

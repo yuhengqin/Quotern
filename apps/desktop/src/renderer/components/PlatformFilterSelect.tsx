@@ -4,6 +4,7 @@ import { Button, Label, ListBox, Popover } from '@heroui/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { sourceLabel, TOOLTIP_SHADOW } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'quotern-i18n/react';
 
 /**
  * Text-only multi-select used by Token / Daily / Heatmap platform filters.
@@ -18,21 +19,22 @@ export function PlatformFilterSelect({
   value: string[];
   onChange: (keys: string[]) => void;
 }) {
+  const { t } = useTranslation();
   if (allSources.length === 0) return null;
 
   const allSelected = value.length === allSources.length;
 
   const label =
     value.length === 0
-      ? '选择 Agent'
+      ? t('usage.filter.selectAgents')
       : allSelected
-        ? '全部 Agent'
-        : `已选 ${value.length} 个 Agent`;
+        ? t('usage.filter.allAgents')
+        : t('usage.filter.selectedAgents', { count: value.length });
 
   return (
     <Popover>
       <Button
-        aria-label={`筛选 Agent：${label}`}
+        aria-label={t('usage.filter.agentsAria', { label })}
         className="h-7 min-h-0 w-auto min-w-0 max-w-40 gap-1 px-2 text-xs font-medium"
         size="sm"
         variant="tertiary"
@@ -52,7 +54,7 @@ export function PlatformFilterSelect({
             ) : null}
           </span>
         ) : (
-          <span className="whitespace-nowrap">选择 Agent</span>
+          <span className="whitespace-nowrap">{t('usage.filter.selectAgents')}</span>
         )}
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
@@ -63,7 +65,7 @@ export function PlatformFilterSelect({
       >
         <Popover.Dialog className="p-0">
           <ListBox
-            aria-label="Agent 列表"
+            aria-label={t('usage.filter.agentList')}
             className="flex max-h-64 min-w-48 flex-col gap-1 overflow-y-auto p-2"
             selectedKeys={new Set(value)}
             selectionMode="multiple"
@@ -140,6 +142,7 @@ export function KeyFilterSelect({
   triggerIcon?: (keys: string[]) => ReactNode;
   renderOption: (key: string) => ReactNode;
 }) {
+  const { t } = useTranslation();
   if (allKeys.length === 0) return null;
 
   const selected = new Set(value);
@@ -159,7 +162,7 @@ export function KeyFilterSelect({
   return (
     <Popover>
       <Button
-        aria-label={`筛选：${label}`}
+        aria-label={t('usage.filter.genericAria', { label })}
         className={cn(
           'h-auto min-h-0 max-w-36 gap-1 rounded-none border-0 bg-transparent p-0',
           'text-xs font-medium text-muted shadow-none',
@@ -193,7 +196,7 @@ export function KeyFilterSelect({
                 type="button"
                 onClick={() => onChange([...allKeys])}
               >
-                全部
+                {t('usage.filter.all')}
               </button>
               <span aria-hidden="true" className="text-border">
                 ·
@@ -203,7 +206,7 @@ export function KeyFilterSelect({
                 type="button"
                 onClick={() => onChange([])}
               >
-                清空
+                {t('usage.filter.clear')}
               </button>
             </div>
           </div>

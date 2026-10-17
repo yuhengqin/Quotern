@@ -20,7 +20,7 @@ export function useQuotaState() {
         if (!Object.keys(next.preferences.channels).length && Object.keys(legacy).length) {
           await bridge.setPreferences({ channels: legacy });
         }
-      } catch { if (active) setError('暂时无法读取额度状态，请稍后重试'); }
+      } catch { if (active) setError('usage.quota.loadFailed'); }
     };
     void load();
     window.addEventListener('focus', load);
@@ -28,7 +28,7 @@ export function useQuotaState() {
   }, []);
   const save = useCallback(async (patch: QuotaPreferencePatch) => {
     try { const next = await window.tud.quota.setPreferences(patch); setState(next); setError(null); }
-    catch (cause) { setError('额度设置保存失败，已保留原设置'); throw cause; }
+    catch (cause) { setError('usage.quota.saveFailed'); throw cause; }
   }, []);
   return { state, error, save };
 }

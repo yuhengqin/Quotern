@@ -511,7 +511,7 @@ async function main(): Promise<void> {
       const parsed = parseUsageArgs(process.argv.slice(3));
       if (parsed.help) { printHelp(); return; }
       const report = await readUsageReport(parsed.dataDir ? resolve(parsed.dataDir) : resolveDataDir(), parsed.query);
-      console.log(formatUsageReport(report, parsed.format));
+      console.log(formatUsageReport(report, parsed.format, { compact: parsed.compact }));
       return;
     }
     const { command, serviceAction, port, host, source, days } = parseArgs(process.argv);

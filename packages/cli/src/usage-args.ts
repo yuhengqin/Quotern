@@ -21,6 +21,7 @@ export interface ParsedUsageArgs {
     project?: string;
   };
   format: UsageFormat;
+  compact?: boolean;
   dataDir?: string;
   help: boolean;
 }
@@ -126,6 +127,7 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
   let project: string | undefined;
   let dataDir: string | undefined;
   let format: UsageFormat | undefined;
+  let compact = false;
   const sourceValues: string[] = [];
   const seenOptions = new Set<string>();
 
@@ -148,6 +150,11 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
+    if (token === '--compact') {
+      markSeen(token);
+      compact = true;
+      continue;
+    }
     if (token === '--json' || token === '--csv') {
       markSeen(token);
       setFormat(token === '--json' ? 'json' : 'csv', token);
@@ -222,6 +229,9 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
   if (fromDate !== undefined && days !== undefined) {
     throw new Error('--from/--to 日期范围不能与显式 --days 同时使用');
   }
+  if (compact && format !== 'json') {
+    throw new Error('--compact 仅支持 JSON 输出，请同时指定 --format json 或 --json');
+  }
 
   const query: ParsedUsageArgs['query'] = { period: period ?? 'summary' };
   if (days !== undefined) query.days = days;
@@ -237,6 +247,7 @@ export function parseUsageArgs(args: string[]): ParsedUsageArgs {
   return {
     query,
     format: format ?? 'text',
+    ...(compact ? { compact: true } : {}),
     dataDir,
     help: false,
   };

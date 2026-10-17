@@ -69,7 +69,54 @@ function money(value: number): string {
   return `$${value.toFixed(6)}`;
 }
 
+function displayTimestamp(value: string | null, timeZone: string): string | null {
+  if (value === null || !Number.isFinite(Date.parse(value))) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone, calendar: 'iso8601', numberingSystem: 'latn',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}:${part('second')} (${timeZone})`;
+}
+
+function displayCoverage(report: UsageReport) {
+  return {
+    collectSince: displayTimestamp(report.coverage.collectSince, report.timeZone),
+    lastSyncAt: displayTimestamp(report.coverage.lastSyncAt, report.timeZone),
+    readAt: displayTimestamp(report.coverage.readAt, report.timeZone),
+  };
+}
+
+function compactCost(explanation: UsageReport['summary']['costExplanation']) {
+  const { reportedCostUsd, estimatedCostUsd, unpricedTokens, defaultPricedTokens, tokenQualityTokens } = explanation;
+  return { reportedCostUsd, estimatedCostUsd, unpricedTokens, defaultPricedTokens, tokenQualityTokens };
+}
+
+/** Presentation only: Core still owns all aggregation, grouping and quality semantics. */
+function compactReport(report: UsageReport) {
+  const { costExplanation, ...summary } = report.summary;
+  return {
+    schemaVersion: report.schemaVersion,
+    view: 'compact',
+    period: report.period,
+    timeZone: report.timeZone,
+    fromDate: report.fromDate,
+    toDate: report.toDate,
+    filters: report.filters,
+    coverage: { ...report.coverage, display: displayCoverage(report) },
+    summary: { ...summary, costExplanation: compactCost(costExplanation) },
+    rows: report.rows.map((row) => ({
+      label: row.label, source: row.source, model: row.model, project: row.project,
+      fromDate: row.fromDate, toDate: row.toDate,
+      tokens: row.tokens, costUsd: row.costUsd, knownCostUsd: row.knownCostUsd,
+      costExplanation: compactCost(row.costExplanation),
+    })),
+  };
+}
+
 function formatText(report: UsageReport): string {
+  const display = displayCoverage(report);
   const lines = [
     `Quotern usage · ${cleanText(report.period)}`,
     `${cleanText(report.fromDate)} – ${cleanText(report.toDate)} · ${cleanText(report.timeZone)}`,
@@ -87,9 +134,11 @@ function formatText(report: UsageReport): string {
     ...(['recorded', 'estimated', 'ledger', 'mixed', 'unknown'] as const).map(
       (quality) => `${quality} tokens\t${report.summary.costExplanation.tokenQualityTokens[quality]}`,
     ),
-    `覆盖起点\t${cleanText(report.coverage.collectSince)} · limited=${report.coverage.limited}`,
-    `最近同步\t${cleanText(report.coverage.lastSyncAt ?? '未知')}`,
+    `覆盖起点\t${cleanText(display.collectSince ?? '未知')} · limited=${report.coverage.limited}`,
+    `最近同步完成\t${cleanText(display.lastSyncAt ?? '未知')}`,
+    `报告读取时间\t${cleanText(display.readAt ?? '未知')}`,
     `快照\t${cleanText(report.coverage.snapshot)}${report.coverage.snapshot === 'persisted' ? '（读取时已落盘快照）' : ''}`,
+    '提示\t最近同步完成时间不代表所有来源的数据均已更新至此时。',
     '提示\t费用信息包含来源报告与费率估算，不是实际账单。',
   ];
   return lines.join('\n');
@@ -98,8 +147,9 @@ function formatText(report: UsageReport): string {
 export function formatUsageReport(
   report: UsageReport,
   format: 'text' | 'json' | 'csv',
+  options: { compact?: boolean } = {},
 ): string {
-  if (format === 'json') return JSON.stringify(report, null, 2);
+  if (format === 'json') return options.compact ? JSON.stringify(compactReport(report)) : JSON.stringify(report, null, 2);
   if (format === 'csv') return formatCsv(report);
   return formatText(report);
 }

@@ -157,6 +157,7 @@ Options:
     --project <name>     按项目筛选
     --data-dir <path>    指定本地用量数据目录
     --format <text|json|csv> 选择输出格式；--json / --csv 为快捷方式
+    --compact           精简 JSON（须配合 --json）：保留分组总量及质量提示，省略逐条价格明细
   -h, --help            显示帮助
 
 Examples:
@@ -167,6 +168,7 @@ Examples:
   quotern usage
   quotern usage daily --days 30 --source claude,codex
   quotern usage --from 2026-03-01 --to 2026-03-07 --format json
+  quotern usage models --days 7 --format json --compact
   quotern usage models --csv --model claude-3-7-sonnet
   quotern sync --source=claude
   quotern service start`);

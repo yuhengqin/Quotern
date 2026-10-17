@@ -29,6 +29,14 @@ test('usage queries persisted data while Desktop owns runtime without writing or
     assert.equal(report.coverage.snapshot, 'persisted');
     assert.equal(report.summary.costExplanation.tokenQualityTokens.recorded, 120);
     assert.equal(json.stdout.includes('private-test-secret'), false);
+    const compact = await run(process.execPath, [bin, ...args, '--format', 'json', '--compact'], { timeout: 15_000 });
+    const concise = JSON.parse(compact.stdout);
+    assert.equal(compact.stderr, '');
+    assert.equal(concise.view, 'compact');
+    assert.equal(concise.summary.tokens, 120);
+    assert.equal(concise.rows[0].source, 'codex');
+    assert.equal(concise.coverage.display.lastSyncAt, '2026-06-09 18:00:00 (Asia/Shanghai)');
+    assert.equal(compact.stdout.includes('private-test-secret'), false);
     const csv = await run(process.execPath, [bin, ...args, '--csv'], { timeout: 15_000 });
     assert.ok(csv.stdout.startsWith('period,label,source,model,'));
     await assert.rejects(run(process.execPath, [bin, 'usage', '--days', '0', '--json', '--data-dir', dir]), (error) => error.code === 1 && error.stdout === '' && /days/.test(error.stderr));

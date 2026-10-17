@@ -85,6 +85,22 @@ test('parseUsageArgs reports help', () => {
   assert.equal(parseUsageArgs(['-h']).help, true);
 });
 
+test('compact is a JSON presentation option and never enters the Core query', () => {
+  for (const args of [
+    ['models', '--days', '7', '--format', 'json', '--compact'],
+    ['--compact', 'models', '--days=7', '--json'],
+  ]) {
+    const parsed = parseUsageArgs(args);
+    assert.deepEqual(parsed.query, { period: 'models', days: 7 });
+    assert.equal(parsed.format, 'json');
+    assert.equal(parsed.compact, true);
+  }
+  for (const args of [
+    ['--compact'], ['--csv', '--compact'], ['--compact', '--format=text'],
+    ['--json', '--compact', '--compact'], ['--json', '--compact=true'],
+  ]) assert.throws(() => parseUsageArgs(args), /compact/);
+});
+
 test('parseUsageArgs validates dates and date-range constraints', () => {
   for (const args of [
     ['--from', '2026-02-30', '--to', '2026-03-01'],

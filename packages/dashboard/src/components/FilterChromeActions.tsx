@@ -1,12 +1,7 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Coins } from 'lucide-react';
-import {
-  ArrowsRotateRight,
-  Gear,
-  LogoGithub,
-  NodesRight,
-} from '@gravity-ui/icons';
+import { CircleDollarSign, RefreshCw, Settings, Share2 } from 'lucide-react';
+import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
 import { useAppToastQueue } from '@/components/AppToastContext';
@@ -86,7 +81,7 @@ export function FilterChromeActions() {
             />
           )}
         >
-          <Coins className="size-4" aria-hidden />
+          <CircleDollarSign className="size-4" aria-hidden />
         </Tooltip.Trigger>
         <Tooltip.Content placement="bottom">
           <p>模型价格</p>
@@ -99,7 +94,7 @@ export function FilterChromeActions() {
       />
       <AchievementEntry />
       <ChromeAction
-        icon={<NodesRight className="size-4" />}
+        icon={<Share2 className="size-4" aria-hidden />}
         label="分享"
         onPress={() => {
           void shareCurrentPage();
@@ -110,8 +105,9 @@ export function FilterChromeActions() {
           <ChromeAction
             disabled={busy}
             icon={
-              <ArrowsRotateRight
+              <RefreshCw
                 className={cn('size-4', busy && 'animate-spin')}
+                aria-hidden
               />
             }
             label={refreshLabel}
@@ -120,7 +116,7 @@ export function FilterChromeActions() {
             }}
           />
           <ChromeAction
-            icon={<Gear className="size-4" />}
+            icon={<Settings className="size-4" aria-hidden />}
             label="设置"
             onPress={() => dispatchOpenSettings()}
           />

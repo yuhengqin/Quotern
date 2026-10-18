@@ -178,7 +178,7 @@ test('a published API lease cannot authorize an unrelated server on its port', a
   await assert.rejects(createDevSession(root, 'ui', {}), /API.*标识|API.*就绪/);
 });
 
-async function staleDesktop(t, patch = {}) {
+async function staleDesktop(t, patch = {}, tracked = true) {
   const root = await fixture(t);
   const startedAt = new Date().toISOString();
   const child = spawn(process.execPath, ['-e', ''], { windowsHide: true });
@@ -189,6 +189,14 @@ async function staleDesktop(t, patch = {}) {
     ...patch,
   };
   const dir = join(root, '.quotern-dev');
+  if (process.platform !== 'win32' && tracked && !record.processTracker) {
+    record.processTracker = { kind: 'posix-pgroups-v1', proofToken: randomUUID() };
+    await mkdir(join(dir, 'process-groups'), { recursive: true });
+    await writeFile(join(dir, 'process-groups/old-desktop.json'), JSON.stringify({
+      ...record.processTracker, sessionId: record.sessionId, mode: record.mode, pid: record.pid,
+      worktree: record.worktree, startedAt: record.startedAt, pendingSpawn: false, pgids: [],
+    }));
+  }
   for (const name of ['runtime', 'desktop-ui']) {
     await mkdir(join(dir, `${name}.lock`), { recursive: true });
     await writeFile(join(dir, `${name}.lock/owner.json`), JSON.stringify(record));
@@ -205,6 +213,52 @@ test('confirmed stopped session locks are recovered on the next desktop launch',
     const owner = JSON.parse(await readFile(join(dir, `${name}.lock/owner.json`), 'utf8'));
     assert.equal(owner.sessionId, session.record.sessionId);
   }
+});
+
+test('POSIX crashed sessions recover only with complete matching process-group evidence', { skip: process.platform === 'win32' }, async (t) => {
+  const { root, dir } = await staleDesktop(t, { status: 'running' });
+  const session = await createDevSession(root, 'desktop', {});
+  assert.notEqual(session.record.sessionId, 'old-desktop');
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, session.record.sessionId);
+});
+
+test('POSIX legacy sessions without complete group history remain blocked', { skip: process.platform === 'win32' }, async (t) => {
+  for (const status of ['running', 'stopped']) {
+    const { root, dir } = await staleDesktop(t, { status }, false);
+    await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+    assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+  }
+});
+
+test('POSIX recovery preserves locks for missing, corrupt, incomplete or mismatched group records', { skip: process.platform === 'win32' }, async (t) => {
+  const { root, dir } = await staleDesktop(t, { status: 'running' });
+  const path = join(dir, 'process-groups/old-desktop.json');
+  const proof = JSON.parse(await readFile(path, 'utf8'));
+  await rm(path);
+  await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  await writeFile(path, '{broken');
+  await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  for (const patch of [{ pendingSpawn: true }, { proofToken: randomUUID() }, { sessionId: 'other' }, { mode: 'api' }, { kind: 'other' }, { pgids: [0] }, { pgids: [] , pendingSpawn: null }]) {
+    await writeFile(path, JSON.stringify({ ...proof, ...patch }));
+    await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  }
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+});
+
+test('POSIX recovery checks journal groups omitted from the current child list and never stops them', { skip: process.platform === 'win32' }, async (t) => {
+  const group = spawn(process.execPath, ['-e', 'setInterval(() => {},1000)'], { detached: true, stdio: 'ignore' });
+  const exited = once(group, 'exit');
+  t.after(async () => { if (group.exitCode == null && group.signalCode == null) group.kill(); await exited; });
+  const { root, dir } = await staleDesktop(t, { status: 'running', children: [] });
+  const path = join(dir, 'process-groups/old-desktop.json');
+  const proof = JSON.parse(await readFile(path, 'utf8'));
+  await writeFile(path, JSON.stringify({ ...proof, pgids: [group.pid] }));
+  await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  assert.doesNotThrow(() => process.kill(group.pid, 0));
+  group.kill();
+  await exited;
+  const session = await createDevSession(root, 'desktop', {});
+  assert.notEqual(session.record.sessionId, 'old-desktop');
 });
 
 test('recovery refuses a live recorded child and preserves the old locks', async (t) => {

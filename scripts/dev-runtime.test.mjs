@@ -212,6 +212,130 @@ test('desktop renderer keeps loopback by default and listens on the LAN when req
   } else t.diagnostic('no non-loopback IPv4 interface; only renderer binding was verified');
 });
 
+for (const ending of ['completed build', 'signalled build', 'completed service', 'service exits during shutdown']) {
+test(`POSIX only probes ${ending} groups and recovers after their last descendant exits`, {
+  skip: process.platform === 'win32', timeout: 20000,
+}, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'quotern-posix-build-group-'));
+  const duringShutdown = ending === 'service exits during shutdown';
+  const serviceDescendant = ending.includes('service');
+  let supervisor;
+  let grandchildPid;
+  t.after(async () => {
+    if (supervisor && supervisor.exitCode == null && supervisor.signalCode == null) {
+      supervisor.kill('SIGTERM');
+      await until(() => supervisor.exitCode != null || supervisor.signalCode != null, 'fixture supervisor stopped');
+    }
+    if (grandchildPid && alive(grandchildPid)) process.kill(grandchildPid, 'SIGKILL');
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(join(root, 'scripts'));
+  for (const file of ['dev.mjs', 'dev-instance.mjs', 'dev-processes.mjs', 'dev-windows-job.mjs', 'dev-windows-job.ps1', 'dev-windows-job-host.mjs']) {
+    await cp(join(source, 'scripts', file), join(root, 'scripts', file));
+  }
+  await writeFile(join(root, 'package.json'), '{"type":"module"}');
+  await mkdir(join(root, 'packages/cli/bin'), { recursive: true });
+  const builder = join(root, 'builder.cjs');
+  const orphan = duringShutdown ? `const {spawn}=require('node:child_process');
+    const child=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});process.send('ready');setInterval(()=>{},1000)"],
+      {stdio:['ignore','ignore','ignore','ipc']});
+    child.on('message',()=>console.log(JSON.stringify({remainingDescendant:child.pid})));
+    process.on('SIGTERM',()=>process.exit(0));` : `const {spawn}=require('node:child_process');
+    const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
+    console.log(JSON.stringify({remainingDescendant:child.pid}));child.unref();`;
+  await writeFile(join(root, 'packages/cli/bin/quotern.js'), serviceDescendant
+    ? `import {createRequire} from 'node:module';const require=createRequire(import.meta.url);${orphan}`
+    : 'setTimeout(() => process.exit(0), 200);');
+  await writeFile(builder, serviceDescendant ? 'process.exit(0);'
+    : orphan + (ending === 'signalled build' ? "setTimeout(()=>process.kill(process.pid,'SIGTERM'),50);" : ''));
+  supervisor = spawn(process.execPath, [join(root, 'scripts/dev.mjs'), 'api'], {
+    cwd: root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, npm_execpath: builder, VITE_CLI_API_ORIGIN: '',
+      QUOTERN_DEV_API_PORT: undefined, QUOTERN_DEV_UI_PORT: undefined, QUOTERN_DEV_DESKTOP_PORT: undefined },
+  });
+  let output = '';
+  for (const stream of [supervisor.stdout, supervisor.stderr]) stream.on('data', data => {
+    output += data;
+    const match = output.match(/"remainingDescendant":(\d+)/);
+    if (match) grandchildPid = Number(match[1]);
+  });
+  if (duringShutdown) {
+    await until(() => grandchildPid, 'fixture descendant ready');
+    supervisor.send({ type: 'quotern-dev-stop' });
+  }
+  await once(supervisor, 'exit');
+  assert.equal(supervisor.exitCode, 1, output);
+  assert.ok(grandchildPid && alive(grandchildPid));
+  const record = JSON.parse(await readFile(join(root, '.quotern-dev/api.json'), 'utf8'));
+  assert.equal(record.status, 'cleanup-required');
+  assert.equal(record.processTracker.kind, 'posix-pgroups-v1');
+  if (ending !== 'signalled build') assert.ok(record.children.every(child => child.name !== 'build'));
+  await assert.rejects(createDevSession(root, 'api', {}), /进程组/);
+  assert.ok(alive(grandchildPid), 'recovery never signals the remaining descendant');
+  process.kill(grandchildPid, 'SIGKILL');
+  grandchildPid = undefined;
+  const journal = JSON.parse(await readFile(join(root, `.quotern-dev/process-groups/${record.sessionId}.json`), 'utf8'));
+  await until(() => journal.pgids.every(pgid => !alive(-pgid)), 'all recorded groups exited');
+  const recovered = await createDevSession(root, 'api', {});
+  assert.notEqual(recovered.record.sessionId, record.sessionId);
+  await recovered.close();
+});
+}
+
+test('POSIX spawn journal commit failure keeps locks even after the spawned group is cleaned', {
+  skip: process.platform === 'win32', timeout: 20000,
+}, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'quotern-posix-journal-failure-'));
+  let supervisor;
+  let spawnedPid;
+  t.after(async () => {
+    if (supervisor && supervisor.exitCode == null && supervisor.signalCode == null) {
+      supervisor.kill();
+      await once(supervisor, 'exit');
+    }
+    if (spawnedPid && alive(-spawnedPid)) process.kill(-spawnedPid, 'SIGTERM');
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(join(root, 'scripts'));
+  for (const file of ['dev.mjs', 'dev-instance.mjs', 'dev-processes.mjs', 'dev-windows-job.mjs', 'dev-windows-job.ps1', 'dev-windows-job-host.mjs']) {
+    await cp(join(source, 'scripts', file), join(root, 'scripts', file));
+  }
+  await writeFile(join(root, 'package.json'), '{"type":"module"}');
+  const builder = join(root, 'builder.cjs');
+  await writeFile(builder, 'setTimeout(() => {}, 10000);');
+  const fault = join(root, 'fault.cjs');
+  await writeFile(fault, `const fs=require('node:fs');const rename=fs.renameSync;
+    fs.renameSync=function(from,to){
+      if(to.includes('/process-groups/')){
+        const proof=JSON.parse(fs.readFileSync(from,'utf8'));
+        if(!proof.pendingSpawn&&proof.pgids.length){
+          console.error(JSON.stringify({spawnedPid:proof.pgids.at(-1)}));
+          throw new Error('fixture journal commit failed');
+        }
+      }
+      return rename.call(this,from,to);
+    };require('node:module').syncBuiltinESMExports();`);
+  supervisor = spawn(process.execPath, ['--require', fault, join(root, 'scripts/dev.mjs'), 'api'], {
+    cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, npm_execpath: builder, VITE_CLI_API_ORIGIN: '',
+      QUOTERN_DEV_API_PORT: undefined, QUOTERN_DEV_UI_PORT: undefined, QUOTERN_DEV_DESKTOP_PORT: undefined },
+  });
+  let output = '';
+  for (const stream of [supervisor.stdout, supervisor.stderr]) stream.on('data', data => {
+    output += data;
+    const match = output.match(/"spawnedPid":(\d+)/);
+    if (match) spawnedPid = Number(match[1]);
+  });
+  await once(supervisor, 'exit');
+  assert.equal(supervisor.exitCode, 1, output);
+  assert.ok(spawnedPid);
+  assert.equal(alive(-spawnedPid), false);
+  const record = JSON.parse(await readFile(join(root, '.quotern-dev/api.json'), 'utf8'));
+  assert.equal(record.status, 'cleanup-required');
+  const proof = JSON.parse(await readFile(join(root, `.quotern-dev/process-groups/${record.sessionId}.json`), 'utf8'));
+  assert.equal(proof.pendingSpawn, true);
+  await assert.rejects(createDevSession(root, 'api', {}), /进程组/);
+  assert.equal(JSON.parse(await readFile(join(root, '.quotern-dev/runtime.lock/owner.json'), 'utf8')).sessionId, record.sessionId);
+});
+
 test('Windows Job refuses live detached descendants and permits recovery only after its process tree ends', {
   skip: process.platform !== 'win32', timeout: 20000,
 }, async (t) => {

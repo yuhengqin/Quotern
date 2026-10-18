@@ -3,6 +3,11 @@ import type { SupportedLocale } from 'quotern-i18n';
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  'usage.activity.filters': ['会话筛选', 'Session filters', 'セッションの絞り込み', '세션 필터'],
+  'usage.activity.selectedFilters': ['已选会话筛选', 'Selected session filters', '選択中のセッション条件', '선택한 세션 필터'],
+  'usage.activity.searchFilter': ['搜索：{{query}}', 'Search: {{query}}', '検索：{{query}}', '검색: {{query}}'],
+  'usage.activity.removeFilter': ['移除筛选：{{label}}', 'Remove filter: {{label}}', '条件を削除：{{label}}', '필터 제거: {{label}}'],
+  'usage.activity.clearFilters': ['清除筛选', 'Clear filters', '絞り込みをクリア', '필터 지우기'],
   'usage.explorer.autoResolved': ['自动 · {{grain}}', 'Auto · {{grain}}', '自動 · {{grain}}', '자동 · {{grain}}'],
   'usage.explorer.reportedPeriod': ['统计范围：{{range}}', 'Data period: {{range}}', '集計期間：{{range}}', '집계 기간: {{range}}'],
   'usage.explorer.partialWeek': ['部分周', 'Partial week', '週の一部', '일부 주간'],

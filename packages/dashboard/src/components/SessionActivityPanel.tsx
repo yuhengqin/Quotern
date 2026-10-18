@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Button, Card, Input, Label, Modal, Tabs, TextField, Tooltip } from '@heroui/react';
+import { useMemo, useRef, useState } from 'react';
+import { Button, Card, Label, ListBox, Modal, SearchField, Select, Tabs, Tooltip } from '@heroui/react';
+import { ArrowDownUp, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
@@ -92,23 +93,61 @@ function SessionBrowser({ rows, contribution, open, onOpenChange }: { rows: Sess
   const { t } = useTranslation();
   const [query, setQuery] = useState(''), [source, setSource] = useState('all'), [page, setPage] = useState(1);
   const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>(contribution ? 'tokens' : 'recent');
+  const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
   const facets = useMemo(() => sessionActivityFacets(rows, query, source, project), [rows, query, source, project]);
   const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, source, project), sort), [rows, query, source, project, sort]);
   const result = sessionActivityPage(filtered, page);
+  const hasFilters = Boolean(query.trim() || source !== 'all' || project);
   return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={t('usage.activity.allSessions')} className="w-full max-w-4xl">
     <Modal.CloseTrigger aria-label={t('usage.activity.closeAllSessions')} /><Modal.Header><Modal.Heading>{t('usage.activity.allSessions')}</Modal.Heading><p className="text-xs text-muted">{t('usage.explorer.windowNote')}</p></Modal.Header>
     <Modal.Body className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <TextField className="min-w-40 flex-1" value={query} onChange={value => { setQuery(value); setPage(1); }}><Label>{t('usage.activity.search')}</Label><Input placeholder={t('usage.activity.searchPlaceholder')} type="search" /></TextField>
-        <label className="flex flex-col gap-1 text-xs">Agent<select value={source} onChange={event => { setSource(event.target.value); setPage(1); }} className="rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm outline-offset-2 focus-visible:outline-accent"><option value="all">{t('usage.filter.allAgents')}</option>{facets.sources.map(({ value, count }) => <option key={value} value={value}>{sourceLabel(value)} ({count})</option>)}</select></label>
-        <label className="flex min-w-32 flex-col gap-1 text-xs">{t('usage.explorer.project')}<select value={project} onChange={event => { setProject(event.target.value); setPage(1); }} className="max-w-56 rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm focus-visible:outline-accent"><option value="">{t('usage.explorer.allProjects')}</option>{facets.projects.map(({ value, count }) => <option key={value} value={value}>{value} ({count})</option>)}</select></label>
-        <label className="flex flex-col gap-1 text-xs">{t('usage.explorer.sort')}<select value={sort} onChange={event => { setSort(event.target.value as SessionSort); setPage(1); }} className="rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm focus-visible:outline-accent">{(['recent', 'tokens', 'cost', 'duration'] as const).map(value => <option key={value} value={value}>{t(`usage.explorer.${{ recent: 'sortRecent', tokens: 'sortTokens', cost: 'sortCost', duration: 'sortDuration' }[value]}`)}</option>)}</select></label>
+      <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 flex-wrap items-center gap-2">
+        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto" value={query} onChange={value => { setQuery(value); setPage(1); }}>
+          <Label className="sr-only">{t('usage.activity.search')}</Label>
+          <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
+        </SearchField>
+        <Select aria-label="Agent" value={source} onChange={key => { if (typeof key === 'string') { setSource(key); setPage(1); } }} variant="secondary" className="min-w-0 max-w-44">
+          <Label className="sr-only">Agent</Label>
+          <Select.Trigger ref={sourceTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="truncate">{source === 'all' ? t('usage.filter.allAgents') : sourceLabel(source)}</Select.Value><Select.Indicator /></Select.Trigger>
+          <Select.Popover className="w-56 max-w-[calc(100vw-2rem)]"><ListBox aria-label="Agent">
+            <ListBox.Item id="all" textValue={t('usage.filter.allAgents')} className="text-xs">{t('usage.filter.allAgents')}<ListBox.ItemIndicator /></ListBox.Item>
+            {facets.sources.map(({ value, count }) => <ListBox.Item id={value} key={value} textValue={sourceLabel(value)} className="text-xs"><span>{sourceLabel(value)}</span><span className="ml-auto text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
+          </ListBox></Select.Popover>
+        </Select>
+        <Select aria-label={t('usage.explorer.project')} value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') { setProject(key === 'all' ? '' : key.slice('project:'.length)); setPage(1); } }} variant="secondary" className="min-w-0 max-w-56">
+          <Label className="sr-only">{t('usage.explorer.project')}</Label>
+          <Select.Trigger ref={projectTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="truncate">{project || t('usage.explorer.allProjects')}</Select.Value><Select.Indicator /></Select.Trigger>
+          <Select.Popover className="w-64 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.project')}>
+            <ListBox.Item id="all" textValue={t('usage.explorer.allProjects')} className="text-xs">{t('usage.explorer.allProjects')}<ListBox.ItemIndicator /></ListBox.Item>
+            {facets.projects.map(({ value, count }) => <ListBox.Item id={`project:${value}`} key={value} textValue={value} className="text-xs"><span className="min-w-0 truncate" title={value}>{value}</span><span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
+          </ListBox></Select.Popover>
+        </Select>
+        <Select aria-label={t('usage.explorer.sort')} value={sort} onChange={key => { if (typeof key === 'string') { setSort(key as SessionSort); setPage(1); } }} variant="secondary" className="min-w-0 max-w-52">
+          <Label className="sr-only">{t('usage.explorer.sort')}</Label>
+          <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate" /><Select.Indicator /></Select.Trigger>
+          <Select.Popover className="w-52 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.sort')}>
+            {(['recent', 'tokens', 'cost', 'duration'] as const).map(value => <ListBox.Item id={value} key={value} textValue={t(`usage.explorer.${{ recent: 'sortRecent', tokens: 'sortTokens', cost: 'sortCost', duration: 'sortDuration' }[value]}`)} className="text-xs">{t(`usage.explorer.${{ recent: 'sortRecent', tokens: 'sortTokens', cost: 'sortCost', duration: 'sortDuration' }[value]}`)}<ListBox.ItemIndicator /></ListBox.Item>)}
+          </ListBox></Select.Popover>
+        </Select>
       </div>
+      {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
+        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { setQuery(''); setPage(1); searchInput.current?.focus(); }} />}
+        {source !== 'all' && <SessionFilterChip label={`Agent: ${sourceLabel(source)}`} onRemove={() => { setSource('all'); setPage(1); sourceTrigger.current?.focus(); }} />}
+        {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { setProject(''); setPage(1); projectTrigger.current?.focus(); }} />}
+        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setQuery(''); setSource('all'); setProject(''); setPage(1); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
+      </div>}
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
       {filtered.length ? <SessionRows rows={result.rows} contribution={contribution} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
     </Modal.Body>
     <Modal.Footer className="items-center justify-between gap-3"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => setPage(result.page - 1)}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => setPage(result.page + 1)}>{t('usage.activity.nextPage')}</Button></div></Modal.Footer>
   </Modal.Dialog></Modal.Container></Modal.Backdrop>;
+}
+
+function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): void }) {
+  const { t } = useTranslation();
+  return <Button className="!h-6 !min-h-6 max-w-full !gap-1 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={onRemove} aria-label={t('usage.activity.removeFilter', { label })}>
+    <span className="min-w-0 truncate" title={label}>{label}</span><X className="size-3 shrink-0" aria-hidden />
+  </Button>;
 }
 
 function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {

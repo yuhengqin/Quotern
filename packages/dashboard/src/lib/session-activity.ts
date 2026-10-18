@@ -5,6 +5,22 @@ export function filterSessionActivity(rows: SessionActivity[], query: string, so
   const needle = query.trim().toLocaleLowerCase();
   return rows.filter(row => (source === 'all' || row.source === source) && (!project || row.projectLabel === project) && (!needle || [row.sessionTitle, row.projectLabel, row.model, row.source, row.sessionId, ...(row.models?.map(model => model.model) ?? [])].some(value => value?.toLocaleLowerCase().includes(needle))));
 }
+
+function sessionFilterOptions(rows: SessionActivity[], key: 'source' | 'projectLabel', selected: string) {
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row[key], (counts.get(row[key]) ?? 0) + 1);
+  if (selected && !counts.has(selected)) counts.set(selected, 0);
+  return [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([value, count]) => ({ value, count }));
+}
+
+export function sessionActivityFacets(rows: SessionActivity[], query: string, source: string, project: string) {
+  // Ignore a facet's own selection so users can switch to its other matching options.
+  return {
+    sources: sessionFilterOptions(filterSessionActivity(rows, query, 'all', project), 'source', source === 'all' ? '' : source),
+    projects: sessionFilterOptions(filterSessionActivity(rows, query, source), 'projectLabel', project),
+  };
+}
+
 export type SessionSort = 'recent' | 'tokens' | 'cost' | 'duration';
 export function sortSessionActivity(rows: SessionActivity[], sort: SessionSort): SessionActivity[] {
   const value = (row: SessionActivity) => sort === 'cost' ? row.costUsd ?? -1 : sort === 'duration' ? row.taskSeconds ?? -1 : row.tokens ?? -1;

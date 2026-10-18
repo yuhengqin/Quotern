@@ -8,7 +8,7 @@ import { sourceLabel } from '@/lib/tokens';
 import { isCliBackend } from '@/lib/api';
 import type { DashboardDateRange } from '@/lib/dashboard-date-range';
 import { ProviderIcon } from './ProviderIcon';
-import { filterSessionActivity, sessionActivityPage, sortSessionActivity, type SessionSort } from '../lib/session-activity';
+import { filterSessionActivity, sessionActivityFacets, sessionActivityPage, sortSessionActivity, type SessionSort } from '../lib/session-activity';
 
 const number = (value: number, locale: SupportedLocale) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 const serviceLabel = (value: string, locale: SupportedLocale) => {
@@ -92,6 +92,7 @@ function SessionBrowser({ rows, contribution, open, onOpenChange }: { rows: Sess
   const { t } = useTranslation();
   const [query, setQuery] = useState(''), [source, setSource] = useState('all'), [page, setPage] = useState(1);
   const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>(contribution ? 'tokens' : 'recent');
+  const facets = useMemo(() => sessionActivityFacets(rows, query, source, project), [rows, query, source, project]);
   const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, source, project), sort), [rows, query, source, project, sort]);
   const result = sessionActivityPage(filtered, page);
   return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={t('usage.activity.allSessions')} className="w-full max-w-4xl">
@@ -99,8 +100,8 @@ function SessionBrowser({ rows, contribution, open, onOpenChange }: { rows: Sess
     <Modal.Body className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <TextField className="min-w-40 flex-1" value={query} onChange={value => { setQuery(value); setPage(1); }}><Label>{t('usage.activity.search')}</Label><Input placeholder={t('usage.activity.searchPlaceholder')} type="search" /></TextField>
-        <label className="flex flex-col gap-1 text-xs">Agent<select value={source} onChange={event => { setSource(event.target.value); setPage(1); }} className="rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm outline-offset-2 focus-visible:outline-accent"><option value="all">{t('usage.filter.allAgents')}</option>{[...new Set(rows.map(row => row.source))].sort().map(value => <option key={value} value={value}>{sourceLabel(value)}</option>)}</select></label>
-        <label className="flex min-w-32 flex-col gap-1 text-xs">{t('usage.explorer.project')}<select value={project} onChange={event => { setProject(event.target.value); setPage(1); }} className="max-w-56 rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm focus-visible:outline-accent"><option value="">{t('usage.explorer.allProjects')}</option>{[...new Set(rows.map(row => row.projectLabel))].sort().map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+        <label className="flex flex-col gap-1 text-xs">Agent<select value={source} onChange={event => { setSource(event.target.value); setPage(1); }} className="rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm outline-offset-2 focus-visible:outline-accent"><option value="all">{t('usage.filter.allAgents')}</option>{facets.sources.map(({ value, count }) => <option key={value} value={value}>{sourceLabel(value)} ({count})</option>)}</select></label>
+        <label className="flex min-w-32 flex-col gap-1 text-xs">{t('usage.explorer.project')}<select value={project} onChange={event => { setProject(event.target.value); setPage(1); }} className="max-w-56 rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm focus-visible:outline-accent"><option value="">{t('usage.explorer.allProjects')}</option>{facets.projects.map(({ value, count }) => <option key={value} value={value}>{value} ({count})</option>)}</select></label>
         <label className="flex flex-col gap-1 text-xs">{t('usage.explorer.sort')}<select value={sort} onChange={event => { setSort(event.target.value as SessionSort); setPage(1); }} className="rounded-xl border border-separator bg-surface-secondary px-3 py-2 text-sm focus-visible:outline-accent">{(['recent', 'tokens', 'cost', 'duration'] as const).map(value => <option key={value} value={value}>{t(`usage.explorer.${{ recent: 'sortRecent', tokens: 'sortTokens', cost: 'sortCost', duration: 'sortDuration' }[value]}`)}</option>)}</select></label>
       </div>
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>

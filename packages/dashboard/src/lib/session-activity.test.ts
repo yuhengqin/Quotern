@@ -25,3 +25,26 @@ test('session browser filters projects and sorts known costs ahead of unknown wi
   assert.deepEqual(sort(rows, 'cost').map((r: SessionActivity) => r.sessionId), ['b', 'a']);
   assert.equal(rows[0].sessionId, 'a');
 });
+
+test('session filter options follow search and the other filter, with counts across every page', () => {
+  const rows = [
+    ...Array.from({ length: 13 }, (_, i) => ({ source: 'codex', sessionId: `a-${i}`, projectLabel: 'A', sessionTitle: '调研' })),
+    { source: 'claude', sessionId: 'b', projectLabel: 'B', sessionTitle: '调研' },
+    { source: 'codex', sessionId: 'c', projectLabel: 'C', sessionTitle: '实现' },
+    { source: 'claude', sessionId: 'd', projectLabel: 'A', sessionTitle: '调研' },
+  ] as SessionActivity[];
+  const facets = activity.sessionActivityFacets;
+  assert.deepEqual(facets(rows, ' 调研 ', 'all', ''), {
+    sources: [{ value: 'claude', count: 2 }, { value: 'codex', count: 13 }],
+    projects: [{ value: 'A', count: 14 }, { value: 'B', count: 1 }],
+  });
+  assert.deepEqual(facets(rows, '调研', 'codex', 'A'), {
+    sources: [{ value: 'claude', count: 1 }, { value: 'codex', count: 13 }],
+    projects: [{ value: 'A', count: 13 }],
+  });
+  assert.deepEqual(facets(rows, '实现', 'claude', 'B'), {
+    sources: [{ value: 'claude', count: 0 }],
+    projects: [{ value: 'B', count: 0 }],
+  });
+  assert.deepEqual(facets(rows, '无匹配', 'all', ''), { sources: [], projects: [] });
+});

@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
+import net from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const source = join(dirname(fileURLToPath(import.meta.url)), '..');
+const lanHost = Object.values(networkInterfaces()).flat().find(address => address.family === 'IPv4' && !address.internal)?.address;
 async function until(check, description, timeout = 25000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -16,7 +18,7 @@ async function until(check, description, timeout = 25000) {
   }
   throw new Error(`Timed out: ${description}`);
 }
-async function start(t) {
+async function start(t, host) {
   const root = await mkdtemp(join(tmpdir(), 'quotern-live-dev-'));
   let child;
   const stop = async () => {
@@ -54,6 +56,7 @@ async function start(t) {
       CURSOR_STATE_DB_PATH: join(home, 'no-cursor.sqlite'),
       VITE_CLI_API_ORIGIN: '', QUOTERN_DEV_API_PORT: undefined,
       QUOTERN_DEV_UI_PORT: undefined, QUOTERN_DEV_DESKTOP_PORT: undefined,
+      QUOTERN_DEV_HOST: host,
     },
   });
   for (const stream of [child.stdout, child.stderr]) stream.on('data', (data) => { output += data; });
@@ -69,8 +72,8 @@ async function start(t) {
   }, 'CLI and Vite ready');
   return { root, config, stop, child };
 }
-async function configAt(port) {
-  const response = await fetch(`http://127.0.0.1:${port}/functions/tud-config`, { signal: AbortSignal.timeout(2000) });
+async function configAt(port, host = '127.0.0.1') {
+  const response = await fetch(`http://${host}:${port}/functions/tud-config`, { signal: AbortSignal.timeout(2000) });
   assert.equal(response.status, 200);
   return (await response.json()).data;
 }
@@ -90,6 +93,11 @@ test('real CLI/Vite instances proxy private identities and stopping one leaves t
     const health = await fetch(`http://127.0.0.1:${instance.config.apiPort}/health`);
     assert.equal(health.headers.get('X-Quotern-Dev-Instance'), instance.config.apiSessionId);
     await health.body.cancel();
+    if (lanHost) {
+      for (const port of [instance.config.apiPort, instance.config.uiPort]) {
+        await assert.rejects(fetch(`http://${lanHost}:${port}/health`, { signal: AbortSignal.timeout(1000) }));
+      }
+    }
   }
   await a.stop();
   assert.equal((await configAt(b.config.uiPort)).deviceId, apiB.deviceId);
@@ -97,6 +105,88 @@ test('real CLI/Vite instances proxy private identities and stopping one leaves t
   const stopped = JSON.parse(await readFile(join(a.root, '.quotern-dev/cli.json'), 'utf8'));
   assert.equal(stopped.status, 'stopped');
   assert.equal(stopped.exitCode, 0);
+});
+
+test('wildcard CLI and Vite serve the LAN interface and accept same-host achievement mutations', {
+  skip: !lanHost && 'no non-loopback IPv4 interface', timeout: 60000,
+}, async (t) => {
+  const instance = await start(t, '0.0.0.0');
+  const localConfig = await configAt(instance.config.apiPort);
+  for (const port of [instance.config.apiPort, instance.config.uiPort]) {
+    assert.equal((await configAt(port, lanHost)).deviceId, localConfig.deviceId);
+    const response = await fetch(`http://${lanHost}:${port}/health`, { signal: AbortSignal.timeout(2000) });
+    assert.equal(response.headers.get('X-Quotern-Dev-Instance'), instance.config.apiSessionId);
+    await response.body.cancel();
+    const post = origin => fetch(`http://${lanHost}:${port}/functions/tud-achievements`, {
+      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operation: 'preferences', celebrationsEnabled: false }),
+      signal: AbortSignal.timeout(3000),
+    });
+    const updated = await post(`http://${lanHost}:${instance.config.uiPort}`);
+    const result = await updated.json();
+    assert.equal(updated.status, 200, `port ${port}: ${JSON.stringify(result)}`);
+    assert.equal(result.data.snapshot.preferences.celebrationsEnabled, false);
+    const rejected = await post('https://evil.example');
+    assert.equal(rejected.status, 403);
+    await rejected.body.cancel();
+  }
+});
+
+async function startRenderer(t, host) {
+  const root = await mkdtemp(join(tmpdir(), 'quotern-renderer-host-'));
+  let child;
+  t.after(async () => {
+    if (child && child.exitCode == null && child.signalCode == null) {
+      child.kill('SIGTERM');
+      await until(() => child.exitCode != null || child.signalCode != null, 'renderer cleanup', 10000);
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(join(root, 'src/renderer/routes'), { recursive: true });
+  await cp(join(source, 'apps/desktop/electron.vite.config.ts'), join(root, 'electron.vite.config.ts'));
+  await writeFile(join(root, 'package.json'), '{"name":"fixture-renderer","version":"0.0.0","type":"module"}');
+  await writeFile(join(root, 'src/renderer/index.html'), '<!doctype html><html><body>isolated renderer fixture</body></html>');
+  await writeFile(join(root, 'src/renderer/routes/__root.tsx'), 'import { createRootRoute } from "@tanstack/react-router"; export const Route = createRootRoute();');
+  await symlink(join(source, 'apps/desktop/node_modules'), join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  await writeFile(join(root, 'serve.mjs'), `
+    import { loadConfigFromFile } from 'electron-vite';
+    import { createServer } from 'vite';
+    const { config } = await loadConfigFromFile({ command: 'serve', mode: 'development' });
+    const server = await createServer({ ...config.renderer, configFile: false, cacheDir: '.vite-test', logLevel: 'error' });
+    process.once('SIGTERM', () => { void server.close().then(() => process.exit(0)); });
+    await server.listen();
+    console.log('renderer-ready:' + JSON.stringify(server.httpServer.address()));
+  `);
+  const reservation = net.createServer();
+  await new Promise((resolve, reject) => { reservation.once('error', reject); reservation.listen(0, '0.0.0.0', resolve); });
+  const port = reservation.address().port;
+  await new Promise(resolve => reservation.close(resolve));
+  let output = '';
+  child = spawn(process.execPath, [join(root, 'serve.mjs')], {
+    cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, QUOTERN_DEV_HOST: host, QUOTERN_DEV_DESKTOP_PORT: String(port) },
+  });
+  for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { output += data; });
+  return until(() => {
+    if (child.exitCode != null) throw new Error(`renderer exited ${child.exitCode}: ${output}`);
+    const match = output.match(/renderer-ready:(\{[^\n]+\})/);
+    return match ? JSON.parse(match[1]) : false;
+  }, 'renderer listening');
+}
+
+test('desktop renderer keeps loopback by default and listens on the LAN when requested', { timeout: 60000 }, async (t) => {
+  const local = await startRenderer(t);
+  assert.equal(local.address, '127.0.0.1');
+  const response = await fetch(`http://127.0.0.1:${local.port}/`, { signal: AbortSignal.timeout(2000) });
+  assert.equal(response.status, 200);
+  await response.body.cancel();
+  const external = await startRenderer(t, '0.0.0.0');
+  assert.equal(external.address, '0.0.0.0');
+  if (lanHost) {
+    const remote = await fetch(`http://${lanHost}:${external.port}/`, { signal: AbortSignal.timeout(2000) });
+    assert.equal(remote.status, 200);
+    assert.match(await remote.text(), /isolated renderer fixture/);
+  } else t.diagnostic('no non-loopback IPv4 interface; only renderer binding was verified');
 });
 
 test('a Windows service parent that exits early cannot release ownership of possibly live descendants', {

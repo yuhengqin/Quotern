@@ -17,6 +17,7 @@ if (mode === 'status') {
 
 async function run() {
   const session = await createDevSession(root, mode);
+  const listenHost = session.env.QUOTERN_DEV_HOST;
   const log = createWriteStream(session.record.logPath, { flags: 'a' });
   const children = [];
   let closing = false;
@@ -120,7 +121,8 @@ async function run() {
   try {
     console.log(`[Quotern dev] ${session.record.branch || '(detached)'} · ${root}`);
     console.log(`会话 ${session.record.sessionId} / PID ${process.pid}`);
-    console.log(`API http://127.0.0.1:${session.config.apiPort} · Vite http://127.0.0.1:${mode === 'desktop' ? session.config.desktopPort : session.config.uiPort}`);
+    const apiAddress = mode === 'desktop' ? 'IPC' : mode === 'ui' ? session.env.VITE_CLI_API_ORIGIN : `http://${listenHost}:${session.config.apiPort}`;
+    console.log(`API ${apiAddress} · Vite http://${listenHost}:${mode === 'desktop' ? session.config.desktopPort : session.config.uiPort}`);
     console.log(`数据 ${session.config.dataDir}\n归属 ${session.recordPath}\n日志 ${session.record.logPath}`);
     if (mode !== 'ui') {
       const entry = process.env.npm_execpath;
@@ -135,11 +137,11 @@ async function run() {
     if (closing) return await done;
     const services = [];
     if (mode === 'cli' || mode === 'api') {
-      services.push(launch('cli', process.execPath, [join(root, 'packages/cli/bin/quotern.js'), 'start', '--port', String(session.config.apiPort), '--host', '127.0.0.1', '--quotern-dev-instance', session.record.sessionId], root, true));
+      services.push(launch('cli', process.execPath, [join(root, 'packages/cli/bin/quotern.js'), 'start', '--port', String(session.config.apiPort), '--host', listenHost, '--quotern-dev-instance', session.record.sessionId], root, true));
     }
     if (mode === 'cli' || mode === 'ui') {
       const cwd = join(root, 'packages/dashboard');
-      services.push(launch('vite', process.execPath, [toolBin(cwd, 'vite', 'bin/vite.js'), '--host', '127.0.0.1', '--port', String(session.config.uiPort), '--strictPort'], cwd));
+      services.push(launch('vite', process.execPath, [toolBin(cwd, 'vite', 'bin/vite.js'), '--host', listenHost, '--port', String(session.config.uiPort), '--strictPort'], cwd));
     }
     if (mode === 'desktop') {
       const cwd = join(root, 'apps/desktop');

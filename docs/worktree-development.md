@@ -35,7 +35,7 @@ $env:QUOTERN_DEV_UI_PORT = '5204'
 pnpm dev:cli
 ```
 
-Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。环境变量仅用于本地启动，不提交 `.env*`，也不改仓库默认端口来绕过冲突。
+Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。CLI API、浏览器 Vite 和 Desktop renderer 的监听地址默认 `127.0.0.1`；需要局域网访问时，在启动命令的环境中设置 `QUOTERN_DEV_HOST=0.0.0.0`，例如 `QUOTERN_DEV_HOST=0.0.0.0 pnpm dev:cli`。端口预检使用同一监听地址；未显式指定的端口遇到其他网卡占用时也会另选空闲端口，显式端口冲突仍报错。浏览器使用宿主机的实际局域网 IP 和启动输出中的端口访问；Vite 到 CLI 的代理仍走 `127.0.0.1`。Desktop 数据仍经 Electron IPC 读取，对外开放 renderer 不会提供 Desktop HTTP API。上述环境变量仅用于本地启动，不提交 `.env*`，也不改仓库默认端口来绕过冲突。
 
 只改 UI 时可明确复用已有 API：
 

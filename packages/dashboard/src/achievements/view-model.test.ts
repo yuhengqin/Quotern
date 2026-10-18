@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { groupAchievements, closestAchievements, formatAchievementAmount } from './view-model.ts';
+import { groupAchievements, closestAchievements, formatAchievementAmount, formatAchievementDate, formatAchievementMonth, achievementUnit, achievementTitle, achievementDescription } from './view-model.ts';
 import * as viewModel from './view-model.ts';
 import { buildAchievementShare } from './share-model.ts';
 import type { AchievementSnapshot, AchievementProgress, EarnedAchievement } from 'quotern-core/achievements';
+import { registerMessages } from 'quotern-i18n';
+import { achievementRankMessages } from '../i18n/achievement-rank-messages.ts';
+
+registerMessages(achievementRankMessages);
 
 const badge = (id: string, target: number, value: number, eligible = false, overrides: Partial<AchievementProgress> = {}): AchievementProgress => ({ id, family: 'tokens', category: 'milestones', groupId: 'tokens', title: id, description: 'rule', target, value, unit: 'Token', tier: target, eligible, achievedOn: eligible ? '2026-09-01' : null, ...overrides });
 const earned = (item: AchievementProgress): EarnedAchievement => ({ ...item, ruleVersion: 1, unlockedAt: '2026-09-01T00:00:00Z', seenAt: null, notifiedAt: null, historical: true, snapshot: { value: item.value, timeZone: 'Asia/Shanghai', coverageFromDate: '2026-01-01' } });
@@ -32,7 +36,31 @@ test('closest targets exclude finished historical months, spending/time and retu
     badge('sessions-100', 100, 50, false, { family: 'sessions', groupId: 'sessions' }),
   ]);
   assert.deepEqual(closestAchievements(state).map(item => item.id), ['active-days-30', 'tokens-100', 'streak-7']);
-  assert.equal(formatAchievementAmount(36000, '秒'), '10');
+  assert.equal(formatAchievementAmount(36000, 'duration'), '10');
+});
+
+test('achievement amount and unit use stable family semantics instead of localized API unit text', () => {
+  assert.equal(formatAchievementAmount(36000, 'duration', 'en'), '10');
+  assert.equal(formatAchievementAmount(1_250_000, 'tokens', 'en'), '1.3M');
+  assert.equal(formatAchievementAmount(1000.25, 'cost', 'en'), '$1,000.25');
+  assert.equal(achievementUnit({ family: 'duration', unit: 'seconds' }), '小时');
+});
+
+test('date-only achievement values render in the requested locale without shifting calendar days', () => {
+  assert.equal(formatAchievementDate('2026-10-17', 'en'), 'Oct 17, 2026');
+  assert.equal(formatAchievementMonth('2026-10', 'en'), 'Oct 2026');
+  assert.equal(formatAchievementDate('2026-10-17', 'zh-CN').startsWith('2026年10月17日'), true);
+});
+
+test('canonical rule identifiers render localized badge names and descriptions without changing stored IDs', () => {
+  const tokenBadge = badge('tokens-1000000', 1_000_000, 1_000_000, true, { tier: 1 });
+  assert.equal(achievementTitle(tokenBadge, 'en'), 'A million sparks');
+  assert.equal(achievementTitle(tokenBadge, 'ja'), '百万の輝き');
+  assert.equal(achievementTitle(tokenBadge, 'ko'), '백만의 불꽃');
+  assert.match(achievementDescription(tokenBadge, 'en'), /Total collected tokens/);
+  assert.equal(tokenBadge.id, 'tokens-1000000');
+  const monthly = badge('monthly-full-2026-10', 31, 31, true, { family: 'monthly-full', tier: 1, period: '2026-10' });
+  assert.equal(achievementTitle(monthly, 'en'), 'Oct 2026 perfect month');
 });
 
 test('share projection omits hidden money and project identity before anything reaches the export DOM', () => {
@@ -43,14 +71,14 @@ test('share projection omits hidden money and project identity before anything r
   state.preferences.showcaseIds = state.earned.map(item => item.id);
   const projected = buildAchievementShare(state, { kind: 'showcase' });
   const raw = JSON.stringify(projected);
-  assert.equal(raw.includes('1000.25'), false);
+  assert.equal(raw.includes('$1,000.25'), false);
   assert.equal(raw.includes('secret-repository'), false);
   assert.equal(raw.includes('privatehash'), false);
   assert.equal(raw.includes('千美元'), false);
   assert.equal(projected.badges.length, 2);
   const visible = JSON.stringify(buildAchievementShare(state, { kind: 'showcase' }, { showCost: true, showProjects: true }));
   assert.equal(visible.includes('secret-repository'), true);
-  assert.equal(visible.includes('1000.25'), true);
+  assert.equal(visible.includes('$1,000.25'), true);
 });
 
 test('sharing a locked badge or empty shelf fails explicitly, while annual cards use the selected year', () => {
@@ -68,7 +96,7 @@ test('annual badge captions identify the year of earning instead of presenting l
   const state = snapshot([badge('active-days-100', 100, 102, true, { family: 'active-days', title: '百日同行', unit: '天', achievedOn: '2025-12-20' })]);
   state.annual = [{ year: 2025, activeDays: 30, activeMonths: 1, tokens: 999, costUsd: 88, topSource: 'codex', fromDate: '2025-12-01', toDate: '2025-12-30', complete: true }];
   const result = buildAchievementShare(state, { kind: 'annual', year: 2025 });
-  assert.equal(result.badges[0]!.subtitle, '2025-12-20 点亮');
+  assert.equal(result.badges[0]!.subtitle, '2025年12月20日 点亮');
   assert.equal(JSON.stringify(result).includes('102'), false);
 });
 

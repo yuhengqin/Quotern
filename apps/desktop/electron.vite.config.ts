@@ -5,12 +5,19 @@ import tailwindcss from '@tailwindcss/vite';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coreSourcePlugin } from '../../scripts/vite-core-source.mjs';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
 
+const quotaPreview = process.env.QUOTERN_DEV_QUOTA_PREVIEW === '1';
+if (quotaPreview && process.env.QUOTERN_DEV_ISOLATED !== '1') {
+  throw new Error('额度 mock 必须通过 pnpm dev:desktop:quota 隔离启动');
+}
+
 const sharedRenderPlugins = () => [
+  coreSourcePlugin(),
   tanstackRouter({
     target: 'react',
     autoCodeSplitting: true,
@@ -32,7 +39,7 @@ const sharedRenderPlugins = () => [
  *
  * Main 嵌入 quotern-core（读 ~/.ai-usage，内存 local-api）；renderer 经 IPC 取数。
  *
- * quotern-core / hono 为纯 ESM（exports 仅有 import），Electron main 产物是 CJS，
+ * quotern-core / quotern-i18n / hono 为纯 ESM（exports 仅有 import），Electron main 产物是 CJS，
  * 不能 require 它们 — 打进 main bundle，避免 ERR_PACKAGE_PATH_NOT_EXPORTED。
  */
 export default defineConfig({
@@ -41,6 +48,7 @@ export default defineConfig({
       externalizeDepsPlugin({
         exclude: [
           'quotern-core',
+          'quotern-i18n',
           'electron-updater',
           'hono',
           'yauzl',
@@ -51,16 +59,17 @@ export default defineConfig({
       outDir: 'out/main',
       rollupOptions: {
         external: ['sharp'],
-        input: { index: resolve(__dirname, 'src/main/index.ts') },
+        input: { index: resolve(__dirname, quotaPreview ? 'src/main/quota-preview.ts' : 'src/main/index.ts') },
       },
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    // Sandboxed preloads cannot require workspace packages at runtime.
+    plugins: [externalizeDepsPlugin({ exclude: ['quotern-core'] })],
     build: {
       outDir: 'out/preload',
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/preload/index.ts') },
+        input: { index: resolve(__dirname, quotaPreview ? 'src/preload/quota-preview.ts' : 'src/preload/index.ts') },
       },
     },
   },

@@ -7,6 +7,7 @@ import {
   Xmark,
 } from '@gravity-ui/icons';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { isCliBackend, triggerSync } from '@/lib/api';
 import {
   dispatchDataSynced,
@@ -27,13 +28,14 @@ type FabActionId = 'share' | 'about' | 'refresh' | 'settings';
 
 /** Floating action button — expands upward into share / refresh / settings. */
 export function MobileActionBubble() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
   const [busy, setBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const cliBackend = isCliBackend();
-  const refreshLabel = cliBackend ? '同步数据' : '刷新数据';
+  const refreshLabel = t(cliBackend ? 'shell.syncData' : 'shell.refreshData');
 
   useEffect(() => {
     if (open) {
@@ -95,7 +97,7 @@ export function MobileActionBubble() {
   }> = [
     {
       id: 'share',
-      label: '分享',
+      label: t('shell.share'),
       onClick: () => {
         void shareCurrentPage();
         setOpen(false);
@@ -104,7 +106,7 @@ export function MobileActionBubble() {
     },
     {
       id: 'about',
-      label: '关于',
+      label: t('shell.about'),
       onClick: () => {
         dispatchOpenAbout();
         setOpen(false);
@@ -126,7 +128,7 @@ export function MobileActionBubble() {
     },
     {
       id: 'settings',
-      label: '设置',
+      label: t('shell.settings'),
       onClick: () => {
         dispatchOpenSettings();
         setOpen(false);
@@ -145,7 +147,7 @@ export function MobileActionBubble() {
     >
       <button
         type="button"
-        aria-label={open ? '收起快捷操作' : '打开快捷操作'}
+        aria-label={t(open ? 'shell.collapseQuickActions' : 'shell.openQuickActions')}
         aria-expanded={open}
         aria-controls={menuMounted ? menuId : undefined}
         onClick={() => setOpen((prev) => !prev)}
@@ -181,7 +183,7 @@ export function MobileActionBubble() {
         <div
           id={menuId}
           role="menu"
-          aria-label="快捷操作"
+          aria-label={t('shell.quickActions')}
           className="flex flex-col-reverse items-center gap-2"
         >
           {actions.map((action, index) => (

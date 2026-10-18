@@ -7,6 +7,8 @@ import {
   Description,
   Label,
   ListBox,
+  Radio,
+  RadioGroup,
   Select,
   Tabs,
   Toast,
@@ -16,7 +18,7 @@ import {
   getLatestUpdateVersion,
   getUpdateToolbarAction,
   PORTABLE_RELEASES_URL,
-  updateStatusMessage,
+  updateDownloadPercent,
   type AutoUpdateState,
 } from '../../shared/auto-update';
 import { resolveAutoUpdateStateForUi } from '@/lib/mock-portable-update';
@@ -28,8 +30,11 @@ import {
 import { AboutContent } from '@/components/AboutContent';
 import { StatusBanner } from '@/components/StatusBanner';
 import { PetSettingsCard } from '@/components/PetSettingsCard';
-import { useSubscriptionChannelVisibility } from '@/hooks/useSubscriptionChannelVisibility';
-import { SUBSCRIPTION_CHANNELS } from '../../shared/subscription-channels';
+import { useLocalePreference } from '@/hooks/useLocalePreference';
+import { useTranslation } from 'quotern-i18n/react';
+import { LanguagePreferenceControl } from '../../../../../packages/dashboard/src/components/LanguagePreferenceControl';
+import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
+import { QuotaSettings } from './QuotaSettings';
 
 import {
   type SettingsTabId,
@@ -37,10 +42,10 @@ import {
 
 type DesktopSettingsTabId = SettingsTabId;
 
-const TAB_ITEMS: { id: DesktopSettingsTabId; label: string }[] = [
-  { id: 'subscription', label: '订阅' },
-  { id: 'app', label: '应用' },
-  { id: 'about', label: '关于' },
+const TAB_ITEMS: { id: DesktopSettingsTabId; labelKey: string }[] = [
+  { id: 'subscription', labelKey: 'settings.tabs.subscription' },
+  { id: 'app', labelKey: 'settings.tabs.app' },
+  { id: 'about', labelKey: 'settings.tabs.about' },
 ];
 
 /**
@@ -61,6 +66,7 @@ export function SettingsPanel({
   const [toastQueue] = useState(
     () => new ToastQueue({ maxVisibleToasts: 1 }),
   );
+  const { t } = useTranslation();
   const [uncontrolledTab, setUncontrolledTab] =
     useState<DesktopSettingsTabId>('app');
   const tab = activeTab ?? uncontrolledTab;
@@ -75,14 +81,14 @@ export function SettingsPanel({
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List aria-label="设置分类" className="w-fit">
+          <Tabs.List aria-label={t('settings.tabs.category')} className="w-fit">
             {TAB_ITEMS.map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
                 key={item.id}
               >
-                {item.label}
+                {t(item.labelKey)}
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
@@ -105,52 +111,14 @@ export function SettingsPanel({
 
 /** Toggle which auto-detected subscription channels may appear on the dashboard. */
 function SubscriptionChannelSettings() {
-  const { isEnabled, setChannelEnabled, setAllEnabled } =
-    useSubscriptionChannelVisibility();
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-medium text-foreground">订阅额度卡片</p>
-        <Description>
-          控制用量页展示哪些订阅额度卡片。默认全部开启；本机未登录或未识别到额度时仍会自动隐藏。
-        </Description>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onPress={() => setAllEnabled(true)}>
-          全部开启
-        </Button>
-        <Button size="sm" variant="tertiary" onPress={() => setAllEnabled(false)}>
-          全部关闭
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {SUBSCRIPTION_CHANNELS.map((channel) => (
-          <Checkbox
-            id={`subscription-channel-${channel.id}`}
-            isSelected={isEnabled(channel.id)}
-            key={channel.id}
-            onChange={(checked) => {
-              setChannelEnabled(channel.id, checked);
-            }}
-          >
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              {channel.label}
-            </Checkbox.Content>
-          </Checkbox>
-        ))}
-      </div>
-    </div>
-  );
+  return <QuotaSettings />;
 }
 
 /** 自动更新 + 开机自启 + 设备信息。 */
 function AppSettingsPanel() {
+  const { t } = useTranslation();
+  const { preference, locale, setPreference } = useLocalePreference();
+  const [localeError, setLocaleError] = useState(false);
   const cliMode = true;
   const isMac = window.tud?.platform === 'darwin';
   const isWindows = window.tud?.platform === 'win32';
@@ -177,7 +145,8 @@ function AppSettingsPanel() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载配置失败');
+          console.error('[quotern-desktop] failed to load config:', e);
+          setError('settings.loadConfigFailed');
         }
       })
       .finally(() => {
@@ -207,9 +176,8 @@ function AppSettingsPanel() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setAutostartError(
-            e instanceof Error ? e.message : '加载开机自启设置失败',
-          );
+          console.error('[quotern-desktop] failed to load autostart settings:', e);
+          setAutostartError('settings.autostart.loadFailed');
         }
       })
       .finally(() => {
@@ -228,9 +196,8 @@ function AppSettingsPanel() {
       await window.tud.setOpenAtLogin(next);
     } catch (e) {
       setOpenAtLogin(prev);
-      setAutostartError(
-        e instanceof Error ? e.message : '更新开机自启失败',
-      );
+      console.error('[quotern-desktop] failed to update autostart:', e);
+      setAutostartError('settings.autostart.updateFailed');
     }
   };
 
@@ -241,9 +208,8 @@ function AppSettingsPanel() {
       await window.tud.setLaunchHidden(next);
     } catch (e) {
       setLaunchHidden(prev);
-      setAutostartError(
-        e instanceof Error ? e.message : '更新静默启动设置失败',
-      );
+      console.error('[quotern-desktop] failed to update quiet launch:', e);
+      setAutostartError('settings.autostart.hiddenUpdateFailed');
     }
   };
 
@@ -264,9 +230,8 @@ function AppSettingsPanel() {
         })
         .catch((e) => {
           if (!cancelled) {
-            setTrayUsageError(
-              e instanceof Error ? e.message : '加载托盘用量设置失败',
-            );
+            console.error('[quotern-desktop] failed to load tray usage settings:', e);
+            setTrayUsageError('settings.tray.loadFailed');
           }
         })
         .finally(() => {
@@ -288,9 +253,8 @@ function AppSettingsPanel() {
       await window.tud.setShowTrayUsage(next);
     } catch (e) {
       setShowTrayUsage(prev);
-      setTrayUsageError(
-        e instanceof Error ? e.message : '更新托盘用量设置失败',
-      );
+      console.error('[quotern-desktop] failed to update tray usage:', e);
+      setTrayUsageError('settings.tray.updateFailed');
     }
   };
 
@@ -302,20 +266,34 @@ function AppSettingsPanel() {
       await window.tud.setTrayUsageMode(next);
     } catch (e) {
       setTrayUsageMode(prev);
-      setTrayUsageError(
-        e instanceof Error ? e.message : '更新托盘用量显示方式失败',
-      );
+      console.error('[quotern-desktop] failed to update tray display mode:', e);
+      setTrayUsageError('settings.tray.modeUpdateFailed');
     }
   };
 
   return (
     <div className="flex flex-col gap-5">
-      {error && <StatusBanner tone="error" title={error} />}
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <LanguagePreferenceControl
+            value={preference}
+            onChange={(next) => {
+              setLocaleError(false);
+              void setPreference(next).catch((reason) => {
+                console.error('[quotern-desktop] failed to persist locale:', reason);
+                setLocaleError(true);
+              });
+            }}
+          />
+        </Card.Content>
+      </Card>
+      {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
+      {error && <StatusBanner tone="error" title={t(error)} />}
       {autostartError && (
-        <StatusBanner tone="error" title={autostartError} />
+        <StatusBanner tone="error" title={t(autostartError)} />
       )}
       {trayUsageError && (
-        <StatusBanner tone="error" title={trayUsageError} />
+        <StatusBanner tone="error" title={t(trayUsageError)} />
       )}
 
       {cliMode && (
@@ -332,7 +310,7 @@ function AppSettingsPanel() {
               <Checkbox.Control>
                 <Checkbox.Indicator />
               </Checkbox.Control>
-              开机时自动启动
+              {t('settings.autostart.enable')}
             </Checkbox.Content>
           </Checkbox>
           {openAtLogin && (
@@ -349,12 +327,12 @@ function AppSettingsPanel() {
                   <Checkbox.Control>
                     <Checkbox.Indicator />
                   </Checkbox.Control>
-                  静默启动
+                  {t('settings.autostart.hidden')}
                 </Checkbox.Content>
               </Checkbox>
               {launchHidden && (
                 <p className="text-xs text-muted">
-                  开机后只出现托盘，不弹出主窗口
+                  {t('settings.autostart.hiddenHint')}
                 </p>
               )}
             </>
@@ -373,13 +351,13 @@ function AppSettingsPanel() {
                   <Checkbox.Control>
                     <Checkbox.Indicator />
                   </Checkbox.Control>
-                  在菜单栏托盘显示今日用量
+                  {t('settings.tray.enable')}
                 </Checkbox.Content>
               </Checkbox>
               {showTrayUsage && (
                 <div className="mt-2 max-w-xs pl-4">
                   <Select
-                    aria-label="菜单栏用量显示方式"
+                    aria-label={t('settings.tray.modeAria')}
                     isDisabled={trayUsageLoading}
                     value={trayUsageMode}
                     variant="secondary"
@@ -389,23 +367,23 @@ function AppSettingsPanel() {
                       }
                     }}
                   >
-                    <Label>显示方式</Label>
+                    <Label>{t('settings.tray.modeLabel')}</Label>
                     <Select.Trigger>
                       <Select.Value>{({ selectedText }) => selectedText}</Select.Value>
                       <Select.Indicator />
                     </Select.Trigger>
                     <Select.Popover>
-                      <ListBox aria-label="菜单栏用量显示方式列表">
-                        <ListBox.Item id="both" textValue="Token 和金额">
-                          Token 和金额
+                      <ListBox aria-label={t('settings.tray.modeListAria')}>
+                        <ListBox.Item id="both" textValue={t('settings.tray.both')}>
+                          {t('settings.tray.both')}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
-                        <ListBox.Item id="tokens" textValue="仅 Token">
-                          仅 Token
+                        <ListBox.Item id="tokens" textValue={t('settings.tray.tokens')}>
+                          {t('settings.tray.tokens')}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
-                        <ListBox.Item id="cost" textValue="仅金额">
-                          仅金额
+                        <ListBox.Item id="cost" textValue={t('settings.tray.cost')}>
+                          {t('settings.tray.cost')}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
                       </ListBox>
@@ -420,25 +398,60 @@ function AppSettingsPanel() {
 
       {isWindows && <PetSettingsCard />}
 
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <RadioGroup
+            name="token-unit-mode"
+            value={getTokenUnitMode()}
+            variant="secondary"
+            onChange={(next) => {
+              if (next !== 'localized' && next !== 'international') return;
+              if (next === getTokenUnitMode()) return;
+              setTokenUnitMode(next);
+              window.location.reload();
+            }}
+          >
+            <Label>{t('settings.tokenUnit.label')}</Label>
+            <Description>{t('settings.tokenUnit.description')}</Description>
+            <Radio value="localized">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                {t('settings.tokenUnit.localized')}
+              </Radio.Content>
+            </Radio>
+            <Radio value="international">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                {t('settings.tokenUnit.international')}
+              </Radio.Content>
+            </Radio>
+          </RadioGroup>
+        </Card.Content>
+      </Card>
+
       <AutoUpdateSettings />
 
       {!loading && config && (
         <Card variant="tertiary" className="rounded-xl shadow-none">
           <Card.Header>
-            <Card.Title>设备信息</Card.Title>
+            <Card.Title>{t('settings.device.title')}</Card.Title>
           </Card.Header>
           <Card.Content className="flex flex-col gap-2 text-sm">
-            <InfoRow label="设备 ID" value={config.deviceId} />
+            <InfoRow label={t('settings.device.id')} value={config.deviceId} />
             <InfoRow
-              label="统计起点"
+              label={t('settings.device.statsSince')}
               value={config.statsSince.slice(0, 19).replace('T', ' ')}
             />
             <InfoRow
-              label="上次同步"
+              label={t('settings.device.lastSync')}
               value={
                 config.lastSyncAt
-                  ? new Date(config.lastSyncAt).toLocaleString()
-                  : '从未'
+                  ? new Date(config.lastSyncAt).toLocaleString(locale)
+                  : t('settings.device.never')
               }
             />
           </Card.Content>
@@ -449,6 +462,7 @@ function AppSettingsPanel() {
 }
 
 function AutoUpdateSettings() {
+  const { t } = useTranslation();
   const [state, setState] = useState<AutoUpdateState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [installPending, setInstallPending] = useState(false);
@@ -472,9 +486,8 @@ function AutoUpdateSettings() {
       })
       .catch((reason) => {
         if (!cancelled) {
-          setActionError(
-            reason instanceof Error ? reason.message : '读取更新状态失败',
-          );
+          console.error('[quotern-desktop] failed to read update state:', reason);
+          setActionError('settings.update.readFailed');
         }
       });
     return () => {
@@ -488,9 +501,8 @@ function AutoUpdateSettings() {
     try {
       setState(resolveAutoUpdateStateForUi(await window.tud.checkForUpdates()));
     } catch (reason) {
-      setActionError(
-        reason instanceof Error ? reason.message : '检查更新失败',
-      );
+      console.error('[quotern-desktop] failed to check updates:', reason);
+      setActionError('settings.update.checkFailed');
     }
   };
 
@@ -500,9 +512,8 @@ function AutoUpdateSettings() {
     try {
       await window.tud.installDownloadedUpdate();
     } catch (reason) {
-      setActionError(
-        reason instanceof Error ? reason.message : '更新并重启失败',
-      );
+      console.error('[quotern-desktop] failed to install update:', reason);
+      setActionError('settings.update.installFailed');
     } finally {
       setInstallPending(false);
     }
@@ -513,12 +524,12 @@ function AutoUpdateSettings() {
     try {
       const result = await window.tud.openExternal(PORTABLE_RELEASES_URL);
       if (!result.ok) {
-        setActionError(result.message ?? '无法打开 GitHub 发行版页面');
+        console.error('[quotern-desktop] failed to open releases:', result.message);
+        setActionError('settings.update.openReleasesFailed');
       }
     } catch (reason) {
-      setActionError(
-        reason instanceof Error ? reason.message : '无法打开 GitHub 发行版页面',
-      );
+      console.error('[quotern-desktop] failed to open releases:', reason);
+      setActionError('settings.update.openReleasesFailed');
     }
   };
 
@@ -528,17 +539,31 @@ function AutoUpdateSettings() {
     status === 'downloading' ||
     status === 'downloaded' ||
     status === 'installing';
-  const message = updateStatusMessage(state);
+  const messageKey = !state ? 'settings.update.loading'
+    : status === 'unsupported' ? 'settings.update.unsupported'
+    : status === 'checking' ? 'settings.update.checking'
+    : status === 'available' ? 'settings.update.available'
+    : status === 'error' ? 'settings.update.retry'
+    : status === 'idle' ? 'settings.update.idle'
+    : null;
+  const message = messageKey ? t(messageKey) : null;
   const latestVersion = getLatestUpdateVersion(state);
-  const error = actionError ?? (status === 'error' ? state?.message : null);
+  const error = actionError ? t(actionError) : status === 'error' ? t('settings.update.retry') : null;
   // Check failures can be retried with the persistent check button.
   const updateAction = status === 'error' ? null : getUpdateToolbarAction(state);
+  const updateActionLabel = status === 'available' ? t('settings.update.available')
+    : status === 'downloading' ? state?.percent == null
+      ? t('settings.update.downloading')
+      : t('settings.update.downloadPercent', { percent: updateDownloadPercent(state?.percent) })
+    : status === 'downloaded' ? t('settings.update.restart')
+    : status === 'installing' ? t('settings.update.restarting')
+    : updateAction?.label;
 
   return (
     <Card className="rounded-xl shadow-none" variant="tertiary">
       <Card.Header>
         <div className="flex w-full items-center justify-between gap-4">
-          <Card.Title>应用更新</Card.Title>
+          <Card.Title>{t('settings.update.title')}</Card.Title>
           <div className="flex shrink-0 items-center gap-2">
             <Button
               className="shrink-0"
@@ -550,7 +575,7 @@ function AutoUpdateSettings() {
               size="sm"
               variant="outline"
             >
-              检查更新
+              {t('settings.update.check')}
             </Button>
             {updateAction && (
               <Button
@@ -564,7 +589,7 @@ function AutoUpdateSettings() {
                 size="sm"
                 variant="primary"
               >
-                {updateAction.label}
+                {updateActionLabel}
               </Button>
             )}
           </div>
@@ -572,18 +597,18 @@ function AutoUpdateSettings() {
       </Card.Header>
       <Card.Content className="flex flex-col gap-3">
         <InfoRow
-          label="当前版本"
+          label={t('settings.update.current')}
           value={`v${state?.currentVersion ?? '—'}`}
         />
         {latestVersion && (
-          <InfoRow label="最新版本" value={`v${latestVersion}`} />
+          <InfoRow label={t('settings.update.latest')} value={`v${latestVersion}`} />
         )}
 
         {error && (
           <Alert status="danger">
             <Alert.Indicator />
             <Alert.Content>
-              <Alert.Title>更新失败</Alert.Title>
+              <Alert.Title>{t('settings.update.failed')}</Alert.Title>
               <Alert.Description>{error}</Alert.Description>
             </Alert.Content>
           </Alert>
@@ -591,7 +616,7 @@ function AutoUpdateSettings() {
 
         {message && status === 'available' ? (
           <p className="text-xs text-muted">
-            发现新版本，请到{' '}
+            {t('settings.update.portableHint')}{' '}
             <button
               className="text-[#1e80ff] underline-offset-2 hover:underline"
               onClick={() => {
@@ -599,9 +624,8 @@ function AutoUpdateSettings() {
               }}
               type="button"
             >
-              GitHub 发行版
+              {t('settings.update.releases')}
             </button>
-            {' '}下载便携版
           </p>
         ) : message ? (
           <p className="text-xs text-muted">{message}</p>

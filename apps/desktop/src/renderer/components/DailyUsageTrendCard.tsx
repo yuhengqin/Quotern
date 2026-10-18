@@ -1,5 +1,6 @@
 import { memo, useId, useMemo, useState } from 'react';
 import { Card } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   Area,
   Bar,
@@ -33,27 +34,27 @@ type TrendMetric = (typeof METRICS)[number];
 
 const CHART_CONFIG = {
   inputTokens: {
-    label: '输入',
+    label: 'usage.common.input',
     color: 'var(--chart-1)',
   },
   cachedInputTokens: {
-    label: '缓存输入',
+    label: 'usage.chart.cachedInput',
     color: 'var(--chart-3)',
   },
   outputTokens: {
-    label: '输出',
+    label: 'usage.common.output',
     color: 'var(--chart-2)',
   },
   otherTokens: {
-    label: '其他',
+    label: 'usage.common.other',
     color: 'var(--chart-6)',
   },
   totalTokens: {
-    label: '总 Token',
+    label: 'usage.common.totalTokens',
     color: 'var(--chart-4)',
   },
   costUsd: {
-    label: '费用',
+    label: 'usage.common.cost',
     color: 'var(--chart-5)',
   },
 } satisfies ChartConfig;
@@ -80,6 +81,10 @@ export const DailyUsageTrendCard = memo(function DailyUsageTrendCard({
   rangeDays?: number;
   rangeLabel?: string;
 }) {
+  const { t } = useTranslation();
+  const chartConfig = Object.fromEntries(
+    Object.entries(CHART_CONFIG).map(([key, value]) => [key, { ...value, label: t(value.label) }]),
+  ) as ChartConfig;
   const gradientId = useId().replace(/:/g, '');
   const [metric, setMetric] = useState<TrendMetric>('tokens');
 
@@ -93,14 +98,14 @@ export const DailyUsageTrendCard = memo(function DailyUsageTrendCard({
 
   const title = hourly
     ? dayScoped
-      ? '当日趋势'
-      : '今日趋势'
-    : '每日趋势';
+      ? t('usage.chart.dayTrend')
+      : t('usage.chart.todayTrend')
+    : t('usage.chart.dailyTrend');
   const description = hourly
     ? dayScoped
-      ? '当日按小时的 Token 与费用趋势'
-      : '今日按小时的 Token 与费用趋势'
-    : `${rangeLabel ?? `最近 ${rangeDays} 天`}的 Token 与费用趋势`;
+      ? t('usage.chart.dayDescription')
+      : t('usage.chart.todayDescription')
+    : t('usage.chart.rangeDescription', { range: rangeLabel ?? t('usage.range.lastDays', { count: rangeDays }) });
 
   return (
     <Card className={`${compact ? 'min-w-0 p-3' : 'h-full min-w-0'} overflow-hidden rounded-2xl ${className}`}>
@@ -112,7 +117,7 @@ export const DailyUsageTrendCard = memo(function DailyUsageTrendCard({
           </Card.Description>
         </div>
         <DashboardMetricTabs
-          ariaLabel={hourly ? '今日趋势指标' : '每日趋势指标'}
+          ariaLabel={t(hourly ? 'usage.chart.todayMetric' : 'usage.chart.dailyMetric')}
           metrics={METRICS}
           selectedMetric={metric}
           onMetricChange={setMetric}
@@ -122,12 +127,12 @@ export const DailyUsageTrendCard = memo(function DailyUsageTrendCard({
       <Card.Content className={compact ? 'px-0 pt-2 pb-0' : 'pt-3'}>
         {chartRows.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted">
-            暂无数据
+            {t('usage.common.noData')}
           </p>
         ) : (
           <ChartContainer
             className={`${compact ? 'h-40' : 'h-[260px]'} w-full`}
-            config={CHART_CONFIG}
+            config={chartConfig}
             initialDimension={{ width: 720, height: 260 }}
           >
             <ComposedChart
@@ -250,6 +255,7 @@ function DailyTrendTooltip({
   metric: TrendMetric;
   payload?: Array<{ payload?: UsageTrendChartPoint }>;
 }) {
+  const { t } = useTranslation();
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
 
@@ -274,23 +280,23 @@ function DailyTrendTooltip({
         <div className="grid gap-1.5 text-muted">
           <DailyTooltipRow
             color="var(--chart-1)"
-            label="输入"
+            label={t('usage.common.input')}
             value={formatTokens(point.inputTokens)}
           />
           <DailyTooltipRow
             color="var(--chart-3)"
-            label="缓存输入"
+            label={t('usage.chart.cachedInput')}
             value={formatTokens(point.cachedInputTokens)}
           />
           <DailyTooltipRow
             color="var(--chart-2)"
-            label="输出"
+            label={t('usage.common.output')}
             value={formatTokens(point.outputTokens)}
           />
           {point.otherTokens > 0 ? (
             <DailyTooltipRow
               color="var(--chart-6)"
-              label="其他"
+              label={t('usage.common.other')}
               value={formatTokens(point.otherTokens)}
             />
           ) : null}

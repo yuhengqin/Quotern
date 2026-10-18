@@ -8,6 +8,8 @@ export type {
 } from './local-metrics.js';
 
 export interface QueueBucket {
+  /** Local-only origin of token amounts. Omitted on unannotated historical rows. */
+  token_quality?: import('./token-quality.js').TokenQuality;
   /** Local-only request/cache evidence. Never uploaded. */
   local_metrics?: LocalMetricEvidence;
   hour_start: string;
@@ -33,6 +35,7 @@ export interface QueueBucket {
 }
 
 export interface TokenTotals {
+  token_quality?: import('./token-quality.js').TokenQuality;
   local_metrics?: LocalMetricEvidence;
   input_tokens: number;
   output_tokens: number;
@@ -85,6 +88,10 @@ export interface ClaudeFileCursor {
 }
 
 export interface CodexFileCursor {
+  /** Physical encoding/stamp; offsets always refer to decoded JSONL bytes. */
+  encoding?: 'jsonl' | 'zst';
+  physicalSize?: number;
+  mtimeMs?: number;
   /** Last cumulative snapshot, used to ignore repeated usage notifications. */
   lastUsageSnapshot?: string;
   inode: number;
@@ -138,6 +145,9 @@ export interface CursorsFile {
     seenUsage?: Record<string, TokenTotals>;
   };
   codex?: {
+    /** Forces one replay when adding compaction support to old byte cursors. */
+    meteringVersion?: 2;
+    compactions?: import('./parsers/codex-compaction.js').CodexCompactionState;
     files: Record<string, CodexFileCursor>;
     sessionIndex?: Record<string, CodexSessionIndexEntry>;
     seenHashes?: string[];
@@ -146,6 +156,8 @@ export interface CursorsFile {
      * (precise JSONL rows plus any ledger gap). Missing on older cursors.
      */
     ledgerTotals?: Record<string, { tokens: number }>;
+    /** Actual ledger readings, separate from the combined reported watermark. */
+    ledgerReadings?: Record<string, number>;
     /** mtimeMs of each `state_*.sqlite` last read. */
     dbMtimes?: Record<string, number>;
   };

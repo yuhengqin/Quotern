@@ -7,21 +7,9 @@ import { localDateNow } from 'quotern-core/timezone';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
 import { isLocalRuntimeSyncing, localApiRequest, onLocalRuntimeSyncActivity, onLocalRuntimeSynced } from './local-runtime';
 import { PetCatalog } from './pet-catalog';
-import { collectPetLimits } from './pet-limits';
-import { readCodexSubscription } from './codex-subscription';
-import { readClaudeSubscription } from './claude-subscription';
-import { readCursorSubscription } from './cursor-subscription';
-import { readCopilotSubscription } from './copilot-subscription';
-import { readGrokSubscription } from './grok-subscription';
-import { readKimiSubscriptions } from './kimi-subscription';
-import { readZcodeSubscription } from './zcode-subscription';
-import { readAntigravitySubscription } from './antigravity-subscription';
-import { readQoderSubscription } from './qoder-subscription';
-import { readMiniMaxSubscription } from './minimax-subscription';
-import { readDeepSeekSubscription } from './deepseek-subscription';
-import { readOpenCodeSubscription } from './opencode-subscription';
-import { readTraeSubscription } from './trae-subscription';
-import { readWorkBuddySubscription } from './workbuddy-subscription';
+import type { QuotaState } from '../shared/quota';
+import type { SupportedLocale } from 'quotern-i18n';
+import { NATIVE_MESSAGES, nativeText, type NativeMessageKey } from './native-messages';
 import {
   clampPetBounds,
   DEFAULT_PET_SETTINGS,
@@ -54,7 +42,6 @@ const CURSOR_POLL_MS = 50;
 const IDLE_SLEEP_MS = 60_000;
 const EDGE_ANIMATION_MS = 200;
 const DATA_REFRESH_MS = 60_000;
-const LIMIT_REFRESH_MS = 5 * 60_000;
 
 function dataFromResponse(value: { status: number; body: unknown }): Record<string, unknown> {
   const body = value.body && typeof value.body === 'object' ? value.body as Record<string, unknown> : {};
@@ -88,12 +75,10 @@ export class PetController {
   private cursorTimer: ReturnType<typeof setInterval> | null = null;
   private edgeTimer: ReturnType<typeof setInterval> | null = null;
   private dataTimer: ReturnType<typeof setInterval> | null = null;
-  private limitTimer: ReturnType<typeof setInterval> | null = null;
   private lastCursor: Point | null = null;
   private lastCursorMoveAt = Date.now();
   private sleeping = false;
   private refreshing = false;
-  private refreshingLimits = false;
   private refreshAgain = false;
   private lastStatsDate = '';
   private settingsQueue: Promise<unknown> = Promise.resolve();
@@ -106,7 +91,13 @@ export class PetController {
     isMainWindowVisible: () => boolean;
     openSettings: () => void;
     getDark: () => boolean;
+    getLocale: () => SupportedLocale;
+    getQuotaState?: () => QuotaState | null;
   }) {}
+
+  private t(key: NativeMessageKey): string {
+    return nativeText(this.options.getLocale(), key);
+  }
 
   private settingsPath(): string {
     return path.join(app.getPath('userData'), 'pet-settings.json');
@@ -234,7 +225,7 @@ export class PetController {
       maximizable: false,
       fullscreenable: false,
       autoHideMenuBar: true,
-      title: 'Quotern 桌面宠物',
+      title: this.t('native.pet.title'),
       icon: resolveAppIconPath(),
       webPreferences: { preload: defaultPreloadPath(), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
@@ -333,16 +324,16 @@ export class PetController {
   }
 
   private async setSettings(patch: unknown): Promise<PetState> {
-    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('无效的宠物设置');
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error(this.t('native.pet.invalidSettings'));
     const input = patch as PetSettingPatch;
     const keys = Object.keys(input);
-    if (keys.some(key => !['visible', 'character', 'size', 'botColor'].includes(key))) throw new Error('不支持的宠物设置');
-    if (input.visible !== undefined && typeof input.visible !== 'boolean') throw new Error('无效的显示设置');
-    if (input.character !== undefined && (typeof input.character !== 'string' || !PET_ID_RE.test(input.character))) throw new Error('无效的角色');
-    if (input.size !== undefined && !['small', 'medium', 'large'].includes(input.size)) throw new Error('无效的尺寸');
-    if (input.botColor !== undefined && !['auto', 'bleu', 'turquoise', 'vert', 'ambre', 'rose', 'violet'].includes(input.botColor)) throw new Error('无效的颜色');
+    if (keys.some(key => !['visible', 'character', 'size', 'botColor'].includes(key))) throw new Error(this.t('native.pet.unsupportedSettings'));
+    if (input.visible !== undefined && typeof input.visible !== 'boolean') throw new Error(this.t('native.pet.invalidVisibility'));
+    if (input.character !== undefined && (typeof input.character !== 'string' || !PET_ID_RE.test(input.character))) throw new Error(this.t('native.pet.invalidCharacter'));
+    if (input.size !== undefined && !['small', 'medium', 'large'].includes(input.size)) throw new Error(this.t('native.pet.invalidSize'));
+    if (input.botColor !== undefined && !['auto', 'bleu', 'turquoise', 'vert', 'ambre', 'rose', 'violet'].includes(input.botColor)) throw new Error(this.t('native.pet.invalidColor'));
     const run = this.settingsQueue.then(async () => {
-      if (input.character && !this.state.catalog.some(pet => pet.id === input.character)) throw new Error('角色已不存在');
+      if (input.character && !this.state.catalog.some(pet => pet.id === input.character)) throw new Error(this.t('native.pet.characterGone'));
       const previousVisible = this.settings.visible;
       this.settings = normalizePetSettings({ ...this.settings, ...input });
       this.state.settings = { ...this.settings };
@@ -362,20 +353,20 @@ export class PetController {
     if (!w || w.isDestroyed()) return;
     const size = this.settings.size;
     const menu = Menu.buildFromTemplate([
-      { label: this.options.isMainWindowVisible() ? '关闭 Quotern' : '打开 Quotern', click: this.options.toggleMainWindow },
-      { label: '同步数据', click: () => void this.triggerSync() },
+      { label: this.t(this.options.isMainWindowVisible() ? 'native.pet.closeMain' : 'native.pet.openMain'), click: this.options.toggleMainWindow },
+      { label: this.t('native.tray.sync'), click: () => void this.triggerSync() },
       { type: 'separator' },
-      { label: '大小', submenu: (['small', 'medium', 'large'] as const).map((value, index) => ({
-        label: ['小', '中', '大'][index]!, type: 'radio' as const, checked: size === value,
+      { label: this.t('native.pet.size'), submenu: (['small', 'medium', 'large'] as const).map((value) => ({
+        label: this.t(`native.pet.${value}`), type: 'radio' as const, checked: size === value,
         click: () => this.setSettingsFromMenu({ size: value }),
       })) },
-      { label: '角色', submenu: this.state.catalog.map(pet => ({
+      { label: this.t('native.pet.character'), submenu: this.state.catalog.map(pet => ({
         label: pet.displayName, type: 'radio' as const, checked: this.settings.character === pet.id,
         click: () => this.setSettingsFromMenu({ character: pet.id }),
       })) },
       { type: 'separator' },
-      { label: '宠物设置', click: this.options.openSettings },
-      { label: '隐藏宠物', click: () => this.setSettingsFromMenu({ visible: false }) },
+      { label: this.t('native.pet.settings'), click: this.options.openSettings },
+      { label: this.t('native.pet.hide'), click: () => this.setSettingsFromMenu({ visible: false }) },
     ]);
     menu.popup({ window: w });
   }
@@ -514,52 +505,31 @@ export class PetController {
   }
 
   private async refreshLimits(): Promise<void> {
-    if (!this.settings.visible || this.refreshingLimits) return;
-    this.refreshingLimits = true;
-    const readers: Record<string, Promise<unknown>> = {
-      codex: readCodexSubscription(),
-      claude: readClaudeSubscription(),
-      cursor: readCursorSubscription(),
-      copilot: readCopilotSubscription(),
-      grok: readGrokSubscription(),
-      kimi: readKimiSubscriptions(),
-      zcode: readZcodeSubscription(),
-      antigravity: readAntigravitySubscription(),
-      qoder: readQoderSubscription(),
-      minimax: readMiniMaxSubscription(),
-      deepseek: readDeepSeekSubscription(),
-      opencode: readOpenCodeSubscription(),
-      traeGlobal: readTraeSubscription('global'),
-      traeCn: readTraeSubscription('mainland'),
-      workbuddyGlobal: readWorkBuddySubscription('global'),
-      workbuddyMainland: readWorkBuddySubscription('mainland'),
-    };
-    try {
-      const pairs = await Promise.all(Object.entries(readers).map(async ([key, promise]) => [key, await promise.catch(() => null)] as const));
-      const snapshots = Object.fromEntries(pairs) as Record<string, unknown>;
-      const kimi = Array.isArray(snapshots.kimi) ? snapshots.kimi as Array<{ source?: string }> : [];
-      snapshots.kimiCode = kimi.find(item => item.source === 'code');
-      snapshots.kimiDesktop = kimi.find(item => item.source === 'desktop');
-      this.state.limits = collectPetLimits(snapshots);
-      this.broadcast();
-    } catch (error) {
-      console.debug('[tud-desktop] pet limits refresh failed:', error);
-    } finally { this.refreshingLimits = false; }
+    const state = this.options.getQuotaState?.();
+    if (state) this.updateQuotaState(state);
+  }
+
+  updateQuotaState(state: QuotaState): void {
+    this.state.limits = state.providers.filter(provider => provider.status === 'ready' && !provider.stale)
+      .flatMap(provider => provider.windows.filter(window => window.analysisEligible !== false && window.usedPercent > 0 && window.usedPercent < 100)
+        .map(window => ({ provider: provider.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), usedPercent: window.usedPercent, resetAt: window.resetsAt })))
+      .sort((a, b) => b.usedPercent - a.usedPercent);
+    this.broadcast();
   }
 
   private async handleCatalog(request: PetCatalogRequest): Promise<unknown> {
-    if (!request || typeof request !== 'object') throw new Error('无效的宠物操作');
+    if (!request || typeof request !== 'object') throw new Error(this.t('native.pet.invalidOperation'));
     if (request.action === 'list-codex') return this.catalog.listCodex();
     let importedPet: PetCatalogEntry | undefined;
     if (request.action === 'import-zip') {
-      const result = await dialog.showOpenDialog({ title: '导入桌面宠物', properties: ['openFile'], filters: [{ name: '宠物 ZIP', extensions: ['zip'] }] });
+      const result = await dialog.showOpenDialog({ title: this.t('native.pet.import'), properties: ['openFile'], filters: [{ name: this.t('native.pet.zipFilter'), extensions: ['zip'] }] });
       if (result.canceled || !result.filePaths[0]) return { canceled: true };
       const file = result.filePaths[0];
       const fs = await import('node:fs/promises');
-      if ((await fs.stat(file)).size > 12 * 1024 * 1024) throw new Error('宠物 ZIP 超过 12 MB');
+      if ((await fs.stat(file)).size > 12 * 1024 * 1024) throw new Error(this.t('native.pet.zipTooLarge'));
       importedPet = await this.catalog.installZip(await fs.readFile(file));
     } else if (request.action === 'install-url') {
-      if (typeof request.url !== 'string') throw new Error('无效的下载地址');
+      if (typeof request.url !== 'string') throw new Error(this.t('native.pet.invalidUrl'));
       importedPet = await this.catalog.installFromUrl(request.url);
     } else if (request.action === 'import-codex') {
       await this.catalog.importCodex(request.ids);
@@ -568,7 +538,7 @@ export class PetController {
     } else if (request.action === 'restore-builtins') {
       await this.catalog.restoreBuiltins();
     } else {
-      throw new Error('不支持的宠物操作');
+      throw new Error(this.t('native.pet.unsupportedOperation'));
     }
     this.state.catalog = await this.catalog.list();
     if (!this.state.catalog.some(pet => pet.id === this.settings.character)) await this.setSettings({ character: 'clawd' });
@@ -582,7 +552,7 @@ export class PetController {
     catch { this.settings = { ...DEFAULT_PET_SETTINGS }; }
     this.state.settings = { ...this.settings };
     this.state.dark = this.options.getDark();
-    this.state.locale = app.getLocale();
+    this.state.locale = this.options.getLocale();
     this.state.syncing = isLocalRuntimeSyncing();
     this.state.catalog = await this.catalog.list();
     if (!this.state.catalog.some(pet => pet.id === this.settings.character)) this.settings.character = 'clawd';
@@ -597,7 +567,15 @@ export class PetController {
     ipcMain.removeHandler(PET_CATALOG_CHANNEL);
     ipcMain.handle(PET_CATALOG_CHANNEL, async (_event, request: PetCatalogRequest) => {
       try { return { ok: true, data: await this.handleCatalog(request) }; }
-      catch (error) { return { ok: false, error: error instanceof Error ? error.message : '宠物操作失败' }; }
+      catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        const locale = this.options.getLocale();
+        // Catalog validation still throws some diagnostic Chinese messages.
+        // Do not expose those raw strings when another language is selected.
+        return { ok: false, error: locale === 'zh-CN' || Object.values(NATIVE_MESSAGES[locale]).includes(message)
+          ? (message || this.t('native.pet.operationFailed'))
+          : this.t('native.pet.operationFailed') };
+      }
     });
     ipcMain.removeAllListeners(PET_COMMAND_CHANNEL);
     ipcMain.on(PET_COMMAND_CHANNEL, (event, raw) => this.handleCommand(event, raw));
@@ -610,7 +588,6 @@ export class PetController {
       this.broadcast();
     });
     this.dataTimer = setInterval(() => void this.refreshData(), DATA_REFRESH_MS);
-    this.limitTimer = setInterval(() => void this.refreshLimits(), LIMIT_REFRESH_MS);
     if (this.settings.visible) this.setVisible(true);
     this.broadcast();
     void this.refreshData();
@@ -618,6 +595,13 @@ export class PetController {
 
   setDark(dark: boolean): void {
     this.state.dark = dark;
+    this.broadcast();
+  }
+
+  setLocale(locale: SupportedLocale): void {
+    if (this.state.locale === locale) return;
+    this.state.locale = locale;
+    if (this.window && !this.window.isDestroyed()) this.window.setTitle(this.t('native.pet.title'));
     this.broadcast();
   }
 
@@ -630,8 +614,6 @@ export class PetController {
     this.stopEdgeAnimation();
     if (this.dataTimer) clearInterval(this.dataTimer);
     this.dataTimer = null;
-    if (this.limitTimer) clearInterval(this.limitTimer);
-    this.limitTimer = null;
     this.unsubscribeSync?.();
     this.unsubscribeSync = null;
     this.unsubscribeSyncActivity?.();

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   traeRemainingPercent,
   type TraeRegion,
@@ -25,6 +26,7 @@ interface TraeSubscriptionCardProps {
 
 /** Compact TRAE IDE entitlement summary for macOS desktop surfaces. */
 export function TraeSubscriptionCard({ region, title, fetcher }: TraeSubscriptionCardProps) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<TraeSubscriptionSnapshot>({
     ...INITIAL_SNAPSHOT,
     region,
@@ -38,12 +40,12 @@ export function TraeSubscriptionCard({ region, title, fetcher }: TraeSubscriptio
     try {
       setSnapshot(await fetcher());
     } catch {
-      setSnapshot({ ...INITIAL_SNAPSHOT, region, message: '暂时无法读取 TRAE 订阅信息' });
+      setSnapshot({ ...INITIAL_SNAPSHOT, region, message: t('desktop.provider.readSubscription', { provider: 'TRAE' }) });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, [fetcher, region]);
+  }, [fetcher, region, t]);
 
   useEffect(() => {
     void reload();
@@ -58,7 +60,11 @@ export function TraeSubscriptionCard({ region, title, fetcher }: TraeSubscriptio
         icon: <SubscriptionBrandIcon brand="trae" />,
         metrics: snapshot.limits.map((limit, index) => ({
           color: ['#7dcf00', '#2b7eff', '#f59e0b'][index] ?? '#2b7eff',
-          label: limit.label,
+          label: limit.id === 'basic'
+            ? t('desktop.provider.metric.basic')
+            : limit.id === 'bonus'
+              ? t('desktop.provider.metric.bonus')
+              : t('desktop.provider.metric.extra'),
           remainingPercent: traeRemainingPercent(limit.usedPercent),
           resetsAt: limit.resetsAt,
         })),

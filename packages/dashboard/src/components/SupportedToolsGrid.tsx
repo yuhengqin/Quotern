@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown } from '@gravity-ui/icons';
 import { Button } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
   SUPPORTED_TOOLS,
@@ -39,6 +40,7 @@ export function SupportedToolsGrid({
   className?: string;
   collapsible?: boolean;
 }) {
+  const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const showAll = !collapsible || expanded;
 
@@ -58,8 +60,10 @@ export function SupportedToolsGrid({
           variant="tertiary"
         >
           {expanded
-            ? '收起'
-            : `查看全部（${SUPPORTED_TOOLS.length}）`}
+            ? t('install.collapseTools')
+            : t('install.showAllTools', {
+                total: new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language).format(SUPPORTED_TOOLS.length),
+              })}
           <ChevronDown
             aria-hidden="true"
             className={cn(

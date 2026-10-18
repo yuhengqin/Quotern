@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
+const outputDir = process.env.QUOTERN_CLI_TEST_DIST ?? '../dist';
+const {
   formatListenUrl,
   formatSyncSourceList,
   normalizeListenHost,
   normalizeListenPort,
   parseArgs,
   resolveSyncSource,
-} from '../dist/args.js';
+} = await import(`${outputDir}/args.js`);
 
 test('parseArgs reads --host and --port without defaulting them', () => {
   const parsed = parseArgs(['node', 'quotern', 'start', '--host', '0.0.0.0', '--port', '9000']);
@@ -35,6 +36,12 @@ test('parseArgs leaves host/port unset when omitted', () => {
   assert.equal(parsed.port, undefined);
 });
 
+test('isolated dev launcher ownership marker does not become a user option', () => {
+  const parsed = parseArgs(['node', 'quotern', 'start', '--port', '8453', '--quotern-dev-instance', 'session-123']);
+  assert.equal(parsed.command, 'start');
+  assert.equal(parsed.port, 8453);
+});
+
 test('quotern --host 0.0.0.0 is treated as start', () => {
   const parsed = parseArgs(['node', 'quotern', '--host', '0.0.0.0']);
   assert.equal(parsed.command, 'start');
@@ -50,25 +57,25 @@ test('service start keeps --host', () => {
 
 test('normalizeListenHost rejects empty or path-like values', () => {
   assert.equal(normalizeListenHost(' 0.0.0.0 '), '0.0.0.0');
-  assert.throws(() => normalizeListenHost(''), /不能为空/);
-  assert.throws(() => normalizeListenHost('0.0.0.0/foo'), /无效/);
+  assert.throws(() => normalizeListenHost('', 'zh-CN'), /不能为空/);
+  assert.throws(() => normalizeListenHost('0.0.0.0/foo', 'zh-CN'), /无效/);
 });
 
 test('parseArgs throws when --host has no value', () => {
-  assert.throws(() => parseArgs(['node', 'quotern', 'start', '--host']), /需要地址/);
+  assert.throws(() => parseArgs(['node', 'quotern', 'start', '--host', '--lang', 'zh-CN']), /需要地址/);
 });
 
 test('normalizeListenPort accepts only valid TCP port integers', () => {
   assert.equal(normalizeListenPort('8452'), 8452);
-  assert.throws(() => normalizeListenPort('abc'), /无效的 --port/);
-  assert.throws(() => normalizeListenPort('1.5'), /无效的 --port/);
-  assert.throws(() => normalizeListenPort('0'), /无效的 --port/);
-  assert.throws(() => normalizeListenPort('65536'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('abc', 'zh-CN'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('1.5', 'zh-CN'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('0', 'zh-CN'), /无效的 --port/);
+  assert.throws(() => normalizeListenPort('65536', 'zh-CN'), /无效的 --port/);
 });
 
 test('parseArgs rejects a missing --port value without consuming the next flag', () => {
   assert.throws(
-    () => parseArgs(['node', 'quotern', 'start', '--port', '--host', '0.0.0.0']),
+    () => parseArgs(['node', 'quotern', 'start', '--port', '--host', '0.0.0.0', '--lang', 'zh-CN']),
     /--port 需要端口号/,
   );
 });
@@ -103,8 +110,8 @@ test('resolveSyncSource normalizes case and aliases', () => {
 });
 
 test('resolveSyncSource rejects unknown sources with the valid list', () => {
-  assert.throws(() => resolveSyncSource('cluade'), /未知的数据源: cluade/);
-  assert.throws(() => resolveSyncSource('cluade'), /claude/);
+  assert.throws(() => resolveSyncSource('cluade', 'zh-CN'), /未知的数据源: cluade/);
+  assert.throws(() => resolveSyncSource('cluade', 'zh-CN'), /claude/);
 });
 
 test('help source list comes from the registry and keeps all + dsh', () => {

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
+import type { SupportedLocale } from 'quotern-i18n';
 import {
   DASHBOARD_RANGE_DAYS,
   DashboardFilter,
@@ -8,6 +10,7 @@ import {
 } from '@/components/DashboardFilter';
 import { DashboardLoadingSkeleton } from '@/components/DashboardLoadingSkeleton';
 import { DashboardOverviewCard } from '@/components/DashboardOverviewCard';
+import { SessionActivityPanel } from '@/components/SessionActivityPanel';
 import { DashboardRangeSyncOverlay } from '@/components/DashboardRangeSyncOverlay';
 import { DailyUsageTrendCard } from '@/components/DailyUsageTrendCard';
 import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
@@ -19,11 +22,13 @@ import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useCostExplanation } from '@/hooks/useCostExplanation';
 import { useSessionMetrics } from '@/hooks/useSessionMetrics';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { projectDashboardForDate } from '@/lib/dashboard-data';
 import { scheduleAfterPaint } from '@/lib/schedule-after-paint';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { getDashboardReturnState, rememberDashboardScroll, useDashboardReturnState } from '../../../../../packages/dashboard/src/lib/dashboard-return-state';
 import { localDateNow } from '@/lib/stats-timezone';
 import { dateRangeDays, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { sourceLabel } from '@/lib/tokens';
@@ -40,7 +45,6 @@ import {
 } from '@/lib/usage-filter';
 import { isCliBackend, LOCAL_RUNTIME_RECOVERING_HINT } from '@/lib/api';
 import {
-  DASHBOARD_RANGE_LABELS,
   DEFAULT_DASHBOARD_RANGE,
   isDashboardRange,
 } from '../../shared/dashboard-range';
@@ -64,6 +68,8 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 
 /** HeroUI dashboard backed by the same usage dataset as the root route. */
 export function DashboardPage() {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [range, setRange] = useLocalStorage<DashboardRange>(
     'tud.dashboardRange',
     DEFAULT_DASHBOARD_RANGE,
@@ -72,12 +78,12 @@ export function DashboardPage() {
   useEffect(() => {
     void window.tud.setDashboardRange(range);
   }, [range]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => getDashboardReturnState()?.selectedDate ?? null);
   const [customRange, setCustomRange] = useLocalStorage<DashboardDateRange | null>(
     'tud.dashboardCustomRange', null,
     (value): value is DashboardDateRange | null => value === null || isDashboardDateRange(value),
   );
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [selectedTools, setSelectedTools] = useState<string[]>(() => getDashboardReturnState()?.selectedTools ?? []);
 
   useEffect(
     () =>
@@ -93,7 +99,9 @@ export function DashboardPage() {
   const rangeDays = customRange ? dateRangeDays(customRange) : DASHBOARD_RANGE_DAYS[dataRange];
   const { data, error, loading, refreshing, reload } =
     useDashboardData(rangeDays, selectedDate, customRange);
+  useDashboardReturnState(selectedDate, selectedTools, loading);
   const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing);
+  const costExplanation = useCostExplanation(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing && range === dataRange, data);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
@@ -101,19 +109,22 @@ export function DashboardPage() {
   const dayScoped = selectedDate != null || Boolean(customRange && rangeDays === 1 && customRange.end !== localDateNow());
   const isHourly = dayScoped || rangeDays === 1;
   const shareRangeLabel = selectedDate
-    ? formatFilterDayLabel(selectedDate)
-    : customRange ? formatDashboardDateRange(customRange) : DASHBOARD_RANGE_LABELS[range];
+    ? formatFilterDayLabel(selectedDate, locale)
+    : customRange ? formatDashboardDateRange(customRange)
+      : range === 'today' ? t('usage.range.today')
+        : t('usage.range.lastDays', { count: DASHBOARD_RANGE_DAYS[range] });
   const shareToolLabel = selectedTools.length > 0
-    ? selectedTools.map(sourceLabel).join('、')
-    : '全部 Agent';
+    ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedTools.map(sourceLabel))
+    : t('usage.filter.allAgents');
 
   useEffect(() => {
+    if (loading) return;
     const available = new Set(view.toolModelUsage.map((row) => row.source));
     setSelectedTools((current) => {
       const next = current.filter((source) => available.has(source));
       return next.length === current.length ? current : next;
     });
-  }, [view.toolModelUsage]);
+  }, [loading, view.toolModelUsage]);
 
   useEffect(() => {
     let timer = 0;
@@ -180,9 +191,9 @@ export function DashboardPage() {
     : visibleTrendRows.dailyRows;
   const metricTrendPeriodLabel = isHourly
     ? dayScoped
-      ? '当日小时'
-      : '今日小时'
-    : customRange ? formatDashboardDateRange(customRange) : `近 ${rangeDays} 日`;
+      ? t('usage.range.dayHours')
+      : t('usage.range.todayHours')
+    : customRange ? formatDashboardDateRange(customRange) : t('usage.range.lastDaysShort', { count: rangeDays });
   const visibleProjectRows = useMemo(
     () => filterProjectRowsBySources(view.projectModelUsage, selectedTools),
     [selectedTools, view.projectModelUsage],
@@ -290,6 +301,10 @@ export function DashboardPage() {
     <div
       aria-busy={loading || refreshing}
       className="dashboard-page flex w-full flex-col"
+      onClickCapture={(event) => {
+        const href = (event.target as Element).closest('a[href]')?.getAttribute('href');
+        if (href && /\/(pricing|achievements)(?:[?#]|$)/.test(href)) rememberDashboardScroll(selectedDate, selectedTools);
+      }}
     >
       <DashboardFilter
         customRange={customRange}
@@ -304,16 +319,16 @@ export function DashboardPage() {
       {selectedDate && (
         <div className="mb-4">
           <Chip className="gap-1.5" size="sm" variant="soft">
-            <Chip.Label>当前筛选：{formatFilterDayLabel(selectedDate)}</Chip.Label>
+            <Chip.Label>{t('usage.page.filteredDate', { date: formatFilterDayLabel(selectedDate, locale) })}</Chip.Label>
             <Button
-              aria-label="清除日期筛选"
+              aria-label={t('usage.page.clearDate')}
               className="h-5 min-w-0 gap-0.5 px-1.5 text-xs"
               size="sm"
               variant="ghost"
               onPress={() => setSelectedDate(null)}
             >
               <Xmark className="size-3.5" />
-              清除
+              {t('usage.page.clear')}
             </Button>
           </Chip>
         </div>
@@ -323,12 +338,10 @@ export function DashboardPage() {
         <div className="mb-4">
           <StatusBanner
             description={
-              error === LOCAL_RUNTIME_RECOVERING_HINT ? undefined : usageErrorDescription(error)
+              error === LOCAL_RUNTIME_RECOVERING_HINT ? undefined : usageErrorDescription(error, locale)
             }
             title={
-              error === LOCAL_RUNTIME_RECOVERING_HINT
-                ? LOCAL_RUNTIME_RECOVERING_HINT
-                : usageErrorTitle(error)
+              usageErrorTitle(error, locale)
             }
             tone="warn"
           />
@@ -344,6 +357,9 @@ export function DashboardPage() {
         <div className="relative isolate min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
+            costReport={costExplanation.report}
+            costExplanationLoading={costExplanation.loading}
+            costExplanationError={costExplanation.error}
             belowMetrics={
               <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />
             }
@@ -358,9 +374,10 @@ export function DashboardPage() {
             summary={visibleSummary}
             sessionMetrics={sessionMetrics}
           />
+          <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section
-            aria-label="用量图表"
+            aria-label={t('usage.page.charts')}
             className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2"
           >
             <TokenUsageTrendCard
@@ -390,14 +407,14 @@ export function DashboardPage() {
             />
             */}
             <UsageDistributionCard
-              description="按 Agent 查看用量占比"
+              description={t('usage.page.agentDistributionDesc')}
               rows={visibleDistributions.tools}
-              title="Agent 分布"
+              title={t('usage.page.agentDistribution')}
             />
             <UsageDistributionCard
-              description="按模型查看 Token 与费用占比"
+              description={t('usage.page.modelDistributionDesc')}
               rows={visibleDistributions.models}
-              title="模型分布"
+              title={t('usage.page.modelDistribution')}
             />
           </section>
         </div>
@@ -407,7 +424,8 @@ export function DashboardPage() {
 }
 
 /** `YYYY-MM-DD` → `X月X日` (UTC calendar parts, same as heatmap cells). */
-function formatFilterDayLabel(date: string): string {
-  const [, month = '1', day = '1'] = date.slice(0, 10).split('-');
-  return `${Number(month)}月${Number(day)}日`;
+function formatFilterDayLabel(date: string, locale: SupportedLocale): string {
+  return new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${date.slice(0, 10)}T00:00:00Z`),
+  );
 }

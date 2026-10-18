@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   workBuddyRemainingPercent,
   type WorkBuddyRegion,
@@ -25,6 +26,7 @@ interface WorkBuddySubscriptionCardProps {
 
 /** Compact WorkBuddy account resource summary for macOS desktop surfaces. */
 export function WorkBuddySubscriptionCard({ region, title, fetcher }: WorkBuddySubscriptionCardProps) {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<WorkBuddySubscriptionSnapshot>({
     ...INITIAL_SNAPSHOT,
     region,
@@ -38,12 +40,12 @@ export function WorkBuddySubscriptionCard({ region, title, fetcher }: WorkBuddyS
     try {
       setSnapshot(await fetcher());
     } catch {
-      setSnapshot({ ...INITIAL_SNAPSHOT, region, message: '暂时无法读取 WorkBuddy 订阅信息' });
+      setSnapshot({ ...INITIAL_SNAPSHOT, region, message: t('desktop.provider.readSubscription', { provider: 'WorkBuddy' }) });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, [fetcher, region]);
+  }, [fetcher, region, t]);
 
   useEffect(() => {
     void reload();
@@ -58,7 +60,7 @@ export function WorkBuddySubscriptionCard({ region, title, fetcher }: WorkBuddyS
         icon: <SubscriptionBrandIcon brand="workbuddy" />,
         metrics: snapshot.limits.slice(0, 2).map((limit, index) => ({
           color: index === 0 && snapshot.limits.length > 1 ? '#7dcf00' : '#2b7eff',
-          label: workBuddyLabel(region, limit.label),
+          label: workBuddyLabel(limit.label, t),
           remainingPercent: workBuddyRemainingPercent(limit.usedPercent),
           resetsAt: limit.resetsAt,
         })),
@@ -71,14 +73,9 @@ export function WorkBuddySubscriptionCard({ region, title, fetcher }: WorkBuddyS
   );
 }
 
-function workBuddyLabel(region: WorkBuddyRegion, label: string): string {
+function workBuddyLabel(label: string, t: ReturnType<typeof useTranslation>['t']): string {
   const normalized = label.toLowerCase();
-  if (region === 'global') {
-    if (normalized === 'credits' || normalized === '积分') return 'Credits';
-    if (normalized === 'bonus' || normalized === '赠送') return 'Bonus';
-    return label;
-  }
-  if (normalized === 'credits') return '积分';
-  if (normalized === 'bonus') return '赠送';
+  if (normalized === 'credits' || normalized === '积分') return t('desktop.provider.metric.credits');
+  if (normalized === 'bonus' || normalized === '赠送') return t('desktop.provider.metric.bonus');
   return label;
 }

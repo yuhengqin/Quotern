@@ -18,7 +18,7 @@ test('maps current Copilot Free credits and inline suggestions, preferring its S
     planLabel: 'Free',
     limits: [
       { id: 'chat', label: '额度', remainingPercent: 100, unlimited: false, resetsAt: 1_790_812_800 },
-      { id: 'completions', label: '内联建议', remainingPercent: 98.3, unlimited: false, resetsAt: 1_790_812_800 },
+      { id: 'completions', label: '代码补全', remainingPercent: 98.3, unlimited: false, resetsAt: 1_790_812_800 },
     ],
   });
 });
@@ -39,7 +39,7 @@ test('paid credit plans use premium interactions and their own reset timestamp',
   });
 });
 
-test('legacy paid plans expose premium requests and omit unlimited base features', () => {
+test('legacy paid plans retain explicitly unlimited base features alongside premium requests', () => {
   assert.deepEqual(mapCopilotSubscription({
     copilot_plan: 'business',
     quota_reset_date: '2026-10-01',
@@ -50,8 +50,20 @@ test('legacy paid plans expose premium requests and omit unlimited base features
     },
   }), {
     planLabel: 'Business',
-    limits: [{ id: 'premium_interactions', label: '高级请求', remainingPercent: 80, unlimited: false, resetsAt: 1_790_812_800 }],
+    limits: [
+      { id: 'chat', label: '聊天消息', remainingPercent: null, unlimited: true, resetsAt: 1_790_812_800 },
+      { id: 'premium_interactions', label: '高级请求', remainingPercent: 80, unlimited: false, resetsAt: 1_790_812_800 },
+      { id: 'completions', label: '代码补全', remainingPercent: null, unlimited: true, resetsAt: 1_790_812_800 },
+    ],
   });
+});
+
+test('credit plans retain explicit unlimited completions without assuming chat is unlimited', () => {
+  const snapshot = { copilot_plan: 'individual_pro', token_based_billing: true, quota_snapshots: {
+    premium_interactions: { percent_remaining: 60 }, completions: { unlimited: true },
+  } };
+  assert.deepEqual(mapCopilotSubscription(snapshot).limits.map(row => [row.id, row.unlimited]), [['premium_interactions', false], ['completions', true]]);
+  assert.deepEqual(mapCopilotSubscription({ ...snapshot, quota_snapshots: { ...snapshot.quota_snapshots, completions: { unlimited: true, has_quota: false } } }).limits[1].exhausted, true);
 });
 
 test('unlimited quotas carry no fake percentage and report exhausted organization pools', () => {

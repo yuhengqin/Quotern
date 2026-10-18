@@ -1,9 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
+import { translate, type SupportedLocale } from 'quotern-i18n';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { DashboardSessionCards } from '@/components/DashboardSessionCards';
-import type { SessionMetrics } from 'quotern-core';
+import type { SessionMetrics, UsageReport } from 'quotern-core';
+import { CostExplanationLabel } from '@/components/CostExplanationLabel';
+import { TokenSourceDetails } from '@/components/TokenSourceDetails';
 import {
   buildUsageMetricTrendValues,
   type UsageMetricTrendPoint,
@@ -23,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { AchievementActivityLink } from '../achievements/AchievementEntry';
 
 interface DashboardOverviewCardProps {
+  belowMetrics?: ReactNode;
   /** Ordered hourly or daily buckets for the selected dashboard range. */
   metricTrendRows: readonly UsageMetricTrendPoint[];
   metricTrendPeriodLabel: string;
@@ -35,10 +40,14 @@ interface DashboardOverviewCardProps {
   onSelectDate?: (date: string) => void;
   /** Local CLI/Desktop only: show request count + cache hit captions. */
   showLocalMetrics?: boolean;
+  costReport?: UsageReport | null;
+  costExplanationLoading?: boolean;
+  costExplanationError?: boolean;
 }
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
 export function DashboardOverviewCard({
+  belowMetrics,
   metricTrendRows,
   metricTrendPeriodLabel,
   heatmapDays,
@@ -49,35 +58,46 @@ export function DashboardOverviewCard({
   selectedDate = null,
   onSelectDate,
   showLocalMetrics = false,
+  costReport = null,
+  costExplanationLoading = false,
+  costExplanationError = false,
 }: DashboardOverviewCardProps) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const metricTrendValues = useMemo(
     () => buildUsageMetricTrendValues(metricTrendRows),
     [metricTrendRows],
   );
   const requestCaption = showLocalMetrics
-    ? formatRequestCaption(summary)
+    ? formatRequestCaption(summary, locale)
     : null;
   const cacheHitRate = showLocalMetrics
     ? cacheHitRateFromSummary(summary)
     : null;
   const reserveCaption = showLocalMetrics;
+  const showCostTrend = !showLocalMetrics || (costReport !== null && costReport.filters.sources.length === 0 && costReport.summary.costExplanation.unpricedTokens === 0);
   const metrics = [
     {
       id: 'cost',
-      label: '预估费用',
-      value: summary.totalCostUsd,
+      label: t('usage.common.estimatedCost'),
+      value: costReport?.summary.knownCostUsd ?? summary.totalCostUsd,
       format: formatUsd,
       exactFormat: formatUsd,
-      caption: null as string | null,
+      caption:
+        costReport && costReport.summary.costExplanation.unpricedTokens > 0
+          ? t('usage.overview.unpriced')
+          : costReport && costReport.summary.costExplanation.defaultPricedTokens > 0
+            ? t('usage.overview.defaultPrice')
+            : null as string | null,
       trend: {
-        comparison: metricTrends.totalCostUsd,
+        comparison: showCostTrend ? metricTrends.totalCostUsd : null,
         display: 'percent' as const,
-        values: metricTrendValues.costUsd,
+        values: showCostTrend ? metricTrendValues.costUsd : [],
       },
     },
     {
       id: 'total-tokens',
-      label: '总 Token',
+      label: t('usage.common.totalTokens'),
       value: summary.totalTokens,
       format: formatTokens,
       exactFormat: formatTokensExact,
@@ -90,14 +110,14 @@ export function DashboardOverviewCard({
     },
     {
       id: 'input-tokens',
-      label: '输入 Token',
+      label: t('usage.common.inputTokens'),
       value: summary.inputTokens,
       format: formatTokens,
       exactFormat: formatTokensExact,
       caption:
         cacheHitRate == null
           ? null
-          : `缓存命中率 ${(cacheHitRate * 100).toFixed(1)}%`,
+          : t('usage.overview.cacheHitRate', { percent: (cacheHitRate * 100).toFixed(1) }),
       trend: {
         comparison: metricTrends.inputTokens,
         display: 'tokens' as const,
@@ -106,7 +126,7 @@ export function DashboardOverviewCard({
     },
     {
       id: 'output-tokens',
-      label: '输出 Token',
+      label: t('usage.common.outputTokens'),
       value: summary.outputTokens,
       format: formatTokens,
       exactFormat: formatTokensExact,
@@ -120,7 +140,7 @@ export function DashboardOverviewCard({
   ] as const;
 
   return (
-    <section aria-label="用量概览" className="w-full">
+    <section aria-label={t('usage.page.overview')} className="w-full">
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => (
           <Card
@@ -134,8 +154,17 @@ export function DashboardOverviewCard({
           >
             <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
               <div className="flex h-5 min-w-0 items-center justify-between gap-2">
-                {metric.id === 'total-tokens' ? (
+                {metric.id === 'cost' && showLocalMetrics ? (
+                  <CostExplanationLabel
+                    report={costReport}
+                    loading={costExplanationLoading}
+                    error={costExplanationError}
+                  />
+                ) : metric.id === 'total-tokens' ? (
                   <TotalTokenLabel
+                    report={costReport}
+                    loading={costExplanationLoading}
+                    error={costExplanationError}
                     showRequestHelp={showLocalMetrics}
                     summary={summary}
                   />
@@ -157,12 +186,22 @@ export function DashboardOverviewCard({
               </div>
               <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
                 <div className="min-w-0">
-                  <NestedAnimatedValue
-                    exactFormat={metric.exactFormat}
-                    format={metric.format}
-                    label={metric.label}
-                    value={metric.value}
-                  />
+                  {metric.id === 'cost' && showLocalMetrics && !costReport ? (
+                    <div aria-label={t(costExplanationLoading ? 'usage.overview.costLoading' : 'usage.overview.costUnavailable')} className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-muted">
+                      —
+                    </div>
+                  ) : metric.id === 'cost' && costReport && costReport.summary.tokens > 0 && costReport.summary.costExplanation.unpricedTokens >= costReport.summary.tokens ? (
+                    <div aria-label={t('usage.overview.costUnknown')} className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums" title={t('usage.common.unknown')}>
+                      {t('usage.common.unknown')}
+                    </div>
+                  ) : (
+                    <NestedAnimatedValue
+                      exactFormat={metric.exactFormat}
+                      format={metric.format}
+                      label={metric.label}
+                      value={metric.value}
+                    />
+                  )}
                   {reserveCaption ? (
                     <p className="mt-0.5 h-4 truncate text-[10px] leading-4 text-muted tabular-nums">
                       {metric.caption ?? '\u00a0'}
@@ -171,7 +210,7 @@ export function DashboardOverviewCard({
                 </div>
                 <MetricSparkline
                   isIncrease={(metric.trend.comparison?.changeValue ?? 0) >= 0}
-                  label={`${metricTrendPeriodLabel}${metric.label}趋势`}
+                  label={t('usage.page.metricTrend', { period: metricTrendPeriodLabel, metric: metric.label })}
                   values={metric.trend.values}
                 />
               </div>
@@ -181,6 +220,8 @@ export function DashboardOverviewCard({
       </div>
 
       <DashboardSessionCards metrics={sessionMetrics} />
+
+      {belowMetrics}
 
       <Card className="mt-4">
         <Card.Content>
@@ -198,10 +239,14 @@ export function DashboardOverviewCard({
 }
 
 /** Prefer complete count; fall back to known evidence without "至少" wording. */
-function formatRequestCaption(summary: DashboardUsageSummary): string | null {
+function formatRequestCaption(summary: DashboardUsageSummary, locale: SupportedLocale): string | null {
   const count = summary.requestCount ?? summary.knownRequestCount;
   if (count == null) return null;
-  return `${count.toLocaleString('zh-CN')} 次请求`;
+  return translateRequestCount(count, locale);
+}
+
+function translateRequestCount(count: number, locale: SupportedLocale): string {
+  return translate(locale, 'usage.overview.requestCount', { count, display: count.toLocaleString(locale) });
 }
 
 /** OpenUsage / Anthropic-style: cache_read / (input + cache_read + cache_write). */
@@ -218,11 +263,13 @@ function MetricHelpLabel({
   heading,
   label,
   panel,
+  details,
 }: {
   ariaLabel: string;
   heading: string;
   label: string;
   panel: ReactNode;
+  details?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -253,9 +300,10 @@ function MetricHelpLabel({
           className="rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
           placement="bottom"
         >
-          <Popover.Dialog className="p-3 outline-none">
+          <Popover.Dialog className="max-h-[calc(100dvh-3rem)] max-w-[calc(100vw-2rem)] overflow-y-auto p-3 outline-none">
             <Popover.Heading className="sr-only">{heading}</Popover.Heading>
             {panel}
+            {details}
           </Popover.Dialog>
         </Popover.Content>
       </Popover>
@@ -264,17 +312,25 @@ function MetricHelpLabel({
 }
 
 function TotalTokenLabel({
+  report,
+  loading,
+  error,
   showRequestHelp,
   summary,
 }: {
+  report: UsageReport | null;
+  loading: boolean;
+  error: boolean;
   showRequestHelp: boolean;
   summary: DashboardUsageSummary;
 }) {
+  const { t } = useTranslation();
   return (
     <MetricHelpLabel
-      ariaLabel="总 Token 构成说明"
-      heading="总 Token 构成"
-      label="总 Token"
+      ariaLabel={t('usage.overview.totalHelpAria')}
+      heading={t('usage.overview.totalHeading')}
+      label={t('usage.common.totalTokens')}
+      details={showRequestHelp ? <TokenSourceDetails report={report} loading={loading} error={error} /> : null}
       panel={
         <TokenBreakdownPanel
           showRequestHelp={showRequestHelp}
@@ -286,22 +342,24 @@ function TotalTokenLabel({
 }
 
 function InputTokenLabel() {
+  const { t } = useTranslation();
   return (
     <MetricHelpLabel
-      ariaLabel="缓存命中率说明"
-      heading="缓存命中率"
-      label="输入 Token"
+      ariaLabel={t('usage.overview.cacheHelpAria')}
+      heading={t('usage.overview.cacheHitHeading')}
+      label={t('usage.common.inputTokens')}
       panel={<CacheHitRateHelpPanel />}
     />
   );
 }
 
 function CacheHitRateHelpPanel() {
+  const { t } = useTranslation();
   return (
     <div className="grid max-w-56 gap-1.5 text-xs">
-      <p className="font-medium text-foreground">缓存命中率</p>
+      <p className="font-medium text-foreground">{t('usage.overview.cacheHitHeading')}</p>
       <p className="leading-4 text-muted">
-        缓存读 ÷（输入 + 缓存读 + 缓存写）
+        {t('usage.overview.cacheFormula')}
       </p>
     </div>
   );
@@ -314,6 +372,7 @@ function TokenBreakdownPanel({
   showRequestHelp: boolean;
   summary: DashboardUsageSummary;
 }) {
+  const { t } = useTranslation();
   const input = summary.inputTokens;
   const output = summary.outputTokens;
   const cacheRead = summary.cachedInputTokens;
@@ -329,25 +388,23 @@ function TokenBreakdownPanel({
 
   return (
     <div className="grid min-w-44 gap-1.5 text-xs">
-      <p className="font-medium text-foreground">Token 构成</p>
-      <BreakdownRow label="输入" value={input} />
-      <BreakdownRow label="输出" value={output} />
+      <p className="font-medium text-foreground">{t('usage.overview.breakdownHeading')}</p>
+      <BreakdownRow label={t('usage.common.input')} value={input} />
+      <BreakdownRow label={t('usage.common.output')} value={output} />
       <div className="grid gap-1">
-        <p className="text-muted">缓存</p>
-        <BreakdownRow indented label="读" value={cacheRead} />
-        <BreakdownRow indented label="写" value={cacheWrite} />
+        <p className="text-muted">{t('usage.common.cache')}</p>
+        <BreakdownRow indented label={t('usage.overview.read')} value={cacheRead} />
+        <BreakdownRow indented label={t('usage.overview.write')} value={cacheWrite} />
       </div>
-      <BreakdownRow label="其它" value={other} />
+      <BreakdownRow label={t('usage.common.other')} value={other} />
       <div className="my-0.5 h-px bg-border/70" />
-      <BreakdownRow emphasize label="合计" value={summary.totalTokens} />
+      <BreakdownRow emphasize label={t('usage.common.total')} value={summary.totalTokens} />
       <p className="pt-0.5 text-[10px] leading-4 text-muted">
-        总 Token = 输入 + 输出 + 缓存读 + 缓存写 + 其它
+        {t('usage.overview.formula')}
       </p>
       {showRequestHelp ? (
         <p className="pt-1 text-[10px] leading-4 text-muted">
-          请求数优先用本地请求证据；无证据时按 conversation 累计
-          {requestIncomplete ? '，不完整时可能偏低' : ''}
-          。
+          {t(requestIncomplete ? 'usage.overview.requestNoteIncomplete' : 'usage.overview.requestNote')}
         </p>
       ) : null}
     </div>
@@ -514,8 +571,8 @@ function MetricTrend({
   display: 'percent' | 'tokens';
   trend: DashboardMetricTrend;
 }) {
+  const { t } = useTranslation();
   const isIncrease = trend.changeValue >= 0;
-  const direction = isIncrease ? '上涨' : '下降';
   const label =
     display === 'tokens'
       ? `${isIncrease ? '+' : '−'}${formatTokens(Math.abs(trend.changeValue))}`
@@ -523,7 +580,7 @@ function MetricTrend({
 
   return (
     <Chip
-      aria-label={`${direction} ${label}`}
+      aria-label={t(isIncrease ? 'usage.overview.increaseAria' : 'usage.overview.decreaseAria', { value: label })}
       className="shrink-0"
       color={isIncrease ? 'success' : 'danger'}
       size="sm"

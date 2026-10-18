@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "upstreams": [
+    {
+      "id": "codex",
+      "package": "@openai/codex",
+      "repository": "https://github.com/openai/codex",
+      "verifiedVersion": null,
+      "contracts": [
+        "event_msg.payload.info.total_token_usage",
+        "rate_limit.primary_window.used_percent",
+        "rate_limit.primary_window.limit_window_seconds"
+      ],
+      "documents": [
+        { "url": "https://learn.chatgpt.com/docs/pricing", "requiredText": ["local messages per five-hour period", "pro plans currently have no five-hour limit", "weekly limits may also apply"] }
+      ]
+    },
+    {
+      "id": "claude",
+      "package": "@anthropic-ai/claude-code",
+      "repository": "https://github.com/anthropics/claude-code",
+      "verifiedVersion": null,
+      "contracts": [
+        "assistant.message.usage",
+        "compactMetadata.postTokens",
+        "auth status --json",
+        "/usage --output-format json"
+      ],
+      "documents": [
+        { "url": "https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work", "requiredText": ["a session limit that resets every five hours", "weekly limits that reset once every week"] },
+        { "url": "https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan", "requiredText": ["shared across claude and claude code"] }
+      ]
+    },
+    {
+      "id": "opencode",
+      "package": "opencode-ai",
+      "repository": "https://github.com/anomalyco/opencode",
+      "verifiedVersion": null,
+      "contracts": [
+        "message.data.tokens.cache",
+        "message.data.providerID",
+        "go/v1/usage"
+      ]
+    },
+    {
+      "id": "grok",
+      "package": "@xai-official/grok",
+      "repository": "https://github.com/xai-org/grok-build",
+      "verifiedVersion": null,
+      "contracts": [
+        "oauth account identity",
+        "quota windows"
+      ]
+    },
+    {
+      "id": "omp",
+      "package": "@oh-my-pi/pi-coding-agent",
+      "repository": "https://github.com/can1357/oh-my-pi",
+      "verifiedVersion": null,
+      "contracts": [
+        "message.usage",
+        "usage_history.account_id/account_key",
+        "usage_history.limit_id/used_fraction/recorded_at/resets_at"
+      ]
+    },
+    {
+      "id": "pi",
+      "package": "@earendil-works/pi-coding-agent",
+      "repository": "https://github.com/earendil-works/pi",
+      "verifiedVersion": null,
+      "contracts": [
+        "message.usage.input",
+        "message.usage.output",
+        "message.provider"
+      ]
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   claudeRemainingPercent,
   type ClaudeSubscriptionSnapshot,
 } from '../../shared/claude-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
+import { subscriptionMessageKey } from '../i18n/desktop-subscription-messages';
 
 const INITIAL_SNAPSHOT: ClaudeSubscriptionSnapshot = {
   status: 'authorization-required',
@@ -19,6 +21,7 @@ const INITIAL_SNAPSHOT: ClaudeSubscriptionSnapshot = {
 
 /** Claude Code allowance summary with actionable failures for signed-in accounts. */
 export function ClaudeSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<ClaudeSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -34,13 +37,13 @@ export function ClaudeSubscriptionCard() {
       setSnapshot({
         ...INITIAL_SNAPSHOT,
         status: 'temporarily-unavailable',
-        message: '暂时无法读取 Claude 订阅信息',
+        message: t('desktop.provider.readSubscription', { provider: 'Claude' }),
       });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -48,6 +51,8 @@ export function ClaudeSubscriptionCard() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [reload]);
+
+  const messageKey = snapshot.message ? subscriptionMessageKey(snapshot.message) : null;
 
   return (
     <SubscriptionUsageCard
@@ -73,7 +78,7 @@ export function ClaudeSubscriptionCard() {
         ],
         planLabel: snapshot.planLabel,
         hasAccount: snapshot.hasAccount,
-        message: snapshot.message,
+        message: messageKey ? t(messageKey) : snapshot.message,
         stale: snapshot.stale,
         title: 'Claude',
       }}

@@ -3,6 +3,7 @@ import { ChevronDown } from '@gravity-ui/icons';
 import { Button, DateField, Label, Popover, RangeCalendar } from '@heroui/react';
 import { CalendarDate, parseDate } from '@internationalized/date';
 import { I18nProvider } from 'react-aria';
+import { useTranslation } from 'quotern-i18n/react';
 import { CUSTOM_RANGE_LOOKBACK_DAYS, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { localDateDaysAgo, localDateNow } from '@/lib/stats-timezone';
 
@@ -12,6 +13,8 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
   disabled: boolean;
   onChange: (range: DashboardDateRange) => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? 'zh-CN';
   const [open, setOpen] = useState(false);
   const initial = value ?? { start: localDateDaysAgo(initialDays), end: localDateNow() };
   const [start, setStart] = useState<CalendarDate | null>(() => parseDate(initial.start));
@@ -32,21 +35,21 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
   return (
     <Popover isOpen={open} onOpenChange={changeOpen}>
       <Button
-        aria-label={value ? `自定义日期范围：${formatDashboardDateRange(value)}` : '自定义日期范围'}
+        aria-label={value ? t('usage.filter.customRangeValue', { range: formatDashboardDateRange(value) }) : t('usage.filter.customRange')}
         aria-pressed={Boolean(value)}
         className={`!h-6 !min-h-6 !min-w-0 gap-1 rounded-full px-3 text-xs font-normal transition-none! ${value ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
         isDisabled={disabled}
         size="sm"
         variant="ghost"
       >
-        自定义
+        {t('usage.filter.custom')}
         <ChevronDown className="size-3" />
       </Button>
       <Popover.Content className="!w-[560px] max-w-[calc(100vw-24px)] rounded-2xl border border-border bg-overlay p-0 shadow-surface" placement="bottom start" offset={8}>
-        <Popover.Dialog aria-label="自定义日期范围" className="p-4 outline-none">
-          <I18nProvider locale="zh-CN">
+        <Popover.Dialog aria-label={t('usage.filter.customRange')} className="p-4 outline-none">
+          <I18nProvider locale={locale}>
             <RangeCalendar
-              aria-label="选择起止日期"
+              aria-label={t('usage.filter.chooseDates')}
               className="!w-full !max-w-none !border-0 !bg-transparent !p-0 !shadow-none"
               value={selected}
               defaultFocusedValue={parseDate(initial.end)}
@@ -57,42 +60,42 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
               {({ state }) => (
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <div className="flex w-full flex-col gap-3 sm:w-48 sm:shrink-0">
-                    <h2 className="text-sm font-medium">自定义日期范围</h2>
+                    <h2 className="text-sm font-medium">{t('usage.filter.customRange')}</h2>
                     <DateField value={start} onChange={setStart} minValue={min} maxValue={max}>
-                      <Label className="text-xs text-muted">开始日期</Label>
+                      <Label className="text-xs text-muted">{t('usage.filter.startDate')}</Label>
                       <DateField.Group className="rounded-xl">
                         <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
                       </DateField.Group>
                     </DateField>
                     <DateField value={end} onChange={setEnd} minValue={min} maxValue={max}>
                       <div className="flex min-h-6 items-center justify-between gap-2">
-                        <Label className="text-xs text-muted">结束日期</Label>
+                        <Label className="text-xs text-muted">{t('usage.filter.endDate')}</Label>
                         <Button slot={null} size="sm" variant="ghost" className="!h-6 !min-h-6 !min-w-0 rounded-md px-1.5 text-xs font-normal text-accent hover:bg-accent/10" onPress={() => {
                           const today = parseDate(localDateNow());
                           // Finish a pending calendar range before updating an existing end date.
                           if (state.anchorDate) state.selectDate(today);
                           else setEnd(today);
                           state.setFocusedDate(today);
-                        }}>结束日期设为今天</Button>
+                        }}>{t('usage.filter.endToday')}</Button>
                       </div>
                       <DateField.Group className="rounded-xl">
                         <DateField.Input>{(segment) => <DateField.Segment segment={segment} />}</DateField.Input>
                       </DateField.Group>
                     </DateField>
-                    <p className="text-xs text-muted">按北京时间统计，包含起止日期。可选择近一年内的日期。</p>
-                    {!valid && <p role="alert" className="text-xs text-danger">请选择有效的起止日期，开始日期不能晚于结束日期。</p>}
+                    <p className="text-xs text-muted">{t('usage.filter.beijingHint')}</p>
+                    {!valid && <p role="alert" className="text-xs text-danger">{t('usage.filter.invalidDates')}</p>}
                     <div className="mt-auto flex justify-end gap-2 pt-1">
-                      <Button slot={null} size="sm" variant="ghost" onPress={() => setOpen(false)}>取消</Button>
+                      <Button slot={null} size="sm" variant="ghost" onPress={() => setOpen(false)}>{t('usage.filter.cancel')}</Button>
                       <Button slot={null} size="sm" isDisabled={!valid || Boolean(state.anchorDate)} onPress={() => {
                         if (draft && valid) { onChange(draft); setOpen(false); }
-                      }}>确定</Button>
+                      }}>{t('usage.filter.confirm')}</Button>
                     </div>
                   </div>
                   <div className="min-w-0 w-full sm:flex-1">
                     <RangeCalendar.Header>
-                      <RangeCalendar.NavButton slot="previous" aria-label="上个月" />
+                      <RangeCalendar.NavButton slot="previous" aria-label={t('usage.filter.previousMonth')} />
                       <RangeCalendar.Heading className="text-center" />
-                      <RangeCalendar.NavButton slot="next" aria-label="下个月" />
+                      <RangeCalendar.NavButton slot="next" aria-label={t('usage.filter.nextMonth')} />
                     </RangeCalendar.Header>
                     <RangeCalendar.Grid weekdayStyle="narrow">
                       <RangeCalendar.GridHeader>{(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}</RangeCalendar.GridHeader>

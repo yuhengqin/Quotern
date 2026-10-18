@@ -70,8 +70,6 @@ WorkingDirectory=${quotedHome}
 Restart=always
 RestartSec=3
 ${envLine('HOME', home)}
-${envLine('LANG', 'en_US.UTF-8')}
-${envLine('LC_ALL', 'en_US.UTF-8')}
 ${envLine('PATH', defaultPath(nodePath, home))}
 StandardOutput=${output}
 StandardError=${output}

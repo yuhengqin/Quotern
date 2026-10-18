@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Copy } from '@gravity-ui/icons';
 import { Button, Popover } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { ContributorsWall } from '@/components/ContributorsWall';
 import { SupportedToolsGrid } from '@/components/SupportedToolsGrid';
 import { WeChatSupportTrigger } from '@/components/WeChatSupportTrigger';
@@ -24,35 +25,12 @@ interface InstallGuidePageProps {
   reason: InstallGuideReason;
 }
 
-interface GuideCopy {
-  badge: string;
-  headline: [string, string, string];
-  description: string;
-}
-
 type CliVariantId = 'npx' | 'install-start';
 
-const copyByReason: Record<InstallGuideReason, GuideCopy> = {
-  new_user: {
-    badge: 'Quotern',
-    headline: [
-      'Cursor、Claude、Codex',
-      '多 Agent Token 与费用',
-      '本地面板一张表看完。',
-    ],
-    description:
-      '汇总你实际在用的 Coding Agent 用量与趋势，安装后即可查看。',
-  },
-  uninstalled: {
-    badge: '客户端暂未连接',
-    headline: [
-      '客户端暂未连接',
-      '启动后继续',
-      '同步本机用量。',
-    ],
-    description:
-      '下载并打开 Quotern，即可把本机 AI 用量同步回这块面板。',
-  },
+const TARGET_MESSAGE_KEY: Record<DownloadTargetId, string> = {
+  'macos-arm': 'install.targets.macosArm',
+  'macos-intel': 'install.targets.macosIntel',
+  windows: 'install.targets.windows',
 };
 
 const PREVIEW_SRC = `${import.meta.env.BASE_URL}e1.png`;
@@ -101,7 +79,8 @@ function writeSessionTarget(id: DownloadTargetId): void {
  * Installers come from GitHub Releases.
  */
 export function InstallGuidePage({ reason }: InstallGuidePageProps) {
-  const content = copyByReason[reason];
+  const { t, i18n } = useTranslation();
+  const reasonKey = reason === 'new_user' ? 'install.newUser' : 'install.uninstalled';
   const [targetId, setTargetId] = useState<DownloadTargetId>(() => {
     const saved = readSessionTarget();
     if (saved) return saved;
@@ -118,7 +97,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
   const [cliMenuOpen, setCliMenuOpen] = useState(false);
   const [cliVariant, setCliVariant] = useState<CliVariantId>('npx');
   const [copied, setCopied] = useState(false);
-  const [starLabel, setStarLabel] = useState<string | null>(null);
+  const [starCount, setStarCount] = useState<number | null>(null);
   const userPickedRef = useRef(readSessionTarget() !== null);
 
   const target = getDownloadTarget(targetId);
@@ -203,7 +182,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
         if (cancelled || typeof count !== 'number' || !Number.isFinite(count)) {
           return;
         }
-        setStarLabel(formatStarCount(count));
+        setStarCount(count);
       })
       .catch(() => {
         // Star count is decorative; the GitHub link still works without it.
@@ -240,7 +219,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
         <div className="grid w-full items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-16 xl:gap-20">
         <div className="max-w-2xl motion-safe:animate-[fade-up_420ms_ease-out] lg:max-w-none">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-muted">
-            <span>{content.badge}</span>
+            <span>{t(`${reasonKey}.badge`)}</span>
             <span aria-hidden="true" className="text-foreground/25">
               ·
             </span>
@@ -249,24 +228,24 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
             ) : (
               <AppleMark className="size-4 text-foreground/70" />
             )}
-            <span>适用于 {target.badgePlatform}</span>
+            <span>{t('install.platformFor', { platform: target.badgePlatform })}</span>
           </p>
 
           <h1 className="mt-6 text-[2.15rem] leading-[1.15] font-semibold tracking-tight text-foreground sm:text-5xl sm:leading-[1.12] lg:text-[3.15rem] lg:leading-[1.1]">
-            {content.headline[0]}
+            {t(`${reasonKey}.headline1`)}
             <br />
-            {content.headline[1]}
+            {t(`${reasonKey}.headline2`)}
             <br />
-            {content.headline[2]}
+            {t(`${reasonKey}.headline3`)}
           </h1>
 
           <p className="mt-5 max-w-xl text-lg leading-8 text-muted">
-            {content.description}
+            {t(`${reasonKey}.description`)}
           </p>
 
           <div className="mt-9 flex flex-col gap-4">
             <div
-              aria-label="下载客户端"
+              aria-label={t('install.downloadGroup')}
               className="inline-flex max-w-full shrink-0 overflow-hidden rounded-full shadow-[0_1px_2px_rgb(0_0_0/0.06)]"
               role="group"
             >
@@ -280,13 +259,13 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                 ) : (
                   <AppleMark className="size-4.5" />
                 )}
-                {target.label}
+                {t(`${TARGET_MESSAGE_KEY[target.id]}.download`)}
               </button>
               <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>
                 <Button
                   aria-expanded={menuOpen}
                   aria-haspopup="menu"
-                  aria-label="选择其它系统"
+                  aria-label={t('install.selectOtherSystem')}
                   className={cn(
                     downloadBtnClass,
                     'h-14! min-h-14! min-w-14 rounded-l-none rounded-r-full border-0 p-0 shadow-none',
@@ -311,7 +290,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                 >
                   <Popover.Dialog className="p-0 outline-none">
                     <Popover.Heading className="sr-only">
-                      选择下载平台
+                      {t('install.selectDownloadPlatform')}
                     </Popover.Heading>
                     <div className="flex flex-col py-1" role="menu">
                       {DOWNLOAD_TARGETS.map((item) => {
@@ -343,7 +322,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                             ) : (
                               <AppleMark className="size-4 text-foreground/70" />
                             )}
-                            <span className="min-w-0 flex-1">{item.menuLabel}</span>
+                            <span className="min-w-0 flex-1">{t(`${TARGET_MESSAGE_KEY[item.id]}.menu`)}</span>
                             {selected ? (
                               <Check
                                 aria-hidden="true"
@@ -364,7 +343,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                 <Button
                   aria-expanded={cliMenuOpen}
                   aria-haspopup="menu"
-                  aria-label="选择 CLI 启动方式"
+                  aria-label={t('install.selectCliMethod')}
                   className="h-10 min-h-10 shrink-0 gap-1 rounded-full bg-background/80 px-3 text-xs font-medium text-foreground shadow-none hover:bg-background dark:bg-black/10 dark:hover:bg-black/20"
                   variant="secondary"
                 >
@@ -383,7 +362,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                 >
                   <Popover.Dialog className="p-0 outline-none">
                     <Popover.Heading className="sr-only">
-                      选择 CLI 启动方式
+                      {t('install.selectCliMethod')}
                     </Popover.Heading>
                     <div className="flex flex-col py-1" role="menu">
                       {CLI_VARIANTS.map((item) => {
@@ -425,7 +404,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
                 </code>
               </div>
               <button
-                aria-label={copied ? '安装命令已复制' : '复制 CLI 安装命令'}
+                aria-label={t(copied ? 'install.commandCopied' : 'install.copyCommand')}
                 className={cn(
                   'inline-flex size-11 shrink-0 items-center justify-center rounded-full',
                   'text-muted transition-colors duration-150',
@@ -450,20 +429,20 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
             </div>
           </div>
           <p aria-live="polite" className="sr-only">
-            {copied ? '安装命令已复制' : ''}
+            {copied ? t('install.commandCopied') : ''}
           </p>
 
           <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
             <span>{target.requirement}</span>
             <span aria-hidden="true">·</span>
-            <span>CLI 需 Node.js 20+</span>
+            <span>{t('install.cliRequiresNode')}</span>
             <span aria-hidden="true">·</span>
             <WeChatSupportTrigger variant="link" />
           </p>
 
           <div className="mt-4 flex w-full max-w-xl flex-col gap-3">
             <a
-              aria-label="在 GitHub 上 Star 本项目"
+              aria-label={t('install.starAria')}
               className="flex w-full items-center gap-4 rounded-2xl border border-border bg-surface-secondary/80 px-5 py-4 shadow-[0_1px_2px_rgb(0_0_0/0.06)] outline-offset-2 transition-colors hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent dark:bg-overlay/60 dark:hover:bg-overlay/80"
               href={GITHUB_REPO_URL}
               rel="noopener noreferrer"
@@ -473,16 +452,16 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
               <span className="min-w-0">
                 <span className="flex items-baseline gap-2">
                   <span className="text-base font-medium text-foreground">
-                    ⭐️ Star
+                    {t('install.starAction')}
                   </span>
-                  {starLabel ? (
+                  {starCount !== null ? (
                     <span className="text-sm font-medium tabular-nums text-foreground/55">
-                      {starLabel}
+                      {formatStarCount(starCount, i18n.resolvedLanguage ?? i18n.language)}
                     </span>
                   ) : null}
                 </span>
                 <span className="mt-0.5 block text-sm leading-6 text-muted">
-                  开源共享，欢迎提 Issue 与贡献代码
+                  {t('install.starDescription')}
                 </span>
               </span>
             </a>
@@ -493,7 +472,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
         <div className="min-w-0 motion-safe:animate-[fade-up_520ms_ease-out]">
           <figure className="overflow-hidden rounded-2xl border border-border/80 bg-surface shadow-[0_24px_48px_-28px_rgb(15_23_42/0.45)] dark:shadow-[0_24px_48px_-24px_rgb(0_0_0/0.65)]">
             <img
-              alt="Quotern 用量看板界面预览：费用、Token、热力图与趋势图"
+              alt={t('install.previewAlt')}
               className="h-auto w-full"
               decoding="async"
               fetchPriority="high"
@@ -510,7 +489,7 @@ export function InstallGuidePage({ reason }: InstallGuidePageProps) {
             className="text-lg font-semibold tracking-tight text-foreground sm:text-xl"
             id="supported-tools-heading"
           >
-            支持的 Agent
+            {t('about.supportedAgents')}
           </h2>
           <div className="mt-4">
             <SupportedToolsGrid className="lg:grid-cols-3" collapsible />
@@ -531,11 +510,12 @@ const downloadBtnClass = cn(
   'touch-manipulation',
 );
 
-function formatStarCount(count: number): string {
-  if (count < 1000) return String(Math.floor(count));
-  const thousands = count / 1000;
-  const digits = count >= 10_000 ? 0 : 1;
-  return `${thousands.toFixed(digits).replace(/\.0$/, '')}k`;
+function formatStarCount(count: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    notation: 'compact',
+    compactDisplay: 'short',
+    maximumFractionDigits: count < 10_000 ? 1 : 0,
+  }).format(Math.floor(count));
 }
 
 /** GitHub Octicon `mark-github` (24×24). */

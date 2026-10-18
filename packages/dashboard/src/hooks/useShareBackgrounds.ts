@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { defaultBackground, type ShareBackground } from '../lib/share-backgrounds';
 import { loadBackgroundLibrary, shareBackgroundStore } from '../lib/share-background-client';
+import type { BackgroundMigrationNotice } from '../lib/share-background-migration';
 
 export function useShareBackgrounds() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<ShareBackground[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [migrationNotice, setMigrationNotice] = useState<string | null>(null);
+  const [migrationNotice, setMigrationNotice] = useState<BackgroundMigrationNotice | null>(null);
   const locked = useRef(false);
   const mounted = useRef(false);
   const generation = useRef(0);
@@ -34,10 +37,10 @@ export function useShareBackgrounds() {
         setMigrationNotice(result.migrationNotice);
         setReady(true);
       }
-    } catch (failure) {
+    } catch {
       if (mounted.current && request === generation.current) {
         setReady(false);
-        setError(failure instanceof Error ? failure.message : '读取背景失败，请重试');
+        setError('share.backgroundLoadError');
       }
     } finally {
       if (request === generation.current) {
@@ -60,7 +63,7 @@ export function useShareBackgrounds() {
   }, [reload]);
 
   const run = useCallback(async (operation: () => Promise<ShareBackground[]>, select?: (items: ShareBackground[]) => string | null) => {
-    if (locked.current) throw new Error('背景正在保存，请稍候');
+    if (locked.current) throw new Error('share.backgroundBusy');
     locked.current = true;
     setBusy(true);
     setError(null);
@@ -72,7 +75,7 @@ export function useShareBackgrounds() {
       }
       return saved;
     } catch (failure) {
-      if (mounted.current) setError(failure instanceof Error ? failure.message : '保存背景失败，请重试');
+      if (mounted.current) setError('share.backgroundSaveError');
       throw failure;
     } finally {
       locked.current = false;
@@ -87,7 +90,9 @@ export function useShareBackgrounds() {
   }, [ready, loading, run]);
 
   return {
-    items, selectedId, ready, loading, busy, error, migrationNotice, reload, select, setEditing,
+    items, selectedId, ready, loading, busy, error,
+    migrationNotice: migrationNotice ? t(migrationNotice.key, migrationNotice) : null,
+    reload, select, setEditing,
     markUsed: (id: string) => {
       if (!locked.current) void run(() => shareBackgroundStore.touch(id)).catch(() => undefined);
     },

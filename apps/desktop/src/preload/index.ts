@@ -7,6 +7,7 @@
  *  - tud.onDataSynced → Core poll / sync watcher refresh
  */
 import { contextBridge, ipcRenderer } from 'electron';
+import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
@@ -23,6 +24,13 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import {
+  LOCALE_CHANGED_CHANNEL,
+  LOCALE_GET_CHANNEL,
+  LOCALE_SET_CHANNEL,
+  type DesktopLocaleState,
+} from '../shared/locale';
+import type { LocalePreference } from 'quotern-i18n';
 import { SHARE_BACKGROUNDS_CHANNEL, type SavedShareBackground, type ShareBackgroundRequest } from '../shared/share-backgrounds';
 import {
   TRAY_USAGE_CHANGED_CHANNEL,
@@ -105,6 +113,16 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
 const tudApi = {
   version: () => '0.1.0',
   platform: process.platform,
+  quota: {
+    getState: (): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_GET),
+    refresh: (provider?: string): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_REFRESH, provider),
+    setPreferences: (patch: QuotaPreferencePatch): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_SET, patch),
+    onChanged: (callback: (state: QuotaState) => void) => {
+      const listener = (_event: unknown, state: QuotaState) => callback(state);
+      ipcRenderer.on(QUOTA_CHANGED, listener);
+      return () => ipcRenderer.removeListener(QUOTA_CHANGED, listener);
+    },
+  },
 
   minimize: () => ipcRenderer.send('window:minimize'),
   toggleMaximize: () => ipcRenderer.send('window:toggle-maximize'),
@@ -239,6 +257,18 @@ const tudApi = {
 
   getTheme: (): Promise<{ mode: ThemeMode; resolved: Theme }> =>
     ipcRenderer.invoke(THEME_GET_CHANNEL),
+
+  getLocalePreference: (): Promise<DesktopLocaleState> =>
+    ipcRenderer.invoke(LOCALE_GET_CHANNEL),
+
+  setLocalePreference: (preference: LocalePreference): Promise<void> =>
+    ipcRenderer.invoke(LOCALE_SET_CHANNEL, preference),
+
+  onLocaleChanged: (callback: (state: DesktopLocaleState) => void) => {
+    const listener = (_event: unknown, state: DesktopLocaleState) => callback(state);
+    ipcRenderer.on(LOCALE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(LOCALE_CHANGED_CHANNEL, listener);
+  },
 
   setThemeMode: (mode: ThemeMode) =>
     ipcRenderer.send(THEME_SET_CHANNEL, mode),

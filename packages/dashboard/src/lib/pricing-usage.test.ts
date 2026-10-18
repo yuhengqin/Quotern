@@ -24,3 +24,17 @@ it('combines aliases across Agents while preserving distinct pricing variants', 
   ]);
   assert.equal('usageTokens' in rows[0]!, false);
 });
+
+it('keeps API usage matching stable when subscription channels share a calling ID', () => {
+  const api = { ...rows[0]!, model: 'stepfun/step-3.5-flash' };
+  const cn = { ...api, model: 'stepfun-step-plan/step-3.5-flash', billingMode: 'subscription' as const };
+  const global = { ...cn, model: 'stepfun-ai-step-plan/step-3.5-flash' };
+  const result = addPricingUsage([api, cn, global], [
+    usage('step-3.5-flash', 'opencode', 100),
+    usage('auto', 'pi', 20),
+    usage('stepfun-step-plan/step-3.5-flash', 'opencode', 40),
+  ], { sourceAlias: { pi: { auto: api.model } } });
+  assert.deepEqual(result.map(row => [row.model, row.usageTokens]), [
+    [api.model, 120], [cn.model, 40], [global.model, 0],
+  ]);
+});

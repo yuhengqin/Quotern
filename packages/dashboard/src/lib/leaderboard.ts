@@ -3,6 +3,7 @@ import type {
   LeaderboardRange,
   LeaderboardRow,
 } from '@/lib/api';
+import { translate, type SupportedLocale } from 'quotern-i18n';
 import { getModelProvider, type ModelProvider } from './model-provider.ts';
 
 export type RankRange = LeaderboardRange;
@@ -67,13 +68,14 @@ const PRIORITY_VENDOR_INDEX = new Map<string, number>(
 
 function rankVendorForProvider(
   provider: ModelProvider,
+  locale: SupportedLocale,
 ): Omit<RankModelVendorGroup, 'models'> {
   const key = RANK_VENDOR_KEYS[provider.key] ?? provider.key;
   const priorityVendor = PRIORITY_RANK_MODEL_VENDORS.find(
     (vendor) => vendor.key === key,
   );
-  if (priorityVendor) return priorityVendor;
-  if (key === 'unknown') return { key: 'other', label: '其他', icon: 'unknown' };
+  if (priorityVendor) return key === 'alibaba' ? { ...priorityVendor, label: translate(locale, 'rank.vendor.alibaba') } : priorityVendor;
+  if (key === 'unknown') return { key: 'other', label: translate(locale, 'rank.vendor.other'), icon: 'unknown' };
   return { key, label: provider.label, icon: provider.icon };
 }
 
@@ -98,18 +100,19 @@ function compareRankVendors(
 export function groupRankModelsByVendor(
   models: readonly string[],
   query = '',
+  locale: SupportedLocale = 'zh-CN',
 ): RankModelVendorGroup[] {
   const buckets = new Map<RankModelVendorKey, RankModelVendorGroup>();
   buckets.set('other', {
     key: 'other',
-    label: '其他',
+    label: translate(locale, 'rank.vendor.other'),
     icon: 'unknown',
     models: [],
   });
 
   for (const model of new Set(models.filter(Boolean))) {
     const provider = getModelProvider(model);
-    const vendor = rankVendorForProvider(provider);
+    const vendor = rankVendorForProvider(provider, locale);
     const group = buckets.get(vendor.key) ?? { ...vendor, models: [] };
     group.models.push(model);
     buckets.set(vendor.key, group);
@@ -216,8 +219,8 @@ export function resolveRankShareViewer(
   return { kind: 'anonymous' };
 }
 
-export function rankShareFallbackLabel(kind: RankShareFallbackKind): string {
-  return kind === 'off_board' ? '100+名' : '登录后查看';
+export function rankShareFallbackLabel(kind: RankShareFallbackKind, locale: SupportedLocale = 'zh-CN'): string {
+  return translate(locale, kind === 'off_board' ? 'rank.share.offBoard' : 'rank.share.signIn');
 }
 
 /** Put the current user at the top of the list while keeping their Top N row. */
@@ -230,6 +233,6 @@ export function pinCurrentUserRows(
   return [{ pinned: true, row: currentUser }, ...listed];
 }
 
-export function leaderboardMetricLabel(metric: LeaderboardMetric): string {
-  return metric === 'cost' ? '按消费' : '按 Token';
+export function leaderboardMetricLabel(metric: LeaderboardMetric, locale: SupportedLocale = 'zh-CN'): string {
+  return translate(locale, metric === 'cost' ? 'rank.metric.cost' : 'rank.metric.tokens');
 }

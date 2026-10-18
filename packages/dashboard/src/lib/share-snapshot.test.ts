@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dailyModelKey } from 'quotern-core/daily-model-key';
 import { addLocalDays, localDateNow } from 'quotern-core/timezone';
+import { registerMessages } from 'quotern-i18n';
+import { shareMessages } from '../i18n/share-messages.ts';
 import type { UsageDataset } from './api.ts';
 import { buildDashboardDataFromDataset } from './dashboard-data.ts';
 import { buildShareDataFromDataset, buildShareSnapshot } from './share-snapshot.ts';
 
 const today = localDateNow();
+registerMessages(shareMessages);
 const yesterday = addLocalDays(today, -1);
 const olderDay = addLocalDays(today, -15);
 const dataset: UsageDataset = {
@@ -101,4 +104,20 @@ test('a selected Agent alias remains consistent after the API changes its source
   assert.deepEqual(result.details.models.map(({ model, tokens }) => ({ model, tokens })), [{ model: 'sonnet', tokens: 930 }]);
   const duplicate = buildShareSnapshot(data, { rangeDays: 30, selectedDate: null, selectedSources: ['claude-code', 'claude'] });
   assert.deepEqual(duplicate.details.sources, ['claude']);
+});
+
+test('share export labels follow locale without changing selected data or dates', () => {
+  const data = buildDashboardDataFromDataset(dataset, 30);
+  const filters = { rangeDays: 30, selectedDate: null, selectedSources: [] };
+  const inChinese = buildShareSnapshot(data, filters);
+  const inEnglish = buildShareSnapshot(data, filters, 'en');
+  assert.equal(inEnglish.rangeLabel, 'Last 30 days');
+  assert.equal(inEnglish.toolLabel, 'All agents');
+  assert.deepEqual(inEnglish.summary, inChinese.summary);
+  assert.deepEqual(inEnglish.details, inChinese.details);
+
+  const dateFilters = { ...filters, selectedDate: yesterday, dateRange: { start: yesterday, end: yesterday } };
+  const inJapanese = buildShareSnapshot(data, dateFilters, 'ja');
+  assert.equal(inJapanese.rangeLabel, yesterday);
+  assert.equal(inJapanese.details.days[0]?.date, yesterday);
 });

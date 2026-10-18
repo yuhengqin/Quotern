@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdir, open, readFile, realpath, rm, writeFile, rename } from 'node:fs/promises';
+import { mkdir, open, readFile, realpath, rm, writeFile, rename, lstat, readdir, unlink, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import net from 'node:net';
+import { sessionEndEvidence } from './dev-processes.mjs';
 
 const MODES = { cli: ['runtime', 'ui'], api: ['runtime'], ui: ['ui'], desktop: ['runtime', 'desktop-ui'] };
 const PORTS = { apiPort: ['QUOTERN_DEV_API_PORT', 8452], uiPort: ['QUOTERN_DEV_UI_PORT', 5194], desktopPort: ['QUOTERN_DEV_DESKTOP_PORT', 5195] };
@@ -60,7 +61,70 @@ async function choosePort(first, explicit, excluded, host) {
   throw new Error('没有可用的开发端口');
 }
 
-/** Leases never signal a PID. A stale/unknown lease requires inspection, not takeover. */
+// Every acquisition, recovery and release uses the same gate. A gate left by a
+// crashed inspector is deliberately not auto-reclaimed (its operation is unknown).
+async function withResourceGate(dir, resource, action) {
+  const gate = join(dir, `${resource}.guard`);
+  let acquired = false;
+  for (let attempt = 0; attempt < 240; attempt++) {
+    try { await mkdir(gate); acquired = true; break; }
+    catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  if (!acquired) throw new Error(`开发资源 ${resource} 的锁检查尚未完成；请核对 ${gate}，禁止自动接管`);
+  try {
+    await saveJson(join(gate, 'owner.json'), { pid: process.pid, startedAt: new Date().toISOString(), resource });
+    return await action();
+  } finally {
+    await rm(join(gate, 'owner.json'), { force: true });
+    await rmdir(gate);
+  }
+}
+
+async function removeLease(path) {
+  const info = await lstat(path);
+  if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('归属锁不是普通目录');
+  const entries = await readdir(path);
+  if (entries.length !== 1 || entries[0] !== 'owner.json') throw new Error('归属锁包含未知内容，保留原锁');
+  await unlink(join(path, 'owner.json'));
+  await rmdir(path);
+}
+
+async function recoverLease(root, dir, resource, path) {
+  try {
+    const info = await lstat(path);
+    if (!info.isDirectory() || info.isSymbolicLink()) return '归属锁不是普通目录';
+    const owner = await readJson(join(path, 'owner.json'));
+    if (!owner || !MODES[owner.mode]?.includes(resource) || typeof owner.sessionId !== 'string'
+      || !owner.sessionId || owner.worktree !== root || !Number.isSafeInteger(owner.pid) || owner.pid <= 0
+      || !Number.isFinite(Date.parse(owner.startedAt)) || Date.parse(owner.startedAt) > Date.now()) return '归属记录不完整';
+    if (pidAlive(owner.pid)) return `原会话 PID ${owner.pid} 仍存在`;
+    const record = await readJson(join(dir, `${owner.mode}.json`));
+    if (!record || ['sessionId', 'mode', 'pid', 'worktree', 'startedAt'].some((key) => record[key] !== owner[key])
+      || !['starting', 'building', 'running', 'cleanup-required', 'stopped'].includes(record.status)
+      || !Array.isArray(record.children) || record.children.some((child) => !child
+        || !Number.isSafeInteger(child.pid) || child.pid <= 0)) return '会话记录缺失、不完整或与锁归属不匹配';
+    if (record.status === 'stopped' && (!Number.isFinite(Date.parse(record.stoppedAt))
+      || Date.parse(record.stoppedAt) < Date.parse(record.startedAt) || Date.parse(record.stoppedAt) > Date.now())) {
+      return '会话结束记录不完整';
+    }
+    const reason = await sessionEndEvidence(record);
+    if (reason) return reason;
+    // The gate serializes all cooperating writers. Re-read before deletion too.
+    const latestOwner = await readJson(join(path, 'owner.json'));
+    const latestRecord = await readJson(join(dir, `${owner.mode}.json`));
+    if (JSON.stringify(latestOwner) !== JSON.stringify(owner) || JSON.stringify(latestRecord) !== JSON.stringify(record)) {
+      return '检查期间会话记录发生变化';
+    }
+    await removeLease(path);
+    console.log(`[Quotern dev] 已确认旧会话 ${owner.sessionId} 结束，自动清理 ${resource}.lock`);
+    return null;
+  } catch (error) { return `无法确认残留锁可恢复：${error.message}`; }
+}
+
+/** Leases never signal a PID. Only positively checked, matching stale leases recover. */
 export async function createDevSession(root, mode, inputEnv = process.env) {
   if (!MODES[mode]) throw new Error(`未知开发模式：${mode}`);
   const host = inputEnv.QUOTERN_DEV_HOST?.trim() || '127.0.0.1';
@@ -83,22 +147,28 @@ export async function createDevSession(root, mode, inputEnv = process.env) {
   catch { /* Non-Git fixtures also use the launcher. */ }
   const leases = [];
   const release = async () => {
-    for (const path of leases) {
-      const owner = await readJson(join(path, 'owner.json'));
-      if (owner?.sessionId === record.sessionId) await rm(path, { recursive: true });
+    for (const resource of leases) {
+      await withResourceGate(dir, resource, async () => {
+        const path = join(dir, `${resource}.lock`);
+        const owner = await readJson(join(path, 'owner.json'));
+        if (owner?.sessionId === record.sessionId) await removeLease(path);
+      });
     }
   };
   try {
     for (const resource of MODES[mode]) {
       const path = join(dir, `${resource}.lock`);
-      try { await mkdir(path); }
-      catch (error) {
-        if (error.code !== 'EEXIST') throw error;
-        const owner = await readJson(join(path, 'owner.json'));
-        throw new Error(`开发资源 ${resource} 已有会话归属${owner ? `（PID ${owner.pid}，${owner.mode}）` : '（归属尚未写完或未知）'}；运行 pnpm dev:status 核对，禁止自动停止或接管`);
-      }
-      leases.push(path);
-      await saveJson(join(path, 'owner.json'), record);
+      await withResourceGate(dir, resource, async () => {
+        try { await mkdir(path); }
+        catch (error) {
+          if (error.code !== 'EEXIST') throw error;
+          const reason = await recoverLease(root, dir, resource, path);
+          if (reason) throw new Error(`开发资源 ${resource} 已有会话归属；${reason}；运行 pnpm dev:status 核对，禁止自动停止或接管`);
+          await mkdir(path);
+        }
+        await saveJson(join(path, 'owner.json'), record);
+        leases.push(resource);
+      });
     }
     // Serialize config selection across separate API/UI launchers in one worktree.
     const configLock = join(dir, 'config.lock');

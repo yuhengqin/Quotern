@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   zcodeRemainingPercent,
   type ZcodeSubscriptionSnapshot,
@@ -18,6 +19,7 @@ const INITIAL_SNAPSHOT: ZcodeSubscriptionSnapshot = {
 
 /** ZCode's locally authorized Coding Plan allowance. */
 export function ZcodeSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<ZcodeSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -28,12 +30,12 @@ export function ZcodeSubscriptionCard() {
     try {
       setSnapshot(await window.tud.getZcodeSubscription());
     } catch {
-      setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 ZCode 订阅信息' });
+      setSnapshot({ ...INITIAL_SNAPSHOT, message: t('desktop.provider.readSubscription', { provider: 'ZCode' }) });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();

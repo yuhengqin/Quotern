@@ -1,11 +1,12 @@
 import { Button, Label, ListBox, Modal, Select, Spinner } from '@heroui/react';
 import { useEffect, useMemo, useState } from 'react';
-import { usageErrorDescription } from '@/lib/usage-error';
+import { normalizeLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import { useShareSnapshot, type ShareSnapshot } from '../hooks/ShareSnapshotContext';
 import { useShareData } from '../hooks/useShareData';
 import { useShareBackgrounds } from '../hooks/useShareBackgrounds';
 import { OPEN_SHARE_EVENT } from '@/lib/shell-events';
-import { buildShareSnapshot, SHARE_RANGE_OPTIONS, type ShareFilters } from '../lib/share-snapshot';
+import { buildShareSnapshot, SHARE_RANGE_OPTIONS, shareRangeLabel, type ShareFilters } from '../lib/share-snapshot';
 import { normalizeSourceId } from '../lib/usage-filter';
 import { MAX_SHARE_BACKGROUNDS } from '../lib/share-backgrounds';
 import { formatDashboardDateRange } from '@/lib/dashboard-date-range';
@@ -16,6 +17,7 @@ import { ShareBackgroundPicker } from './ShareBackgroundPicker';
 
 /** Each opening captures the dashboard scope, then owns an independent share session. */
 export function ShareActivityModal() {
+  const { t } = useTranslation();
   const [session, setSession] = useState<{ snapshot: ShareSnapshot | null } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const { snapshot } = useShareSnapshot();
@@ -29,8 +31,8 @@ export function ShareActivityModal() {
   return (
     <Modal.Backdrop isOpen={session !== null} onOpenChange={(open) => { if (!open) setSession(null); }}>
       <Modal.Container className="p-4 sm:p-4" scroll="inside" size="lg">
-        <Modal.Dialog aria-label="分享用量报告" className="max-h-[90dvh] overflow-hidden p-4 sm:max-w-[720px] sm:p-5">
-          <Modal.CloseTrigger aria-label="关闭分享" />
+        <Modal.Dialog aria-label={t('share.modalLabel')} className="max-h-[90dvh] overflow-hidden p-4 sm:max-w-[720px] sm:p-5">
+          <Modal.CloseTrigger aria-label={t('share.close')} />
           {session && <ShareSession activeIndex={activeIndex} initial={session.snapshot} onActiveIndexChange={setActiveIndex} />}
         </Modal.Dialog>
       </Modal.Container>
@@ -43,12 +45,14 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
   const backgrounds = useShareBackgrounds();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectionRevision, setSelectionRevision] = useState(0);
-  const variants = useMemo<ShareCardVariant[]>(() => [...SHARE_CARD_VARIANTS, ...(backgrounds.ready ? backgrounds.items : []).map((item) => ({
+  const variants = useMemo<ShareCardVariant[]>(() => [...SHARE_CARD_VARIANTS.map((variant) => ({ ...variant, label: t(`share.variant.${variant.id}`) })), ...(backgrounds.ready ? backgrounds.items : []).map((item) => ({
     id: item.id, label: item.name, color: '#100b35', theme: 'custom' as const, backgroundImage: item.image,
-  }))], [backgrounds.items, backgrounds.ready]);
+  }))], [backgrounds.items, backgrounds.ready, locale, t]);
   const customIndex = variants.findIndex((variant) => variant.id === backgrounds.selectedId);
   const currentIndex = customIndex >= 0 ? customIndex : activeIndex;
   const currentVariant = getShareCardVariant(currentIndex, variants);
@@ -67,7 +71,7 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
     selectedSources: [...new Set((initial?.filters.selectedSources ?? []).map(normalizeSourceId))],
   }));
   const { data, loading, error, retry } = useShareData(initial, filters.rangeDays, filters.selectedDate, filters.dateRange);
-  const preview = useMemo(() => data ? buildShareSnapshot(data, filters) : null, [data, filters]);
+  const preview = useMemo(() => data ? buildShareSnapshot(data, filters, locale) : null, [data, filters, locale]);
   const sources = [...new Set([
     ...(initial && !initial.loading && !initial.error ? initial.details?.sources ?? [] : []),
     ...filters.selectedSources,
@@ -76,15 +80,15 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   const inheritedDate = initial?.filters.selectedDate;
   const inheritedRange = initial?.filters.dateRange;
   const rangeValue = filters.selectedDate ? `date:${filters.selectedDate}` : filters.dateRange ? 'custom' : String(filters.rangeDays);
-  const rangeLabel = filters.selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : SHARE_RANGE_OPTIONS.find((option) => option.days === filters.rangeDays)?.label);
+  const rangeLabel = filters.selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : shareRangeLabel(filters.rangeDays, locale));
   const disabled = loading || error !== null || !preview;
 
   return (
     <>
       <Modal.Body className="px-0 pb-0 pt-0 sm:px-2">
-        <div className="flex flex-wrap items-center justify-center gap-2 pb-3" aria-label="分享筛选条件">
+        <div className="flex flex-wrap items-center justify-center gap-2 pb-3" aria-label={t('share.filterGroup')}>
           <Select
-            aria-label="分享日期范围"
+            aria-label={t('share.dateRange')}
             className="w-fit text-xs"
             value={rangeValue}
             variant="secondary"
@@ -96,16 +100,16 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
               setFilters((current) => ({ ...current, rangeDays, selectedDate, dateRange }));
             }}
           >
-            <Label className="sr-only">日期范围</Label>
+            <Label className="sr-only">{t('share.dateRangeShort')}</Label>
             <Select.Trigger className="!h-8 !min-h-8 !w-fit ps-3 pe-8 !text-xs">
               <Select.Value />
               <Select.Indicator />
             </Select.Trigger>
             <Select.Popover className="w-44" placement="bottom start">
-              <ListBox aria-label="分享日期范围选项">
+              <ListBox aria-label={t('share.dateRangeOptions')}>
                 {SHARE_RANGE_OPTIONS.map((option) => (
-                  <ListBox.Item id={String(option.days)} key={option.days} textValue={option.label}>
-                    {option.label}<ListBox.ItemIndicator />
+                  <ListBox.Item id={String(option.days)} key={option.days} textValue={shareRangeLabel(option.days, locale)}>
+                    {shareRangeLabel(option.days, locale)}<ListBox.ItemIndicator />
                   </ListBox.Item>
                 ))}
                 {inheritedRange && <ListBox.Item id="custom" textValue={formatDashboardDateRange(inheritedRange)}>
@@ -120,7 +124,7 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             </Select.Popover>
           </Select>
           <ToolChannelSelect
-            ariaLabel="分享 Agent"
+            ariaLabel={t('share.agentFilter')}
             tools={sources.map((source) => ({ source }))}
             selectedTools={filters.selectedSources}
             onChange={(selectedSources) => setFilters((current) => ({ ...current, selectedSources }))}
@@ -137,9 +141,9 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
               details={preview?.details} toolLabel={preview?.toolLabel} />
             {disabled && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-surface/90 p-6 text-center" role="status" aria-live="polite">
-                {loading ? <><Spinner size="sm" /><span className="text-sm text-muted">正在更新分享预览…</span></> : <>
-                  <p className="text-sm text-muted">{error ? usageErrorDescription(error) : '暂无分享数据'}</p>
-                  <Button size="sm" variant="secondary" onPress={retry}>重试</Button>
+                {loading ? <><Spinner size="sm" /><span className="text-sm text-muted">{t('share.previewLoading')}</span></> : <>
+                  <p className="text-sm text-muted">{error ? t('share.previewError') : t('share.previewEmpty')}</p>
+                  <Button size="sm" variant="secondary" onPress={retry}>{t('share.retry')}</Button>
                 </>}
               </div>
             )}

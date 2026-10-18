@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import type { SourceUsageRow } from '@/lib/api';
 import { formatPct, formatTokens, formatUsd } from '@/lib/format';
 import { sourceColor, sourceLabel, TOOLTIP_SHADOW } from '@/lib/tokens';
@@ -26,15 +27,16 @@ export function AgentShareCard({
   selectedRow,
   onSelectSource,
 }: AgentShareCardProps) {
+  const { t } = useTranslation();
   return (
     <Card>
       <Card.Header>
-        <Card.Title>按 Agent</Card.Title>
+        <Card.Title>{t('rank.agentShare.title')}</Card.Title>
       </Card.Header>
       <Card.Content className="flex flex-col gap-4">
         {rows.length === 0 ? (
           <p className="text-sm font-medium text-muted">
-            暂无数据。使用 Claude Code 对话后运行同步。
+            {t('rank.agentShare.empty')}
           </p>
         ) : (
           <>
@@ -150,6 +152,7 @@ function AgentMetric({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   const modelCount = row.models.filter((m) => m.tokens > 0).length;
 
   return (
@@ -174,13 +177,14 @@ function AgentMetric({
         {formatPct(row.pct)}
       </div>
       <div className="mt-0.5 text-xs font-medium text-muted">
-        {modelCount} 个模型
+        {t('rank.agentShare.modelCount', { count: modelCount })}
       </div>
     </button>
   );
 }
 
 function ModelBreakdownWell({ row }: { row: SourceUsageRow }) {
+  const { t } = useTranslation();
   const models = row.models.filter((model) => model.tokens > 0);
 
   return (
@@ -198,7 +202,7 @@ function ModelBreakdownWell({ row }: { row: SourceUsageRow }) {
       </div>
 
       {models.length === 0 ? (
-        <p className="text-sm font-medium text-muted">暂无模型用量</p>
+        <p className="text-sm font-medium text-muted">{t('rank.agentShare.emptyModels')}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {models.map((model) => (

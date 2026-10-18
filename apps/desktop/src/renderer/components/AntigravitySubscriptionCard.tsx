@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { antigravityRemainingPercent, type AntigravitySubscriptionSnapshot } from '../../shared/antigravity-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
@@ -9,6 +10,7 @@ const INITIAL_SNAPSHOT: AntigravitySubscriptionSnapshot = {
 
 /** Antigravity's official account model quota. */
 export function AntigravitySubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<AntigravitySubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -16,9 +18,9 @@ export function AntigravitySubscriptionCard() {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
     try { setSnapshot(await window.tud.getAntigravitySubscription()); }
-    catch { setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 Antigravity 订阅信息' }); }
+    catch { setSnapshot({ ...INITIAL_SNAPSHOT, message: t('desktop.provider.readSubscription', { provider: 'Antigravity' }) }); }
     finally { requestInFlight.current = false; setLoading(false); }
-  }, []);
+  }, [t]);
   useEffect(() => {
     void reload();
     const onFocus = () => void reload();

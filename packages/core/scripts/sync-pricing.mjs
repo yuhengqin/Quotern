@@ -15,11 +15,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import { EnvHttpProxyAgent } from 'undici';
 import { mergePricingModelMetadata } from './pricing-metadata.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRICING_PATH = join(__dirname, '..', 'src', 'pricing', 'pricing.json');
-const MODELS_DEV_URL = 'https://models.dev/api.json';
+// One snapshot contains both calling IDs and provider-independent model names.
+const MODELS_DEV_URL = 'https://models.dev/catalog.json';
 
 // Official-channel providers kept in the bundle. Everything else in models.dev
 // (third-party / community / AWS / regional relays) is excluded.
@@ -28,6 +31,19 @@ const SCOPED_PROVIDERS = new Set([
   'xai', 'deepseek', 'alibaba', 'alibaba-cn', 'moonshotai', 'moonshotai-cn',
   'minimax', 'minimax-cn', 'xiaomi', 'mistral', 'zai', 'zhipuai', 'volcengine',
   'stepfun', 'meta',
+]);
+
+// Explicitly verified vendor-operated subscriptions. Do not infer billing from
+// a provider name or zero rates: some plans have nonzero placeholder rates.
+const SUBSCRIPTION_PROVIDERS = new Set([
+  'kimi-code-plan-cn', 'kimi-code-plan-global',
+  'zai-coding-plan', 'zhipuai-coding-plan',
+  'minimax-coding-plan', 'minimax-cn-coding-plan',
+  'alibaba-coding-plan', 'alibaba-coding-plan-cn',
+  'alibaba-token-plan', 'alibaba-token-plan-cn',
+  'volcengine-coding-plan', 'tencent-coding-plan', 'tencent-token-plan',
+  'stepfun-ai-step-plan', 'stepfun-step-plan',
+  'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'xiaomi-token-plan-ams',
 ]);
 
 // Manual overrides for models.dev prices that are known to be wrong / stale.
@@ -118,13 +134,38 @@ function toRates(cost) {
 
 async function main() {
   const current = JSON.parse(readFileSync(PRICING_PATH, 'utf8'));
-  const res = await fetch(MODELS_DEV_URL, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`models.dev fetch failed: HTTP ${res.status}`);
-  const catalog = await res.json();
+  // Honor HTTP(S)_PROXY / NO_PROXY even on Node versions without --use-env-proxy.
+  const dispatcher = new EnvHttpProxyAgent();
+  let catalog;
+  try {
+    const res = await fetch(MODELS_DEV_URL, {
+      headers: { Accept: 'application/json' },
+      dispatcher,
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) {
+      await res.body?.cancel();
+      throw new Error(`models.dev fetch failed: HTTP ${res.status}`);
+    }
+    catalog = await res.json();
+    if (!catalog?.providers || typeof catalog.providers !== 'object' || Array.isArray(catalog.providers)
+      || !Object.keys(catalog.providers).length) throw new Error('models.dev catalog is missing providers');
+  } finally {
+    await dispatcher.close();
+  }
 
   // 1. Build the fresh exact table from models.dev (scoped providers, text models with cost).
+  const providers = catalog.providers;
+  const canonicalModels = catalog.models ?? {};
   const fresh = {};
-  for (const [provider, entry] of Object.entries(catalog)) {
+  const subscriptionKeys = {};
+  for (const [provider, entry] of Object.entries(providers)) {
+    if (SUBSCRIPTION_PROVIDERS.has(provider)) {
+      for (const [modelId, model] of Object.entries(entry?.models ?? {})) {
+        if (isTextModel(model)) subscriptionKeys[`${provider}/${modelId}`] = {};
+      }
+      continue;
+    }
     if (!SCOPED_PROVIDERS.has(provider)) continue;
     for (const [modelId, model] of Object.entries(entry?.models ?? {})) {
       if (!model?.cost || typeof model.cost.input !== 'number' || typeof model.cost.output !== 'number') continue;
@@ -156,7 +197,7 @@ async function main() {
   // 5. Keep only each model's own vendor's official pricing. Cross-vendor
   // hosting (`alibaba-cn/glm-5`, `volcengine/deepseek-*`) and cloud channels
   // (`google-vertex/*`, `google-vertex-anthropic/*`) are dropped.
-  const dropped = Object.keys(exact).filter((k) => !isOfficialKey(k));
+  const dropped = Object.keys(exact).filter((k) => SUBSCRIPTION_PROVIDERS.has(k.split('/')[0]) || !isOfficialKey(k));
   for (const k of dropped) delete exact[k];
 
   // Diff summary for review.
@@ -169,15 +210,28 @@ async function main() {
   }
   const added = Object.keys(exact).filter((k) => !(k in (current.exact ?? {}))).length;
   const removed = Object.keys(current.exact ?? {}).filter((k) => !(k in exact));
+  const modelMetadata = mergePricingModelMetadata(current.model_metadata, providers, exact, canonicalModels);
+  const subscriptionModels = mergePricingModelMetadata(current.subscription_models, providers, subscriptionKeys, canonicalModels);
 
+  // Scheduled syncs must not create commits just for timestamps or history notes.
+  if (process.argv.includes('--if-changed') &&
+      isDeepStrictEqual(exact, current.exact ?? {}) &&
+      isDeepStrictEqual(modelMetadata, current.model_metadata ?? {}) &&
+      isDeepStrictEqual(subscriptionModels, current.subscription_models ?? {})) {
+    console.log('(no pricing or model metadata changes — file left unchanged)');
+    return;
+  }
+
+  const generatedAt = new Date().toISOString();
   const next = {
     ...current,
     exact,
-    model_metadata: mergePricingModelMetadata(current.model_metadata, catalog, exact),
+    model_metadata: modelMetadata,
+    subscription_models: subscriptionModels,
     _meta: {
       ...(current._meta ?? {}),
-      generated_at: `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`,
-      note: `${current._meta?.note ?? ''} Incremental models.dev sync on ${new Date().toISOString().slice(0, 10)}: ` +
+      generated_at: generatedAt,
+      note: `${current._meta?.note ?? ''} Incremental models.dev sync on ${generatedAt.slice(0, 10)}: ` +
         `kept=${Object.keys(exact).length} (added=${added}, changed=${changes.length}, removed=${removed.length}). ` +
         `Official-only: cross-vendor hosting and cloud-partnership channels dropped.`,
     },
@@ -186,6 +240,7 @@ async function main() {
   writeFileSync(PRICING_PATH, `${JSON.stringify(next, null, 2)}\n`);
 
   console.log(`exact: ${Object.keys(current.exact ?? {}).length} -> ${Object.keys(exact).length}`);
+  console.log(`subscription catalog: ${Object.keys(subscriptionModels).length} models (no per-token rates)`);
   console.log(
     `added: ${added}, changed: ${changes.length}, removed: ${removed.length} ` +
       `(${discoveredAdded} discovered, ${dropped.length} non-official dropped)`,

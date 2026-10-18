@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { differenceInCalendarDays, format } from 'date-fns';
+import { differenceInCalendarDays } from 'date-fns';
 import { Card, Chip, ProgressBar } from '@heroui/react';
+import { i18n, normalizeLocale, translate, type SupportedLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import { AlarmClockIcon } from 'lucide-react';
 import { visibleSubscriptionPlanLabel } from '../../shared/subscription-plan';
 
@@ -41,6 +43,7 @@ export function SubscriptionUsageCard({
   loading,
   feedback,
 }: SubscriptionUsageCardProps) {
+  const { t } = useTranslation();
   const visiblePlanLabel = visibleSubscriptionPlanLabel(data.planLabel, data.showFreePlan);
   const visibleMetrics = data.metrics.filter(
     (metric): metric is SubscriptionUsageMetric & { remainingPercent: number } =>
@@ -60,7 +63,7 @@ export function SubscriptionUsageCard({
               {data.title}
             </p>
             {data.stale ? (
-              <span className="shrink-0 text-[10px] text-muted">旧</span>
+              <span className="shrink-0 text-[10px] text-muted">{t('desktop.subscription.stale')}</span>
             ) : null}
           </div>
           {visiblePlanLabel ? (
@@ -73,7 +76,7 @@ export function SubscriptionUsageCard({
           <SubscriptionProgressBars metrics={visibleMetrics} title={data.title} />
         ) : null}
         {feedback ?? (data.hasAccount && data.message ? (
-          <p role="status" className="text-xs text-muted">{data.message}</p>
+          <p role="status" className="text-xs text-muted">{t('desktop.subscription.unavailable', { provider: data.title })}</p>
         ) : null)}
       </Card.Content>
     </Card>
@@ -87,17 +90,22 @@ function SubscriptionProgressBars({
   metrics: readonly (SubscriptionUsageMetric & { remainingPercent: number })[];
   title: string;
 }) {
+  const { t, i18n: activeI18n } = useTranslation();
+  const locale = normalizeLocale(activeI18n.resolvedLanguage);
   return (
     <div className="grid min-h-12 content-start gap-3">
       {metrics.slice(0, 3).map((metric) => {
         const daysOnly = metric.resetDisplay === 'days-only';
         const resetLabel = daysOnly
-          ? formatSubscriptionDaysRemaining(metric.resetsAt)
-          : formatSubscriptionResetTime(metric.resetsAt);
+          ? formatSubscriptionDaysRemaining(metric.resetsAt, new Date(), locale)
+          : formatSubscriptionResetTime(metric.resetsAt, new Date(), false, locale);
         const resetTitle = daysOnly
-          ? formatSubscriptionExpiryDate(metric.resetsAt)
-          : formatSubscriptionResetTime(metric.resetsAt, new Date(), true);
-        const timeKind = daysOnly ? '到期' : '刷新时间';
+          ? formatSubscriptionExpiryDate(metric.resetsAt, locale)
+          : formatSubscriptionResetTime(metric.resetsAt, new Date(), true, locale);
+        const timeKind = t(daysOnly ? 'desktop.subscription.expires' : 'desktop.subscription.resetTime');
+        const resetDescription = resetLabel
+          ? t('desktop.subscription.progressReset', { kind: timeKind, time: resetLabel })
+          : '';
         return (
           <div
             className="grid min-w-0 gap-0.5"
@@ -107,7 +115,7 @@ function SubscriptionProgressBars({
               <span className="shrink-0 text-xs font-normal text-muted">{metric.label}</span>
               {resetLabel ? (
                 <span
-                  aria-label={`${timeKind}：${resetLabel}`}
+                  aria-label={t('desktop.subscription.timeLabel', { kind: timeKind, time: resetLabel })}
                   className="flex min-w-0 items-center gap-1 text-xs font-normal leading-none tabular-nums text-muted"
                   title={resetTitle ?? resetLabel}
                 >
@@ -120,7 +128,12 @@ function SubscriptionProgressBars({
             </div>
             <div className="flex min-w-0 items-center gap-3">
               <ProgressBar
-                aria-label={`${title} ${metric.label} ${metric.valueText ?? `剩余 ${Math.round(metric.remainingPercent)}%`}${resetLabel ? `，${timeKind}${resetLabel}` : ''}`}
+                aria-label={t('desktop.subscription.progress', {
+                  title,
+                  metric: metric.label,
+                  value: metric.valueText ?? t('desktop.subscription.remaining', { percent: Math.round(metric.remainingPercent) }),
+                  reset: resetDescription,
+                })}
                 className="min-w-0 flex-1"
                 maxValue={100}
                 size="sm"
@@ -152,35 +165,44 @@ export function formatSubscriptionResetTime(
   resetsAt?: number | null,
   now = new Date(),
   absolute = false,
+  locale: SupportedLocale = normalizeLocale(i18n.resolvedLanguage),
 ): string | null {
   if (typeof resetsAt !== 'number' || !Number.isFinite(resetsAt) || resetsAt <= 0) return null;
   const date = new Date(resetsAt * 1_000);
   if (!Number.isFinite(date.getTime())) return null;
-  if (absolute) return format(date, 'M月d日 HH:mm');
+  if (absolute) return `${formatSubscriptionDate(date, locale)} ${formatSubscriptionClock(date, locale)}`;
 
   const daysUntilReset = differenceInCalendarDays(date, now);
   const dayLabel = daysUntilReset === 0
-    ? '今日'
+    ? translate(locale, 'desktop.subscription.today')
     : daysUntilReset === 1
-      ? '明日'
+      ? translate(locale, 'desktop.subscription.tomorrow')
       : daysUntilReset > 1
-        ? `${daysUntilReset}天后`
-        : format(date, 'M月d日');
-  return `${dayLabel} ${format(date, 'HH:mm')}`;
+        ? translate(locale, 'desktop.subscription.daysLater', { count: daysUntilReset })
+        : formatSubscriptionDate(date, locale);
+  return `${dayLabel} ${formatSubscriptionClock(date, locale)}`;
 }
 
-function formatSubscriptionDaysRemaining(resetsAt?: number | null, now = new Date()): string | null {
+function formatSubscriptionDaysRemaining(resetsAt?: number | null, now = new Date(), locale: SupportedLocale = normalizeLocale(i18n.resolvedLanguage)): string | null {
   const date = subscriptionTimestampToDate(resetsAt);
   if (!date) return null;
   const daysUntilExpiry = differenceInCalendarDays(date, now);
-  if (daysUntilExpiry <= 0) return '今日';
-  if (daysUntilExpiry === 1) return '明日';
-  return `${daysUntilExpiry}天后`;
+  if (daysUntilExpiry <= 0) return translate(locale, 'desktop.subscription.today');
+  if (daysUntilExpiry === 1) return translate(locale, 'desktop.subscription.tomorrow');
+  return translate(locale, 'desktop.subscription.daysLater', { count: daysUntilExpiry });
 }
 
-function formatSubscriptionExpiryDate(resetsAt?: number | null): string | null {
+function formatSubscriptionExpiryDate(resetsAt?: number | null, locale: SupportedLocale = normalizeLocale(i18n.resolvedLanguage)): string | null {
   const date = subscriptionTimestampToDate(resetsAt);
-  return date ? format(date, 'M月d日到期') : null;
+  return date ? translate(locale, 'desktop.subscription.expiresOnDate', { date: formatSubscriptionDate(date, locale) }) : null;
+}
+
+function formatSubscriptionDate(date: Date, locale: SupportedLocale): string {
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function formatSubscriptionClock(date: Date, locale: SupportedLocale): string {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
 }
 
 function subscriptionTimestampToDate(timestamp?: number | null): Date | null {

@@ -11,6 +11,12 @@ declare global {
     tud: {
       version: () => string;
       platform: NodeJS.Platform;
+      quota: {
+        getState: () => Promise<import('../shared/quota').QuotaState>;
+        refresh: (provider?: string) => Promise<import('../shared/quota').QuotaState>;
+        setPreferences: (patch: import('../shared/quota').QuotaPreferencePatch) => Promise<import('../shared/quota').QuotaState>;
+        onChanged: (callback: (state: import('../shared/quota').QuotaState) => void) => () => void;
+      };
       minimize: () => void;
       toggleMaximize: () => void;
       close: () => void;
@@ -103,6 +109,9 @@ declare global {
         mode: import('../shared/theme').ThemeMode;
         resolved: import('../shared/theme').Theme;
       }>;
+      getLocalePreference: () => Promise<import('../shared/locale').DesktopLocaleState>;
+      setLocalePreference: (preference: import('quotern-i18n').LocalePreference) => Promise<void>;
+      onLocaleChanged: (callback: (state: import('../shared/locale').DesktopLocaleState) => void) => () => void;
       setThemeMode: (mode: import('../shared/theme').ThemeMode) => void;
       onThemeChanged: (
         callback: (state: {

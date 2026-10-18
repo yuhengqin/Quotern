@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Headset } from 'lucide-react';
 import { Button } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { cn } from '@/lib/utils';
 
 const WECHAT_QR_SRC = `${import.meta.env.BASE_URL}captain-wechat.jpg`;
@@ -10,14 +11,15 @@ function canHoverOpen(): boolean {
 }
 
 function SupportQrCard() {
+  const { t } = useTranslation();
   return (
     <div className="w-52 rounded-xl bg-overlay p-3 text-overlay-foreground shadow-surface">
-      <p className="text-sm font-medium text-foreground">问题反馈</p>
+      <p className="text-sm font-medium text-foreground">{t('about.feedbackTitle')}</p>
       <p className="mt-1 text-xs leading-5 text-muted">
-        使用问题，建议反馈，可加微信反馈
+        {t('about.supportDescription')}
       </p>
       <img
-        alt="微信客服二维码：扫码添加 Captain"
+        alt={t('about.supportQrAlt')}
         className="mt-2.5 block h-auto w-full rounded-lg bg-white"
         decoding="async"
         draggable={false}
@@ -35,6 +37,7 @@ export function WeChatSupportTrigger({
 }: {
   variant: 'chrome' | 'link';
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const isLink = variant === 'link';
@@ -73,7 +76,7 @@ export function WeChatSupportTrigger({
       <Button
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label="问题反馈"
+        aria-label={t('about.feedbackTitle')}
         className={
           isLink
             ? cn(
@@ -103,7 +106,7 @@ export function WeChatSupportTrigger({
               : 'top-full right-0 pt-2',
           )}
           role="dialog"
-          aria-label="问题反馈"
+          aria-label={t('about.feedbackTitle')}
         >
           <SupportQrCard />
         </div>

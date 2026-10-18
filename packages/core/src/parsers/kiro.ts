@@ -189,7 +189,11 @@ export function cliEventsToEntries(
           model: canonicalizeKiroModel(curModel),
           project: opts.cwd ? resolveProjectName(opts.cwd) : 'unknown',
           timestamp: curTs || opts.fallbackTimestamp || new Date(),
-          delta: { ...deltaBody, total_tokens: computeTotalTokens(deltaBody) },
+          delta: {
+            ...deltaBody,
+            total_tokens: computeTotalTokens(deltaBody),
+            token_quality: 'estimated',
+          },
         });
       }
       pendingInput = 0;
@@ -312,7 +316,8 @@ function parseKiroSqlite(
       let input = Number.isFinite(inputRaw) && inputRaw > 0 ? Math.floor(inputRaw) : 0;
       let output = Number.isFinite(outputRaw) && outputRaw > 0 ? Math.floor(outputRaw) : 0;
 
-      if (input === 0 && output === 0) {
+      const estimated = input === 0 && output === 0;
+      if (estimated) {
         const promptLen = Math.max(0, Number(r.user_prompt_length) || 0);
         const respLen = Math.max(0, Number(r.response_size) || 0);
         input = Math.floor(promptLen / 4);
@@ -342,7 +347,12 @@ function parseKiroSqlite(
         model,
         convId,
         hourStart,
-        { ...deltaBody, total_tokens: computeTotalTokens(deltaBody), conversation_count: 1 },
+        {
+          ...deltaBody,
+          total_tokens: computeTotalTokens(deltaBody),
+          conversation_count: 1,
+          token_quality: estimated ? 'estimated' : 'recorded',
+        },
         KIRO_COLLECTOR_CLI,
       );
       seenHashes.add(requestId);

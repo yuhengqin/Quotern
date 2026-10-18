@@ -66,6 +66,7 @@ quotern start
 | `quotern status` | 查看 CLI / 面板当前状态 |
 | `quotern sync` | 手动同步本地用量数据 |
 | `quotern doctor` | 检查运行环境、本地数据源及服务状态 |
+| `quotern usage [period]` | 只读查询已采集用量，支持文本、JSON、CSV |
 | `quotern help` | 显示帮助 |
 
 ## 常用选项
@@ -75,6 +76,28 @@ quotern start --port 8452
 quotern start --host 0.0.0.0          # 局域网可访问；默认 127.0.0.1
 quotern sync --source=claude          # claude | codex | cursor | all
 ```
+
+## 用量报表与 Agent 查询
+
+```bash
+quotern usage                         # 最近 7 天，包含今天
+quotern usage overview --days 7 --json --compact # 同次读取的综合概览
+quotern usage daily --days 30
+quotern usage weekly --from 2026-06-01 --to 2026-06-30
+quotern usage monthly --days 90 --csv
+quotern usage models --source codex,claude --days 30 --json
+quotern usage projects --project Quotern --days 30 --format json
+```
+
+`period` 支持 `summary`（命令行默认）、`overview`、`daily`、`weekly`、`monthly`、`models`、`projects`。日期以 `Asia/Shanghai` 划分，包含起止日，周一为一周起点。`--days` 接受 1–3660；与成对的 `--from/--to` 互斥。筛选支持逗号分隔的 `--source`、完整模型名 `--model` 和项目显示名 `--project`。同名项目目录沿用面板合并口径；模型仍保留 Agent 身份。
+
+命令直接读取本地配置、统计队列和已有价格缓存，Desktop 运行时也可使用；不会启动服务、同步原始日志或扩大采集范围。默认目录为 `~/.ai-usage/`，`--data-dir <目录>` 可显式选择已有数据。缺配置或非法参数退出码为 1；空结果正常返回。数据为读取时已落盘的快照，同步正在进行时与面板读数可能有短暂差异。
+
+JSON 使用 `schemaVersion: 1`，包含 `summary`、`rows`、`filters` 和 `coverage`。先检查采集起点、`limited`、最近同步时间；请求的日期范围早于采集起点时，结果不代表完整历史。费用的 `costUsd: null` 表示部分价格未知，`knownCostUsd` 仅为已计价小计；CSV 对未知费用/请求数/缓存率留空。`costExplanation` 提供来源报告金额、按费率估算、默认费率占比、缺失价格、实际匹配模型和 Token 依据。费用均不能直接解释为实际付款。
+
+`overview` 额外返回 `breakdowns.daily`、`breakdowns.models`、`breakdowns.projects`：同一次读取后筛选的记录生成全部维度，共用顶层范围、筛选和覆盖说明，不能将不同维度相加。`rows` 保留总计行；CSV 的 `period` 列分别标识 `summary/daily/models/projects`。Skill 将“查看用量信息”等宽泛请求默认交付为 Quotern 样式的综合 HTML 概览；明确的单项查询仍按问题简洁回答。
+
+Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)。推荐通过 `npx skills` 跨工具安装，见 [安装方法](./README.md#推荐使用-npx-skills-安装)；也可让 Agent 按 [安装助手说明](./README_AI.md) 执行。手动复制完整 Skill 文件夹作为备用。Skill 只调用上述 JSON 查询，不维护第二套解析器，也不会隐式启动或修复服务。
 
 ## 数据与同步
 

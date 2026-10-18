@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
+  Description,
+  Label,
+  Radio,
+  RadioGroup,
   Surface,
   Tabs,
   Toast,
@@ -10,14 +14,18 @@ import {
   type TudConfigView,
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
+import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
 import { StatusBanner } from '@/components/StatusBanner';
+import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
+import { useLocalePreference } from '@/hooks/useLocalePreference';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   type SettingsTabId,
 } from '@/lib/shell-events';
 
-const TAB_ITEMS: { id: SettingsTabId; label: string }[] = [
-  { id: 'app', label: '应用' },
-  { id: 'about', label: '关于' },
+const TAB_ITEMS: { id: SettingsTabId; labelKey: string }[] = [
+  { id: 'app', labelKey: 'settings.tabs.app' },
+  { id: 'about', labelKey: 'settings.tabs.about' },
 ];
 
 /** See desktop SettingsPanel: panel height must fit under dialog chrome. */
@@ -34,6 +42,7 @@ export function SettingsPanel({
   const [toastQueue] = useState(
     () => new ToastQueue({ maxVisibleToasts: 1 }),
   );
+  const { t } = useTranslation();
   const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>('app');
   const tab = activeTab ?? uncontrolledTab;
   const setTab = onTabChange ?? setUncontrolledTab;
@@ -50,14 +59,14 @@ export function SettingsPanel({
         onSelectionChange={(key) => setTab(String(key) as SettingsTabId)}
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List aria-label="设置分类" className="w-fit">
+          <Tabs.List aria-label={t('settings.tabs.category')} className="w-fit">
             {TAB_ITEMS.map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
                 key={item.id}
               >
-                {item.label}
+                {t(item.labelKey)}
                 <Tabs.Indicator className="bg-accent" />
               </Tabs.Tab>
             ))}
@@ -76,6 +85,8 @@ export function SettingsPanel({
 }
 
 function AppSettingsPanel() {
+  const { t } = useTranslation();
+  const { preference, locale, setPreference } = useLocalePreference();
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +102,8 @@ function AppSettingsPanel() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '加载配置失败');
+          console.error('[quotern-dashboard] failed to load config:', e);
+          setError('settings.loadConfigFailed');
         }
       })
       .finally(() => {
@@ -102,42 +114,70 @@ function AppSettingsPanel() {
     };
   }, []);
 
-  if (loading) {
-    return <p className="text-muted">加载配置…</p>;
-  }
-
-  if (error) {
-    return <StatusBanner tone="error" title={error} />;
-  }
-
-  if (!config) {
-    return (
-      <p className="text-sm text-muted">
-        当前为 Web 模式，设备信息仅在本机 CLI / 桌面端可见。
-      </p>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
-        <h3 className="mb-3 text-sm font-medium text-foreground">设备信息</h3>
-        <div className="flex flex-col gap-2 text-sm">
-          <InfoRow label="设备 ID" value={config.deviceId} />
-          <InfoRow
-            label="统计起点"
-            value={config.statsSince.slice(0, 19).replace('T', ' ')}
-          />
-          <InfoRow
-            label="上次同步"
-            value={
-              config.lastSyncAt
-                ? new Date(config.lastSyncAt).toLocaleString()
-                : '从未'
-            }
-          />
-        </div>
+        <LanguagePreferenceControl value={preference} onChange={setPreference} />
       </Surface>
+      <Surface className="rounded-xl p-4" variant="secondary">
+        <RadioGroup
+          name="token-unit-mode"
+          value={getTokenUnitMode()}
+          variant="secondary"
+          onChange={(next) => {
+            if (next !== 'localized' && next !== 'international') return;
+            if (next === getTokenUnitMode()) return;
+            setTokenUnitMode(next);
+            window.location.reload();
+          }}
+        >
+          <Label>{t('settings.tokenUnit.label')}</Label>
+          <Description>{t('settings.tokenUnit.description')}</Description>
+          <Radio value="localized">
+            <Radio.Content>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              {t('settings.tokenUnit.localized')}
+            </Radio.Content>
+          </Radio>
+          <Radio value="international">
+            <Radio.Content>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              {t('settings.tokenUnit.international')}
+            </Radio.Content>
+          </Radio>
+        </RadioGroup>
+      </Surface>
+      {loading ? <p className="text-muted">{t('settings.loadingConfig')}</p> : null}
+      {error ? <StatusBanner tone="error" title={t(error)} /> : null}
+      {!loading && !error && !config ? (
+        <p className="text-sm text-muted">
+          {t('settings.webDeviceHint')}
+        </p>
+      ) : null}
+      {config ? (
+        <Surface className="rounded-xl p-4" variant="secondary">
+          <h3 className="mb-3 text-sm font-medium text-foreground">{t('settings.device.title')}</h3>
+          <div className="flex flex-col gap-2 text-sm">
+            <InfoRow label={t('settings.device.id')} value={config.deviceId} />
+            <InfoRow
+              label={t('settings.device.statsSince')}
+              value={config.statsSince.slice(0, 19).replace('T', ' ')}
+            />
+            <InfoRow
+              label={t('settings.device.lastSync')}
+              value={
+                config.lastSyncAt
+                  ? new Date(config.lastSyncAt).toLocaleString(locale)
+                  : t('settings.device.never')
+              }
+            />
+          </div>
+        </Surface>
+      ) : null}
     </div>
   );
 }

@@ -31,6 +31,8 @@
   ·
   <a href="./FAQ.md">常见问题</a>
   ·
+  <a href="#agent-自动发现与调用">Agent 自动发现与调用</a>
+  ·
   <a href="#本地数据">本地数据</a>
 </p>
 
@@ -65,6 +67,82 @@ quotern service start
 ```
 
 国内网络较慢可用 `npm i -g quotern --registry=https://registry.npmmirror.com/`。完整命令、选项与数据说明见 [CLI 使用说明](./CLI.md)。
+
+## Agent 自动发现与调用
+
+Quotern 提供 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)，支持 Agent Skills 的 Coding Agent 可根据用量问题自动匹配并调用本地查询。查询时需要可用的 Quotern CLI 和已同步的本地数据；仅安装桌面客户端时，还需额外安装 CLI。
+
+### 推荐：使用 npx skills 安装
+
+使用 [Vercel Skills CLI](https://github.com/vercel-labs/skills) 安装，当前安装器要求 Node.js >= 22.20；Quotern CLI 本身仍支持 Node.js >= 20.10。
+
+```bash
+npx skills add yuhengqin/Quotern --skill quotern-usage --full-depth --global
+```
+
+按提示选择要安装到的 Agent，推荐使用链接模式：Skill 集中保存在 `~/.agents/skills/quotern-usage/`，安装器为需要独立目录的 Agent 建立链接。Windows 使用目录联接（Junction），无法建立链接时可选择复制模式。`--global` 表示在个人所有项目中可用；只想在当前项目使用时去掉它。
+
+安装前也可只查看仓库中可发现的 Skill：
+
+```bash
+npx skills add yuhengqin/Quotern --list --full-depth
+```
+
+从本仓库源码安装时，在仓库根目录运行 `npx skills add ./packages/cli/skills/quotern-usage --global`。若远程访问失败，先检查 GitHub 仓库访问权限，或使用已检出的本地源码。
+
+### 交给 Agent 安装
+
+将下面这段话发给当前 Coding Agent，让它按 [Agent 安装说明](./README_AI.md) 完成安装并报告验证结果：
+
+```text
+请阅读 https://github.com/yuhengqin/Quotern/blob/main/README_AI.md，
+为当前 Agent 全局安装 quotern-usage Skill，保留已有本地定制，
+并验证完整文件、技能发现路径及 Quotern CLI 是否可用。
+```
+
+### 手动复制（备用）
+
+无法使用安装器时，可从已安装的 CLI npm 包或本仓库复制完整 `quotern-usage` 文件夹，保留 `references/`、`scripts/`、`assets/`。以下以当前项目的 `.agents/skills/` 为例；其他技能目录按所用 Agent 的要求调整。全局安装 CLI 本身不会自动将 Skill 注册到 Agent。
+
+<details>
+<summary>查看手动复制命令</summary>
+
+macOS / Linux：
+
+```bash
+mkdir -p .agents/skills
+cp -R "$(npm root -g)/quotern/skills/quotern-usage" .agents/skills/
+```
+
+Windows PowerShell：
+
+```powershell
+New-Item -ItemType Directory -Force .agents/skills | Out-Null
+Copy-Item -Recurse (Join-Path (npm root -g) 'quotern/skills/quotern-usage') .agents/skills/
+```
+
+也可从本仓库的 [`packages/cli/skills/quotern-usage`](./packages/cli/skills/quotern-usage/) 复制完整文件夹。
+
+</details>
+
+### 让 Agent 调用
+
+按所用 Agent 的方式刷新技能或重开会话，确认已加载 `quotern-usage` 后，直接提问：
+
+```text
+查看我最近 7 天的用量信息
+最近 30 天 Codex 和 Claude 各用了多少 Token？
+统计 Quotern 项目最近 30 天的用量和预估费用
+```
+
+Skill 会选择对应查询：宽泛的用量报告默认生成综合 HTML 概览，明确的单项问题直接简洁回答。Agent 通过 `quotern usage` 读取 JSON，例如：
+
+```bash
+quotern usage overview --days 7 --json --compact
+quotern usage models --source codex,claude --days 30 --json --compact
+```
+
+查询只读取已落盘的本地统计，Desktop 运行时也可调用，无需额外启动 Web 服务。Skill 不会隐式启动服务或同步日志；数据新鲜度取决于最近同步，费用为来源报告金额或费率估算。完整参数、数据覆盖和费用口径见 [用量报表与 Agent 查询](./CLI.md#用量报表与-agent-查询)。
 
 ## 本地数据
 

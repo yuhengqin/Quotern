@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   openCodeRemainingPercent,
   type OpenCodeSubscriptionSnapshot,
@@ -17,6 +18,7 @@ const INITIAL_SNAPSHOT: OpenCodeSubscriptionSnapshot = {
 
 /** Compact OpenCode Go subscription allowance summary for macOS desktop surfaces. */
 export function OpenCodeSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<OpenCodeSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -27,12 +29,12 @@ export function OpenCodeSubscriptionCard() {
     try {
       setSnapshot(await window.tud.getOpenCodeSubscription());
     } catch {
-      setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 OpenCode Go 订阅信息' });
+      setSnapshot({ ...INITIAL_SNAPSHOT, message: t('desktop.provider.readSubscription', { provider: 'OpenCode Go' }) });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -47,7 +49,7 @@ export function OpenCodeSubscriptionCard() {
         icon: <SubscriptionBrandIcon brand="opencode" />,
         metrics: snapshot.limits.map((limit, index) => ({
           color: index === 0 && snapshot.limits.length > 1 ? '#7dcf00' : '#2b7eff',
-          label: limit.label,
+          label: limit.id === 'monthly' ? t('desktop.provider.metric.monthlyLimit') : limit.label,
           remainingPercent: openCodeRemainingPercent(limit.usedPercent),
           resetsAt: limit.resetsAt,
         })),

@@ -316,6 +316,7 @@ function normalizeCursorRecord(record: CursorCsvRecord): TokenTotals | null {
     ...totals,
     total_tokens: total,
     conversation_count: 1,
+    token_quality: 'recorded',
     local_metrics: localEvidence(
       1,
       true,

@@ -21,24 +21,25 @@ it('loads public Quotern prices without sending dashboard credentials', async (t
 
 it('preserves free rates, missing rates and the price-table generation date', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
-    _meta: { generated_at: '2026-10-15T00:00:00.000Z' },
+    _meta: { generated_at: '2099-10-15T00:00:00.000Z' },
     exact: { free: { input: 0, cache_read: 0 }, unknown: {} },
   })));
   const catalog = await fetchPricingCatalog();
-  assert.equal(catalog.generatedAt, '2026-10-15T00:00:00.000Z');
+  assert.equal(catalog.generatedAt, '2099-10-15T00:00:00.000Z');
   assert.deepEqual(catalog.models, [
     { model: 'free', input: 0, output: null, cacheRead: 0, cacheWrite: null },
     { model: 'unknown', input: null, output: null, cacheRead: null, cacheWrite: null },
   ]);
 });
 
-for (const failure of ['network', 'http', 'invalid-json', 'invalid-rates', 'empty-catalog'] as const) {
+for (const failure of ['network', 'http', 'invalid-json', 'invalid-rates', 'invalid-subscriptions', 'empty-catalog'] as const) {
   it(`shows bundled prices when the remote catalog has a ${failure} failure`, async (t) => {
     t.mock.method(globalThis, 'fetch', async () => {
       if (failure === 'network') throw new TypeError('offline');
       if (failure === 'http') return new Response(null, { status: 404 });
       if (failure === 'invalid-json') return new Response('not JSON');
       if (failure === 'empty-catalog') return new Response(JSON.stringify({ exact: {} }));
+      if (failure === 'invalid-subscriptions') return new Response(JSON.stringify({ exact: { good: {} }, subscription_models: { bad: null } }));
       return new Response(JSON.stringify({ exact: { bad: { input: -1 } } }));
     });
     const catalog = await fetchPricingCatalog();

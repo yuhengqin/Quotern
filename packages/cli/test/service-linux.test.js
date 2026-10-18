@@ -5,12 +5,13 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 
-import {
+const outputDir = process.env.QUOTERN_CLI_TEST_DIST ?? '../dist';
+const {
   buildLinuxUnit,
   isLinuxAutostartRegistered,
   registerLinuxAutostart,
   systemdQuote,
-} from '../dist/service-linux.js';
+} = await import(`${outputDir}/service-linux.js`);
 
 function restoreEnv(name, value) {
   if (value == null) delete process.env[name];
@@ -80,6 +81,7 @@ test('buildLinuxUnit writes ExecStart, Restart, and log paths', () => {
   assert.match(unit, /^RestartSec=3$/m);
   assert.match(unit, /^WorkingDirectory=\/home\/dev$/m);
   assert.match(unit, /^Environment=HOME=\/home\/dev$/m);
+  assert.doesNotMatch(unit, /^Environment=(?:LANG|LC_ALL)=/m);
   assert.match(unit, /StandardOutput=append:\/home\/dev\/\.ai-usage\/logs\/daemon\.log/);
   assert.match(unit, /StandardError=append:\/home\/dev\/\.ai-usage\/logs\/daemon\.log/);
   assert.match(unit, /^WantedBy=default\.target$/m);

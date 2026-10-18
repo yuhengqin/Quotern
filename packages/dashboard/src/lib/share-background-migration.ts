@@ -4,6 +4,10 @@ export interface BackgroundMigrationSource {
   legacy: () => Promise<ShareBackground[]>;
   importLegacy: (items: ShareBackground[]) => Promise<{ items: ShareBackground[]; acceptedIds: string[]; pendingIds: string[] }>;
 }
+export type BackgroundMigrationNotice =
+  | { key: 'share.migrationPending'; count: number }
+  | { key: 'share.migrationFailed' };
+
 export async function loadSharedBackgroundLibrary(source: BackgroundMigrationSource) {
   const shared = await source.list();
   try {
@@ -13,10 +17,9 @@ export async function loadSharedBackgroundLibrary(source: BackgroundMigrationSou
     const pendingCount = result.pendingIds.length;
     return {
       items: result.items, pendingCount,
-      migrationNotice: pendingCount ? `还有 ${pendingCount} 张旧背景待导入。共享图库最多三张，请删除不需要的背景后重试迁移；旧图已保留。` : null,
+      migrationNotice: pendingCount ? { key: 'share.migrationPending' as const, count: pendingCount } : null,
     };
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : '读取或导入失败';
-    return { items: shared, migrationNotice: `旧背景尚未完成迁移：${reason}。旧图已保留，可重试迁移。`, pendingCount: 0 };
+  } catch {
+    return { items: shared, migrationNotice: { key: 'share.migrationFailed' as const }, pendingCount: 0 };
   }
 }

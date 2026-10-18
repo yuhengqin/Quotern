@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   getUpdateToolbarAction,
   PORTABLE_RELEASES_URL,
+  updateDownloadPercent,
   type AutoUpdateState,
 } from '../../shared/auto-update';
 import { resolveAutoUpdateStateForUi } from '@/lib/mock-portable-update';
 
 /** Keep frequent download progress updates local to the toolbar button. */
 export function AutoUpdateAction({ className }: { className: string }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<AutoUpdateState | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -39,10 +42,21 @@ export function AutoUpdateAction({ className }: { className: string }) {
   const action = getUpdateToolbarAction(state);
   if (!action) return null;
 
+  const label = state?.status === 'available'
+    ? t('desktop.update.available')
+    : state?.status === 'downloading'
+      ? state.percent == null
+        ? t('desktop.update.downloading')
+        : t('desktop.update.downloadPercent', { percent: updateDownloadPercent(state.percent) })
+      : state?.status === 'downloaded'
+        ? t('desktop.update.install')
+        : state?.status === 'installing'
+          ? t('desktop.update.installing')
+          : t('desktop.update.retry');
   const tip =
-    actionError
-    ?? state?.message
-    ?? (state?.version ? `更新至 v${state.version}` : action.label);
+    actionError ? t(actionError)
+      : state?.status !== 'error' && state?.version ? t('desktop.update.toVersion', { version: state.version })
+        : label;
 
   const runAction = async () => {
     if (!action.request || requestPending.current) return;
@@ -60,13 +74,13 @@ export function AutoUpdateAction({ className }: { className: string }) {
         case 'open-releases': {
           const result = await window.tud.openExternal(PORTABLE_RELEASES_URL);
           if (!result.ok) {
-            setActionError(result.message ?? '无法打开下载页');
+            setActionError('desktop.update.openFailed');
           }
           break;
         }
       }
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : '更新失败，请重试');
+    } catch {
+      setActionError('desktop.update.actionFailed');
     } finally {
       requestPending.current = false;
       setPending(false);
@@ -91,7 +105,7 @@ export function AutoUpdateAction({ className }: { className: string }) {
         }}
         type="button"
       >
-        {actionError ? '重试更新' : action.label}
+        {actionError ? t('desktop.update.retry') : label}
       </button>
       {tipOpen ? (
         <div

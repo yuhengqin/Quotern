@@ -15,7 +15,7 @@ test('maps a weekly Grok billing response with microsecond dates', () => {
     },
   }), {
     planLabel: 'SuperGrok',
-    limits: [{ id: 'weekly', label: '7d', usedPercent: 27.5, resetsAt: 1_788_825_600 }],
+    limits: [{ id: 'weekly', label: '7d', usedPercent: 27.5, resetsAt: 1_788_825_600, periodSeconds: 604_800 }],
   });
 });
 
@@ -48,6 +48,7 @@ test('derives monthly utilization from credits when percent is absent', () => {
     label: '周期',
     usedPercent: 25,
     resetsAt: 1_790_812_800,
+    periodSeconds: 2_592_000,
   }]);
 });
 
@@ -64,6 +65,7 @@ test('treats an omitted proto percent as zero without inventing a session readin
     label: '7d',
     usedPercent: 0,
     resetsAt: 1_789_344_000,
+    periodSeconds: null,
   }]);
 });
 

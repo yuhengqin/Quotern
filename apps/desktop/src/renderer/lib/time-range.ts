@@ -7,6 +7,7 @@ import type {
 import { localDateDaysAgo, localDateNow } from './stats-timezone';
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
+import { i18n, normalizeLocale, translate, type SupportedLocale } from 'quotern-i18n';
 
 export type TimeRangeKey = 'week' | 'month' | 'all';
 
@@ -15,9 +16,9 @@ export const TIME_RANGE_OPTIONS: {
   label: string;
   days: number;
 }[] = [
-  { key: 'week', label: '周', days: 7 },
-  { key: 'month', label: '月', days: 30 },
-  { key: 'all', label: '不限制', days: 365 },
+  { key: 'week', get label() { return translate(normalizeLocale(i18n.resolvedLanguage), 'desktop.timeRange.week'); }, days: 7 },
+  { key: 'month', get label() { return translate(normalizeLocale(i18n.resolvedLanguage), 'desktop.timeRange.month'); }, days: 30 },
+  { key: 'all', get label() { return translate(normalizeLocale(i18n.resolvedLanguage), 'desktop.timeRange.all'); }, days: 365 },
 ];
 
 export function daysForRange(key: TimeRangeKey): number {
@@ -37,12 +38,13 @@ export function rangeDateBounds(days: number, now = new Date()): {
 
 /**
  * Display label for the active query window.
- * For「不限制」, clamp start to statsSince when it falls inside the window.
+ * For the all-time option, clamp start to statsSince when it falls inside the window.
  */
 export function formatRangeLabel(
   key: TimeRangeKey,
   statsSince: string | null | undefined,
   now = new Date(),
+  locale: SupportedLocale = normalizeLocale(i18n.resolvedLanguage),
 ): string {
   const days = daysForRange(key);
   const { start, end } = rangeDateBounds(days, now);
@@ -51,7 +53,16 @@ export function formatRangeLabel(
     const sinceDay = statsSince.slice(0, 10);
     if (sinceDay > from) from = sinceDay;
   }
-  return `${from} ~ ${end}`;
+  return `${formatCalendarDate(from, locale)} ~ ${formatCalendarDate(end, locale)}`;
+}
+
+function formatCalendarDate(isoDay: string, locale: SupportedLocale): string {
+  const [year, month, day] = isoDay.split('-').map(Number);
+  if (!year || !month || !day) return isoDay;
+  // The API day is already defined in Asia/Shanghai. UTC here only prevents
+  // presentation from shifting that calendar day in a different local zone.
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 /** Build Agent / overview summary scoped to the fetched model breakdown. */

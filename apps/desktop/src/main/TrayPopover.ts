@@ -9,7 +9,17 @@ import {
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { defaultPreloadPath, resolveAppIconPath, WINDOW_BACKGROUND_COLORS, type DesktopWindowTheme } from './DesktopWindow';
+import sharp from 'sharp';
+import type { QuotaState } from '../shared/quota';
+import type { SupportedLocale } from 'quotern-i18n';
+import { quotaPopoverBounds, quotaTraySummary } from './tray-quota';
+import { nativeText } from './native-messages';
+import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
+import {
+  TRAY_WINDOW_WIDTH as POPOVER_WIDTH,
+  TRAY_WINDOW_MIN_HEIGHT as POPOVER_MIN_HEIGHT,
+  TRAY_WINDOW_MAX_HEIGHT as POPOVER_MAX_HEIGHT,
+} from '../shared/tray-popover-layout';
 import { pokeSyncOnForeground } from './local-runtime';
 import {
   markTrayPopoverQuitting,
@@ -27,8 +37,8 @@ export { markTrayPopoverQuitting, resetTrayPopoverQuitting } from './tray-popove
  *  - 全平台创建 Tray；关窗后进程靠托盘保活，右键菜单提供「显示主窗口」「同步数据」「退出」。
  *  - macOS：左键切换 Popover；右键手动 popUpContextMenu（不可 setContextMenu，
  *    否则 Electron 会让左键也弹菜单）。图标用 Template Image（`quoternTemplate.png`）。
- *  - Win/Linux：左键显示主窗口；setContextMenu 处理右键；图标用 `icon.png`。
- *  - Popover（仅 macOS）是独立无边框 BrowserWindow，通过 tray.getBounds()
+ *  - Windows：左键切换额度面板；Linux 左键显示主窗口。右键保留主窗口菜单。
+ *  - Popover 是独立无边框 BrowserWindow，通过 tray.getBounds()
  *    定位；失焦自动隐藏。
  *  - 应用退出时清理 tray 与窗口，避免残留。
  */
@@ -39,27 +49,28 @@ const isMac = process.platform === 'darwin';
 
 const TRAY_POPOVER_RESIZE_CHANNEL = 'tray-popover:resize';
 
-const POPOVER_WIDTH = 430;
-const POPOVER_MIN_HEIGHT = 200;
-const POPOVER_MAX_HEIGHT = 700;
 /** Initial height; the renderer reports its real content height on first paint. */
 const POPOVER_INITIAL_HEIGHT = POPOVER_MIN_HEIGHT;
-const POPOVER_MARGIN = 6;
 
 export interface TrayPopoverOptions {
+  getLocale: () => SupportedLocale;
   showMainWindow: () => void;
   openSettings: () => void;
   /** Same as in-app「同步数据」→ POST tud-trigger-sync. */
   triggerSync: () => void;
   /** Windows desktop pet toggle. */
   togglePet?: () => void;
-  /** Initial popover window background, kept in sync with the app theme. */
-  theme: DesktopWindowTheme;
+  onOpen?: () => void;
 }
 
 let tray: Tray | null = null;
+let trayMenu: Menu | null = null;
+let currentOptions: TrayPopoverOptions | null = null;
+let lastQuotaState: QuotaState | null = null;
 let popover: BrowserWindow | null = null;
-let popoverTheme: DesktopWindowTheme = 'light';
+let lastHiddenAt = 0;
+let iconGeneration = 0;
+let quotaLevel = -1;
 /** Latest content height reported by the renderer, used when re-anchoring. */
 let popoverHeight = POPOVER_INITIAL_HEIGHT;
 
@@ -87,26 +98,27 @@ function loadTrayIcon(): Electron.NativeImage {
 }
 
 function buildTrayMenu(options: TrayPopoverOptions): Menu {
+  const locale = options.getLocale();
   return Menu.buildFromTemplate([
     {
-      label: '显示主窗口',
+      label: nativeText(locale, 'native.tray.showMain'),
       click: () => options.showMainWindow(),
     },
     {
-      label: '同步数据',
+      label: nativeText(locale, 'native.tray.sync'),
       click: () => options.triggerSync(),
     },
     ...(!isMac && options.togglePet ? [{
-      label: '显示/隐藏桌面宠物',
+      label: nativeText(locale, 'native.tray.togglePet'),
       click: () => options.togglePet?.(),
     }] : []),
     {
-      label: '设置',
+      label: nativeText(locale, 'native.tray.settings'),
       click: () => options.openSettings(),
     },
     { type: 'separator' },
     {
-      label: '退出',
+      label: nativeText(locale, 'native.tray.quit'),
       click: () => app.quit(),
     },
   ]);
@@ -125,16 +137,19 @@ function ensurePopover(): BrowserWindow {
     show: false,
     frame: false,
     fullscreenable: false,
-    backgroundColor: WINDOW_BACKGROUND_COLORS[popoverTheme],
-    // Keep native resizing enabled for programmatic auto-height updates. The
-    // active height is locked with equal min/max bounds after every update.
-    resizable: true,
+    // The renderer paints the rounded shell; an opaque native backing would
+    // fill its corners. Keep transparency stable across renderer theme changes.
+    transparent: true,
+    backgroundColor: '#00000000',
+    // Transparent windows must not be user-resizable. Programmatic setBounds
+    // still works; positionPopoverNearTray unlocks the min/max bounds first.
+    resizable: false,
     movable: false,
     minimizable: false,
     maximizable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    hasShadow: true,
+    hasShadow: false,
     webPreferences: {
       preload: defaultPreloadPath(),
       sandbox: true,
@@ -144,7 +159,8 @@ function ensurePopover(): BrowserWindow {
   });
 
   popover.webContents.on('context-menu', (e) => e.preventDefault());
-  popover.on('blur', () => popover?.hide());
+  popover.on('blur', () => { lastHiddenAt = Date.now(); popover?.hide(); });
+  popover.webContents.on('before-input-event', (_event, input) => { if (input.key === 'Escape') { lastHiddenAt = Date.now(); popover?.hide(); } });
   popover.on('close', (e) => {
     // Hide instead of destroy on user close to allow re-toggling.
     if (shouldTrayPopoverPreventClose()) {
@@ -182,49 +198,17 @@ async function loadPopoverRenderer(window: BrowserWindow): Promise<void> {
 function positionPopoverNearTray(t: Tray, height: number): void {
   if (!popover) return;
   const bounds = t.getBounds();
-  if (bounds.width === 0 && bounds.height === 0) return;
-
-  const display = screen.getDisplayNearestPoint({
+  const display = screen.getDisplayNearestPoint(bounds.width || bounds.height ? {
     x: bounds.x,
     y: bounds.y,
-  });
+  } : screen.getCursorScreenPoint());
   const work = display.workArea;
-
-  // Never taller than the work area itself, regardless of the content cap.
-  const h = Math.min(height, work.height - POPOVER_MARGIN * 2);
-
-  // macOS needs a resizable window for `setBounds` height updates. Temporarily
-  // unlock the height, apply the measured size, then lock it again so users
-  // cannot drag any popover edge to resize it.
-  popover.setMinimumSize(POPOVER_WIDTH, POPOVER_MIN_HEIGHT);
-  popover.setMaximumSize(POPOVER_WIDTH, POPOVER_MAX_HEIGHT);
-
-  let x = Math.round(
-    bounds.x + bounds.width / 2 - POPOVER_WIDTH / 2,
-  );
-  let y: number;
-  if (bounds.y < work.y + work.height / 2) {
-    y = bounds.y + bounds.height + POPOVER_MARGIN;
-  } else {
-    y = bounds.y - h - POPOVER_MARGIN;
-  }
-
-  const minX = work.x + POPOVER_MARGIN;
-  const maxX = work.x + work.width - POPOVER_WIDTH - POPOVER_MARGIN;
-  x = Math.max(minX, Math.min(x, maxX));
-
-  const minY = work.y + POPOVER_MARGIN;
-  const maxY = work.y + work.height - h - POPOVER_MARGIN;
-  y = Math.max(minY, Math.min(y, Math.max(minY, maxY)));
-
-  popover.setBounds({
-    x,
-    y,
-    width: POPOVER_WIDTH,
-    height: Math.round(h),
-  });
-  popover.setMinimumSize(POPOVER_WIDTH, Math.round(h));
-  popover.setMaximumSize(POPOVER_WIDTH, Math.round(h));
+  const target = quotaPopoverBounds(bounds, work, POPOVER_WIDTH, height);
+  popover.setMinimumSize(target.width, Math.min(POPOVER_MIN_HEIGHT, target.height));
+  popover.setMaximumSize(target.width, POPOVER_MAX_HEIGHT);
+  popover.setBounds(target);
+  popover.setMinimumSize(target.width, target.height);
+  popover.setMaximumSize(target.width, target.height);
 }
 
 function handlePopoverResize(
@@ -248,6 +232,7 @@ function handlePopoverResize(
 
 function togglePopover(): void {
   if (!tray) return;
+  if (Date.now() - lastHiddenAt < 200) return;
   const w = ensurePopover();
   if (w.isVisible()) {
     w.hide();
@@ -265,14 +250,6 @@ export function hideTrayPopover(): void {
   popover.hide();
 }
 
-/** Keep the popover's native background in sync with the app theme. */
-export function setPopoverTheme(theme: DesktopWindowTheme): void {
-  popoverTheme = theme;
-  if (popover && !popover.isDestroyed()) {
-    popover.setBackgroundColor(WINDOW_BACKGROUND_COLORS[theme]);
-  }
-}
-
 /**
  * Set the text displayed beside the tray icon in the macOS menu bar.
  * Uses monospaced digits to prevent jitter when usage numbers tick up.
@@ -283,26 +260,54 @@ export function setTrayUsageTitle(text: string): void {
   tray.setTitle(title, { fontType: 'monospacedDigit' });
 }
 
+export function setTrayQuotaState(state: QuotaState): void {
+  lastQuotaState = state;
+  if (!tray || tray.isDestroyed()) return;
+  const locale = currentOptions?.getLocale() ?? 'zh-CN';
+  const summary = quotaTraySummary(state.providers, locale);
+  const incidents = state.providers.filter(provider => provider.service && !provider.service.stale && !['operational', 'unknown'].includes(provider.service.level)).map(provider => nativeText(locale, 'native.tray.serviceIssue', { provider: provider.label }));
+  tray.setToolTip(['Quotern', ...incidents, summary.text].join('\n').slice(0, 127));
+  if (isMac || quotaLevel === summary.level) return;
+  quotaLevel = summary.level;
+  const generation = ++iconGeneration;
+  const base = loadTrayIcon();
+  if (!summary.level) { tray.setImage(base); return; }
+  const color = summary.level === 2 ? '#ef4444' : '#f59e0b';
+  const badge = Buffer.from(`<svg width="32" height="32"><circle cx="25" cy="25" r="7" fill="${color}" stroke="white" stroke-width="2"/></svg>`);
+  void sharp(base.toPNG()).resize(32, 32).composite([{ input: badge }]).png().toBuffer().then(buffer => {
+    if (generation === iconGeneration && tray && !tray.isDestroyed()) tray.setImage(nativeImage.createFromBuffer(buffer));
+  }).catch(() => { if (generation === iconGeneration) quotaLevel = -1; });
+}
+
 export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
-  popoverTheme = options.theme;
-
+  currentOptions = options;
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
-  const menu = buildTrayMenu(options);
+  trayMenu = buildTrayMenu(options);
 
-  if (isMac) {
-    tray.on('click', () => togglePopover());
-    tray.on('right-click', () => tray?.popUpContextMenu(menu));
+  if (isMac || process.platform === 'win32') {
+    tray.on('click', () => { options.onOpen?.(); togglePopover(); });
+    tray.on('right-click', () => { if (trayMenu) tray?.popUpContextMenu(trayMenu); });
     ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
     ipcMain.on(TRAY_POPOVER_RESIZE_CHANNEL, handlePopoverResize);
   } else {
-    tray.setContextMenu(menu);
+    tray.setContextMenu(trayMenu);
     tray.on('click', () => options.showMainWindow());
   }
+  if (lastQuotaState) setTrayQuotaState(lastQuotaState);
+}
+
+/** Rebuild native menu and tooltip when the Desktop language changes. */
+export function refreshTrayLocale(): void {
+  if (!tray || tray.isDestroyed() || !currentOptions) return;
+  trayMenu = buildTrayMenu(currentOptions);
+  if (!isMac && process.platform !== 'win32') tray.setContextMenu(trayMenu);
+  if (lastQuotaState) setTrayQuotaState(lastQuotaState);
 }
 
 export function disposeTrayPopover(): void {
+  iconGeneration++; quotaLevel = -1;
   markTrayPopoverQuitting();
   ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
   if (popover && !popover.isDestroyed()) {
@@ -318,4 +323,7 @@ export function disposeTrayPopover(): void {
     tray.destroy();
   }
   tray = null;
+  trayMenu = null;
+  currentOptions = null;
+  lastQuotaState = null;
 }

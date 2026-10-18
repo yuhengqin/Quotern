@@ -31,7 +31,7 @@ export function AppShell() {
         <AchievementProvider request={updateAchievements}>
         <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
           <Toast.Provider placement="top end" queue={toastQueue} />
-          <div className={cn('relative min-h-0 flex-1 overflow-x-hidden overscroll-contain', pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto')}>
+          <div data-dashboard-scroll-container className={cn('relative min-h-0 flex-1 overflow-x-hidden overscroll-contain', pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto', pathname === '/dashboard' && '[overflow-anchor:none]')}>
             <div className="relative mx-auto w-full max-w-300 px-4 py-4 pb-12 sm:py-6 md:px-8 2xl:max-w-360">
               <main className="min-w-0 w-full"><Outlet /></main>
             </div>

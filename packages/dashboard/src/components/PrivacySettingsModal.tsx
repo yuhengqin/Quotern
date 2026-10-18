@@ -1,15 +1,17 @@
 import { Lock, ShieldCheck } from '@gravity-ui/icons';
 import { Button, Modal } from '@heroui/react';
 import { useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 
 export function PrivacySettingsModal() {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <>
       <Button onPress={() => setIsOpen(true)} variant="tertiary">
         <Lock />
-        隐私设置
+        {t('rank.privacy.button')}
       </Button>
 
       <Modal.Backdrop
@@ -19,26 +21,26 @@ export function PrivacySettingsModal() {
       >
         <Modal.Container size="md">
           <Modal.Dialog>
-            <Modal.CloseTrigger aria-label="关闭隐私说明" />
+            <Modal.CloseTrigger aria-label={t('rank.privacy.close')} />
             <Modal.Header>
               <Modal.Icon className="bg-success-soft text-success-soft-foreground">
                 <ShieldCheck />
               </Modal.Icon>
-              <Modal.Heading>排行榜隐私说明</Modal.Heading>
+              <Modal.Heading>{t('rank.privacy.heading')}</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="space-y-3 text-sm leading-6 text-muted">
               <p>
-                排行榜仅展示匿名昵称、Token 用量和预估消费，用于社区用量对比。
+                {t('rank.privacy.summary')}
               </p>
               <p>
-                项目名、设备名、账号标识、鉴权信息及对话内容不会出现在排行榜中。
+                {t('rank.privacy.exclusions')}
               </p>
               <p>
-                可在排行榜页的「隐藏自己」开关中选择是否参与公开排名。
+                {t('rank.privacy.optOut')}
               </p>
             </Modal.Body>
             <Modal.Footer>
-              <Button slot="close">我知道了</Button>
+              <Button slot="close">{t('rank.privacy.gotIt')}</Button>
             </Modal.Footer>
           </Modal.Dialog>
         </Modal.Container>

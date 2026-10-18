@@ -3,6 +3,8 @@ import {
   SYNC_SOURCE_IDS,
   normalizeSyncSource,
 } from 'quotern-core';
+import type { SupportedLocale } from 'quotern-i18n';
+import { cliT, extractCliLanguage, systemCliLocale, userError } from './i18n/locale.js';
 
 export const DEFAULT_HOST = '127.0.0.1';
 
@@ -15,10 +17,10 @@ export function formatSyncSourceList(): string {
  * 校验 `--source`：未传 / `all` 表示全量；别名与大小写归一为标准 id；
  * 未知值抛错（由 main 打印并以非零码退出），绝不静默跳过。
  */
-export function resolveSyncSource(raw?: string): string | undefined {
+export function resolveSyncSource(raw?: string, locale: SupportedLocale = systemCliLocale()): string | undefined {
   const resolved = normalizeSyncSource(raw);
   if (resolved !== null) return resolved;
-  throw new Error(`未知的数据源: ${raw}\n可用值: ${formatSyncSourceList()}`);
+  throw userError(locale, 'arg.sourceUnknown', { value: raw, sources: formatSyncSourceList() });
 }
 
 export function isWildcardListenHost(host: string): boolean {
@@ -34,6 +36,7 @@ export function formatListenUrl(host: string, port: number): string {
 
 export interface ParsedArgs {
   command: string;
+  lang?: SupportedLocale;
   serviceAction?: string;
   /** Set only when --port is passed. */
   port?: number;
@@ -44,21 +47,21 @@ export interface ParsedArgs {
   days?: number;
 }
 
-export function normalizeListenHost(raw: string): string {
+export function normalizeListenHost(raw: string, locale: SupportedLocale = systemCliLocale()): string {
   const host = raw.trim();
   if (!host) {
-    throw new Error('--host 不能为空，例如 0.0.0.0 或 127.0.0.1');
+    throw userError(locale, 'arg.hostEmpty');
   }
   if (/[\s/?#]/.test(host)) {
-    throw new Error(`无效的 --host: ${raw}`);
+    throw userError(locale, 'arg.hostInvalid', { value: raw });
   }
   return host;
 }
 
-export function normalizeListenPort(raw: string): number {
+export function normalizeListenPort(raw: string, locale: SupportedLocale = systemCliLocale()): number {
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error(`无效的 --port: ${raw}，请输入 1 到 65535 之间的整数`);
+    throw userError(locale, 'arg.portInvalid', { value: raw });
   }
   return port;
 }
@@ -68,7 +71,8 @@ function isFlagToken(value: string | undefined): boolean {
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
-  const args = argv.slice(2);
+  const { args, lang } = extractCliLanguage(argv.slice(2));
+  const locale = lang ?? systemCliLocale();
   let command = args[0] ?? 'start';
   let serviceAction: string | undefined;
   let port: number | undefined;
@@ -83,7 +87,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     args.includes('--help') ||
     args.includes('-h')
   ) {
-    return { command: 'help', port, host, source };
+    return { command: 'help', port, host, source, ...(lang ? { lang } : {}) };
   }
 
   if (command === 'service') {
@@ -93,66 +97,57 @@ export function parseArgs(argv: string[]): ParsedArgs {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port') {
       if (isFlagToken(args[i + 1]) || args[i + 1] == null) {
-        throw new Error('--port 需要端口号，例如 8452');
+        throw userError(locale, 'arg.portMissing');
       }
-      port = normalizeListenPort(args[i + 1]);
+      port = normalizeListenPort(args[i + 1], locale);
       i += 1;
     } else if (args[i] === '--host') {
       if (isFlagToken(args[i + 1]) || args[i + 1] == null) {
-        throw new Error('--host 需要地址，例如 0.0.0.0 或 127.0.0.1');
+        throw userError(locale, 'arg.hostMissing');
       }
-      host = normalizeListenHost(args[i + 1]);
+      host = normalizeListenHost(args[i + 1], locale);
       i += 1;
     } else if (args[i]?.startsWith('--host=')) {
-      host = normalizeListenHost(args[i].slice('--host='.length));
-    } else if (args[i] === '--source' && args[i + 1]) {
+      host = normalizeListenHost(args[i].slice('--host='.length), locale);
+    } else if (args[i] === '--source') {
+      if (isFlagToken(args[i + 1]) || args[i + 1] == null) throw userError(locale, 'arg.sourceMissing');
       source = args[i + 1];
       i += 1;
     } else if (args[i]?.startsWith('--source=')) {
       source = args[i].slice('--source='.length);
-    } else if (args[i] === '--days' && args[i + 1]) {
+      if (!source.trim()) throw userError(locale, 'arg.sourceMissing');
+    } else if (args[i] === '--days') {
+      if (isFlagToken(args[i + 1]) || args[i + 1] == null) throw userError(locale, 'arg.daysMissing');
       days = Number(args[i + 1]);
       i += 1;
     } else if (args[i]?.startsWith('--days=')) {
       days = Number(args[i].slice('--days='.length));
+    } else if (args[i] === '--quotern-dev-instance') {
+      // Internal marker passed by the isolated dev launcher for process ownership.
+      if (isFlagToken(args[i + 1]) || args[i + 1] == null) {
+        throw userError(locale, 'arg.unknownOption', { value: args[i] });
+      }
+      i += 1;
+    } else if (args[i].startsWith('-')) {
+      throw userError(locale, 'arg.unknownOption', { value: args[i] });
     }
   }
   if (command.startsWith('-')) command = 'start';
-  return { command, serviceAction, port, host, source, days };
+  return { command, serviceAction, port, host, source, days, ...(lang ? { lang } : {}) };
 }
 
-export function resolveDaysAgo(days: number | undefined): number | undefined {
+export function resolveDaysAgo(days: number | undefined, locale: SupportedLocale = systemCliLocale()): number | undefined {
   if (days === undefined) return undefined;
   if (!Number.isInteger(days) || days <= 0) {
-    throw new Error(`--days 须为正整数，收到: ${days}`);
+    throw userError(locale, 'arg.daysPositive', { value: days });
   }
   return days;
 }
 
-export function printHelp(): void {
-  console.log(`Usage: quotern <command> [options]
-
-Commands:
-  start                 前台启动本地面板与同步（默认；桌面已运行时为观察模式）
-  stop                  停止当前进程内的服务
-  status                查看 CLI / 面板当前启动状态
-  sync                  手动同步本地用量数据
-  service <action>      后台服务与开机自启（macOS / Windows / Linux）
-                        action: start | stop | status
-  doctor                诊断系统环境与本地数据源
-  help                  显示帮助
-
-Options:
-  --port <number>       面板端口（默认 ${DEFAULT_PORT}）
-  --host <address>      面板监听地址（默认 ${DEFAULT_HOST}；局域网访问用 0.0.0.0）
-  --source <name>       sync 数据源：${formatSyncSourceList()}
-  -h, --help            显示帮助
-
-Examples:
-  quotern
-  quotern start --port 8452
-  quotern start --host 0.0.0.0
-  quotern status
-  quotern sync --source=claude
-  quotern service start`);
+export function printHelp(locale: SupportedLocale = systemCliLocale()): void {
+  console.log(cliT(locale, 'help.full', {
+    port: DEFAULT_PORT,
+    host: DEFAULT_HOST,
+    sources: formatSyncSourceList(),
+  }));
 }

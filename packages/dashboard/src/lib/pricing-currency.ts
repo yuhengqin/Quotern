@@ -154,6 +154,7 @@ export function formatConvertedPricingRate(
   value: number | null,
   currency: PricingCurrency = 'USD',
   exchangeRate: number | null = null,
+  locale = 'en-US',
 ): string {
   if (value === null || !Number.isFinite(value) || value < 0) return '—';
 
@@ -166,9 +167,13 @@ export function formatConvertedPricingRate(
     symbol = '¥';
   }
 
-  const formatted = new Intl.NumberFormat('en-US', {
+  const formatted = new Intl.NumberFormat(locale, {
     maximumSignificantDigits: 6,
     useGrouping: true,
   }).format(convertedValue);
   return `${symbol}${formatted}`;
+}
+
+export function formatPricingExchangeRate(rate: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { maximumSignificantDigits: 15 }).format(rate);
 }

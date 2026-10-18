@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { createDevSession, readDevStatus } from './dev-instance.mjs';
+import { startWindowsJob } from './dev-windows-job.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mode = process.argv[2] ?? 'cli';
@@ -21,11 +22,14 @@ async function run() {
   const log = createWriteStream(session.record.logPath, { flags: 'a' });
   const children = [];
   let closing = false;
+  let windowsJob;
+  let jobSetup;
   let finish;
   const done = new Promise((resolve) => { finish = resolve; });
   let stateQueue = Promise.resolve();
   const update = (patch) => (stateQueue = stateQueue.then(() => session.update(patch)));
   function launch(name, command, args, cwd, ipc = false) {
+    if (closing) throw new Error('开发会话正在关闭，禁止启动新进程');
     const child = spawn(command, args, { cwd, env: session.env, windowsHide: true,
       detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe', ...(ipc ? ['ipc'] : [])] });
     children.push({ name, child });
@@ -40,6 +44,9 @@ async function run() {
     if (closing) return;
     closing = true;
     try {
+      // Do not release ownership while an in-flight setup can still update the
+      // session record or attach this supervisor to its Job.
+      if (jobSetup) windowsJob = await jobSetup;
       const cleaned = await Promise.all(children.map(async ({ name, child }) => {
         if (!child.pid) return true;
         // Completed build commands are not running services.
@@ -71,7 +78,8 @@ async function run() {
         return waitUntil(() => !groupAlive(), 2500);
       }));
       await stateQueue;
-      if (cleaned.every(Boolean)) await session.close(code);
+      const confirmed = windowsJob ? await windowsJob.childrenEnded() : cleaned.every(Boolean);
+      if (confirmed) await session.close(code);
       else {
         console.error('部分服务父进程已退出或进程树清理未确认；保留归属锁，请检查 dev:status 及所属后代进程');
         code = 1;
@@ -82,6 +90,7 @@ async function run() {
       console.error(`清理未确认，保留归属锁：${error.message}`);
       await session.update({ status: 'cleanup-required', exitCode: code }).catch(() => {});
     } finally {
+      windowsJob?.detach();
       for (const { child } of children) {
         child.stdout?.destroy();
         child.stderr?.destroy();
@@ -119,6 +128,9 @@ async function run() {
     return join(dirname(require.resolve(`${tool}/package.json`)), relativeBin);
   }
   try {
+    jobSetup = startWindowsJob(session);
+    windowsJob = await jobSetup;
+    if (closing) return await done;
     console.log(`[Quotern dev] ${session.record.branch || '(detached)'} · ${root}`);
     console.log(`会话 ${session.record.sessionId} / PID ${process.pid}`);
     const apiAddress = mode === 'desktop' ? 'IPC' : mode === 'ui' ? session.env.VITE_CLI_API_ORIGIN : `http://${listenHost}:${session.config.apiPort}`;

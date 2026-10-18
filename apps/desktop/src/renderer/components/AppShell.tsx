@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { ToastQueue } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 // Sidebar / FAB chrome temporarily hidden — actions moved to FilterChromeActions.
 // import {
 //   AppSidebar,
@@ -29,6 +30,7 @@ import { updateAchievements } from '@/lib/api';
 
 /** Root shell: filter chrome actions + nested route outlet. */
 export function AppShell() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   // const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -71,11 +73,11 @@ export function AppShell() {
     return window.tud.onRuntimeNotice((detail) => {
       if (detail.kind !== 'config-reset') return;
       toastQueue.add({
-        title: '配置文件已损坏并已重置',
+        title: t('desktop.shell.configReset'),
         variant: 'warning',
       });
     });
-  }, [toastQueue]);
+  }, [toastQueue, t]);
 
   // const toggleSidebarCollapsed = () => {
   //   setSidebarCollapsed((prev) => {

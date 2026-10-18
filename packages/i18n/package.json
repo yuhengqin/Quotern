@@ -1,0 +1,53 @@
+{
+  "name": "quotern-i18n",
+  "version": "0.1.13",
+  "description": "Quotern shared product translations and locale helpers",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuhengqin/Quotern.git",
+    "directory": "packages/i18n"
+  },
+  "publishConfig": { "access": "public" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./quota": {
+      "types": "./dist/quota.d.ts",
+      "import": "./dist/quota.js",
+      "require": "./dist/quota.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json && node --experimental-strip-types --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "i18next": "^26.4.7",
+    "react-i18next": "^17.0.21"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-aria": "3.51.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-aria": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "typescript": "^5.9.3"
+  },
+  "engines": { "node": ">=20.10.0" }
+}

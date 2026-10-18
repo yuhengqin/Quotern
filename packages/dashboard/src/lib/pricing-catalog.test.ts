@@ -14,6 +14,7 @@ import {
   getPricingProvider,
   getPricingChannel,
   formatPricingRate,
+  formatCatalogPricingRate,
 } from './pricing-catalog.ts';
 
 const rows: PricingCatalogRow[] = [
@@ -36,6 +37,29 @@ describe('pricing catalog helpers', () => {
   it('filters model names case-insensitively after trimming the query', () => {
     const result = filterAndSortPricingCatalog(rows, '  ALPHA ', DEFAULT_PRICING_SORT);
     assert.deepEqual(result.map((row) => row.model), ['Alpha', 'alpha-mini']);
+  });
+
+  it('searches canonical model IDs and display names as well as calling IDs', () => {
+    const plan = { ...rows[0]!, model: 'kimi-code-plan-cn/kimi-for-coding', displayName: 'Kimi K2.8 Preview', canonicalModelId: 'moonshotai/kimi-k2.8-preview' };
+    for (const query of ['k2.8', 'Kimi K2.8', 'moonshotai/kimi-k2.8-preview', 'kimi-for-coding']) {
+      assert.deepEqual(filterAndSortPricingCatalog([plan], query, DEFAULT_PRICING_SORT), [plan]);
+    }
+    assert.equal(getPricingModelName(plan.model, plan.displayName), 'Kimi K2.8 Preview');
+  });
+
+  it('labels subscription pricing and sorts it after known API prices', () => {
+    const plan = { ...rows[0]!, model: 'plan/model', billingMode: 'subscription' as const, input: 0 };
+    assert.equal(formatCatalogPricingRate(plan, 'input'), '订阅制');
+    assert.equal(formatCatalogPricingRate(plan, 'input', 'USD', null, 'en'), 'Subscription');
+    assert.equal(formatCatalogPricingRate(plan, 'output'), '—');
+    assert.equal(formatCatalogPricingRate({ ...plan, billingMode: 'api' }, 'input'), '$0');
+    for (const direction of ['ascending', 'descending'] as const) {
+      assert.deepEqual(filterAndSortPricingCatalog([plan, rows[0]!], '', { column: 'input', direction }).map(row => row.model), ['Beta', 'plan/model']);
+    }
+    assert.equal(getPricingProvider('kimi-code-plan-cn/kimi-for-coding').key, 'moonshot');
+    assert.equal(getPricingProvider('zai-coding-plan/glm-5').key, 'zhipu');
+    assert.equal(getPricingChannel('kimi-code-plan-cn/kimi-for-coding'), '中国');
+    assert.equal(getPricingChannel('kimi-code-plan-global/kimi-for-coding'), '国际');
   });
 
   it('keeps only the final model path segment for display', () => {

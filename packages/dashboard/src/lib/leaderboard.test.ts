@@ -11,6 +11,10 @@ import {
   resolveRankShareViewer,
 } from './leaderboard.ts';
 import type { LeaderboardRow } from './api.ts';
+import { registerMessages } from 'quotern-i18n';
+import { achievementRankMessages } from '../i18n/achievement-rank-messages.ts';
+
+registerMessages(achievementRankMessages);
 
 describe('isRankRange', () => {
   it('accepts the four leaderboard ranges', () => {
@@ -160,6 +164,11 @@ describe('groupRankModelsByVendor', () => {
       ['gpt-5'],
     );
   });
+
+  it('searches vendor names in the selected display language', () => {
+    assert.deepEqual(groupRankModelsByVendor(['local/custom-model'], 'Other', 'en').map(group => group.key), ['other']);
+    assert.deepEqual(groupRankModelsByVendor(['qwen3-coder'], 'Alibaba', 'en').map(group => group.key), ['alibaba']);
+  });
 });
 
 describe('formatRankPosition', () => {
@@ -247,6 +256,7 @@ describe('resolveRankShareViewer', () => {
     );
     assert.deepEqual(viewer, { kind: 'off_board' });
     assert.equal(rankShareFallbackLabel('off_board'), '100+名');
+    assert.equal(rankShareFallbackLabel('off_board', 'en'), 'Rank 100+');
   });
 
   it('keeps the login hint for anonymous viewers', () => {

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Card } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import type { DailyUsageRow } from '@/lib/api';
 import { buildTokenTrend } from '@/lib/chart-data';
@@ -20,17 +21,18 @@ interface TokenTrendChartProps {
  * `useMemo` 在父级轮询时仅当 `data` 引用变化才重算。
  */
 export function TokenTrendChart({ data }: TokenTrendChartProps) {
+  const { t } = useTranslation();
   const { config, rows } = useMemo(() => buildTokenTrend(data), [data]);
 
   return (
     <Card>
       <Card.Header>
-        <Card.Title>每日 Token 用量</Card.Title>
+        <Card.Title>{t('usage.chart.dailyTokenUsage')}</Card.Title>
       </Card.Header>
       <Card.Content>
         {rows.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted">
-            暂无数据
+            {t('usage.common.noData')}
           </p>
         ) : (
           <ChartContainer config={config} className="h-[260px] w-full">
@@ -82,7 +84,7 @@ export function TokenTrendChart({ data }: TokenTrendChartProps) {
                         return [formatTokens(Number(value)), 'Token'];
                       }
                       if (name === 'costUsd') {
-                        return [formatUsd(Number(value)), '费用'];
+                        return [formatUsd(Number(value)), t('usage.common.cost')];
                       }
                       return [String(value), String(name)];
                     }}

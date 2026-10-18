@@ -7,7 +7,13 @@
 @source "../../../../packages/dashboard/src/components/ShareActivityModal.tsx";
 @source "../../../../packages/dashboard/src/pages/PricingPage.tsx";
 @source "../../../../packages/dashboard/src/components/PricingMoreFilters.tsx";
+@source "../../../../packages/dashboard/src/components/PricingList.tsx";
+@source "../../../../packages/dashboard/src/components/PricingDetails.tsx";
+@source "../../../../packages/dashboard/src/components/PricingTools.tsx";
+@source "../../../../packages/dashboard/src/components/PricingComparison.tsx";
 @source "../../../../packages/dashboard/src/components/ModelProviderIcon.tsx";
+@source "../../../../packages/dashboard/src/components/QuotaUsageCard.tsx";
+@source "../../../../packages/dashboard/src/components/SubscriptionBrandIcon.tsx";
 @source "../../../../packages/dashboard/src/achievements";
 
 :root {
@@ -187,6 +193,11 @@
   html,
   body {
     font-family: var(--font-sans);
+  }
+
+  html:has(.dashboard-page),
+  body:has(.dashboard-page) {
+    overflow-anchor: none;
   }
 
   /* Desktop window: keep page scroll, hide the right-edge scrollbar. */

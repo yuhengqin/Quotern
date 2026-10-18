@@ -1,6 +1,8 @@
 import { ArrowDownToLine } from '@gravity-ui/icons';
 import { Button, Toast, ToastQueue } from '@heroui/react';
 import { Copy } from 'lucide-react';
+import { normalizeLocale, type SupportedLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
@@ -39,6 +41,7 @@ interface ExportRequest {
   avatarUrl?: string;
   color: string;
   id: number;
+  locale: SupportedLocale;
   rangeLabel?: string;
   reject: (reason?: unknown) => void;
   resolve: (blob: Blob) => void;
@@ -47,18 +50,18 @@ interface ExportRequest {
   userName?: string;
 }
 
-const ACTION_LABELS: Record<ShareAction, Record<ShareActionState, string>> = {
+const ACTION_LABEL_KEYS: Record<ShareAction, Record<ShareActionState, string>> = {
   download: {
-    error: '下载失败',
-    idle: '下载',
-    pending: '生成中…',
-    success: '已下载',
+    error: 'share.action.downloadError',
+    idle: 'share.action.download',
+    pending: 'share.action.downloadPending',
+    success: 'share.action.downloadSuccess',
   },
   copy: {
-    error: '复制失败',
-    idle: '复制',
-    pending: '复制中…',
-    success: '已复制',
+    error: 'share.action.copyError',
+    idle: 'share.action.copy',
+    pending: 'share.action.copyPending',
+    success: 'share.action.copySuccess',
   },
 };
 
@@ -87,6 +90,7 @@ export function ShareCardActions({
   toolLabel?: string;
   userName?: string;
 }) {
+  const { t, i18n } = useTranslation();
   const [toastQueue] = useState(
     () => new ToastQueue({ maxVisibleToasts: 2 }),
   );
@@ -129,7 +133,7 @@ export function ShareCardActions({
     if (resetTimerRef.current !== null) {
       window.clearTimeout(resetTimerRef.current);
     }
-    pendingRequestRef.current?.reject(new Error('分享弹窗已关闭'));
+    pendingRequestRef.current?.reject(new Error('share dialog closed'));
   }, []);
 
   const finish = (
@@ -155,6 +159,7 @@ export function ShareCardActions({
         avatarUrl,
         color,
         id,
+        locale: normalizeLocale(i18n.resolvedLanguage ?? i18n.language),
         rangeLabel,
         reject,
         resolve,
@@ -175,8 +180,8 @@ export function ShareCardActions({
       onExportSuccess?.();
       finish('download', 'success');
       toastQueue.add({
-        description: '卡片图片已保存到本地',
-        title: '下载成功',
+        description: t('share.downloadToastDescription'),
+        title: t('share.downloadToastTitle'),
         variant: 'success',
       });
     } catch (error) {
@@ -195,8 +200,8 @@ export function ShareCardActions({
       onExportSuccess?.();
       finish('copy', 'success');
       toastQueue.add({
-        description: '卡片图片已复制，可直接粘贴',
-        title: '复制成功',
+        description: t('share.copyToastDescription'),
+        title: t('share.copyToastTitle'),
         variant: 'success',
       });
     } catch (error) {
@@ -206,9 +211,9 @@ export function ShareCardActions({
   };
 
   const getLabel = (action: ShareAction) => {
-    if (activeAction === action) return ACTION_LABELS[action].pending;
-    if (result?.action === action) return ACTION_LABELS[action][result.state];
-    return ACTION_LABELS[action].idle;
+    if (activeAction === action) return t(ACTION_LABEL_KEYS[action].pending);
+    if (result?.action === action) return t(ACTION_LABEL_KEYS[action][result.state]);
+    return t(ACTION_LABEL_KEYS[action].idle);
   };
 
   return (
@@ -259,6 +264,7 @@ export function ShareCardActions({
                   borderRadius={6}
                   details={exportRequest.details}
                   isHidden
+                  locale={exportRequest.locale}
                   rangeLabel={exportRequest.rangeLabel}
                   summary={exportRequest.summary}
                   toolLabel={exportRequest.toolLabel}

@@ -1,4 +1,5 @@
 import { Skeleton } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import type { LeaderboardBoard, LeaderboardMetric } from '@/lib/api';
 import { formatRankPosition, resolveLeaderboardCurrentUser } from '@/lib/leaderboard';
 import { cn } from '@/lib/utils';
@@ -21,22 +22,23 @@ export function MyRankCard({
   onMetricChange: (metric: LeaderboardMetric) => void;
   tokens: LeaderboardBoard | null;
 }) {
+  const { t } = useTranslation();
   const metrics = [
     {
       id: 'tokens' as const,
-      label: '按 Token',
+      label: t('rank.metric.tokens'),
       rank: resolveLeaderboardCurrentUser(tokens)?.rank,
     },
     {
       id: 'cost' as const,
-      label: '按消费',
+      label: t('rank.metric.cost'),
       rank: resolveLeaderboardCurrentUser(cost)?.rank,
     },
   ] as const;
 
   return (
     <div
-      aria-label="排行指标"
+      aria-label={t('rank.metric.aria')}
       className={SEGMENT_SURFACE}
       role="tablist"
     >
@@ -46,7 +48,7 @@ export function MyRankCard({
           hideFromLeaderboard || loading ? null : formatVisibleRank(rank);
         return (
           <button
-            aria-label={rankLabel ? `${label} ${rankLabel}` : label}
+            aria-label={rankLabel ? t('rank.metric.buttonAria', { label, rank: rankLabel }) : label}
             aria-selected={selected}
             className={cn(
               'inline-flex h-full items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors sm:px-2.5',
@@ -62,7 +64,7 @@ export function MyRankCard({
             <span>{label}</span>
             {hideFromLeaderboard ? null : loading ? (
               <Skeleton
-                aria-label={`${label}排名加载中`}
+                aria-label={t('rank.metric.loading', { label })}
                 className="h-3 w-6 rounded-sm"
               />
             ) : rankLabel ? (

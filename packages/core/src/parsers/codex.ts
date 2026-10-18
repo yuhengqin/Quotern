@@ -1,6 +1,5 @@
 import { localEvidence, validUsageFields } from '../local-metrics.js';
-import { createReadStream, type Stats } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type {
@@ -13,11 +12,12 @@ import type {
 import { codexSessionsDirs } from '../paths.js';
 import { resolveProjectName } from '../project-name.js';
 import { toUtcHalfHourStart } from '../queue/keys.js';
-import { createJsonlLineReader } from './jsonl-tail.js';
+import { createCodexLineReader, findCodexLogFiles, logicalCodexPath } from './codex-log-reader.js';
+import { allocateLedgerCoverage, compactionLifetime, emptyCompactionState, sameUsage, settleCompaction, uncoveredUsage } from './codex-compaction.js';
+import type { PendingCompaction } from './codex-compaction.js';
 import {
   modelFromRolloutEvent,
   readModel,
-  recoverLastModelBeforeOffset,
 } from './rollout-model.js';
 import {
   accumulateBucket,
@@ -109,7 +109,7 @@ function normalizeCodexUsage(u: TokenUsage): TokenTotals | null {
   };
   const total = computeTotalTokens(totals);
   if (total === 0) return null;
-  return { ...totals, total_tokens: total, conversation_count: 1 };
+  return { ...totals, total_tokens: total, conversation_count: 1, token_quality: 'recorded' };
 }
 
 function pickDelta(
@@ -149,10 +149,7 @@ async function indexSessionFile(filePath: string): Promise<{
   let sessionProject = 'unknown';
   let tokenCountRecords = 0;
 
-  const rl = createInterface({
-    input: createReadStream(filePath),
-    crlfDelay: Infinity,
-  });
+  const rl = createCodexLineReader(filePath, 0);
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -189,16 +186,23 @@ export async function parseCodexIncremental(
   cursors: CursorsFile,
   statsSince: string,
 ): Promise<{ result: ParseCodexResult; cursors: CursorsFile }> {
-  const files = await listCodexRolloutFiles();
+  // Session text export keeps its plain-only discovery; metering handles both encodings.
+  const files = await findCodexLogFiles(codexSessionsDirs());
   const sinceMs = new Date(statsSince).getTime();
+
+  // A failed decode must not publish a partially advanced cursor.
+  const originalCursors = cursors;
+  cursors = { ...cursors, codex: cursors.codex ? structuredClone(cursors.codex) : undefined };
 
   if (!cursors.codex) {
     cursors.codex = { files: {}, sessionIndex: {}, seenHashes: [] };
   }
   const codexCursor = cursors.codex;
+  const upgrading = codexCursor.meteringVersion !== 2;
   if (!codexCursor.sessionIndex) codexCursor.sessionIndex = {};
   if (!codexCursor.files) codexCursor.files = {};
   const seenHashes = new Set(codexCursor.seenHashes ?? []);
+  const compactions = codexCursor.compactions ?? emptyCompactionState();
   const bucketState: BucketAccumulator = new Map();
   // Basenames already counted before this round. A file scanned now is not
   // "already counted" — that would seed away a same-round ledger tail.
@@ -215,10 +219,10 @@ export async function parseCodexIncremental(
 
     // Unchanged file (same inode, same size): reuse cached meta instead of
     // re-reading the whole session file every poll round.
-    const prev = codexCursor.files[filePath];
+    const prev = codexCursor.files[logicalCodexPath(filePath)];
     const cached = prev?.meta;
     const meta: CodexSessionFileMeta =
-      cached && prev.inode === st.ino && cached.size === st.size
+      cached && prev.inode === st.ino && cached.size === st.size && (!filePath.endsWith('.zst') || prev.mtimeMs === st.mtimeMs)
         ? cached
         : { ...(await indexSessionFile(filePath)), size: st.size };
 
@@ -235,6 +239,15 @@ export async function parseCodexIncremental(
   let eventsParsed = 0;
   let filesProcessed = 0;
 
+  // Process parents before fork copies so the original request supplies attribution.
+  const depth = (path: string): number => {
+    let parent = fileMeta.get(path)?.forkedFromId;
+    const visited = new Set<string>();
+    while (parent && !visited.has(parent)) { visited.add(parent); parent = codexCursor.sessionIndex?.[parent]?.forkedFrom; }
+    return visited.size;
+  };
+  files.sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+
   for (const filePath of files) {
     const st = fileStats.get(filePath);
     if (!st) continue;
@@ -242,10 +255,13 @@ export async function parseCodexIncremental(
     const meta = fileMeta.get(filePath);
     if (!meta) continue;
 
-    const prev = codexCursor.files[filePath];
+    const logicalPath = logicalCodexPath(filePath);
+    const encoding = filePath.endsWith('.zst') ? 'zst' : 'jsonl';
+    const prev = codexCursor.files[logicalPath];
     const inode = st.ino;
-    const sameInode = prev && prev.inode === inode;
-    const truncated = sameInode && (prev.offset ?? 0) > st.size;
+    const sameInode = prev && prev.inode === inode && (prev.encoding ?? 'jsonl') === encoding;
+    if (!upgrading && encoding === 'zst' && sameInode && prev.physicalSize === st.size && prev.mtimeMs === st.mtimeMs) continue;
+    const truncated = sameInode && (upgrading || encoding === 'zst' || (prev.offset ?? 0) > st.size);
     const startOffset = sameInode && !truncated ? (prev.offset ?? 0) : 0;
     let tokenCountSeen = sameInode && !truncated ? (prev.tokenCountSeen ?? 0) : 0;
     const prevTotalMap = new Map<string, TokenUsage>(
@@ -262,7 +278,7 @@ export async function parseCodexIncremental(
       observed: 0,
       sessionId: meta.sessionId,
     };
-    rolloutScans.set(basename(filePath), scan);
+    rolloutScans.set(basename(logicalPath), scan);
 
     const replayTokenCountToSkip = meta.forkedFromId
       ? (codexCursor.sessionIndex[meta.forkedFromId]?.tokenCount ?? 0)
@@ -281,15 +297,28 @@ export async function parseCodexIncremental(
       startOffset > 0 &&
       !readModel(prev?.lastModel)
     ) {
-      const recovered = await recoverLastModelBeforeOffset(
-        filePath,
-        startOffset,
-      );
-      if (recovered) turnContextModel = recovered;
+      const prefix = createCodexLineReader(filePath, 0);
+      for await (const line of prefix) {
+        if (prefix.nextOffset > startOffset) break;
+        try { turnContextModel = modelFromRolloutEvent(JSON.parse(line)) ?? turnContextModel; } catch { /* malformed row */ }
+      }
     }
     let sessionUuid: string | null = meta.sessionId;
+    // On replay reconstruct response ordering from the file, rather than
+    // applying the last response from the previous scan to older events.
+    let latestUsageResponseId = startOffset > 0 && sessionUuid ? compactions.latest[sessionUuid] : undefined;
+    let legacyOrdinaryLifetime: number | null = null;
+    let legacyOrdinaryObserved = 0;
 
-    const reader = createJsonlLineReader(filePath, startOffset);
+    const reader = createCodexLineReader(filePath, startOffset);
+    const pendingEmissions: Array<{ pending: PendingCompaction; legacy: boolean }> = [];
+
+    const emitCompaction = (id: string) => {
+      const pending = settleCompaction(compactions, id, true);
+      if (!pending) return;
+      scan.observed += pending.usage.total_tokens;
+      pendingEmissions.push({ pending, legacy: upgrading && reader.nextOffset <= (prev?.offset ?? 0) });
+    };
 
     for await (const line of reader) {
       if (!line.trim()) continue;
@@ -303,6 +332,39 @@ export async function parseCodexIncremental(
       if (obj.type === 'session_meta') {
         const payload = obj.payload as SessionMeta;
         sessionUuid = payload.id ?? sessionUuid;
+      }
+
+      if (obj.type === 'compacted' || obj.type === 'token_usage_record') {
+        const payload = obj.payload as Record<string, unknown> | undefined;
+        const id = readModel(obj.type === 'compacted' ? payload?.compaction_response_id : payload?.response_id);
+        if (!id || !sessionUuid) continue;
+        const settled = compactions.settled[id];
+        if (settled) {
+          if (!settled.sessions.includes(sessionUuid)) { settled.sessions.push(sessionUuid); if (settled.standalone) scan.observed += settled.tokens; }
+          continue;
+        }
+        if (obj.type === 'compacted') {
+          if (!compactions.markers.includes(id)) compactions.markers.push(id);
+          emitCompaction(id);
+        } else {
+          const raw = normalizeCacheWriteAlias(payload?.usage as TokenUsage | undefined);
+          const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : '';
+          if (!raw || !Number.isFinite(Date.parse(timestamp))) continue;
+          const delta = normalizeCodexUsage(raw);
+          if (!delta || !Number.isFinite(delta.total_tokens)) continue;
+          const validCache = validUsageFields([raw.input_tokens], [raw.cached_input_tokens, raw.cache_read_input_tokens, raw.cache_creation_input_tokens]);
+          delta.local_metrics = localEvidence(1, true, validCache, validCache);
+          compactions.latest[sessionUuid] = id;
+          latestUsageResponseId = id;
+          const threadUsage = normalizeCacheWriteAlias(payload?.thread_token_usage as TokenUsage | undefined);
+          compactions.pending[id] ??= {
+            sessionId: sessionUuid, model: readModel(payload?.model) ?? turnContextModel,
+            project: meta.sessionProject, timestamp, usage: delta,
+            threadUsage: threadUsage ? normalizeCodexUsage(threadUsage) : null,
+          };
+          if (compactions.markers.includes(id)) emitCompaction(id);
+        }
+        continue;
       }
 
       if (
@@ -328,6 +390,7 @@ export async function parseCodexIncremental(
       const cumulative = Number(totalUsage?.total_tokens);
       if (Number.isFinite(cumulative) && cumulative > 0) {
         scan.lifetime = scan.lifetime == null ? cumulative : Math.max(scan.lifetime, cumulative);
+        if (upgrading && prev && reader.nextOffset <= prev.offset) legacyOrdinaryLifetime = Math.max(legacyOrdinaryLifetime ?? 0, cumulative);
       }
 
       const isReplayedHistory = tokenCountSeen < replayTokenCountToSkip;
@@ -360,9 +423,18 @@ export async function parseCodexIncremental(
         continue;
       }
 
-      const delta = normalizeCodexUsage(rawUsage);
+      let delta = normalizeCodexUsage(rawUsage);
       if (!delta) continue;
       scan.observed += delta.total_tokens;
+      if (upgrading && prev && reader.nextOffset <= prev.offset) legacyOrdinaryObserved += delta.total_tokens;
+
+      const latest = latestUsageResponseId;
+      const pending = latest ? compactions.pending[latest] : undefined;
+      if (latest && pending && (sameUsage(pending.usage, delta) || sameUsage(pending.threadUsage, totalUsage ? normalizeCodexUsage(totalUsage) : null))) {
+        settleCompaction(compactions, latest, false);
+        delta = uncoveredUsage(delta, pending.ledgerCoveredTokens ?? 0);
+        if (!delta) continue;
+      }
 
       const ts = tokenEvent.timestamp;
       if (!ts) continue;
@@ -378,6 +450,7 @@ export async function parseCodexIncremental(
       )
         continue;
       if (dedupKey) seenHashes.add(dedupKey);
+      if (upgrading && prev && reader.nextOffset <= prev.offset && (sameInode || prev.meta?.sessionId === meta.sessionId)) continue;
 
       const identifiable =
         !!lastUsage && Object.keys(lastUsage).length > 0 && !!sessionUuid;
@@ -393,7 +466,7 @@ export async function parseCodexIncremental(
         (rawUsage.cached_input_tokens ??
           rawUsage.cache_read_input_tokens ??
           0) <= rawUsage.input_tokens!;
-      delta.local_metrics = localEvidence(
+      if (delta.token_quality !== 'ledger') delta.local_metrics = localEvidence(
         identifiable ? 1 : 0,
         identifiable,
         validCache,
@@ -407,19 +480,41 @@ export async function parseCodexIncremental(
         meta.sessionProject,
         hourStart,
         delta,
+        delta.token_quality === 'ledger' ? 'codex-ledger' : undefined,
       );
       scan.emitted += delta.total_tokens;
       eventsParsed += 1;
     }
 
     scan.sessionId = sessionUuid ?? scan.sessionId;
+    const previousLifetime = Math.max(0, ...[...prevTotalMap.values()].map((usage) => Number(usage.total_tokens) || 0));
+    if (previousLifetime > 0) scan.lifetime = Math.max(scan.lifetime ?? 0, previousLifetime);
+    // An old ledger watermark may already include the newly recognized records.
+    // Its excess over observed ordinary usage is overlap, not another charge.
+    let legacyCredit = upgrading && sessionUuid && prev
+      ? Math.max(0, (codexCursor.ledgerTotals?.[sessionUuid]?.tokens ?? 0) - (legacyOrdinaryLifetime ?? legacyOrdinaryObserved)) : 0;
+    for (const { pending, legacy } of pendingEmissions) {
+      const allocation = legacy ? Math.min(legacyCredit, pending.usage.total_tokens) : 0;
+      legacyCredit -= allocation;
+      const hour = toUtcHalfHourStart(pending.timestamp);
+      if (!hour || new Date(hour).getTime() < sinceMs) continue;
+      const delta = uncoveredUsage(pending.usage, Math.max(allocation, pending.ledgerCoveredTokens ?? 0));
+      if (!delta) continue;
+      accumulateBucket(bucketState, 'codex', pending.model, pending.project, hour, delta, delta.token_quality === 'ledger' ? 'codex-ledger' : undefined);
+      scan.emitted += delta.total_tokens;
+      eventsParsed++;
+    }
+    if (sessionUuid && scan.lifetime !== null) scan.lifetime += compactionLifetime(compactions, sessionUuid);
 
     const prevTotalSave: CodexFileCursor['prevTotal'] = {};
     for (const [k, v] of prevTotalMap.entries()) {
       prevTotalSave[k] = { ...v };
     }
 
-    codexCursor.files[filePath] = {
+    codexCursor.files[logicalPath] = {
+      encoding,
+      physicalSize: st.size,
+      mtimeMs: st.mtimeMs,
       inode,
       offset: reader.nextOffset,
       tokenCountSeen,
@@ -432,15 +527,20 @@ export async function parseCodexIncremental(
   }
 
   codexCursor.seenHashes = Array.from(seenHashes);
+  codexCursor.meteringVersion = 2;
+  if (Object.keys(compactions.pending).length || compactions.markers.length || Object.keys(compactions.settled).length) codexCursor.compactions = compactions;
 
   // No ledger file: leave the cursor untouched so existing JSONL syncs stay
   // byte-identical aside from the buckets they already produced.
   if (codexLedgerDbPaths().length > 0) {
     if (!codexCursor.ledgerTotals) codexCursor.ledgerTotals = {};
     if (!codexCursor.dbMtimes) codexCursor.dbMtimes = {};
+    if (!codexCursor.ledgerReadings) codexCursor.ledgerReadings = {};
     const ledger = applyCodexLedger({
       dbMtimes: codexCursor.dbMtimes,
       ledgerTotals: codexCursor.ledgerTotals,
+      ledgerReadings: codexCursor.ledgerReadings,
+      onGap: (sessionId, gap) => allocateLedgerCoverage(compactions, sessionId, gap),
       priorRolloutNames,
       scans: rolloutScans,
       sinceMs,
@@ -451,8 +551,9 @@ export async function parseCodexIncremental(
   }
 
   const buckets = bucketsFromState(bucketState, 'codex');
+  originalCursors.codex = codexCursor;
   return {
     result: { buckets, eventsParsed, filesProcessed },
-    cursors,
+    cursors: originalCursors,
   };
 }

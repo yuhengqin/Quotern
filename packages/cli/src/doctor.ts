@@ -1,4 +1,7 @@
 import type { DoctorReport } from 'quotern-core';
+import type { SupportedLocale } from 'quotern-i18n';
+import { cliMessages } from './i18n/messages.js';
+import { cliT, systemCliLocale } from './i18n/locale.js';
 
 function shouldUseColors(): boolean {
   if (process.env.NO_COLOR) return false;
@@ -22,18 +25,22 @@ function c(color: keyof typeof colors, text: string, enabled: boolean): string {
   return `${colors[color]}${text}${colors.reset}`;
 }
 
-export function printDoctorReport(report: DoctorReport): void {
+export function printDoctorReport(report: DoctorReport, locale: SupportedLocale = systemCliLocale()): void {
   const useColor = shouldUseColors();
+  const t = (key: string, options?: Record<string, unknown>) => cliT(locale, `doctor.${key}`, options);
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const localizedMessage = (key: string, fallback: string, options?: Record<string, unknown>) =>
+    cliMessages[locale][`cli.doctor.${key}`] ? t(key, options) : fallback;
 
   console.log();
   console.log(
     c(
       'bold',
-      `🩺 ${c('cyan', 'Quotern Doctor', useColor)} - 系统环境与数据源全面诊断`,
+      `🩺 ${c('cyan', 'Quotern Doctor', useColor)} - ${t('title')}`,
       useColor,
     ),
   );
-  console.log(c('dim', `诊断时间: ${new Date(report.timestamp).toLocaleString()}`, useColor));
+  console.log(c('dim', t('time', { date: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(report.timestamp)) }), useColor));
   console.log();
 
   for (const cat of report.categories) {
@@ -44,7 +51,7 @@ export function printDoctorReport(report: DoctorReport): void {
       catIcon = c('yellow', '[!]', useColor);
     }
 
-    console.log(`${catIcon} ${c('bold', cat.title, useColor)}`);
+    console.log(`${catIcon} ${c('bold', localizedMessage(`category.${cat.id}`, cat.id), useColor)}`);
 
     for (const item of cat.items) {
       let itemIcon = c('green', '✓', useColor);
@@ -52,8 +59,16 @@ export function printDoctorReport(report: DoctorReport): void {
       else if (item.status === 'warn') itemIcon = c('yellow', '!', useColor);
       else if (item.status === 'info') itemIcon = c('gray', '-', useColor);
 
-      console.log(`  ${itemIcon} ${item.name}: ${item.message}`);
-      if (item.detail) {
+      const name = localizedMessage(`item.${item.id}`, item.id);
+      const message = locale === 'zh-CN' || item.id === 'runtime-os'
+        ? item.message
+        : localizedMessage(
+          `message.${item.id}.${item.status}`,
+          t(`message.generic.${item.status}`),
+          item.id === 'collectors-summary' ? { count: number(report.collectors.detected) } : undefined,
+        );
+      console.log(`  ${itemIcon} ${name}: ${message}`);
+      if (item.detail && (locale === 'zh-CN' || process.env.QUOTERN_DEBUG === '1')) {
         console.log(`    ${c('dim', item.detail, useColor)}`);
       }
     }
@@ -65,31 +80,35 @@ export function printDoctorReport(report: DoctorReport): void {
   const undetected = report.collectors.items.filter((i) => !i.present);
 
   console.log(
-    `${c('cyan', '📊 Coding Agent 探测详情', useColor)} ` +
-      `(${c('bold', String(detected.length), useColor)} / ${report.collectors.total} 款已就绪)`,
+    c('cyan', `📊 ${t('collectorDetails', { detected: number(detected.length), total: number(report.collectors.total) })}`, useColor),
   );
 
   if (detected.length > 0) {
     for (const d of detected) {
-      const hookText = d.hookStatus ? ` ${c('cyan', `[Hook: ${d.hookStatus}]`, useColor)}` : '';
+      const hookText = d.hookStatus ? ` ${c('cyan', `[${t(d.hookStatus === 'active' ? 'hookActive' : 'hookInactive')}]`, useColor)}` : '';
       console.log(`  ${c('green', '✓', useColor)} ${d.displayName}${hookText}`);
     }
   } else {
-    console.log(`  ${c('yellow', '!', useColor)} 尚未检测到任何支持的 Agent`);
+    console.log(`  ${c('yellow', '!', useColor)} ${t('noneDetected')}`);
   }
 
   if (undetected.length > 0) {
     const unNames = undetected.map((u) => u.displayName).join(', ');
     console.log(
-      `  ${c('dim', `- 未探测到日志的 Agent (${undetected.length}): ${unNames}`, useColor)}`,
+      `  ${c('dim', `- ${t('undetected', { count: number(undetected.length), names: unNames })}`, useColor)}`,
     );
   }
   console.log();
 
   // Suggestions block if any warnings/errors
-  if (report.summary.suggestions.length > 0) {
-    console.log(c('bold', c('yellow', '💡 诊断发现以下建议项:', useColor), useColor));
-    for (const suggestion of report.summary.suggestions) {
+  const suggestions = locale === 'zh-CN'
+    ? report.summary.suggestions
+    : [...new Set(report.categories.flatMap((category) => category.items)
+      .filter((item) => item.suggestion)
+      .map((item) => localizedMessage(`suggestion.${item.id}`, t(`message.generic.${item.status}`))))];
+  if (suggestions.length > 0) {
+    console.log(c('bold', c('yellow', `💡 ${t('suggestions')}`, useColor), useColor));
+    for (const suggestion of suggestions) {
       console.log(`  • ${suggestion}`);
     }
     console.log();
@@ -100,7 +119,7 @@ export function printDoctorReport(report: DoctorReport): void {
     console.log(
       c(
         'green',
-        `🎉 诊断完成: ${report.summary.okCount} 项正常, 0 个错误, 0 个警告。所有核心组件运行良好！`,
+        t('summary.ok', { ok: number(report.summary.okCount) }),
         useColor,
       ),
     );
@@ -108,7 +127,7 @@ export function printDoctorReport(report: DoctorReport): void {
     console.log(
       c(
         'yellow',
-        `⚠️  诊断完成: ${report.summary.warnCount} 个提醒事项，请根据上方建议进行调整。`,
+        t('summary.warn', { warn: number(report.summary.warnCount) }),
         useColor,
       ),
     );
@@ -116,7 +135,7 @@ export function printDoctorReport(report: DoctorReport): void {
     console.log(
       c(
         'red',
-        `❌ 诊断完成: 发现 ${report.summary.errorCount} 个异常项，请优先处理上方错误。`,
+        t('summary.error', { error: number(report.summary.errorCount) }),
         useColor,
       ),
     );

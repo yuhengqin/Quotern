@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
+import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
 
 import type { LocalApiDeps } from './state.js';
 import {
@@ -11,11 +12,15 @@ import {
   aggregateModelBreakdown,
   resolveAggregateWindow,
 } from '../aggregate.js';
-import { readSessionMetrics } from '../session-collector.js';
+import { readSessionMetrics, readSessionHistory } from '../session-collector.js';
+import { aggregateSessionActivity } from '../session-observation.js';
+import { attachSessionTitles } from '../session-titles.js';
+import { computeTokens } from '../pricing/index.js';
 import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
 import { localDateNow } from '../timezone.js';
+import { buildUsageReport, type UsageReportPeriod } from '../usage-report.js';
 import {
   ensureLocalCollectRange,
   getHookStatus,
@@ -55,6 +60,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.use('*', cors());
   registerShareBackgroundApi(app, deps.dataDir);
   registerAchievementsApi(app, deps.dataDir);
+  registerQuotaApi(app, deps.quota);
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {
@@ -77,6 +83,30 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.get('/functions/tud-usage-summary', summaryHandler);
   app.get('/functions/tud-account-usage-summary', summaryHandler);
 
+  app.get('/functions/tud-usage-report', (c) => {
+    try {
+      const params = new URL(c.req.url).searchParams;
+      const allowed = new Set(['period', 'days', 'fromDate', 'toDate', 'sources', 'model', 'project']);
+      for (const key of params.keys()) {
+        if (!allowed.has(key) || params.getAll(key).length !== 1) throw new Error(`无效或重复的参数: ${key}`);
+      }
+      const days = params.get('days');
+      if (days !== null && !/^\d+$/.test(days)) throw new Error('days 必须是正整数');
+      const config = deps.getConfig();
+      return c.json(ok(buildUsageReport(deps.bucketStore.getRows(), {
+        period: (params.get('period') ?? undefined) as UsageReportPeriod | undefined,
+        days: days === null ? undefined : Number(days),
+        fromDate: params.get('fromDate') ?? undefined,
+        toDate: params.get('toDate') ?? undefined,
+        sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
+        model: params.get('model') ?? undefined,
+        project: params.get('project') ?? undefined,
+      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' })));
+    } catch (error) {
+      return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_USAGE_QUERY', data: null }, 400);
+    }
+  });
+
   app.get('/functions/tud-usage-sessions', async (c) => {
     const bounds = readDateBounds(c);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
@@ -94,6 +124,38 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       fromDate, toDate: window.toDate,
       ...(sources ? { sources: sources as string[] } : {}),
     })));
+  });
+
+  app.get('/functions/tud-session-activity', async c => {
+    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);
+    const bounds = readDateBounds(c);
+    if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
+    const sources = c.req.query('sources')?.split(',').map(source => normalizeSyncSource(source));
+    if (sources?.some(source => !source)) return c.json({ success: false, message: 'INVALID_SOURCE', data: null }, 400);
+    const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 7));
+    const window = resolveAggregateWindow(days, resolveLocalCollectSince(deps.getConfig()), undefined, bounds);
+    const fromDate = window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
+    const rows = deps.bucketStore.getRows().filter(row => {
+      const date = localDateAndHour(row.hour_start).date;
+      return date >= fromDate && date <= window.toDate && (!sources?.length || (sources as string[]).includes(row.source));
+    });
+    const usageSources = [...new Set(rows.map(row => row.source))];
+    const options = { fromDate, toDate: window.toDate, ...(sources ? { sources: sources as string[] } : {}) };
+    const history = await readSessionHistory(deps.dataDir, usageSources, options);
+    const observed = new Set(history.observations.filter(event => event.usageKnown).map(event => event.source));
+    const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
+    c.header('Cache-Control', 'no-store');
+    const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
+    await attachSessionTitles(snapshot.sessions, history.titles);
+    const labels = new Map<string, Set<string>>();
+    for (const provider of (deps.getQuotaState?.() ?? deps.quota?.getState())?.providers ?? []) if (provider.provenance?.accountRef) {
+      const names = labels.get(provider.provenance.accountRef) ?? new Set<string>();
+      names.add(provider.profileLabel ?? '默认账号'); labels.set(provider.provenance.accountRef, names);
+    }
+    for (const row of [...snapshot.sessions.map(session => session.billing), ...snapshot.billing]) {
+      if (row.accountRef && labels.has(row.accountRef)) row.accountLabel = [...labels.get(row.accountRef)!].join(' / ');
+    }
+    return c.json(ok(snapshot));
   });
 
   app.get('/functions/tud-usage-daily', async (c) => {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   grokRemainingPercent,
   type GrokSubscriptionSnapshot,
@@ -17,6 +18,7 @@ const INITIAL_SNAPSHOT: GrokSubscriptionSnapshot = {
 
 /** Grok Build allowance read through the official CLI's cached login. */
 export function GrokSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<GrokSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -29,13 +31,13 @@ export function GrokSubscriptionCard() {
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,
-        message: '暂时无法读取 Grok 订阅信息',
+        message: t('desktop.provider.readSubscription', { provider: 'Grok' }),
       });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -50,7 +52,9 @@ export function GrokSubscriptionCard() {
         icon: <SubscriptionBrandIcon brand="grok" />,
         metrics: snapshot.limits.map((limit, index) => ({
           color: index === 0 && snapshot.limits.length > 1 ? '#7dcf00' : '#2b7eff',
-          label: limit.label,
+          label: limit.id === 'billing'
+            ? t('desktop.provider.metric.billingPeriod')
+            : limit.id === 'unknown' ? t('desktop.provider.metric.allowance') : limit.label,
           remainingPercent: grokRemainingPercent(limit.usedPercent),
           resetsAt: limit.resetsAt,
         })),

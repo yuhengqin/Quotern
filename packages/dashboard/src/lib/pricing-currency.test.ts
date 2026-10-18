@@ -4,6 +4,7 @@ import {
   createManualPricingExchangeRate,
   fetchPricingExchangeRate,
   formatConvertedPricingRate,
+  formatPricingExchangeRate,
   needsPricingExchangeRateRefresh,
   readPricingExchangeRate,
   writePricingExchangeRate,
@@ -26,6 +27,12 @@ it('formats small USD and CNY rates without losing significant digits', () => {
   assert.equal(formatConvertedPricingRate(0.0000001234567), '$0.000000123457');
   assert.equal(formatConvertedPricingRate(1.23456789, 'USD'), '$1.23457');
   assert.equal(formatConvertedPricingRate(1.25, 'CNY', 6.6874), '¥8.35925');
+  assert.equal(formatConvertedPricingRate(1234.5, 'USD', null, 'de-DE'), '$1.234,5');
+});
+
+it('localizes the exchange-rate decimal separator without dropping quote precision', () => {
+  assert.equal(formatPricingExchangeRate(6.6874, 'en'), '6.6874');
+  assert.equal(formatPricingExchangeRate(6.6874, 'de-DE'), '6,6874');
 });
 
 it('formats all four CNY price fields with the same currency formatter', () => {

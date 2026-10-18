@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   miniMaxRemainingPercent,
   type MiniMaxSubscriptionSnapshot,
@@ -18,6 +19,7 @@ const INITIAL_SNAPSHOT: MiniMaxSubscriptionSnapshot = {
 
 /** Compact local MiniMax Code Coding Plan allowance summary for macOS desktop surfaces. */
 export function MiniMaxSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<MiniMaxSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -28,12 +30,12 @@ export function MiniMaxSubscriptionCard() {
     try {
       setSnapshot(await window.tud.getMiniMaxSubscription());
     } catch {
-      setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 MiniMax Code 订阅信息' });
+      setSnapshot({ ...INITIAL_SNAPSHOT, message: t('desktop.provider.readSubscription', { provider: 'MiniMax Code' }) });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();

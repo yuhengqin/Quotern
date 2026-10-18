@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import type { CopilotSubscriptionSnapshot } from '../../shared/copilot-subscription';
 import { SubscriptionUsageCard, type SubscriptionUsageMetric } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
@@ -14,6 +15,7 @@ const INITIAL_SNAPSHOT: CopilotSubscriptionSnapshot = {
 
 /** GitHub Copilot allowances from the locally signed-in account. */
 export function CopilotSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<CopilotSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -26,13 +28,13 @@ export function CopilotSubscriptionCard() {
     } catch {
       setSnapshot({
         ...INITIAL_SNAPSHOT,
-        message: '暂时无法读取 Copilot 订阅信息',
+        message: t('desktop.provider.readSubscription', { provider: 'Copilot' }),
       });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -43,10 +45,20 @@ export function CopilotSubscriptionCard() {
 
   const metrics: SubscriptionUsageMetric[] = snapshot.limits.map((limit) => ({
     color: limit.id === 'completions' ? '#7dcf00' : '#2b7eff',
-    label: limit.label,
+    label: limit.label === '额度'
+      ? t('desktop.provider.metric.allowance')
+      : limit.id === 'chat'
+        ? t('desktop.provider.metric.chat')
+        : limit.id === 'completions'
+          ? t('desktop.provider.metric.completions')
+          : limit.id === 'premium_interactions'
+            ? t('desktop.provider.metric.premium')
+            : limit.label,
     remainingPercent: limit.exhausted ? 0 : limit.unlimited ? 100 : limit.remainingPercent,
     resetsAt: limit.resetsAt,
-    valueText: limit.exhausted ? '已用尽' : limit.unlimited ? '无限' : undefined,
+    valueText: limit.exhausted
+      ? t('desktop.provider.value.exhausted')
+      : limit.unlimited ? t('desktop.provider.value.unlimited') : undefined,
   }));
 
   return (

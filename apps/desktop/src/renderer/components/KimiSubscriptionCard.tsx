@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/react';
+import { useTranslation } from 'quotern-i18n/react';
 import {
   kimiRemainingPercent,
   type KimiSubscriptionSnapshot,
@@ -7,9 +8,11 @@ import {
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { selectKimiSubscription } from '../lib/kimi-subscription-state';
+import { subscriptionMessageKey } from '../i18n/desktop-subscription-messages';
 
 /** A single Kimi subscription card backed by independent local readers. */
 export function KimiSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshots, setSnapshots] = useState<KimiSubscriptionSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -38,8 +41,10 @@ export function KimiSubscriptionCard() {
   const snapshot = selectKimiSubscription(snapshots);
   if (!snapshot) return null;
   const title = 'Kimi';
+  const messageKey = snapshot.message ? subscriptionMessageKey(snapshot.message) : null;
   const feedback = snapshot.message
-    ?? (snapshot.limits.length === 0 ? '当前账号暂未提供可显示的额度。' : null);
+    ? messageKey ? t(messageKey) : snapshot.message
+    : snapshot.limits.length === 0 ? t('desktop.provider.kimi.noAllowance') : null;
 
   return (
     <SubscriptionUsageCard
@@ -47,7 +52,9 @@ export function KimiSubscriptionCard() {
         icon: <SubscriptionBrandIcon brand="kimi" />,
         metrics: snapshot.limits.map((limit, index) => ({
           color: index === 0 && snapshot.limits.length > 1 ? '#7dcf00' : '#2b7eff',
-          label: limit.label,
+          label: limit.id === 'subscription'
+            ? t('desktop.provider.metric.subscriptionAllowance')
+            : limit.label,
           remainingPercent: kimiRemainingPercent(limit.usedPercent),
           resetsAt: limit.resetsAt,
         })),
@@ -61,7 +68,7 @@ export function KimiSubscriptionCard() {
         <div className="grid gap-2 text-xs leading-relaxed">
           <p className="break-words text-muted" role="status">{feedback}</p>
           <Button
-            aria-label={`重试读取 ${title} 订阅额度`}
+            aria-label={t('desktop.provider.kimi.retryAria')}
             className="justify-self-start"
             isDisabled={loading}
             isPending={loading}
@@ -69,7 +76,7 @@ export function KimiSubscriptionCard() {
             size="sm"
             variant="outline"
           >
-            {loading ? '重试中…' : '重试'}
+            {loading ? t('desktop.provider.retrying') : t('desktop.provider.retry')}
           </Button>
         </div>
       ) : null}

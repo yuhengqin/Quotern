@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import { deepSeekRemainingPercent, type DeepSeekSubscriptionSnapshot } from '../../shared/deepseek-subscription';
 import { SubscriptionUsageCard } from './SubscriptionUsageCard';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
@@ -18,6 +19,7 @@ const INITIAL_SNAPSHOT: DeepSeekSubscriptionSnapshot = {
  * DeepSeek reports a CNY balance using the same compact meter treatment as TRAE.
  */
 export function DeepSeekSubscriptionCard() {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<DeepSeekSubscriptionSnapshot>(INITIAL_SNAPSHOT);
   const [loading, setLoading] = useState(true);
   const requestInFlight = useRef(false);
@@ -28,12 +30,12 @@ export function DeepSeekSubscriptionCard() {
     try {
       setSnapshot(await window.tud.getDeepSeekSubscription());
     } catch {
-      setSnapshot({ ...INITIAL_SNAPSHOT, message: '暂时无法读取 DeepSeek 余额信息' });
+      setSnapshot({ ...INITIAL_SNAPSHOT, message: t('desktop.provider.readBalance', { provider: 'DeepSeek' }) });
     } finally {
       requestInFlight.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void reload();
@@ -48,7 +50,7 @@ export function DeepSeekSubscriptionCard() {
         icon: <SubscriptionBrandIcon brand="deepseek" />,
         metrics: snapshot.limits.map((balance) => ({
           color: deepSeekRemainingPercent(balance.usedPercent) > 25 ? '#4f7dff' : '#ff7a45',
-          label: '余额',
+          label: t('desktop.provider.metric.balance'),
           remainingPercent: deepSeekRemainingPercent(balance.usedPercent),
           resetsAt: balance.resetsAt,
           valueText: balance.remaining === null ? '—' : `¥${balance.remaining.toFixed(2)}`,

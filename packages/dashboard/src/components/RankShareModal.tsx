@@ -3,6 +3,8 @@ import { Avatar, Button, Chip, Modal, Skeleton } from '@heroui/react';
 import { CircleDollarSign, Coins, Copy } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
+import { normalizeLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import type {
   LeaderboardBoard,
   LeaderboardMetric,
@@ -55,6 +57,7 @@ export function RankShareModal({
   profiles: Record<string, LeaderboardUserProfile>;
   toolLabel: string;
 }) {
+  const { t } = useTranslation();
   const shareViewer = resolveRankShareViewer(board, {
     hideFromLeaderboard,
     isSignedIn,
@@ -80,15 +83,15 @@ export function RankShareModal({
 
   const getActionLabel = (action: ShareAction) => {
     if (activeAction === action) {
-      return action === 'download' ? '生成中…' : '复制中…';
+      return t(action === 'download' ? 'rank.share.generating' : 'rank.share.copying');
     }
     if (result?.action === action) {
       if (result.state === 'success') {
-        return action === 'download' ? '已下载' : '已复制';
+        return t(action === 'download' ? 'rank.share.downloaded' : 'rank.share.copied');
       }
-      return action === 'download' ? '下载失败' : '复制失败';
+      return t(action === 'download' ? 'rank.share.downloadFailed' : 'rank.share.copyFailed');
     }
-    return action === 'download' ? '下载到本地' : '复制分享图';
+    return t(action === 'download' ? 'rank.share.download' : 'rank.share.copy');
   };
 
   const finishAction = (action: ShareAction, state: 'error' | 'success') => {
@@ -98,7 +101,7 @@ export function RankShareModal({
 
   const renderPoster = () => {
     if (!posterRef.current) {
-      return Promise.reject(new Error('分享海报尚未准备完成'));
+      return Promise.reject(new Error(t('rank.share.notReady')));
     }
     return renderSharePosterPng(posterRef.current);
   };
@@ -138,12 +141,12 @@ export function RankShareModal({
           size="sm"
         >
           <Modal.Dialog
-            aria-label="分享排行榜"
+            aria-label={t('rank.share.dialog')}
             className="!w-full !max-w-[420px] !overflow-visible !border-0 !bg-transparent !p-0 !shadow-none"
           >
             <Modal.Body className="space-y-3 p-0">
               <section
-                aria-label={`${metric === 'tokens' ? 'Token' : '消费'} 排行榜分享预览`}
+                aria-label={t('rank.share.previewAria', { metric: metric === 'tokens' ? t('rank.share.tokenMetric') : t('rank.share.costMetric') })}
                 className="relative isolate overflow-hidden rounded-[22px] border border-white/85 bg-[#edf7ff] px-4 pb-4 pt-5 text-[#18283a] shadow-[0_18px_36px_rgb(56_121_188_/0.18)] dark:border-white/10 dark:bg-[#0d1b2d] dark:text-[#eaf4ff] dark:shadow-[0_18px_36px_rgb(0_0_0_/0.38)] sm:px-5 sm:pb-5 sm:pt-6"
                 ref={posterRef}
               >
@@ -152,17 +155,17 @@ export function RankShareModal({
                 <div className="relative z-10">
                   <header className="flex items-start justify-between gap-3">
                     <h2 className="inline-flex whitespace-nowrap pt-0.5 text-[28px] font-black italic leading-none tracking-[-0.055em] text-[#14243a] dark:text-[#f1f8ff] sm:text-[32px]">
-                      <span>Token</span>
-                      <span className="ml-2">排行榜</span>
+                      <span>{t('rank.share.tokenMetric')}</span>
+                      <span className="ml-2">{t('rank.share.title')}</span>
                     </h2>
-                    <div aria-label="排行榜指标" className="-mr-1.5 -mt-1 shrink-0">
+                    <div aria-label={t('rank.share.metricAria')} className="-mr-1.5 -mt-1 shrink-0">
                       <MetricGlassChip>
-                        {metric === 'tokens' ? '按 Token' : '按消费'}
+                        {t(metric === 'tokens' ? 'rank.metric.tokens' : 'rank.metric.cost')}
                       </MetricGlassChip>
                     </div>
                   </header>
 
-                  <section className="mt-5" aria-label="排行榜">
+                  <section className="mt-5" aria-label={t('rank.share.title')}>
                     <div className="flex flex-wrap gap-1.5 text-[10px] font-medium text-[#5c7d9c] dark:text-[#a8c1da]">
                       <span className="max-w-32 truncate rounded-full border border-white/80 bg-white/[0.5] px-2 py-1 shadow-[inset_0_1px_0_rgb(255_255_255_/0.9)] backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.08] dark:shadow-none">
                         {toolLabel}
@@ -209,7 +212,7 @@ export function RankShareModal({
                   {getActionLabel('copy')}
                 </Button>
                 <Button size="sm" slot="close" variant="tertiary">
-                  关闭
+                  {t('rank.share.close')}
                 </Button>
               </div>
             </Modal.Body>
@@ -231,13 +234,15 @@ function ShareLeaderboard({
   profiles: Record<string, LeaderboardUserProfile>;
   rows: LeaderboardRow[];
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.language);
   const topRows = rows.slice(0, SHARE_TOP_RANK_LIMIT);
   const currentUserInTopRows = currentUser
     ? topRows.some((row) => isSameLeaderboardUser(row, currentUser))
     : false;
 
   return (
-    <div className="mt-5" aria-label="排行榜列表">
+    <div className="mt-5" aria-label={t('rank.share.listAria')}>
       {topRows.length > 0 ? (
         <ol className="space-y-1.5">
           {topRows.map((row) => (
@@ -251,7 +256,7 @@ function ShareLeaderboard({
         </ol>
       ) : (
         <p className="mt-3 px-2 text-[11px] text-[#7892ac] dark:text-[#9bb7d2]">
-          暂无排行榜数据
+          {t('rank.share.empty')}
         </p>
       )}
 
@@ -274,9 +279,9 @@ function ShareLeaderboard({
 
       {fallbackKind && (
         <div className="mt-4 flex items-center justify-between rounded-xl border border-dashed border-[#b9d8ff] bg-white/[0.32] px-3 py-2.5 text-[11px] dark:border-white/15 dark:bg-white/[0.05]">
-          <span className="font-semibold text-[#5c7d9c] dark:text-[#a8c1da]">我的排名</span>
+          <span className="font-semibold text-[#5c7d9c] dark:text-[#a8c1da]">{t('rank.share.myRank')}</span>
           <span className="font-bold text-[#334e69] dark:text-[#f1f8ff]">
-            {rankShareFallbackLabel(fallbackKind)}
+            {rankShareFallbackLabel(fallbackKind, locale)}
           </span>
         </div>
       )}
@@ -293,6 +298,7 @@ function ShareLeaderboardRow({
   profiles: Record<string, LeaderboardUserProfile>;
   row: LeaderboardRow;
 }) {
+  const { t } = useTranslation();
   const details = getRowDetails(row, profiles);
   const tokens = formatTokens(row.totalTokens ?? row.tokens);
   const cost = formatUsd(row.costUsd);
@@ -309,7 +315,7 @@ function ShareLeaderboardRow({
     >
       {isCurrentUser && (
         <p className="mb-3 text-[10px] font-semibold tracking-[0.04em] text-[#1e80ff] dark:text-[#79b7ff]">
-          @{details.displayName} · 排名
+          {t('rank.share.userRank', { name: details.displayName })}
         </p>
       )}
       <div
@@ -330,7 +336,7 @@ function ShareLeaderboardRow({
               : 'text-[17px]'
           }`}
         >
-          {rankLabel === '—' ? '未上榜' : `#${rankLabel}`}
+          {rankLabel === '—' ? t('rank.share.unranked') : `#${rankLabel}`}
         </span>
         <div className="flex min-w-0 items-center gap-2">
           <Avatar className="size-7 shrink-0 border border-white/80 shadow-sm dark:border-white/15" size="sm">
@@ -348,14 +354,14 @@ function ShareLeaderboardRow({
         <div className="flex shrink-0 items-center gap-3 text-right text-[10px] font-bold tabular-nums">
           <span
             className="inline-flex w-auto shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#b9d8ff]/85 bg-[#e4f1ff]/80 px-2 py-1 text-[#1e80ff] shadow-[inset_0_1px_0_rgb(255_255_255_/0.82)] dark:border-[#356796] dark:bg-[#193755]/80 dark:text-[#79b7ff] dark:shadow-none"
-            title={`Token：${tokens}`}
+            title={t('rank.share.tokenTitle', { amount: tokens })}
           >
             <Coins aria-hidden className="size-3 shrink-0" />
             <span>{tokens}</span>
           </span>
           <span
             className="inline-flex w-auto shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#a8d9ba]/85 bg-[#e6f8ec]/80 px-2 py-1 text-[#22a05a] shadow-[inset_0_1px_0_rgb(255_255_255_/0.82)] dark:border-[#377b55] dark:bg-[#153d29]/80 dark:text-[#63d98a] dark:shadow-none"
-            title={`消费：${cost}`}
+            title={t('rank.share.costTitle', { amount: cost })}
           >
             <CircleDollarSign aria-hidden className="size-3 shrink-0" />
             <span>{cost}</span>
@@ -382,8 +388,9 @@ function rankColorClass(rank: number) {
 }
 
 function ShareLeaderboardSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div className="mt-5" aria-label="排行榜加载中">
+    <div className="mt-5" aria-label={t('rank.share.loading')}>
       <div className="space-y-1.5">
         {Array.from({ length: SHARE_TOP_RANK_LIMIT }, (_, index) => (
           <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-1 rounded-xl border border-white/55 bg-white/[0.38] px-2 py-2.5 dark:border-white/[0.07] dark:bg-white/[0.045]" key={index}>
@@ -408,11 +415,12 @@ function ShareLeaderboardSkeleton() {
 }
 
 function RankShareQrCode() {
+  const { t } = useTranslation();
   return (
     <footer className="mt-8 flex items-center justify-between gap-3 rounded-2xl border border-white/75 bg-white/[0.52] px-3 py-2.5 shadow-[inset_0_1px_0_rgb(255_255_255_/0.9)] backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.06] dark:shadow-none">
       <div className="min-w-0 pl-1">
-        <p className="text-[13px] font-semibold text-[#385775] dark:text-[#d6e8fa]">扫码了解 Quotern</p>
-        <p className="mt-1 truncate text-[11px] text-[#7892ac] dark:text-[#9bb7d2]">Quotern · Token 排行榜</p>
+        <p className="text-[13px] font-semibold text-[#385775] dark:text-[#d6e8fa]">{t('rank.share.scan')}</p>
+        <p className="mt-1 truncate text-[11px] text-[#7892ac] dark:text-[#9bb7d2]">{t('rank.share.qrSubtitle')}</p>
       </div>
       <QRCodeSVG
         bgColor="#ffffff"
@@ -427,7 +435,7 @@ function RankShareQrCode() {
         level="H"
         marginSize={1}
         size={58}
-        title="扫码查看 Quotern 项目"
+        title={t('rank.share.qrTitle')}
         value={QUOTERN_PROJECT_URL}
       />
     </footer>

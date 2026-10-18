@@ -29,7 +29,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
       └─ Desktop IPC → Renderer / 托盘
 ```
 
-订阅额度走另一条链路：主进程读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，生成展示快照后经专用 IPC 返回。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)。
+订阅额度走另一条链路：`packages/core/src/quota` 读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效历史。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 经 `quota` IPC 向主窗口、托盘与宠物提供状态，并负责系统通知。两端共用卡片和详情展示，保留各自的额度历史目录。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和历史口径见[额度管理](./quota-management.md)。
 
 ## 本地接口
 
@@ -42,6 +42,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | `GET /functions/tud-usage-daily` | 按日统计，默认 90 天 |
 | `GET /functions/tud-usage-hourly` | 按小时展示，默认 1 天 |
 | `GET /functions/tud-usage-model-breakdown` | 模型与项目分布，默认 30 天 |
+| `GET /functions/tud-usage-report` | 只读报表与费用依据；`period=summary\|overview\|daily\|weekly\|monthly\|models\|projects`，默认 `summary` / 7 天；支持 `days` 或成对 `fromDate/toDate`，可按 `sources`（逗号分隔）、`model`、`project` 筛选；拒绝未知、重复参数 |
 | 上述三个统计端点的日期参数 | 可同时传 `fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD`，按北京时间包含两端；无参数时保留 `days` 语义，缺一端、无效日期、倒序或未来日期返回 400 |
 | `GET /functions/tud-sync-status` | 同步时间、来源和 Hook 状态 |
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
@@ -78,7 +79,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 
 统计桶包含来源、模型、项目归属和 Token 等数值。部分 parser 为计算用量需要读取 Agent 会话文件；持久化统计桶的结构以 [QueueBucket](../packages/core/src/types.ts) 为准，不应把原始对话或认证材料扩展进该结构。
 
-运行时仍可能访问网络：Cursor 账单采集、价格覆盖表、供应商订阅额度、桌面更新和安装包下载各有独立入口。修改网络行为时，应同时检查调用目的、目标地址、超时、账号隔离和失败降级；不能从“本机统计”推断所有数据源都能离线取得最新读数。
+运行时仍可能访问网络：Cursor 账单采集、价格覆盖表、供应商订阅额度与公开服务状态、桌面更新和安装包下载各有独立入口。修改网络行为时，应同时检查调用目的、目标地址、超时、账号隔离和失败降级；不能从“本机统计”推断所有数据源都能离线取得最新读数。
 
 ## 修改入口
 

@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight } from '@gravity-ui/icons';
 import { Button, Label, Popover, SearchField } from '@heroui/react';
+import { normalizeLocale } from 'quotern-i18n';
+import { useTranslation } from 'quotern-i18n/react';
 import { ModelProviderIcon } from '@/components/ModelProviderIcon';
 import {
   groupRankModelsByVendor,
@@ -20,12 +22,14 @@ export function RankModelCascadeSelect({
   onChange: (model: string) => void;
   value: string;
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.language);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const allGroups = useMemo(() => groupRankModelsByVendor(models), [models]);
+  const allGroups = useMemo(() => groupRankModelsByVendor(models, '', locale), [models, locale]);
   const groups = useMemo(
-    () => groupRankModelsByVendor(models, query),
-    [models, query],
+    () => groupRankModelsByVendor(models, query, locale),
+    [models, query, locale],
   );
   const selectedGroup = allGroups.find((group) => group.models.includes(value));
   const allModels = useMemo(
@@ -48,7 +52,7 @@ export function RankModelCascadeSelect({
       ? allModels
       : (activeGroup?.models ?? []);
   const label =
-    selectedGroup && value ? `${selectedGroup.label} › ${value}` : '全部模型';
+    selectedGroup && value ? `${selectedGroup.label} › ${value}` : t('rank.filter.allModels');
 
   useEffect(() => {
     if (!open) return;
@@ -69,7 +73,7 @@ export function RankModelCascadeSelect({
   return (
     <Popover isOpen={open} onOpenChange={handleOpenChange}>
       <Button
-        aria-label={`模型筛选：${label}`}
+        aria-label={t('rank.model.filterValue', { label })}
         className={`${FILTER_CONTROL_HEIGHT} min-w-0 max-w-[7.5rem] shrink justify-between gap-1.5 px-2.5 !text-xs font-normal sm:max-w-52 sm:shrink-0 sm:px-3`}
         size="sm"
         variant="secondary"
@@ -83,19 +87,19 @@ export function RankModelCascadeSelect({
         placement="bottom start"
       >
         <Popover.Dialog className="p-0 outline-none">
-          <Popover.Heading className="sr-only">模型筛选</Popover.Heading>
+          <Popover.Heading className="sr-only">{t('rank.model.filter')}</Popover.Heading>
           <SearchField
             className="border-b border-border p-2"
             value={query}
             onChange={setQuery}
           >
-            <Label className="sr-only">搜索厂商或模型</Label>
+            <Label className="sr-only">{t('rank.model.search')}</Label>
             <SearchField.Group className="!h-8 !min-h-8 focus-within:!border-border focus-within:!shadow-none focus-within:!outline-none focus-within:!ring-0">
               <SearchField.SearchIcon />
               <SearchField.Input
                 autoFocus
                 className="!text-xs"
-                placeholder="搜索厂商或模型"
+                placeholder={t('rank.model.search')}
               />
               <SearchField.ClearButton />
             </SearchField.Group>
@@ -104,7 +108,7 @@ export function RankModelCascadeSelect({
           {groups.length > 0 ? (
             <div className="grid min-h-56 grid-cols-[minmax(7.5rem,0.8fr)_minmax(0,1.4fr)] divide-x divide-border">
               <div
-                aria-label="模型厂商"
+                aria-label={t('rank.model.vendors')}
                 className="max-h-72 overscroll-contain overflow-y-auto p-1.5"
                 role="listbox"
               >
@@ -123,7 +127,7 @@ export function RankModelCascadeSelect({
                     <span className="flex size-4 shrink-0 items-center justify-center">
                       {!value ? <Check className="size-3 text-accent" /> : null}
                     </span>
-                    <span className="min-w-0 flex-1 font-medium">全部厂商</span>
+                    <span className="min-w-0 flex-1 font-medium">{t('rank.model.allVendors')}</span>
                     <span className="shrink-0 tabular-nums text-[10px] text-muted">
                       {allModels.length}
                     </span>
@@ -165,7 +169,7 @@ export function RankModelCascadeSelect({
               </div>
 
               <div
-                aria-label={visibleVendor === 'all' ? '全部模型' : '具体模型'}
+                aria-label={t(visibleVendor === 'all' ? 'rank.filter.allModels' : 'rank.model.specificModels')}
                 className="max-h-72 overscroll-contain overflow-y-auto p-1.5"
                 role="listbox"
               >
@@ -192,7 +196,7 @@ export function RankModelCascadeSelect({
             </div>
           ) : (
             <div className="flex min-h-40 items-center justify-center px-6 text-center text-xs text-muted">
-              没有匹配的厂商或模型
+              {t('rank.model.noMatches')}
             </div>
           )}
         </Popover.Dialog>

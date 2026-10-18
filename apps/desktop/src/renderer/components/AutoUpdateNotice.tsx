@@ -1,5 +1,6 @@
 import type { ToastQueue } from '@heroui/react';
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'quotern-i18n/react';
 import type { AutoUpdateState } from '../../shared/auto-update';
 import type { AppToastContent } from './AppToastProvider';
 
@@ -9,6 +10,7 @@ type AutoUpdateNoticeProps = {
 
 /** Shows a one-time success toast after an automatic update restarts the app. */
 export function AutoUpdateNotice({ toastQueue }: AutoUpdateNoticeProps) {
+  const { t } = useTranslation();
   const notifiedVersion = useRef<string | null>(null);
 
   useEffect(() => {
@@ -20,8 +22,8 @@ export function AutoUpdateNotice({ toastQueue }: AutoUpdateNoticeProps) {
 
       notifiedVersion.current = version;
       toastQueue.add({
-        title: `已更新至 v${version}`,
-        description: '新版本已安装完成。',
+        title: t('desktop.update.completedTitle', { version }),
+        description: t('desktop.update.completedDescription'),
         variant: 'success',
       });
       void window.tud.acknowledgeUpdateCompleted().catch((reason) => {
@@ -45,7 +47,7 @@ export function AutoUpdateNotice({ toastQueue }: AutoUpdateNoticeProps) {
       cancelled = true;
       unsubscribe();
     };
-  }, [toastQueue]);
+  }, [toastQueue, t]);
 
   return null;
 }

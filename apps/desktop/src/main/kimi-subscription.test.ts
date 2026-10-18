@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { quotaIdentity } from './quota-identity';
 import type { KimiDesktopContext } from './kimi-desktop-context';
 import {
   createKimiSubscriptionReader,
@@ -35,6 +36,22 @@ function codeUsageResponse(used = 25): Response {
 function codePlanResponse(plan = 'Pro'): Response {
   return new Response(JSON.stringify({ user_id: 'code-user', user_level_name: plan }));
 }
+
+test('Code placeholder accounts retain distinct private identities through the multi-source reader', async () => {
+  let accessToken = 'opaque-code-account-a';
+  const read = createKimiSubscriptionsReader({
+    loadDesktopAccount: async () => ({ status: 'not-installed', planLabel: null, limits: [], fetchedAt: null, stale: false, message: null }),
+    loadCodeAccount: async () => ({ ...codeAccount, userId: 'kimi-code', accessToken }),
+    fetchImpl: async url => String(url).endsWith('/me') ? codePlanResponse() : codeUsageResponse(),
+  });
+  const first = (await read({ forceRefresh: true })).find(snapshot => snapshot.source === 'code')!;
+  accessToken = 'opaque-code-account-b';
+  const second = (await read({ forceRefresh: true })).find(snapshot => snapshot.source === 'code')!;
+  assert.ok(quotaIdentity(first));
+  assert.ok(quotaIdentity(second));
+  assert.notEqual(quotaIdentity(first), quotaIdentity(second));
+  assert.equal(JSON.stringify(second).includes(accessToken), false);
+});
 
 function subscriptionResponse(
   ratio = 0.0923,

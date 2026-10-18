@@ -1,4 +1,4 @@
-import type { DashboardDateRange } from './dashboard-date-range.ts';
+import { previousRollingRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { localDateAndHour } from 'quotern-core/timezone';
 import { emptyDashboardData } from './dashboard-mock-data.ts';
 import { parseDailyModelKey } from 'quotern-core/daily-model-key';
@@ -129,7 +129,7 @@ export function buildDashboardDataFromDataset(
   // usage is absent from dailyRows, so slice(-1) would wrongly pick yesterday.
   const rangeEnd = dateRange?.end ?? localDateNow();
   const rangeStart = dateRange?.start ?? localDateDaysAgo(rangeDays);
-  const selectedApiDays = dataset.dailyRows.filter(
+  const selectedApiDays = dataset.window?.dailyRows ?? dataset.dailyRows.filter(
     (row) => row.date >= rangeStart && row.date <= rangeEnd,
   );
 
@@ -161,14 +161,16 @@ export function buildDashboardDataFromDataset(
   const dailyUsage = buildRecentSevenDays(allDailyUsage);
   const summary = aggregateDailyRows(allDailyUsage);
   const hourlyApiRows = dataset.hourlyRows ?? [];
-  const todayHourlyUsage = buildFilledHourlyForDate(
+  const todayHourlyUsage = dateRange?.fromTime ? buildRollingHourlyRows(dataset.window?.hourlyRows ?? [], dateRange) : buildFilledHourlyForDate(
     hourlyApiRows,
     rangeEnd,
     rangeEnd === localDateNow() ? localHourNow() : 23,
   );
 
   return {
+    ...(dateRange?.fromTime ? { rollingRange: dateRange, rangeDailyApiRows: selectedApiDays, rangeHourlyApiRows: dataset.window?.hourlyRows ?? [], previousHourlyApiRows: dataset.window?.previousHourlyRows ?? [] } : {}),
     availableFromDate,
+    availableFromTime: dataset.summary.statsSince,
     summary,
     rangeDailyUsage: allDailyUsage,
     heatmapDailyUsage,
@@ -179,7 +181,11 @@ export function buildDashboardDataFromDataset(
     dailyUsage,
     hourlyUsage: [],
     changes: buildMetricChanges(allDailyUsage),
-    metricTrends: buildMetricTrends(
+    metricTrends: dateRange?.fromTime
+      ? Date.parse(previousRollingRange(dateRange).fromTime!) < Date.parse(dataset.summary.statsSince)
+        ? { inputTokens: null, outputTokens: null, totalTokens: null, totalCostUsd: null }
+        : buildMetricTrendSet(aggregateUsage(todayHourlyUsage), aggregateUsage(buildRollingHourlyRows(dataset.window?.previousHourlyRows ?? [], previousRollingRange(dateRange))))
+      : buildMetricTrends(
       dataset.dailyRows,
       dataset.hourlyRows ?? [],
       rangeDays,
@@ -201,6 +207,18 @@ export function buildDashboardDataFromDataset(
       summary.totalTokens,
     ),
   };
+}
+
+/** Preserve the date on the axis when a rolling window crosses midnight. */
+export function buildRollingHourlyRows(apiRows: HourlyUsageRow[], range: DashboardDateRange): DashboardHourlyUsageRow[] {
+  const from = Date.parse(range.fromTime!), to = Date.parse(range.toTime!);
+  const result: DashboardHourlyUsageRow[] = [];
+  for (let stamp = Math.floor(from / 3_600_000) * 3_600_000; stamp < to; stamp += 3_600_000) {
+    const { date, hour } = localDateAndHour(new Date(stamp));
+    const row = buildFilledHourlyForDate(apiRows, date, 23)[hour];
+    result.push({ ...row, hourLabel: `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))} ${String(hour).padStart(2, '0')}:00` });
+  }
+  return result;
 }
 
 /** First `YYYY-MM-DD` in a plain calendar or ISO midnight date string. */

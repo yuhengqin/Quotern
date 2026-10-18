@@ -72,7 +72,7 @@ function LocalUsageTrendExplorer(props: Props) {
   ];
   return <div className="min-w-0 lg:col-span-2">
     <div role="group" aria-label={t('usage.explorer.grain')} className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-      <p className="min-w-0 text-xs text-muted">{formatTrendDateRange(range, today, t('usage.range.today'))}</p>
+      <p className="min-w-0 text-xs text-muted">{range.fromTime ? t('usage.range.last24Hours') : formatTrendDateRange(range, today, t('usage.range.today'))}</p>
       <TrendSelect label={t('usage.explorer.grain')} value={controls.selection} options={options} onChange={value => {
         if (options.some(option => option.value === value)) setGrain(value as TrendSelection);
       }} />

@@ -5,6 +5,8 @@ import { serviceTierFromEvent, TOKEN_FIELDS, type RequestPricingFact, type Token
 import { localDateAndHour } from './timezone.js';
 import type { SessionMessage, SessionMetricOptions } from './session-metrics.js';
 import { accountReference } from './account-reference.js';
+import { toUtcHalfHourStart } from './queue/keys.js';
+import { inTimeBounds } from './usage-window.js';
 
 export interface SessionBilling {
   service: string;
@@ -261,9 +263,10 @@ export function mergeSessionObservation(previous: SessionObservation | undefined
 }
 
 export function aggregateSessionActivity(events: readonly SessionObservation[], messages: readonly SessionMessage[], options: SessionMetricOptions & { totalTokens: number; now?: number }): SessionActivitySnapshot {
-  const inRange = (source: string, stamp: string) => {
+  const inRange = (source: string, stamp: string, usageBucket = false) => {
     if (options.sources?.length && !options.sources.includes(source)) return false;
     if (!Number.isFinite(Date.parse(stamp))) return false;
+    if (!inTimeBounds(usageBucket ? toUtcHalfHourStart(stamp)! : stamp, options)) return false;
     const date = localDateAndHour(stamp, options.timeZone).date;
     return (!options.fromDate || date >= options.fromDate) && (!options.toDate || date <= options.toDate);
   };
@@ -308,7 +311,7 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   };
   for (const m of messages) if (inRange(m.source, m.timestamp)) ensure(m.source, m.sessionId, m.timestamp, m.projectLabel);
   for (const e of ordered) {
-    if (!inRange(e.source, e.timestamp) || inherited.has(e)) continue;
+    if (!inRange(e.source, e.timestamp, e.usageKnown) || inherited.has(e)) continue;
     const g = ensure(e.source, e.sessionId, e.timestamp, e.projectLabel), row = g.row;
     g.events.push(e);
     if (e.usageKnown) row.tokens = (row.tokens ?? 0) + e.tokens;

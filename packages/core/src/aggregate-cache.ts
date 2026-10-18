@@ -15,6 +15,7 @@ import {
   resolveAggregateWindow,
 } from './aggregate.js';
 import { sealedDailyCachePath } from './paths.js';
+import type { UsageBounds } from './usage-window.js';
 import { normalizeProjectName } from './project-label.js';
 import { roundCostUsd } from './pricing/index.js';
 import {
@@ -395,8 +396,9 @@ export class AggregateCache {
     rows: QueueBucket[],
     days: number,
     statsSince: string,
-    bounds?: { fromDate?: string; toDate?: string },
+    bounds?: UsageBounds,
   ): DailyUsageResponse {
+    if (bounds?.fromTime) return aggregateDaily(rows, days, statsSince, this.timeZone, bounds);
     const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
@@ -431,8 +433,9 @@ export class AggregateCache {
     rows: QueueBucket[],
     days: number,
     statsSince: string,
-    bounds?: { fromDate?: string; toDate?: string },
+    bounds?: UsageBounds,
   ): HourlyUsageResponse {
+    if (bounds?.fromTime) return aggregateHourly(rows, days, statsSince, this.timeZone, bounds);
     const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
@@ -470,8 +473,9 @@ export class AggregateCache {
     rows: QueueBucket[],
     days: number,
     statsSince: string,
-    bounds?: { fromDate?: string; toDate?: string },
+    bounds?: UsageBounds,
   ): ModelBreakdownResponse {
+    if (bounds?.fromTime) return aggregateModelBreakdown(rows, days, statsSince, this.timeZone, bounds);
     const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =

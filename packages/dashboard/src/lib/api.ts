@@ -1,4 +1,4 @@
-import type { DashboardDateRange } from './dashboard-date-range.ts';
+import { appendDashboardRangeQuery, previousRollingRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
 export { fetchPricingCatalog } from './pricing-data.ts';
 export type { PricingCatalogRow, PricingCatalogResponse } from './pricing-data.ts';
@@ -17,7 +17,7 @@ import type { AchievementSnapshot, AchievementOperation, AchievementNotice } fro
 export async function fetchSessionMetrics(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<SessionMetrics> {
   const { others } = apiPrefixes();
   const query = new URLSearchParams({ days: String(days) });
-  if (range) { query.set('fromDate', range.start); query.set('toDate', range.end); }
+  appendDashboardRangeQuery(query, range);
   if (sources.length) query.set('sources', sources.join(','));
   return request<SessionMetrics>(`${others}usage-sessions?${query}`, { headers: authHeaders() });
 }
@@ -26,8 +26,7 @@ export async function fetchUsageReport(days: number, range?: DashboardDateRange,
   const { others } = apiPrefixes();
   const query = new URLSearchParams({ period: 'summary' });
   if (range) {
-    query.set('fromDate', range.start);
-    query.set('toDate', range.end);
+    appendDashboardRangeQuery(query, range);
   } else {
     query.set('days', String(days));
   }
@@ -212,6 +211,7 @@ export interface ModelBreakdownResponse {
 }
 
 export interface UsageDataset {
+  window?: { dailyRows: DailyUsageRow[]; hourlyRows: HourlyUsageRow[]; previousHourlyRows: HourlyUsageRow[] };
   summary: UsageSummary;
   dailyRows: DailyUsageRow[];
   hourlyRows: HourlyUsageRow[];
@@ -272,7 +272,9 @@ export async function fetchSummary(): Promise<UsageSummary> {
 }
 
 function dateRangeQuery(range?: DashboardDateRange): string {
-  return range ? `&fromDate=${encodeURIComponent(range.start)}&toDate=${encodeURIComponent(range.end)}` : '';
+  const query = new URLSearchParams();
+  appendDashboardRangeQuery(query, range);
+  return query.size ? `&${query}` : '';
 }
 
 export async function fetchDaily(days = 90, range?: DashboardDateRange): Promise<DailyUsageResponse> {
@@ -422,7 +424,7 @@ export async function fetchUsageDataset(
   }
   const { dailyDays, breakdownDays, hourlyDays, dailyRange, hourlyRange, breakdownRange } =
     normalizeUsageDatasetDays(days);
-  const [summary, syncStatus, daily, hourly, models] = await Promise.all([
+  const [summary, syncStatus, daily, hourly, models, window] = await Promise.all([
     fetchSummary(),
     fetchSyncStatusIfCli(),
     fetchDaily(dailyDays, dailyRange),
@@ -431,9 +433,13 @@ export async function fetchUsageDataset(
       timeZone: 'Asia/Shanghai',
     })),
     fetchModelBreakdown(breakdownDays, breakdownRange),
+    breakdownRange?.fromTime ? Promise.all([
+      fetchDaily(2, breakdownRange), fetchHourly(2, breakdownRange), fetchHourly(3, previousRollingRange(breakdownRange)),
+    ]).then(([current, hours, previous]) => ({ dailyRows: current.days, hourlyRows: hours.hours, previousHourlyRows: previous.hours })) : undefined,
   ]);
 
   return {
+    ...(window ? { window } : {}),
     summary,
     syncStatus,
     dailyRows: daily.days ?? [],

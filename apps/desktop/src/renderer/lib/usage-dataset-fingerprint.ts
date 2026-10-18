@@ -21,6 +21,7 @@ export function fingerprintUsageDataset(
   return [
     rangeDays,
     dashboardRangeKey(rangeDays, dateRange),
+    dataset.window ? JSON.stringify(dataset.window) : '',
     dataset.summary.totalTokens,
     dataset.summary.statsSince,
     dataset.summary.todayTokens,

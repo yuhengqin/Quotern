@@ -74,8 +74,8 @@ export function aggregateTaskTiming(
 ): TaskTimingMetrics {
   const selected = options.sources?.length ? new Set(options.sources) : null;
   const zone = options.timeZone ?? DEFAULT_STATS_TIMEZONE;
-  const from = options.fromDate ? midnight(options.fromDate, zone) : -Infinity;
-  const to = options.toDate ? midnight(addLocalDays(options.toDate, 1), zone) : Infinity;
+  const from = Math.max(options.fromTime ? Date.parse(options.fromTime) : -Infinity, options.fromDate ? midnight(options.fromDate, zone) : -Infinity);
+  const to = Math.min(options.toTime ? Date.parse(options.toTime) : Infinity, options.toDate ? midnight(addLocalDays(options.toDate, 1), zone) : Infinity);
   const events = timingEvents.filter(e => (!selected || selected.has(e.source)) && Number.isFinite(Date.parse(e.timestamp)));
   const eventGroups = new Set(events.map(sessionKey));
   const codexMessageGroups = new Set<string>();

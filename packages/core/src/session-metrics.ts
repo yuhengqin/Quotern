@@ -1,4 +1,5 @@
 import { DEFAULT_STATS_TIMEZONE, localDateAndHour } from './timezone.js';
+import { inTimeBounds, type UsageBounds } from './usage-window.js';
 import { aggregateTaskTiming, type SessionTimingEvent, type TaskTimingMetrics } from './task-timing.js';
 
 /** Local accounting metadata only: no prompt, response or tool content. */
@@ -25,7 +26,7 @@ export interface SessionMetrics extends TaskTimingMetrics {
   missingSources: string[];
 }
 
-export interface SessionMetricOptions {
+export interface SessionMetricOptions extends UsageBounds {
   fromDate?: string;
   toDate?: string;
   sources?: readonly string[];
@@ -73,6 +74,7 @@ export function aggregateSessionMetrics(
   }
   const sessions = new Map<string, { first: number; last: number; messages: SessionMessage[] }>();
   for (const message of unique.values()) {
+    if (!inTimeBounds(message.timestamp, options)) continue;
     const date = localDateAndHour(message.timestamp, options.timeZone ?? DEFAULT_STATS_TIMEZONE).date;
     if (options.fromDate && date < options.fromDate) continue;
     if (options.toDate && date > options.toDate) continue;

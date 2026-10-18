@@ -63,6 +63,7 @@ export function useDashboardData(
   dateRange?: DashboardDateRange | null,
 ) {
   const rangeKey = dashboardRangeKey(rangeDays, dateRange);
+  const cacheKey = dateRange?.fromTime ? 'rolling:24h' : rangeKey;
   const collectDays = dateRange ? Math.min(365, dateRangeLookback(dateRange) + rangeDays) : rangeDays;
   const [revision, setRevision] = useState(0);
   /** Largest range (days) already ensure'd this session — shrinking skips ensure. */
@@ -119,7 +120,7 @@ export function useDashboardData(
       !needsEnsure;
     const cachedEntry =
       isRangeDrivenRefresh && !needsEnsure
-        ? rangeCacheRef.current.get(rangeKey)
+        ? rangeCacheRef.current.get(cacheKey)
         : undefined;
 
     if (isRangeDrivenRefresh || isHourlyExpansion) {
@@ -223,7 +224,7 @@ export function useDashboardData(
             prior !== emptyDashboardData
           ) {
             // Same content: keep previous data reference; bail if already idle.
-            rangeCacheRef.current.set(rangeKey, {
+            rangeCacheRef.current.set(cacheKey, {
               fingerprint,
               data: prior,
               error: null,
@@ -259,7 +260,7 @@ export function useDashboardData(
             dataRef.current,
             buildDashboardDataFromDataset(dataset, rangeDays, dateRange),
           );
-          rangeCacheRef.current.set(rangeKey, {
+          rangeCacheRef.current.set(cacheKey, {
             fingerprint,
             data,
             error: null,
@@ -278,7 +279,7 @@ export function useDashboardData(
         const emptyFingerprint = `empty|${rangeKey}`;
         const emptyError = '当前时间范围暂无用量记录';
         lastFingerprintRef.current = emptyFingerprint;
-        rangeCacheRef.current.set(rangeKey, {
+        rangeCacheRef.current.set(cacheKey, {
           fingerprint: emptyFingerprint,
           data: emptyDashboardData,
           error: emptyError,

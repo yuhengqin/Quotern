@@ -4,7 +4,8 @@ import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
 import { addLocalDays } from 'quotern-core/timezone';
 import { chartColor } from './chart-data.ts';
 import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
-import { buildFilledHourlyForDate } from './dashboard-data.ts';
+import { buildFilledHourlyForDate, buildRollingHourlyRows } from './dashboard-data.ts';
+import { previousRollingRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import {
   mergeRequestCount,
   mergeKnownRequestCount,
@@ -175,6 +176,7 @@ export function filterTrendRowsBySources(opts: {
   hourlyApiRows: HourlyUsageRow[];
   /** Local date (Asia/Shanghai) the hourly chart is focused on. */
   hourlyDate?: string;
+  rollingRange?: DashboardDateRange | null;
   heatmapDays: DailyUsageRow[];
   modelRows: ModelBreakdownRow[];
   toolRows: DashboardToolUsageRow[];
@@ -218,7 +220,10 @@ export function filterTrendRowsBySources(opts: {
   // Hourly: filter by source then re-bucket — do not scale all hours by day share.
   const hourlyDate = opts.hourlyDate;
   let hourlyRows = opts.hourlyRows;
-  if (hourlyDate != null) {
+  if (opts.rollingRange?.fromTime) {
+    const sourceSet = new Set(selectedSources);
+    hourlyRows = buildRollingHourlyRows(opts.hourlyApiRows.filter(row => sourceInSet(row.source, sourceSet)), opts.rollingRange);
+  } else if (hourlyDate != null) {
     if (opts.hourlyApiRows.length === 0) {
       // Sample / legacy payloads without per-source hourly rows.
       hourlyRows = opts.hourlyRows.map((row) =>
@@ -303,12 +308,23 @@ export function buildVisibleMetricTrends(opts: {
   hourly: boolean;
   currentDate?: string;
   availableFromDate?: string;
+  rollingRange?: DashboardDateRange | null;
+  previousHourlyApiRows?: HourlyUsageRow[];
+  availableFromTime?: string;
 }): DashboardMetricTrends {
   const current = summarizeTrendRows({
     dailyRows: opts.currentDailyRows,
     hourlyRows: opts.currentHourlyRows,
     hourly: opts.hourly,
   });
+  if (opts.rollingRange?.fromTime) {
+    const previousRange = previousRollingRange(opts.rollingRange);
+    if (opts.availableFromTime && Date.parse(opts.availableFromTime) > Date.parse(previousRange.fromTime!)) return { inputTokens: null, outputTokens: null, totalTokens: null, totalCostUsd: null };
+    if (opts.availableFromDate && previousRange.start < opts.availableFromDate) return { inputTokens: null, outputTokens: null, totalTokens: null, totalCostUsd: null };
+    const sources = new Set(opts.selectedSources);
+    const rows = (opts.previousHourlyApiRows ?? []).filter(row => !sources.size || sourceInSet(row.source, sources));
+    return metricTrendSet(current, summarizeTrendRows({ dailyRows: [], hourlyRows: buildRollingHourlyRows(rows, previousRange), hourly: true }));
+  }
   const currentDate = opts.currentDate ?? localDateNow();
   const comparisonStart = addLocalDays(currentDate, -(opts.hourly ? 1 : 2 * opts.rangeDays - 1));
   if (opts.availableFromDate && comparisonStart < opts.availableFromDate) {

@@ -6,6 +6,7 @@ import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
 
 import type { LocalApiDeps } from './state.js';
+import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
 import {
   aggregateDaily,
   aggregateHourly,
@@ -36,9 +37,13 @@ function ok<T>(data: T) {
   return { success: true as const, message: 'ok', data };
 }
 
-function readDateBounds(c: Context): { fromDate: string; toDate: string } | null | undefined {
+function readDateBounds(c: Context): UsageBounds | null | undefined {
   const fromDate = c.req.query('fromDate');
   const toDate = c.req.query('toDate');
+  const fromTime = c.req.query('fromTime'), toTime = c.req.query('toTime');
+  if (fromTime !== undefined || toTime !== undefined) {
+    return fromDate === undefined && toDate === undefined && validTimeBounds({ fromTime, toTime }) ? { fromTime, toTime } : null;
+  }
   if (fromDate === undefined && toDate === undefined) return undefined;
   const valid = (date: string | undefined): date is string => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
@@ -89,7 +94,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.get('/functions/tud-usage-report', (c) => {
     try {
       const params = new URL(c.req.url).searchParams;
-      const allowed = new Set(['period', 'days', 'fromDate', 'toDate', 'sources', 'model', 'project']);
+      const allowed = new Set(['period', 'days', 'fromDate', 'toDate', 'fromTime', 'toTime', 'sources', 'model', 'project']);
       for (const key of params.keys()) {
         if (!allowed.has(key) || params.getAll(key).length !== 1) throw new Error(`无效或重复的参数: ${key}`);
       }
@@ -101,6 +106,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
         days: days === null ? undefined : Number(days),
         fromDate: params.get('fromDate') ?? undefined,
         toDate: params.get('toDate') ?? undefined,
+        fromTime: params.get('fromTime') ?? undefined, toTime: params.get('toTime') ?? undefined,
         sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
         model: params.get('model') ?? undefined,
         project: params.get('project') ?? undefined,
@@ -113,7 +119,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.get('/functions/tud-usage-trend', (c) => {
     try {
       const params = new URL(c.req.url).searchParams;
-      const allowed = new Set(['granularity', 'days', 'fromDate', 'toDate', 'sources', 'model', 'project']);
+      const allowed = new Set(['granularity', 'days', 'fromDate', 'toDate', 'fromTime', 'toTime', 'sources', 'model', 'project']);
       for (const key of params.keys()) if (!allowed.has(key) || params.getAll(key).length !== 1) throw new Error('INVALID_TREND_QUERY');
       const days = params.get('days');
       if (days !== null && !/^\d+$/.test(days)) throw new Error('INVALID_DAYS');
@@ -122,6 +128,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       return c.json(ok(aggregateUsageTrend(deps.bucketStore.getRows(), {
         granularity: (params.get('granularity') ?? 'daily') as TrendGranularity,
         days: days === null ? undefined : Number(days), fromDate: params.get('fromDate') ?? undefined, toDate: params.get('toDate') ?? undefined,
+        fromTime: params.get('fromTime') ?? undefined, toTime: params.get('toTime') ?? undefined,
         sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
         model: params.get('model') ?? undefined, project: params.get('project') ?? undefined,
       }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' })));
@@ -141,10 +148,10 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const fromDate = window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
     const usageSources = [...new Set(deps.bucketStore.getRows().filter((row) => {
       const date = localDateAndHour(row.hour_start).date;
-      return date >= fromDate && date <= window.toDate && (row.total_tokens > 0 || row.conversation_count > 0);
+      return date >= fromDate && date <= window.toDate && inTimeBounds(row.hour_start, bounds) && (row.total_tokens > 0 || row.conversation_count > 0);
     }).map((row) => row.source))];
     return c.json(ok(await readSessionMetrics(deps.dataDir, usageSources, {
-      fromDate, toDate: window.toDate,
+      ...bounds, fromDate, toDate: window.toDate,
       ...(sources ? { sources: sources as string[] } : {}),
     })));
   });
@@ -160,10 +167,10 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const fromDate = window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
     const rows = deps.bucketStore.getRows().filter(row => {
       const date = localDateAndHour(row.hour_start).date;
-      return date >= fromDate && date <= window.toDate && (!sources?.length || (sources as string[]).includes(row.source));
+      return date >= fromDate && date <= window.toDate && inTimeBounds(row.hour_start, bounds) && (!sources?.length || (sources as string[]).includes(row.source));
     });
     const usageSources = [...new Set(rows.map(row => row.source))];
-    const options = { fromDate, toDate: window.toDate, ...(sources ? { sources: sources as string[] } : {}) };
+    const options = { ...bounds, fromDate, toDate: window.toDate, ...(sources ? { sources: sources as string[] } : {}) };
     const history = await readSessionHistory(deps.dataDir, usageSources, options);
     const observed = new Set(history.observations.filter(event => event.usageKnown).map(event => event.source));
     const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];

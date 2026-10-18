@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { MergedConfig } from '../../shared/dsh-pet.js';
 import { parseJsonc } from './jsonc.js';
 import { loadVendor, type ConfigPaths, type VendorHost } from './vendor.js';
+import { atomicPrivateFile } from './storage.js';
 
 export class DshPetConfigStore {
   readonly paths: ConfigPaths;
@@ -45,5 +46,25 @@ export class DshPetConfigStore {
   reset(): Promise<void> { return this.saveText(readFileSync(this.paths.defaultFile, 'utf8')); }
   async patchMain(patch: Record<string, unknown>): Promise<void> {
     await this.saveText(JSON.stringify({ ...parseJsonc(this.readText()), ...patch }, null, 2));
+  }
+  setDisplay(id: string, display: string): Promise<void> {
+    const run = this.writes.then(async () => {
+      if (!['web', 'desktop', 'both', 'none'].includes(display)) throw new Error('display 无效');
+      const found = this.vendor.findPetInstance(this.read(), id);
+      if (!found) throw new Error('没有这只宠物');
+      if (found.entry === 'main') {
+        const raw = parseJsonc(this.readText());
+        const pets = (Array.isArray(raw.pets) ? raw.pets : found.conf.pets) as Record<string, unknown>[];
+        await this.save(JSON.stringify({ ...raw, pets: pets.map(pet => pet.id === id ? { ...pet, display } : pet) }, null, 2));
+      } else {
+        if (path.basename(found.entry) !== found.entry || /[\\/:]/.test(found.entry)) throw new Error('宠物包目录无效');
+        const file = path.join(this.paths.petDir, `${found.entry}-config.json`);
+        const raw = parseJsonc(readFileSync(file, 'utf8'));
+        const pets = (raw.pets as Record<string, unknown>[]).map(pet => pet.id === id ? { ...pet, display } : pet);
+        await atomicPrivateFile(file, JSON.stringify({ ...raw, pets }, null, 2));
+      }
+    });
+    this.writes = run.catch(() => {});
+    return run;
   }
 }

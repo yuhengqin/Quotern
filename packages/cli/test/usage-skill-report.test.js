@@ -206,6 +206,44 @@ test('time-series chart follows chronological order while retaining every table 
   assert.match(html, /2026-10-17/);
 });
 
+test('time-series hover values use compact units while retaining exact amounts', async () => {
+  const { renderUsageHtml } = await renderer();
+  for (const [tokens, formatted, precise] of [
+    [3200, '3.2K', '3,200'],
+    [493082972, '493.08M', '493,082,972'],
+    [1234000000, '1.23B', '1,234,000,000'],
+    [1234000000000, '1.23T', '1,234,000,000,000'],
+  ]) {
+    const input = report({ period: 'daily' });
+    input.rows = [{ label: '2026-10-17', fromDate: '2026-10-17', toDate: '2026-10-17', tokens }];
+    const html = renderUsageHtml(input);
+    assert.ok(html.includes(`<title>2026-10-17：${formatted} Token（精确值 ${precise}）</title>`));
+  }
+});
+
+test('time-series axis has readable evenly spaced ticks and enough headroom for the largest bar', async () => {
+  const { renderUsageHtml } = await renderer();
+  for (const [tokens, expectedLabels] of [
+    [493082972, ['0', '100M', '200M', '300M', '400M', '500M']],
+    [1234000000000, ['0', '250B', '500B', '750B', '1T', '1.25T']],
+    [3200, ['0', '1K', '2K', '3K', '4K']],
+    [1, ['0', '0.2', '0.4', '0.6', '0.8', '1']],
+  ]) {
+    const input = report({ period: 'daily' });
+    input.rows = [{ label: '2026-10-17', fromDate: '2026-10-17', toDate: '2026-10-17', tokens }];
+    const html = renderUsageHtml(input);
+    const labels = [...html.matchAll(/<text class="y-label"[^>]*>([^<]+)<\/text>/g)].map(match => match[1]);
+    assert.deepEqual(labels, expectedLabels);
+    const gridY = [...html.matchAll(/<line class="y-grid"[^>]*y1="([^"]+)"/g)].map(match => Number(match[1]));
+    assert.equal(gridY.length, labels.length);
+    const step = gridY[0] - gridY[1];
+    for (let index = 1; index < gridY.length; index++) assert.ok(Math.abs(gridY[index - 1] - gridY[index] - step) < 1e-8);
+    const bar = html.match(/<rect[^>]*y="([^"]+)"[^>]*height="([^"]+)"/);
+    assert.ok(Number(bar[1]) >= gridY.at(-1) - 1e-8);
+    assert.ok(Number(bar[1]) + Number(bar[2]) <= gridY[0] + 1e-8);
+  }
+});
+
 test('CLI accepts UTF-8 BOM input, creates portable output and protects existing files', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'quotern-skill-report-'));
   try {

@@ -89,7 +89,10 @@
     .timeline { display: block; inline-size: 100%; margin-block-start: 18px; overflow: visible; }
     .timeline rect { fill: var(--chart-1); }
     .timeline line { stroke: var(--line); stroke-width: 1; }
+    .timeline .y-grid { stroke-dasharray: 3 4; }
+    .timeline .y-grid:first-of-type { stroke-dasharray: none; }
     .timeline text { fill: var(--muted); font-size: 11px; }
+    .timeline .axis-unit { font-size: 10px; }
     summary { cursor: pointer; font-size: 14px; font-weight: 600; }
     summary small { font-size: 10px; font-weight: 400; margin-inline-start: 8px; }
     details[open] > summary { margin-block-end: 20px; }

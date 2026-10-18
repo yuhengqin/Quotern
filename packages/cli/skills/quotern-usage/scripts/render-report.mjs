@@ -10,6 +10,7 @@ const periodNames = { summary: '用量总览', overview: '综合用量概览', m
 const sourceNames = { codex: 'Codex', claude: 'Claude', zcode: 'Zcode', opencode: 'OpenCode', antigravity: 'Antigravity', cursor: 'Cursor', gemini: 'Gemini' };
 const countNames = { summary: '汇总项', models: '模型与来源组合', projects: '项目', daily: '有记录的日期', weekly: '有记录的周', monthly: '有记录的月份' };
 const whole = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 6 });
+const chartNumber = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const sourceName = (source) => Object.hasOwn(sourceNames, source) ? sourceNames[source] : source ?? '—';
 const validNumber = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -144,20 +145,31 @@ function temporalChart(report, rows) {
   const span = Math.max(end - start, 86400000);
   const max = Math.max(...rows.map((row) => row.tokens), 0);
   if (!max) return '<p class="empty">暂无非零用量可供比较。</p>';
+  // Round the upper bound to a readable interval instead of labeling only zero and the raw maximum.
+  const roughStep = max / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const step = [1, 2, 2.5, 5, 10].find(factor => factor >= roughStep / magnitude) * magnitude;
+  const intervals = Math.ceil(max / step);
+  const ceiling = intervals * step;
+  const yTicks = Array.from({ length: intervals + 1 }, (_, index) => {
+    const value = index * step;
+    const y = 200 - index / intervals * 170;
+    return `<line class="y-grid" x1="80" y1="${y}" x2="680" y2="${y}"/><text class="y-label" x="64" y="${y}" text-anchor="end" dominant-baseline="middle">${escape(chartNumber.format(value))}</text>`;
+  }).join('');
   const width = Math.min(24, 600 / Math.max(1, (end - start) / 86400000 + 1));
   const bars = dated.map(({ row, stamp }) => {
-    const x = 55 + (stamp - start) / span * 600;
-    const height = row.tokens / max * 170;
-    return `<rect x="${x - width / 2}" y="${200 - height}" width="${width}" height="${height}" rx="2"><title>${escape(row.label)}：${escape(exact(row.tokens))} Token</title></rect>`;
+    const x = 80 + (stamp - start) / span * 600;
+    const height = row.tokens / ceiling * 170;
+    return `<rect x="${x - width / 2}" y="${200 - height}" width="${width}" height="${height}" rx="2"><title>${escape(row.label)}：${escape(chartNumber.format(row.tokens))} Token（精确值 ${escape(exact(row.tokens))}）</title></rect>`;
   }).join('');
   const days = Math.round((end - start) / 86400000);
   const tickCount = Math.min(days + 1, 7);
   const ticks = Array.from({ length: tickCount }, (_, index) => {
     const offset = tickCount === 1 ? 0 : Math.round(index * days / (tickCount - 1));
     const date = new Date(start + offset * 86400000).toISOString().slice(5, 10);
-    return `<text x="${55 + offset * 86400000 / span * 600}" y="230" text-anchor="middle">${date}</text>`;
+    return `<text x="${80 + offset * 86400000 / span * 600}" y="230" text-anchor="middle">${date}</text>`;
   }).join('');
-  return `<p class="muted chart-caption">按时间展示已记录用量；空白日期不能据此确认零用量。未结束的统计时段不宜与完整自然日直接比较。</p><svg class="timeline" viewBox="0 0 710 245" role="img" aria-labelledby="timeline-title timeline-description"><title id="timeline-title">${escape(periodNames[report.period])}</title><desc id="timeline-description">当前筛选范围内已记录时段的 Token 用量。每个时段的精确值见完整明细。</desc><line x1="55" y1="200" x2="655" y2="200"/><text x="8" y="30">${escape(compact(max))}</text><text x="28" y="204">0</text>${bars}${ticks}</svg>`;
+  return `<p class="muted chart-caption">按时间展示已记录用量；空白日期不能据此确认零用量。未结束的统计时段不宜与完整自然日直接比较。</p><svg class="timeline" viewBox="0 0 750 245" role="img" aria-labelledby="timeline-title timeline-description"><title id="timeline-title">${escape(periodNames[report.period])}</title><desc id="timeline-description">当前筛选范围内已记录时段的 Token 用量。K、M、B、T 分别表示千、百万、十亿、万亿。每个时段的精确值见完整明细。</desc><text class="axis-unit" x="64" y="12" text-anchor="end">Token</text>${yTicks}${bars}${ticks}</svg>`;
 }
 
 function table(report, rows, costs) {

@@ -145,6 +145,8 @@ Dashboard 与 Desktop 共享价格页及目录转换，订阅行显示“订阅�
 
 `GET /functions/tud-usage-trend` 支持 `granularity=hourly|daily|weekly|monthly`、`days` 或成对 `fromDate/toDate`，以及 `sources/model/project`。沿用报告的参数、采集下限和时区，图表范围最多 367 个自然日；小时 key 包含日期，今天补零截止当前小时。每个时间点直接按桶计算模型费用，不按 Token 占比分摊；周一开周，首末周/月只含选定日期。`costUsd=null` 保留未知价格，图表显示 `knownCostUsd` 并提示部分未计价。粒度仅影响图表，不修改日期、来源、概览或分享筛选。
 
+Dashboard 与 Desktop 主页面的两张趋势图共用日期标签、粒度和一次趋势请求。自动粒度为单日按小时、2–90 日按日、更长范围按周；小时选项限 7 日以内，周/月选项要求范围超过 7 日且跨越至少两个对应日历桶。切换范围后，失效的手动粒度恢复为自动。单日标签只显示一次日期，今天附“今天”；单日小时轴省略重复日期。显示粒度规则见 [usage-trend-controls.ts](../packages/dashboard/src/lib/usage-trend-controls.ts)。
+
 ## 日历、封存与配置写入
 
 队列时间使用 UTC，面板日期分组使用 [timezone.ts](../packages/core/src/timezone.ts) 的本地日历规则。今天实时计算，过去日期读取封存缓存。启动时补齐有记录但未封存的日期；跨午夜或休眠多日后，即使同步没有写出新桶，也要触发日历封存检查。历史桶变化时重封受影响日期。

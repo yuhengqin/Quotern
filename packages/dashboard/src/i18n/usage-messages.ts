@@ -3,6 +3,7 @@ import type { SupportedLocale } from 'quotern-i18n';
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  'usage.explorer.autoResolved': ['自动 · {{grain}}', 'Auto · {{grain}}', '自動 · {{grain}}', '자동 · {{grain}}'],
   'usage.profiles.open': ['监控目录', 'Monitored folders', '監視するフォルダー', '모니터링 폴더'],
   'usage.profiles.title': ['额度监控目录', 'Quota monitoring folders', '使用枠を監視するフォルダー', '한도 모니터링 폴더'],
   'usage.profiles.defaultHint': ['默认目录自动读取。多个账号需要分别在独立的 Codex home 或 Claude 配置目录中完成登录，再添加到这里监控。此处只读取登录状态与额度，不执行登录或切换账号。', 'The default folder is read automatically. For multiple accounts, sign in within separate Codex home or Claude configuration folders, then add them here. Quotern reads sign-in state and quota; it does not sign in or switch accounts.', '既定のフォルダーは自動的に読み取ります。複数のアカウントは、別々の Codex home または Claude 設定フォルダーでログインしてから追加してください。ログイン状態と使用枠のみを読み取り、ログインやアカウント切替は行いません。', '기본 폴더는 자동으로 읽습니다. 여러 계정은 각각 별도의 Codex home 또는 Claude 설정 폴더에서 로그인한 다음 여기에 추가하세요. 로그인 상태와 한도만 읽으며 로그인하거나 계정을 전환하지 않습니다.'],

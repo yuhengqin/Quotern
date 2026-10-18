@@ -345,8 +345,7 @@ export function DashboardPage() {
             aria-label={t('usage.page.charts')}
             className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2"
           >
-            <UsageTrendExplorer variant="tokens" days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} />
-            <UsageTrendExplorer variant="usage" days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined} />
+            <UsageTrendExplorer days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined} />
             {/* 分时活跃热力图：按天热力图已并入概览大卡片，此处注释便于以后恢复
             <HourlyActivityHeatmap rows={data.hourlyUsage} />
             */}

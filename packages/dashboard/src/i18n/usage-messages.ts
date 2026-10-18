@@ -200,6 +200,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.activity.usageNotRecorded': ['用量未记录', 'Usage not recorded', '使用量の記録なし', '사용량 기록 없음'],
   'usage.activity.insufficientBillingEvidence': ['来源未记录足够的认证或套餐信息，暂不能确定计费方式。', 'The source did not record enough authentication or plan information to determine the billing method.', '請求方法を特定するのに十分な認証・プラン情報がソースに記録されていません。', '원본에 인증 또는 요금제 정보가 충분히 기록되지 않아 청구 방식을 확인할 수 없습니다.'],
   'usage.activity.recentDetails': ['最近活动：{{date}}；会话 {{id}}', 'Recent activity: {{date}}; session {{id}}', '最近のアクティビティ：{{date}}；セッション {{id}}', '최근 활동: {{date}}; 세션 {{id}}'],
+  'usage.activity.contextUpdated': ['上下文更新于 {{date}}', 'Context updated at {{date}}', 'コンテキスト更新：{{date}}', '컨텍스트 업데이트: {{date}}'],
   'usage.activity.contextAfterCompaction': ['压缩后记录', 'After compaction', '圧縮後の記録', '압축 후 기록'],
   'usage.activity.contextRequestInput': ['最近请求输入估计', 'Recent request input estimate', '直近のリクエスト入力推定', '최근 요청 입력 추정'],
   'usage.activity.contextSnapshot': ['来源记录的上下文快照', 'Context snapshot from source', 'ソース記録のコンテキストスナップショット', '원본 기록의 컨텍스트 스냅샷'],

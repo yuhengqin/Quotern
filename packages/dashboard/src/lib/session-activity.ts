@@ -1,4 +1,9 @@
-import type { SessionActivity } from 'quotern-core';
+import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
+
+export function relatedSessionActivity(rows: SessionActivity[], group: Pick<SessionActivitySnapshot['billing'][number], 'sessionRefs'>): SessionActivity[] {
+  const refs = new Set(group.sessionRefs?.map(ref => JSON.stringify([ref.source, ref.sessionId])));
+  return rows.filter(row => refs.has(JSON.stringify([row.source, row.sessionId])));
+}
 
 export const SESSION_PAGE_SIZE = 12;
 export function filterSessionActivity(rows: SessionActivity[], query: string, source: string, project = ''): SessionActivity[] {

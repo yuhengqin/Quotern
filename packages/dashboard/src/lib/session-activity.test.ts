@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionActivity } from 'quotern-core';
-import { filterSessionActivity, sessionActivityPage } from './session-activity.ts';
+import { filterSessionActivity, relatedSessionActivity, sessionActivityPage } from './session-activity.ts';
 import * as activity from './session-activity.ts';
 
 test('session search combines source and named metadata while pages remain bounded after filtering', () => {
@@ -47,4 +47,15 @@ test('session filter options follow search and the other filter, with counts acr
     projects: [{ value: 'B', count: 0 }],
   });
   assert.deepEqual(facets(rows, '无匹配', 'all', ''), { sources: [], projects: [] });
+});
+
+test('related sessions use exact source and session references even when session attribution is mixed', () => {
+  const rows = [
+    { source: 'pi', sessionId: 'shared', billing: { service: 'mixed' } },
+    { source: 'omp', sessionId: 'shared', billing: { service: 'openai' } },
+    { source: 'pi', sessionId: 'other', billing: { service: 'openai' } },
+  ] as SessionActivity[];
+  assert.deepEqual(relatedSessionActivity(rows, { sessionRefs: [{ source: 'pi', sessionId: 'shared' }, { source: 'pi', sessionId: 'shared' }] }), [rows[0]]);
+  assert.deepEqual(relatedSessionActivity(rows, { sessionRefs: [] }), []);
+  assert.deepEqual(relatedSessionActivity(rows, {}), []);
 });

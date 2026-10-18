@@ -245,7 +245,9 @@ export interface SessionActivity {
 export interface SessionActivitySnapshot {
   sessions: SessionActivity[]; totalTokens: number; attributedTokens: number; otherTokens: number;
   tokenTotalMismatch: boolean; missingSources: string[]; observedAt: string;
-  billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'] }[];
+  billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'];
+    /** Exact contributing sessions; absent only in responses from older runtimes. */
+    sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[] }[];
 }
 export interface SessionModelUsage {
   model: string; tokens: number; requests: number | null;
@@ -323,9 +325,16 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   const totalTokens = Math.max(attributedTokens, Math.max(0, options.totalTokens));
   const services = new Map<string, SessionActivitySnapshot['billing'][number]>();
   const serviceCosts = new Map<string, Set<string>>();
-  const addBilling = (proof: SessionBilling, tokens: number, costUsd: number | null, costKind: string) => {
+  const serviceSessions = new Map<string, Set<string>>();
+  const addBilling = (proof: SessionBilling, tokens: number, costUsd: number | null, costKind: string, session?: SessionActivity) => {
     const key = JSON.stringify([proof.service, proof.mode, proof.accountRef]);
-    const service = services.get(key) ?? { service: proof.service, mode: proof.mode, accountRef: proof.accountRef, tokens: 0, costUsd: null, costKind: 'unknown' as const };
+    const service = services.get(key) ?? { service: proof.service, mode: proof.mode, accountRef: proof.accountRef, tokens: 0, costUsd: null, costKind: 'unknown' as const, sessionRefs: [] };
+    if (session) {
+      const refs = serviceSessions.get(key) ?? new Set<string>();
+      const ref = JSON.stringify([session.source, session.sessionId]);
+      if (!refs.has(ref)) service.sessionRefs!.push({ source: session.source, sessionId: session.sessionId });
+      refs.add(ref); serviceSessions.set(key, refs);
+    }
     service.tokens += tokens;
     if (costUsd !== null) service.costUsd = (service.costUsd ?? 0) + costUsd;
     const kinds = serviceCosts.get(key) ?? new Set<string>();
@@ -352,8 +361,8 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
     row.detailsComplete = calls.length > 0 && calls.every(event => event.tokenParts && TOKEN_FIELDS.reduce((sum, key) => sum + event.tokenParts![key], 0) === event.tokens);
     row.unallocatedCostUsd = totals.length ? row.costUsd : null;
     row.sharePercent = row.tokens !== null && totalTokens > 0 ? row.tokens / totalTokens * 100 : null;
-    for (const event of calls) addBilling(event.billing, event.tokens, totals.length ? null : event.costUsd, totals.length ? 'unknown' : event.costKind);
-    for (const event of totals) addBilling(event.billing, 0, event.costUsd, event.costIncomplete ? 'mixed' : event.costKind);
+    for (const event of calls) addBilling(event.billing, event.tokens, totals.length ? null : event.costUsd, totals.length ? 'unknown' : event.costKind, row);
+    for (const event of totals) addBilling(event.billing, 0, event.costUsd, event.costIncomplete ? 'mixed' : event.costKind, row);
     return row;
   }).sort((a, b) => (b.tokens ?? -1) - (a.tokens ?? -1) || b.lastActivityAt.localeCompare(a.lastActivityAt));
   if (totalTokens > attributedTokens) addBilling(emptyBilling(), totalTokens - attributedTokens, null, 'unknown');

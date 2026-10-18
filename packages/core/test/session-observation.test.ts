@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractSessionObservation, aggregateSessionActivity, type ObservationContext } from '../src/session-observation.js';
+import { extractSessionObservation, aggregateSessionActivity, type ObservationContext, type SessionObservation } from '../src/session-observation.js';
 
 test('Codex preserves recorded call usage, de-duplicates cumulative snapshots and records capacity', () => {
   const context: ObservationContext = { sessionId: 'a' };
@@ -50,6 +50,7 @@ test('Codex fork replay ignores changed clocks, preserving later real repeat cal
   const repeat = extractSessionObservation('codex', event('2026-10-16T04:02:00Z', 50), child)!;
   const result = aggregateSessionActivity([a, replay, b, repeat], [], { fromDate: '2026-10-16', toDate: '2026-10-16', totalTokens: 90 });
   assert.equal(result.attributedTokens, 90); assert.equal(result.sessions[0]?.tokens, 90);
+  assert.deepEqual(result.billing[0].sessionRefs, [{ source: 'codex', sessionId: 'c' }]);
 });
 
 test('partial account metadata does not invent multiple billing services', () => {
@@ -112,4 +113,41 @@ test('Codex billing uses recorded auth and plan evidence without guessing from m
   assert.equal(read('', { plan_type: 'future-plan' }), 'unknown');
   assert.equal(read('', { plan_type: 'pro' }, 'custom-proxy'), 'unknown');
   assert.equal(read(''), 'unknown');
+});
+
+test('attribution links the contributing sessions per service, mode and account across agents', () => {
+  const base = extractSessionObservation('pi', { type: 'message', id: 'a', timestamp: '2026-10-16T04:00:00Z', message: { role: 'assistant', provider: 'openai', usage: { input: 10 } } }, { sessionId: 'shared' })!;
+  const events: SessionObservation[] = [
+    { ...base, billing: { ...base.billing, mode: 'subscription', accountRef: 'account-a' } },
+    { ...base, id: 'b', billing: { ...base.billing, mode: 'subscription', accountRef: 'account-a' } },
+    { ...base, id: 'c', billing: { ...base.billing, mode: 'api', accountRef: 'account-a' } },
+    { ...base, id: 'd', billing: { ...base.billing, mode: 'subscription', accountRef: 'account-b' } },
+    { ...base, id: 'e', source: 'omp', billing: { ...base.billing, mode: 'subscription', accountRef: 'account-a' } },
+  ];
+  const result = aggregateSessionActivity(events, [], { totalTokens: 50 });
+  const linked = result.billing;
+  assert.equal(linked.length, 3);
+  assert.deepEqual(linked.find(row => row.mode === 'subscription' && row.accountRef === 'account-a')?.sessionRefs, [{ source: 'pi', sessionId: 'shared' }, { source: 'omp', sessionId: 'shared' }]);
+  for (const row of linked.filter(row => row.mode === 'api' || row.accountRef === 'account-b')) assert.deepEqual(row.sessionRefs, [{ source: 'pi', sessionId: 'shared' }]);
+});
+
+test('unknown attribution links real observations but never invents sessions for the summary remainder', () => {
+  const event = extractSessionObservation('pi', { type: 'message', id: 'a', timestamp: '2026-10-16T04:00:00Z', message: { role: 'assistant', usage: { input: 10 } } }, { sessionId: 'known-session' })!;
+  const result = aggregateSessionActivity([event], [], { totalTokens: 30 });
+  assert.equal(result.otherTokens, 20);
+  assert.equal(result.billing[0].tokens, 30);
+  assert.deepEqual(result.billing[0].sessionRefs, [{ source: 'pi', sessionId: 'known-session' }]);
+  assert.deepEqual(aggregateSessionActivity([], [], { totalTokens: 30 }).billing[0].sessionRefs, []);
+});
+
+test('attribution links session total costs including recorded zero without duplicating call estimates', () => {
+  const call = extractSessionObservation('pi', { type: 'message', id: 'call', timestamp: '2026-10-16T04:00:00Z', message: { role: 'assistant', provider: 'openai', usage: { input: 10, cost: { total: 2 } } } }, { sessionId: 'a' })!;
+  for (const costUsd of [0, 3]) {
+    const total: SessionObservation = { ...call, id: 'total', tokens: 0, usageKnown: false, costScope: 'session-total', costUsd, billing: { service: 'unknown', mode: 'unknown', accountRef: null, evidence: 'unknown' } };
+    const result = aggregateSessionActivity([call, total], [], { totalTokens: 10 });
+    assert.equal(result.billing.find(row => row.service === 'openai')?.costUsd, null);
+    const costRow = result.billing.find(row => row.service === 'unknown')!;
+    assert.equal(costRow.costUsd, costUsd);
+    assert.deepEqual(costRow.sessionRefs, [{ source: 'pi', sessionId: 'a' }]);
+  }
 });

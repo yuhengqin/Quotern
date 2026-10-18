@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button, Card, Label, ListBox, Modal, SearchField, Select, Tabs, Tooltip } from '@heroui/react';
 import { ArrowDownUp, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
@@ -9,7 +9,7 @@ import { sourceLabel } from '@/lib/tokens';
 import { isCliBackend } from '@/lib/api';
 import type { DashboardDateRange } from '@/lib/dashboard-date-range';
 import { ProviderIcon } from './ProviderIcon';
-import { filterSessionActivity, sessionActivityFacets, sessionActivityPage, sortSessionActivity, type SessionSort } from '../lib/session-activity';
+import { filterSessionActivity, relatedSessionActivity, sessionActivityFacets, sessionActivityPage, sortSessionActivity, type SessionSort } from '../lib/session-activity';
 
 const number = (value: number, locale: SupportedLocale) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 const serviceLabel = (value: string, locale: SupportedLocale) => {
@@ -32,6 +32,11 @@ function age(stamp: string, locale: SupportedLocale) {
 function money(row: Pick<SessionActivity, 'costUsd' | 'costKind'>, locale: SupportedLocale) {
   return row.costUsd === null ? translate(locale, 'usage.activity.amountUnknown')
     : `$${row.costUsd.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} · ${costLabel(row.costKind, locale)}`;
+}
+const attributionKey = (row: SessionActivitySnapshot['billing'][number]) => JSON.stringify([row.service, row.mode, row.accountRef]);
+function accountLabel(row: Pick<SessionActivity['billing'], 'accountRef' | 'accountLabel'>, locale: SupportedLocale, unknownKey = 'usage.activity.accountUnknown') {
+  return row.accountRef ? [row.accountLabel, translate(locale, 'usage.activity.accountRef', { ref: row.accountRef.slice(0, 8) })].filter(Boolean).join(' · ')
+    : translate(locale, unknownKey);
 }
 
 export function SessionActivityPanel(props: { days: number; selectedDate: string | null; dateRange: DashboardDateRange | null; sources: readonly string[]; enabled: boolean }) {
@@ -65,17 +70,39 @@ export function SessionActivityViews({ snapshot }: { snapshot: SessionActivitySn
       <p className="mt-3 text-[11px] text-muted">{t('usage.activity.contributionNote')}</p>
     </Tabs.Panel>
     <Tabs.Panel id="billing" className="pt-3">
-      <div className="flex flex-col divide-y divide-separator">
-        {snapshot.billing.map(row => <div key={`${row.service}|${row.mode}|${row.accountRef ?? ''}`} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
-          <div className="min-w-0"><p className="text-sm font-medium">{serviceLabel(row.service, locale)}</p><p className="text-xs text-muted">{[row.mode !== 'unknown' ? modeLabel(row.mode, locale) : '', row.accountLabel ?? (row.accountRef ? t('usage.activity.accountRef', { ref: row.accountRef.slice(0, 6) }) : '')].filter(Boolean).join(' · ')}</p></div>
-          <div className="text-right text-xs tabular-nums"><p>{number(row.tokens, locale)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
-        </div>)}
-        {!snapshot.billing.length && <p className="py-4 text-sm text-muted">{t('usage.activity.noBilling')}</p>}
-      </div>
+      <UsageAttribution snapshot={snapshot} />
       <p className="mt-3 text-[11px] text-muted">{t('usage.activity.billingNote')}</p>
     </Tabs.Panel>
     {(snapshot.missingSources.length > 0 || snapshot.tokenTotalMismatch) && <p className="mt-3 text-[11px] text-muted">{snapshot.missingSources.length ? t('usage.activity.missingCoverage', { sources: new Intl.ListFormat(locale).format(snapshot.missingSources.map(sourceLabel)) }) : ''} {snapshot.tokenTotalMismatch ? t('usage.activity.totalMismatch') : ''}</p>}
   </Tabs>;
+}
+
+function UsageAttribution({ snapshot }: { snapshot: SessionActivitySnapshot }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+  const [selected, setSelected] = useState<string | null>(null);
+  const groups = useMemo(() => snapshot.billing.map(row => ({ row, sessions: relatedSessionActivity(snapshot.sessions, row) })), [snapshot]);
+  const active = groups.find(({ row }) => attributionKey(row) === selected);
+  return <>
+    <p className="mb-1 text-xs text-muted">{t('usage.activity.attributionSummary')}</p>
+    {groups.some(({ row }) => !row.sessionRefs) && <p role="status" className="mt-2 text-xs text-muted">{t('usage.activity.sessionLinksUnavailable')}</p>}
+    <div className="flex flex-col divide-y divide-separator">
+      {groups.map(({ row, sessions }) => <div key={attributionKey(row)} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+        <div className="min-w-0 flex-1 basis-48">
+          <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{serviceLabel(row.service, locale)}</p><span className={`rounded-md px-2 py-0.5 text-[11px] ${row.mode === 'unknown' ? 'bg-warning/10 text-warning' : 'bg-surface-secondary text-muted'}`}>{modeLabel(row.mode, locale)}</span></div>
+          <p className="mt-1 break-words text-xs text-muted" title={row.accountRef ? t('usage.activity.accountRef', { ref: row.accountRef }) : undefined}>{accountLabel(row, locale)}</p>
+          {row.service === 'unknown' && row.mode === 'unknown' && !row.accountRef && snapshot.otherTokens > 0 && <p className="mt-1 text-[11px] text-muted">{t('usage.activity.unlinkedTokens', { tokens: number(snapshot.otherTokens, locale) })}</p>}
+        </div>
+        <div className="shrink-0 text-right text-xs tabular-nums"><p>{number(row.tokens, locale)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
+        <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled={!sessions.length} aria-haspopup="dialog" aria-expanded={selected === attributionKey(row)} aria-label={`${row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`} onPress={() => setSelected(attributionKey(row))}>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')}</Button>
+      </div>)}
+      {!groups.length && <p className="py-4 text-sm text-muted">{t('usage.activity.noBilling')}</p>}
+    </div>
+    {active && <SessionBrowser key={selected} rows={active.sessions} contribution={false} open onOpenChange={open => { if (!open) setSelected(null); }} title={t('usage.activity.relatedSessions')} closeLabel={t('usage.activity.closeRelatedSessions')} description={<>
+      <p>{serviceLabel(active.row.service, locale)} · {modeLabel(active.row.mode, locale)} · {accountLabel(active.row, locale)}</p>
+      <p className="mt-1">{t('usage.activity.relatedSessionNote')}</p>
+    </>} />}
+  </>;
 }
 
 function SessionList({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {
@@ -89,7 +116,7 @@ function SessionList({ rows, contribution }: { rows: SessionActivity[]; contribu
   </>;
 }
 
-function SessionBrowser({ rows, contribution, open, onOpenChange }: { rows: SessionActivity[]; contribution: boolean; open: boolean; onOpenChange(open: boolean): void }) {
+function SessionBrowser({ rows, contribution, open, onOpenChange, title, closeLabel, description }: { rows: SessionActivity[]; contribution: boolean; open: boolean; onOpenChange(open: boolean): void; title?: string; closeLabel?: string; description?: ReactNode }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState(''), [source, setSource] = useState('all'), [page, setPage] = useState(1);
   const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>(contribution ? 'tokens' : 'recent');
@@ -98,8 +125,8 @@ function SessionBrowser({ rows, contribution, open, onOpenChange }: { rows: Sess
   const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, source, project), sort), [rows, query, source, project, sort]);
   const result = sessionActivityPage(filtered, page);
   const hasFilters = Boolean(query.trim() || source !== 'all' || project);
-  return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={t('usage.activity.allSessions')} className="w-full max-w-4xl">
-    <Modal.CloseTrigger aria-label={t('usage.activity.closeAllSessions')} /><Modal.Header><Modal.Heading>{t('usage.activity.allSessions')}</Modal.Heading><p className="text-xs text-muted">{t('usage.explorer.windowNote')}</p></Modal.Header>
+  return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={title ?? t('usage.activity.allSessions')} className="w-full max-w-4xl">
+    <Modal.CloseTrigger aria-label={closeLabel ?? t('usage.activity.closeAllSessions')} /><Modal.Header><Modal.Heading>{title ?? t('usage.activity.allSessions')}</Modal.Heading><div className="text-xs text-muted">{description ?? t('usage.explorer.windowNote')}</div></Modal.Header>
     <Modal.Body className="flex flex-col gap-3">
       <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 flex-wrap items-center gap-2">
         <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto" value={query} onChange={value => { setQuery(value); setPage(1); }}>
@@ -175,7 +202,7 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
           </Tooltip></div></div>
         </summary>
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
-          <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)}{row.billing.accountLabel ? ` · ${row.billing.accountLabel}` : row.billing.accountRef ? ` · ${t('usage.activity.accountRef', { ref: row.billing.accountRef.slice(0, 6) })}` : ''}</p>
+          <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>
           {row.billing.mode === 'unknown' && <p>{t('usage.activity.insufficientBillingEvidence')}</p>}
           {!row.models?.length && <p>{row.model === 'unknown' ? t('usage.activity.modelNotRecorded') : row.model}</p>}
           {!row.models?.length && row.taskSeconds != null && <p><TaskTime row={row} /></p>}

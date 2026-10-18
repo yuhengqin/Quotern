@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Card, Label, ListBox, Select, Tabs } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
-import { Area, Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
+import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from 'recharts';
 import type { UsageTrend } from 'quotern-core';
 import { CHART_TOOLTIP_SURFACE_CLASSNAME, ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ChartPrimitives';
 import { DashboardMetricTabs } from '@/components/DashboardMetricTabs';
@@ -102,13 +102,17 @@ function TrendSelect({ label, value, options, onChange }: {
 
 function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'tokens' | 'usage'; data: UsageTrend | null; error: boolean; singleDay: boolean; ticks: string[] }) {
   const { t } = useTranslation();
+  const gradientId = useId().replace(/:/g, '');
   const [metric, setMetric] = useState<'tokens' | 'cost'>('tokens');
   const [view, setView] = useState<'all' | 'detail'>('all');
   const [grouping, setGrouping] = useState<'total' | 'models'>('total');
   const chart = useMemo(() => data ? projectChart(data, metric, metric === 'tokens' && (variant === 'usage' || view === 'detail'), metric === 'cost' && grouping === 'models', t, singleDay) : null, [data, metric, view, grouping, variant, t, singleDay]);
+  const title = variant === 'tokens'
+    ? t(view === 'all' ? 'usage.explorer.tokenTotalTitle' : 'usage.explorer.tokenBreakdownTitle')
+    : t(metric === 'cost' ? 'usage.explorer.costTitle' : 'usage.explorer.usageTitle');
   return <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
     <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 pb-0">
-      <Card.Title className="min-w-0 flex-1 basis-40">{t(variant === 'tokens' ? 'usage.explorer.tokenTitle' : 'usage.explorer.costTitle')}</Card.Title>
+      <Card.Title className="min-w-0 flex-1 basis-40">{title}</Card.Title>
       <div className="flex max-w-full flex-wrap items-center gap-2">
       {variant === 'usage' && metric === 'cost' && <TrendSelect label={t('usage.explorer.grouping')} value={grouping} options={(['total', 'models'] as const).map(value => ({ value, label: t(`usage.explorer.${value}`) }))} onChange={value => { if (value === 'total' || value === 'models') setGrouping(value); }} />}
       {variant === 'usage' ? <DashboardMetricTabs ariaLabel={t('usage.chart.dailyMetric')} metrics={['tokens', 'cost'] as const} selectedMetric={metric} onMetricChange={setMetric} />
@@ -120,6 +124,11 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
       {!chart ? <p role="status" className="flex h-[260px] items-center justify-center text-sm text-muted">{t(error ? 'usage.explorer.error' : 'usage.explorer.loading')}</p>
         : <><ChartContainer config={chart.config} className="h-[260px] w-full" initialDimension={{ width: 720, height: 260 }}>
           <ComposedChart data={chart.rows} accessibilityLayer margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <defs>{chart.keys.map(key => <linearGradient key={key} id={`${gradientId}-${key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={`var(--color-${key})`} stopOpacity={0.28} />
+              <stop offset="72%" stopColor={`var(--color-${key})`} stopOpacity={0.06} />
+              <stop offset="100%" stopColor={`var(--color-${key})`} stopOpacity={0} />
+            </linearGradient>)}</defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" axisLine={false} tickLine={false} ticks={ticks} interval={0} tick={({ x, y, payload }) => <text x={x} y={y} dy={12} fontSize={11} className="fill-muted" textAnchor={ticks.length > 1 && payload.value === ticks[0] ? 'start' : ticks.length > 1 && payload.value === ticks.at(-1) ? 'end' : 'middle'}>{payload.value}</text>} />
             <YAxis axisLine={false} tickLine={false} width={58} tickFormatter={value => metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value))} tick={{ fontSize: 11 }} />
@@ -132,7 +141,7 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
             } : undefined} formatter={(value, name) => [metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value)), chart.config[String(name)]?.label ?? name]} contentStyle={{ background: 'var(--overlay)', color: 'var(--overlay-foreground)', borderRadius: 10, border: 0 }} />
             {chart.keys.map(key => metric === 'cost' && grouping === 'models' ? <Area key={key} type="monotone" dataKey={key} stackId="models" stroke={`var(--color-${key})`} fill={`var(--color-${key})`} fillOpacity={0.6} isAnimationActive={false} />
               : variant === 'usage' && metric === 'tokens' ? <Bar key={key} dataKey={key} fill={`var(--color-${key})`} stackId="tokens" maxBarSize={32} isAnimationActive={false} />
-                : <Line key={key} type="monotone" dataKey={key} stroke={`var(--color-${key})`} dot={chart.rows.length === 1 ? { r: 4 } : false} strokeWidth={2} isAnimationActive={false} />)}
+                : <Area key={key} type="monotone" dataKey={key} stroke={`var(--color-${key})`} fill={`url(#${gradientId}-${key})`} dot={chart.rows.length === 1 ? { r: 4 } : false} strokeWidth={2} isAnimationActive={false} />)}
           </ComposedChart>
         </ChartContainer><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">{chart.keys.map(key => <span className="inline-flex min-w-0 items-center gap-1.5" key={key}><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: chart.config[key]?.color }} /><span className="max-w-52 truncate" title={String(chart.config[key]?.label)}>{chart.config[key]?.label}</span></span>)}</div></>}
       {!!data?.points.some(point => point.unpricedTokens > 0) && metric === 'cost' && <p className="mt-2 text-[11px] text-muted">{t('usage.explorer.partial')}</p>}

@@ -37,7 +37,18 @@ export async function prepareDshPet({ vendorRoot = path.join(desktopRoot, 'vendo
     .replace(/("display"\s*:\s*)"both"/g, '$1"desktop"');
   await writeFile(path.join(output, 'assets/config.jsonc'), config);
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning' });
-  await build({ stdin: { contents: hostModules.map(name => `export * from './${name}.ts';`).join('\n'), resolveDir: path.join(vendor, 'src/host'), loader: 'ts' }, outfile: path.join(output, 'host.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
+  await build({
+    stdin: { contents: hostModules.map(name => `export * from './${name}.ts';`).join('\n'), resolveDir: path.join(vendor, 'src/host'), loader: 'ts' },
+    outfile: path.join(output, 'host.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning',
+    plugins: [{ name: 'quotern-jsonc', setup(bundle) {
+      bundle.onLoad({ filter: /[/\\]src[/\\]host[/\\]config\.ts$/ }, async args => {
+        const original = await readFile(args.path, 'utf8');
+        const patched = original.replace(/function stripJsonc\(src: string\): string \{[\s\S]*?\n\}/, 'function stripJsonc(src: string): string { return quoternStripJsonComments(src).trim(); }');
+        if (original === patched) throw new Error('unsupported upstream JSONC parser');
+        return { loader: 'ts', contents: `import { stripJsonComments as quoternStripJsonComments } from ${JSON.stringify(path.join(desktopRoot, 'src/main/dsh-pet/jsonc.ts'))};\n${patched}` };
+      });
+    } }],
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

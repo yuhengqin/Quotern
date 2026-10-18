@@ -7,3 +7,5 @@ Code: MIT, see LICENSE. Upstream media/prompts/source videos permit open-source 
 The preparation script builds only the checked-in snapshot and copies only manifest-owned runtime resources. GIF documentation previews, source videos and the separately unverified bundled font are not distributed. Runtime defaults use the system font and desktop display mode; the original configuration remains available in the snapshot.
 
 The desktop companion's transport and host integration are maintained in Quotern's own source; any build-time adaptations are applied to the output, preserving the original snapshot for comparison.
+
+The generated host bundle replaces the regular-expression JSONC comment stripper with Quotern's string-aware scanner. URLs and prompt literals containing `//` or `/* */` must survive advanced configuration edits unchanged.

@@ -17,6 +17,12 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 维护注意事项：[架构](docs/architecture-notes.md)、[数据采集与统计](docs/data-notes.md)、[运行维护](docs/runtime-notes.md)、[开发协作](docs/development-notes.md)。
 
+## 功能保留与验收
+
+功能改进、升级或重构，默认保留原有展示信息、交互和功能。完成前必须对照改动前的行为，确认没有意外缺失；验收同时检查新能力是否实现、旧能力是否保留。
+
+如需删减或改变原有能力，且超出用户已明确要求的范围，先说明影响并获得用户确认。
+
 ## 工作区与服务归属
 
 开始开发、操作 worktree / 分支或管理开发服务前，必须阅读并遵守 [worktree 开发规范](docs/worktree-development.md)。已有 worktree 不等于正在并行开发。没有并行开发且 main 工作区完全干净时，直接在 main 开发；否则使用独立分支和 worktree。

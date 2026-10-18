@@ -41,6 +41,32 @@ function turnKey(event: SessionTimingEvent): string {
     ? `codex:${event.turnId}` : JSON.stringify([event.source, event.sessionId, event.turnId]);
 }
 
+/** Keep a shared Codex turn on its original session before per-session grouping. */
+export function attributeTaskTimingEvents(events: readonly SessionTimingEvent[], parents: ReadonlyMap<string, string> = new Map()): SessionTimingEvent[] {
+  const turns = new Map<string, SessionTimingEvent[]>();
+  for (const event of events) {
+    if (event.source !== 'codex' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(event.turnId ?? '')) continue;
+    const rows = turns.get(event.turnId!) ?? []; rows.push(event); turns.set(event.turnId!, rows);
+  }
+  const owners = new Map<string, string>();
+  for (const [turn, rows] of turns) {
+    const candidates = new Set(rows.map(row => row.sessionId));
+    const ancestor = (id: string) => {
+      const seen = new Set<string>(); let current = id;
+      while (parents.has(current) && !seen.has(current)) {
+        seen.add(current); current = parents.get(current)!;
+        if (candidates.has(current)) return current;
+      }
+      return id;
+    };
+    const root = [...rows].sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.sessionId.localeCompare(b.sessionId))[0]!;
+    let owner = root.sessionId, seen = new Set<string>();
+    while (!seen.has(owner)) { seen.add(owner); const next = ancestor(owner); if (next === owner) break; owner = next; }
+    owners.set(turn, owner);
+  }
+  return events.map(event => event.source === 'codex' && owners.has(event.turnId ?? '') ? { ...event, sessionId: owners.get(event.turnId!)! } : event);
+}
+
 export function aggregateTaskTiming(
   messages: readonly SessionMessage[],
   timingEvents: readonly SessionTimingEvent[],

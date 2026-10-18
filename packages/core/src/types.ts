@@ -8,6 +8,7 @@ export type {
 } from './local-metrics.js';
 
 export interface QueueBucket {
+  pricing_requests?: import('./pricing/request-pricing.js').RequestPricingFact[];
   /** Local-only origin of token amounts. Omitted on unannotated historical rows. */
   token_quality?: import('./token-quality.js').TokenQuality;
   /** Local-only request/cache evidence. Never uploaded. */
@@ -35,6 +36,7 @@ export interface QueueBucket {
 }
 
 export interface TokenTotals {
+  pricing_requests?: import('./pricing/request-pricing.js').RequestPricingFact[];
   token_quality?: import('./token-quality.js').TokenQuality;
   local_metrics?: LocalMetricEvidence;
   input_tokens: number;
@@ -88,6 +90,7 @@ export interface ClaudeFileCursor {
 }
 
 export interface CodexFileCursor {
+  serviceTier?: import('./pricing/request-pricing.js').RequestPricingFact['serviceTier'];
   /** Physical encoding/stamp; offsets always refer to decoded JSONL bytes. */
   encoding?: 'jsonl' | 'zst';
   physicalSize?: number;

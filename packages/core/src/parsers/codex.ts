@@ -1,4 +1,6 @@
 import { localEvidence, validUsageFields } from '../local-metrics.js';
+import { createHash } from 'node:crypto';
+import { serviceTierFromEvent, type RequestPricingFact } from '../pricing/request-pricing.js';
 import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename } from 'node:path';
@@ -94,7 +96,7 @@ function extractTokenCount(obj: Record<string, unknown>): { info: Record<string,
   return null;
 }
 
-function normalizeCodexUsage(u: TokenUsage): TokenTotals | null {
+export function normalizeCodexUsage(u: TokenUsage): TokenTotals | null {
   const cached = Math.max(0, u.cached_input_tokens ?? u.cache_read_input_tokens ?? 0);
   const reasoning = Math.max(0, u.reasoning_output_tokens ?? 0);
   const input = Math.max(0, (u.input_tokens ?? 0) - cached);
@@ -291,17 +293,23 @@ export async function parseCodexIncremental(
       sameInode && !truncated
         ? (readModel(prev?.lastModel) ?? 'unknown')
         : 'unknown';
+    let serviceTier: RequestPricingFact['serviceTier'] = startOffset > 0 ? prev?.serviceTier : undefined;
     if (
       sameInode &&
       !truncated &&
       startOffset > 0 &&
-      !readModel(prev?.lastModel)
+      (!readModel(prev?.lastModel) || prev?.serviceTier === undefined)
     ) {
       const prefix = createCodexLineReader(filePath, 0);
       for await (const line of prefix) {
         if (prefix.nextOffset > startOffset) break;
-        try { turnContextModel = modelFromRolloutEvent(JSON.parse(line)) ?? turnContextModel; } catch { /* malformed row */ }
+        try {
+          const event = JSON.parse(line) as Record<string, unknown>;
+          turnContextModel = modelFromRolloutEvent(event) ?? turnContextModel;
+          serviceTier = serviceTierFromEvent(event, serviceTier);
+        } catch { /* malformed row */ }
       }
+      serviceTier ??= 'unknown';
     }
     let sessionUuid: string | null = meta.sessionId;
     // On replay reconstruct response ordering from the file, rather than
@@ -329,6 +337,8 @@ export async function parseCodexIncremental(
         continue;
       }
 
+      serviceTier = serviceTierFromEvent(obj, serviceTier);
+
       if (obj.type === 'session_meta') {
         const payload = obj.payload as SessionMeta;
         sessionUuid = payload.id ?? sessionUuid;
@@ -352,6 +362,8 @@ export async function parseCodexIncremental(
           if (!raw || !Number.isFinite(Date.parse(timestamp))) continue;
           const delta = normalizeCodexUsage(raw);
           if (!delta || !Number.isFinite(delta.total_tokens)) continue;
+          delta.pricing_requests = [{ ...delta, id: createHash('sha256').update(id).digest('hex'), timestamp,
+            requestInputTokens: delta.input_tokens + delta.cached_input_tokens + delta.cache_creation_input_tokens, serviceTier }];
           const validCache = validUsageFields([raw.input_tokens], [raw.cached_input_tokens, raw.cache_read_input_tokens, raw.cache_creation_input_tokens]);
           delta.local_metrics = localEvidence(1, true, validCache, validCache);
           compactions.latest[sessionUuid] = id;
@@ -473,6 +485,12 @@ export async function parseCodexIncremental(
         validCache,
       );
       const model = readModel(info.model) ?? turnContextModel;
+      if (delta.token_quality !== 'ledger') delta.pricing_requests = [{
+        id: createHash('sha256').update(dedupKey ?? `${logicalPath}:${ts}:${tokenCountSeen}`).digest('hex'), timestamp: ts,
+        input_tokens: delta.input_tokens, output_tokens: delta.output_tokens, cached_input_tokens: delta.cached_input_tokens,
+        cache_creation_input_tokens: delta.cache_creation_input_tokens, reasoning_output_tokens: delta.reasoning_output_tokens,
+        ...(identifiable ? { requestInputTokens: delta.input_tokens + delta.cached_input_tokens + delta.cache_creation_input_tokens } : {}), serviceTier,
+      }];
       accumulateBucket(
         bucketState,
         'codex',
@@ -521,6 +539,7 @@ export async function parseCodexIncremental(
       lastUsageSnapshot,
       prevTotal: prevTotalSave,
       lastModel: turnContextModel,
+      ...(serviceTier !== undefined ? { serviceTier } : {}),
       meta,
     };
     filesProcessed += 1;

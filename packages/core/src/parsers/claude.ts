@@ -1,4 +1,6 @@
 import { localEvidence, validUsageFields } from '../local-metrics.js';
+import { createHash } from 'node:crypto';
+import { normalizeServiceTier, type RequestPricingFact } from '../pricing/request-pricing.js';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { stat } from 'node:fs/promises';
@@ -34,6 +36,7 @@ interface ClaudeCacheCreation {
 }
 
 interface ClaudeUsage {
+  speed?: string;
   input_tokens?: number;
   output_tokens?: number;
   cache_creation_input_tokens?: number;
@@ -99,6 +102,17 @@ export function normalizeClaudeUsage(u: ClaudeUsage): TokenTotals {
     conversation_count: 1,
     token_quality: 'recorded',
     local_metrics: localEvidence(1, true, validCache, validCache),
+  };
+}
+
+export function claudeRequestPricingFact(id: string, timestamp: string, usage: ClaudeUsage): RequestPricingFact {
+  const totals = normalizeClaudeUsage(usage);
+  return { id: createHash('sha256').update(id).digest('hex'), timestamp,
+    input_tokens: totals.input_tokens, output_tokens: totals.output_tokens, cached_input_tokens: totals.cached_input_tokens,
+    cache_creation_input_tokens: totals.cache_creation_input_tokens, reasoning_output_tokens: totals.reasoning_output_tokens,
+    requestInputTokens: totals.input_tokens + totals.cached_input_tokens + totals.cache_creation_input_tokens,
+    ...(usage.speed !== undefined ? { serviceTier: normalizeServiceTier(usage.speed) } : {}),
+    ...(usage.cache_creation ? { cacheWrite5mTokens: toCount(usage.cache_creation.ephemeral_5m_input_tokens), cacheWrite1hTokens: toCount(usage.cache_creation.ephemeral_1h_input_tokens) } : {}),
   };
 }
 
@@ -260,12 +274,13 @@ export async function parseClaudeIncremental(
   const commitRow = (row: PendingClaudeRow, dedup: string | null): void => {
     if (dedup) {
       const prev = seenUsage[dedup];
+      if (prev?.pricing_requests?.[0] && row.totals.pricing_requests?.[0]) row.totals.pricing_requests[0].timestamp = prev.pricing_requests[0].timestamp;
       if (!prev && legacyHashes.has(dedup)) {
         // Already ingested under first-wins; seed last-wins from this snapshot.
         seenUsage[dedup] = row.totals;
         return;
       }
-      const delta = diffClaudeUsage(row.totals, prev);
+      let delta = diffClaudeUsage(row.totals, prev);
       // A truncated/replayed prefix must never move the saved usage backwards.
       const snapshot = { ...row.totals };
       if (prev) {
@@ -280,14 +295,23 @@ export async function parseClaudeIncremental(
           snapshot[key] = Math.max(snapshot[key], prev[key]);
         }
       }
+      if (snapshot.pricing_requests?.[0]) {
+        const fact = { ...prev?.pricing_requests?.[0], ...snapshot.pricing_requests[0] };
+        for (const key of ['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'reasoning_output_tokens'] as const) fact[key] = snapshot[key];
+        fact.requestInputTokens = snapshot.input_tokens + snapshot.cached_input_tokens + snapshot.cache_creation_input_tokens;
+        snapshot.pricing_requests = [fact];
+      }
+      const pricingChanged = JSON.stringify(prev?.pricing_requests) !== JSON.stringify(snapshot.pricing_requests);
       seenUsage[dedup] = snapshot;
-      if (!delta) return;
+      if (!delta && !pricingChanged) return;
+      delta ??= { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0, total_tokens: 0, conversation_count: 0, local_metrics: localEvidence(0, true, true, true), token_quality: 'recorded' };
+      delta.pricing_requests = snapshot.pricing_requests;
       accumulateBucket(
         bucketState,
         'claude',
         row.model,
         row.project,
-        row.hourStart,
+        toUtcHalfHourStart(prev?.pricing_requests?.[0]?.timestamp ?? '') ?? row.hourStart,
         delta,
         row.collector,
       );
@@ -363,6 +387,8 @@ export async function parseClaudeIncremental(
 
       const totals = normalizeClaudeUsage(usage);
       if (totals.total_tokens === 0) continue;
+      const dedup = claudeMessageDedupKey(obj);
+      if (dedup) totals.pricing_requests = [claudeRequestPricingFact(dedup, ts, usage)];
 
       const pending: PendingClaudeRow = {
         model: obj.message?.model ?? 'unknown',
@@ -371,9 +397,9 @@ export async function parseClaudeIncremental(
         project,
         collector,
       };
-      const dedup = claudeMessageDedupKey(obj);
       if (dedup) {
         const first = keyedRows.get(dedup);
+        if (first?.totals.pricing_requests?.[0] && pending.totals.pricing_requests?.[0]) pending.totals.pricing_requests[0].timestamp = first.totals.pricing_requests[0].timestamp;
         keyedRows.set(dedup, {
           ...pending,
           hourStart: first?.hourStart ?? pending.hourStart,

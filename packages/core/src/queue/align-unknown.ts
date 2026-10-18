@@ -1,5 +1,6 @@
 import { mergeLocalEvidence, localEvidence } from '../local-metrics.js';
 import { mergeTokenQuality } from '../token-quality.js';
+import { mergePricingRequests } from '../pricing/request-pricing.js';
 import type { QueueBucket } from '../types.js';
 
 export const UNKNOWN_MODEL = 'unknown';
@@ -17,6 +18,7 @@ export function unknownAlignGroupKey(row: {
 function addBucketTotals(a: QueueBucket, b: QueueBucket): QueueBucket {
   return {
     ...a,
+    ...(a.pricing_requests?.length || b.pricing_requests?.length ? { pricing_requests: mergePricingRequests(a.pricing_requests, b.pricing_requests) } : {}),
     input_tokens: a.input_tokens + b.input_tokens,
     output_tokens: a.output_tokens + b.output_tokens,
     cached_input_tokens: a.cached_input_tokens + b.cached_input_tokens,
@@ -44,6 +46,7 @@ function addBucketTotals(a: QueueBucket, b: QueueBucket): QueueBucket {
 function zeroBucket(row: QueueBucket): QueueBucket {
   return {
     ...row,
+    pricing_requests: undefined,
     input_tokens: 0,
     output_tokens: 0,
     cached_input_tokens: 0,

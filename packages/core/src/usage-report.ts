@@ -117,6 +117,11 @@ export function aggregateCostExplanation(rows: readonly QueueBucket[]): CostExpl
       previous.tokens += detail.tokens;
       previous.unpricedTokens += detail.unpricedTokens;
       previous.costUsd = previous.costUsd === null && detail.costUsd === null ? null : (previous.costUsd ?? 0) + (detail.costUsd ?? 0);
+      if (detail.requestPricing) {
+        const old = previous.requestPricing;
+        previous.requestPricing = { requests: (old?.requests ?? 0) + detail.requestPricing.requests, legacyTokens: (old?.legacyTokens ?? 0) + detail.requestPricing.legacyTokens,
+          ruleReferences: [...new Set([...(old?.ruleReferences ?? []), ...detail.requestPricing.ruleReferences])], serviceTiers: [...new Set([...(old?.serviceTiers ?? []), ...detail.requestPricing.serviceTiers])] };
+      }
     } else {
       entries.set(key, { ...detail });
     }

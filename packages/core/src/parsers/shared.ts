@@ -1,5 +1,6 @@
 import { mergeLocalEvidence } from '../local-metrics.js';
 import { mergeTokenQuality } from '../token-quality.js';
+import { mergePricingRequests } from '../pricing/request-pricing.js';
 import { readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -110,6 +111,9 @@ export function sumTokenTotals(a: TokenTotals, b: TokenTotals): TokenTotals {
     ...(a.token_quality || b.token_quality
       ? { token_quality: mergeTokenQuality(a.token_quality, b.token_quality) }
       : {}),
+    ...(a.pricing_requests?.length || b.pricing_requests?.length
+      ? { pricing_requests: mergePricingRequests(a.pricing_requests, b.pricing_requests) }
+      : {}),
   };
 }
 
@@ -177,6 +181,7 @@ export function bucketsFromState(
     conversation_count: b.conversation_count,
     ...(b.local_metrics ? { local_metrics: b.local_metrics } : {}),
     ...(b.token_quality ? { token_quality: b.token_quality } : {}),
+    ...(b.pricing_requests?.length ? { pricing_requests: b.pricing_requests } : {}),
   }));
   return alignUnknownIntoDominant(buckets);
 }

@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import type { QueueBucket } from '../types.js';
+import { builtinRequestRules, priceRequest, TOKEN_FIELDS, validRequestRules } from './request-pricing.js';
+export * from './request-pricing.js';
 import { pricingOverlayPath } from '../paths.js';
 import pricingData from './pricing.json' with { type: 'json' };
 import {
@@ -193,6 +195,10 @@ export function validatePricingData(raw: unknown): { ok: true; data: PricingData
   }
 
   const data: PricingData = { exact };
+  if (obj.request_rules !== undefined) {
+    if (!validRequestRules(obj.request_rules)) return { ok: false, error: 'invalid request_rules' };
+    data.request_rules = obj.request_rules;
+  }
   if (obj._meta != null && typeof obj._meta === 'object' && !Array.isArray(obj._meta)) {
     data._meta = obj._meta as Record<string, unknown>;
   }
@@ -423,6 +429,7 @@ export function computeRowCost(row: QueueBucket): number {
     return row.reported_cost_usd;
   }
 
+  if (row.pricing_requests?.length) return requestAwareCost(row).cost;
   const pricing = getModelPricing(row.model, { source: row.source });
   const reasoningIncludedInOutput = row.source === 'codex' || row.source === 'every-code';
   const reasoningCost = reasoningIncludedInOutput
@@ -442,6 +449,7 @@ export function computeRowCost(row: QueueBucket): number {
 export type CostKind = 'reported' | 'model_estimate' | 'default_estimate' | 'unpriced';
 
 export interface RowCostExplanation {
+  requestPricing?: { requests: number; ruleReferences: string[]; legacyTokens: number; serviceTiers: string[] };
   source: string;
   model: string;
   matchedModel: string | null;
@@ -478,10 +486,12 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
     [row.cache_creation_input_tokens ?? 0, 'cache_write'],
     [row.reasoning_output_tokens ?? 0, 'output'],
   ];
-  const unpricedTokens = fields.reduce((sum, [count, field]) => {
+  let unpricedTokens = fields.reduce((sum, [count, field]) => {
     const rate = match.value?.[field];
     return sum + (count > 0 && !(typeof rate === 'number' && Number.isFinite(rate) && rate >= 0) ? count : 0);
   }, 0);
+  const requestCost = row.pricing_requests?.length ? requestAwareCost(row) : null;
+  if (requestCost) unpricedTokens = requestCost.unpricedTokens;
   const entirelyUnpriced = tokens > 0 && unpricedTokens >= tokens;
   return {
     source: row.source, model: row.model, matchedModel: match.matchedModel ?? null,
@@ -489,7 +499,36 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
     costKind: entirelyUnpriced || !match.value ? 'unpriced' : match.source === 'default' ? 'default_estimate' : 'model_estimate',
     costUsd: entirelyUnpriced || !match.value ? null : computeRowCost(row),
     tokens, unpricedTokens,
+    ...(requestCost ? { requestPricing: requestCost.evidence } : {}),
   };
+}
+
+/** Annotated request quantities replace the same quantities in the legacy bucket. */
+function requestAwareCost(row: QueueBucket) {
+  const match = lookupPricingStacked(row.model, remoteOverlay, builtinPricing, row.source);
+  const base = match.value ?? {};
+  const rules = [...builtinRequestRules(match.matchedModel ?? '', row.source, base), ...(builtinPricing.request_rules ?? []), ...(remoteOverlay?.request_rules ?? [])]
+    .filter(rule => rule.source === row.source && (rule.model === match.matchedModel || rule.model === row.model));
+  const remainder = { ...row, pricing_requests: undefined };
+  let cost = 0, unpricedTokens = 0;
+  const references = new Set<string>(), tiers = new Set<string>();
+  let requests = 0;
+  for (const fact of row.pricing_requests ?? []) {
+    if (!fact.id || !Number.isFinite(Date.parse(fact.timestamp)) || !TOKEN_FIELDS.every(key => Number.isFinite(fact[key]) && fact[key] >= 0)) continue;
+    if ([fact.requestInputTokens, fact.cacheWrite5mTokens, fact.cacheWrite1hTokens].some(n => n !== undefined && (!Number.isFinite(n) || n < 0))) continue;
+    // Historical partial annotations cannot spend quantities they did not contribute.
+    if (TOKEN_FIELDS.some(key => fact[key] > (remainder[key] ?? 0))) continue;
+    for (const key of TOKEN_FIELDS) remainder[key] = (remainder[key] ?? 0) - fact[key];
+    const priced = priceRequest(fact, base, rules);
+    cost += priced.cost; unpricedTokens += priced.unpricedTokens; requests++;
+    priced.ruleReferences.forEach(ref => references.add(ref)); tiers.add(fact.serviceTier ?? 'unknown');
+  }
+  const legacyTokens = computeTokens(remainder);
+  if (legacyTokens) {
+    const legacy = explainRowCost(remainder);
+    cost += legacy.costUsd ?? 0; unpricedTokens += legacy.unpricedTokens;
+  }
+  return { cost: roundCostUsd(cost), unpricedTokens, evidence: { requests, ruleReferences: [...references], legacyTokens, serviceTiers: [...tiers] } };
 }
 
 /**

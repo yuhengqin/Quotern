@@ -54,6 +54,7 @@ import { cmdServiceStart, cmdServiceStatus, cmdServiceStop } from './service.js'
 import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
 import { parseUsageArgs } from './usage-args.js';
 import { formatUsageReport } from './usage-output.js';
+import { runStatusline } from './statusline.js';
 import type { SupportedLocale } from 'quotern-i18n';
 import { CliUserError, cliT, extractCliLanguage, previewCliLocale, systemCliLocale, userError } from './i18n/locale.js';
 
@@ -510,6 +511,10 @@ async function main(): Promise<void> {
   try {
     // Query before the runtime argument path: no startup, ownership or sync.
     const commandLine = extractCliLanguage(process.argv.slice(2));
+    if (commandLine.args[0] === 'statusline') {
+      await runStatusline(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
+      return;
+    }
     if (commandLine.args[0] === 'usage') {
       const parsed = parseUsageArgs([
         ...commandLine.args.slice(1),

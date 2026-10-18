@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { join, delimiter } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -8,6 +8,7 @@ import { parseCodexIncremental } from '../src/parsers/codex.js';
 import { modelFromRolloutEvent } from '../src/parsers/rollout-model.js';
 import { codexHomeCandidates } from '../src/paths.js';
 import type { CursorsFile } from '../src/types.js';
+import { applyRemotePricingOverlay, computeRowCost, resetPricingRuntime } from '../src/pricing/index.js';
 
 const CODEX_ENV_KEYS = ['HOME', 'USERPROFILE', 'CODEX_HOME', 'AI_USAGE_CODEX_HOME'] as const;
 
@@ -53,6 +54,25 @@ const FORK_FILE = [
   '{"type":"event_msg","timestamp":"2026-06-09T21:00:01.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":60},"model":"gpt-5.4"}}}',
   '{"type":"event_msg","timestamp":"2026-06-09T21:00:05.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":20,"cached_input_tokens":5,"output_tokens":8,"reasoning_output_tokens":2,"total_tokens":28},"model":"gpt-5.4"}}}',
 ].join('\n');
+
+test('Codex restores service tier from an old cursor prefix and bills split reasoning once', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'quotern-tier-'));
+  const folder = join(home, '.codex', 'sessions');
+  await mkdir(folder, { recursive: true });
+  const file = join(folder, 'tier.jsonl');
+  const event = (stamp: string) => JSON.stringify({ type: 'event_msg', timestamp: stamp, payload: { type: 'token_count', info: { last_token_usage: { input_tokens: 100, output_tokens: 20, reasoning_output_tokens: 10 } } } });
+  await writeFile(file, [JSON.stringify({ type: 'session_meta', payload: { id: 'tier-session' } }), JSON.stringify({ type: 'turn_context', payload: { model: 'tier-fixture', service_tier: 'fast' } }), event('2026-10-18T00:00:00Z')].join('\n') + '\n');
+  await withIsolatedCodexHome(home, async () => {
+    const first = await parseCodexIncremental({}, '2026-10-01');
+    for (const cursor of Object.values(first.cursors.codex!.files)) delete cursor.serviceTier;
+    await appendFile(file, event('2026-10-18T01:00:00Z') + '\n');
+    const next = await parseCodexIncremental(first.cursors, '2026-10-01');
+    assert.equal(next.result.buckets[0]?.pricing_requests?.[0]?.serviceTier, 'fast');
+    applyRemotePricingOverlay({ exact: { 'tier-fixture': { input: 1, output: 2 } } });
+    assert.equal(computeRowCost(next.result.buckets[0]!), 0.00014);
+    resetPricingRuntime();
+  });
+});
 
 test('parseCodexIncremental normalizes input and skips fork replay', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));

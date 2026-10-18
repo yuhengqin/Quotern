@@ -14,7 +14,7 @@ import { clearProjectResolutionCache } from './session-project.js';
 import { extractSessionObservation, mergeSessionObservation, type SessionObservation } from './session-observation.js';
 import { extractSessionTitle, sessionTitleKey, type SessionTitle } from './session-titles.js';
 
-const VERSION = 9;
+const VERSION = 10;
 interface FileSnapshot {
   complete: boolean;
   size: number;
@@ -44,7 +44,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
     const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, 4, 5, 6, 7, 8, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+    if (![3, 4, 5, 6, 7, 8, 9, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
     cache.set(path, { stamp, value });
     return value;
   } catch { return null; }
@@ -218,7 +218,7 @@ export async function readSessionHistory(
   dataDir: string,
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
-): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; titles: Map<string, SessionTitle>; missingSources: string[] }> {
+): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; titles: Map<string, SessionTitle>; missingSources: string[]; codexParents: Map<string, string> }> {
   const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
   const sources = new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))]);
   const messages: CollectedSessionMessage[] = [];
@@ -226,12 +226,14 @@ export async function readSessionHistory(
   const observations = new Map<string, SessionObservation>();
   const titles = new Map<string, SessionTitle>();
   const missingSources: string[] = [];
+  const codexParents = new Map<string, string>();
   for (const source of sources) {
     if (!validSource(source)) continue;
     if (options.sources?.length && !options.sources.includes(source)) continue;
     const stored = await loadSource(sourcePath(dataDir, source), source);
     if (!stored) { if (usageSources.includes(source) || options.sources?.includes(source)) missingSources.push(source); continue; }
     const result = materialize(stored);
+    if (source === 'codex') for (const file of Object.values(stored.files)) if (file.context.parentId && file.context.sessionId) codexParents.set(file.context.sessionId, file.context.parentId);
     messages.push(...result.messages);
     timingEvents.push(...result.timings);
     for (const file of Object.values(stored.files)) for (const [id, value] of Object.entries(file.titles ?? {})) {
@@ -245,7 +247,7 @@ export async function readSessionHistory(
     const inRange = aggregateSessionMetrics(result.messages, options).sessionCount > 0;
     if ((usageSources.includes(source) || options.sources?.includes(source) || inRange) && (!result.complete || (usageSources.includes(source) && result.messages.length === 0))) missingSources.push(source);
   }
-  return { messages, timingEvents, observations: [...observations.values()], titles, missingSources };
+  return { messages, timingEvents, observations: [...observations.values()], titles, missingSources, codexParents };
 }
 
 export async function readSessionMetrics(

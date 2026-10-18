@@ -15,12 +15,15 @@ import {
 import { readSessionMetrics, readSessionHistory } from '../session-collector.js';
 import { aggregateSessionActivity } from '../session-observation.js';
 import { attachSessionTitles } from '../session-titles.js';
+import { aggregateSessionMetrics, type SessionMessage } from '../session-metrics.js';
+import { attributeTaskTimingEvents, type SessionTimingEvent } from '../task-timing.js';
 import { computeTokens } from '../pricing/index.js';
 import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
 import { localDateNow } from '../timezone.js';
 import { buildUsageReport, type UsageReportPeriod } from '../usage-report.js';
+import { aggregateUsageTrend, type TrendGranularity } from '../usage-trend.js';
 import {
   ensureLocalCollectRange,
   getHookStatus,
@@ -107,6 +110,26 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     }
   });
 
+  app.get('/functions/tud-usage-trend', (c) => {
+    try {
+      const params = new URL(c.req.url).searchParams;
+      const allowed = new Set(['granularity', 'days', 'fromDate', 'toDate', 'sources', 'model', 'project']);
+      for (const key of params.keys()) if (!allowed.has(key) || params.getAll(key).length !== 1) throw new Error('INVALID_TREND_QUERY');
+      const days = params.get('days');
+      if (days !== null && !/^\d+$/.test(days)) throw new Error('INVALID_DAYS');
+      const config = deps.getConfig();
+      c.header('Cache-Control', 'no-store');
+      return c.json(ok(aggregateUsageTrend(deps.bucketStore.getRows(), {
+        granularity: (params.get('granularity') ?? 'daily') as TrendGranularity,
+        days: days === null ? undefined : Number(days), fromDate: params.get('fromDate') ?? undefined, toDate: params.get('toDate') ?? undefined,
+        sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
+        model: params.get('model') ?? undefined, project: params.get('project') ?? undefined,
+      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' })));
+    } catch (error) {
+      return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_TREND_QUERY', data: null }, 400);
+    }
+  });
+
   app.get('/functions/tud-usage-sessions', async (c) => {
     const bounds = readDateBounds(c);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
@@ -147,6 +170,15 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     c.header('Cache-Control', 'no-store');
     const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
     await attachSessionTitles(snapshot.sessions, history.titles);
+    const sessionKey = (source: string, id: string) => JSON.stringify([source, id]);
+    const messages = new Map<string, SessionMessage[]>(), timings = new Map<string, SessionTimingEvent[]>();
+    for (const message of history.messages) { const key = sessionKey(message.source, message.sessionId); const group = messages.get(key) ?? []; group.push(message); messages.set(key, group); }
+    for (const event of attributeTaskTimingEvents(history.timingEvents, history.codexParents)) { const key = sessionKey(event.source, event.sessionId); const group = timings.get(key) ?? []; group.push(event); timings.set(key, group); }
+    for (const session of snapshot.sessions) {
+      const key = sessionKey(session.source, session.sessionId);
+      const metric = aggregateSessionMetrics(messages.get(key) ?? [], { ...options, timingEvents: timings.get(key) ?? [] });
+      session.taskSeconds = metric.taskSeconds; session.taskTimingKind = metric.taskTimingKind;
+    }
     const labels = new Map<string, Set<string>>();
     for (const provider of (deps.getQuotaState?.() ?? deps.quota?.getState())?.providers ?? []) if (provider.provenance?.accountRef) {
       const names = labels.get(provider.provenance.accountRef) ?? new Set<string>();

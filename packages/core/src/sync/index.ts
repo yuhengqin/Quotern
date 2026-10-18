@@ -1,5 +1,6 @@
 import { localEvidence, mergeLocalEvidence } from '../local-metrics.js';
 import { mergeTokenQuality } from '../token-quality.js';
+import { mergePricingRequests } from '../pricing/request-pricing.js';
 import { resolveLocalCollectSince, setLastSyncAt } from '../config.js';
 import type { CursorsFile, QueueBucket, TudConfig } from '../types.js';
 import { CURSOR_POLL_MIN_FETCH_INTERVAL_MS, SYNC_SOURCE_GAP_MS, syncLogPath } from '../paths.js';
@@ -108,6 +109,9 @@ function mergeBuckets(a: QueueBucket, b: QueueBucket): QueueBucket {
     ...(a.token_quality || b.token_quality
       ? { token_quality: mergeTokenQuality(a.token_quality, b.token_quality) }
       : {}),
+    ...(a.pricing_requests?.length || b.pricing_requests?.length
+      ? { pricing_requests: mergePricingRequests(a.pricing_requests, b.pricing_requests) }
+      : {}),
     ...(a.reported_cost_usd != null || b.reported_cost_usd != null
       ? {
           reported_cost_usd:
@@ -126,6 +130,7 @@ function bucketChanged(a: QueueBucket, b: QueueBucket): boolean {
     a.reasoning_output_tokens !== b.reasoning_output_tokens ||
     a.reported_cost_usd !== b.reported_cost_usd ||
     JSON.stringify(a.local_metrics) !== JSON.stringify(b.local_metrics) ||
+    JSON.stringify(a.pricing_requests) !== JSON.stringify(b.pricing_requests) ||
     a.total_tokens !== b.total_tokens ||
     a.conversation_count !== b.conversation_count
   );

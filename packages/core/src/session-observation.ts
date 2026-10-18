@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import { computeRowCost, isModelPriced } from './pricing/index.js';
+import { computeRowCost, isModelPriced, explainRowCost } from './pricing/index.js';
+import { claudeRequestPricingFact, normalizeClaudeUsage } from './parsers/claude.js';
+import { serviceTierFromEvent, TOKEN_FIELDS, type RequestPricingFact, type TokenParts } from './pricing/request-pricing.js';
 import { localDateAndHour } from './timezone.js';
 import type { SessionMessage, SessionMetricOptions } from './session-metrics.js';
 import { accountReference } from './account-reference.js';
@@ -18,6 +20,10 @@ export interface SessionContextObservation {
   observedAt: string;
 }
 export interface SessionObservation {
+  tokenParts?: TokenParts;
+  pricingFact?: RequestPricingFact;
+  requestKnown?: boolean;
+  costBasis?: 'request-facts';
   id: string;
   source: string;
   sessionId: string;
@@ -38,6 +44,7 @@ export interface SessionObservation {
   replayKey?: string;
 }
 export interface ObservationContext {
+  observationTier?: RequestPricingFact['serviceTier'];
   sessionId: string;
   parentId?: string;
   projectLabel?: string;
@@ -78,6 +85,7 @@ function billing(provider: string, auth: string, account: string): SessionBillin
 /** Whitelisted numerical metadata only. No message content or secrets survive. */
 export function extractSessionObservation(source: string, record: Obj, context: ObservationContext): SessionObservation | null {
   const payload = obj(record.payload), body = obj(record.message);
+  if (source === 'codex') context.observationTier = serviceTierFromEvent(record, context.observationTier);
   if (source === 'codex' && record.type === 'session_meta') {
     const nextId = text(payload.id);
     if (nextId && nextId !== context.sessionId) {
@@ -105,6 +113,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
   let contextual: SessionContextObservation | undefined;
   let tokenParts = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 };
   let usageKnown = false, costUsd: number | null = null, reportedTotal = 0;
+  let pricingFact: RequestPricingFact | undefined, requestKnown = false;
   let costScope: 'session-total' | undefined, costIncomplete = false;
   if (source === 'codex') {
     const event = payload.type === 'token_count' ? payload : obj(payload.msg);
@@ -141,7 +150,8 @@ export function extractSessionObservation(source: string, record: Obj, context: 
     const cached = normalized.cached_input_tokens!, reasoning = normalized.reasoning_output_tokens!;
     tokenParts = { input_tokens: Math.max(0, normalized.input_tokens! - cached), output_tokens: Math.max(0, normalized.output_tokens! - reasoning), cached_input_tokens: cached, cache_creation_input_tokens: normalized.cache_creation_input_tokens!, reasoning_output_tokens: reasoning };
     reportedTotal = normalized.total_tokens!;
-    usageKnown = Object.keys(last).length > 0 || Boolean(previous);
+    usageKnown = !repeated && (Object.keys(last).length > 0 || Boolean(previous));
+    requestKnown = Object.keys(last).length > 0 && !repeated;
     id = digest([record.timestamp, Object.keys(total).length ? total : last]);
     const capacity = positive(info.model_context_window);
     if (capacity) context.observationLimit = capacity;
@@ -164,7 +174,10 @@ export function extractSessionObservation(source: string, record: Obj, context: 
       usage = obj(body.usage); usageKnown = true;
       model = text(body.model) || model;
       id = `call:${text(body.id) || text(record.uuid)}:${text(record.requestId)}`;
-      tokenParts = { input_tokens: count(usage.input_tokens), output_tokens: count(usage.output_tokens), cached_input_tokens: count(usage.cache_read_input_tokens), cache_creation_input_tokens: count(usage.cache_creation_input_tokens), reasoning_output_tokens: 0 };
+      const normalized = normalizeClaudeUsage(usage);
+      tokenParts = { input_tokens: normalized.input_tokens, output_tokens: normalized.output_tokens, cached_input_tokens: normalized.cached_input_tokens, cache_creation_input_tokens: normalized.cache_creation_input_tokens, reasoning_output_tokens: 0 };
+      requestKnown = true;
+      pricingFact = claudeRequestPricingFact(id, clock ?? '', usage);
       const capacity = positive(record.context_window ?? usage.context_window);
       if (capacity) context.observationLimit = capacity;
       contextual = { usedTokens: tokenParts.input_tokens + tokenParts.cached_input_tokens + tokenParts.cache_creation_input_tokens, limitTokens: capacity ?? context.observationLimit ?? null, kind: 'request-input', observedAt: clock ?? '' };
@@ -176,6 +189,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
     usage = obj(source === 'opencode' ? data.tokens : data.usage);
     if (!Object.keys(usage).length) return null;
     usageKnown = true;
+    requestKnown = true;
     context.sessionId = text(data.sessionID ?? data.sessionId ?? record.sessionID ?? record.sessionId) || context.sessionId;
     model = text(obj(data.model).id ?? data.modelID ?? data.model) || model;
     provider = text(data.providerID ?? data.provider ?? obj(data.model).providerID);
@@ -193,13 +207,18 @@ export function extractSessionObservation(source: string, record: Obj, context: 
   }
   if (!clock || !context.sessionId || !id || id === 'call:') return null;
   const tokens = Math.max(reportedTotal, Object.values(tokenParts).reduce((a, b) => a + b, 0));
+  if (usageKnown && !pricingFact) pricingFact = { ...tokenParts, id, timestamp: clock,
+    ...(requestKnown ? { requestInputTokens: tokenParts.input_tokens + tokenParts.cached_input_tokens + tokenParts.cache_creation_input_tokens } : {}),
+    ...(source === 'codex' ? { serviceTier: context.observationTier } : {}) };
   let costKind: SessionObservation['costKind'] = costUsd === null ? 'unknown' : 'recorded';
   if (costUsd === null && usageKnown && isModelPriced(model, source)) {
-    costUsd = computeRowCost({ ...tokenParts, hour_start: clock, source, model, project: '', total_tokens: tokens, conversation_count: 0 });
+    costUsd = computeRowCost({ ...tokenParts, pricing_requests: pricingFact ? [pricingFact] : undefined, hour_start: clock, source, model, project: '', total_tokens: tokens, conversation_count: 0 });
     costKind = 'estimated';
   }
   context.observationModel = model;
   return { id, source, sessionId: context.sessionId, timestamp: clock, model, tokens, usageKnown, costUsd, costKind,
+    ...(usageKnown ? { tokenParts, pricingFact, requestKnown } : {}),
+    ...(costKind !== 'recorded' && pricingFact ? { costBasis: 'request-facts' as const } : {}),
     ...(costScope ? { costScope, costIncomplete } : {}),
     billing: billing(provider, auth, account), ...(contextual ? { context: { ...contextual, observedAt: clock } } : {}),
     ...(context.projectLabel ? { projectLabel: context.projectLabel } : {}), ...(context.profileId ? { profileId: context.profileId } : {}),
@@ -210,6 +229,11 @@ export function extractSessionObservation(source: string, record: Obj, context: 
 }
 
 export interface SessionActivity {
+  models?: SessionModelUsage[];
+  detailsComplete?: boolean;
+  unallocatedCostUsd?: number | null;
+  taskSeconds?: number | null;
+  taskTimingKind?: string;
   sessionTitle?: string;
   source: string; sessionId: string; projectLabel: string; model: string; lastActivityAt: string;
   tokens: number | null; sharePercent: number | null; costUsd: number | null;
@@ -221,10 +245,18 @@ export interface SessionActivitySnapshot {
   tokenTotalMismatch: boolean; missingSources: string[]; observedAt: string;
   billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'] }[];
 }
+export interface SessionModelUsage {
+  model: string; tokens: number; requests: number | null;
+  input_tokens: number | null; output_tokens: number | null; cached_input_tokens: number | null;
+  cache_creation_input_tokens: number | null; reasoning_output_tokens: number | null;
+  costUsd: number | null; knownCostUsd: number; costKind: SessionActivity['costKind'];
+  serviceTiers: string[];
+}
 
 export function mergeSessionObservation(previous: SessionObservation | undefined, next: SessionObservation): SessionObservation {
   if (!previous) return next;
-  if (next.source === 'codex' && next.tokens < previous.tokens) return { ...next, tokens: previous.tokens, costUsd: previous.costUsd, costKind: previous.costKind };
+  if (next.source === 'codex' && next.tokens < previous.tokens) return { ...next, tokens: previous.tokens, costUsd: previous.costUsd, costKind: previous.costKind,
+    usageKnown: previous.usageKnown, tokenParts: previous.tokenParts, pricingFact: previous.pricingFact, requestKnown: previous.requestKnown, costBasis: previous.costBasis, costIncomplete: previous.costIncomplete };
   return next.timestamp >= previous.timestamp ? next : previous;
 }
 
@@ -238,7 +270,7 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   const selected = new Map<string, SessionObservation>();
   for (const e of events) {
     const key = JSON.stringify([e.source, e.sessionId, e.id]);
-    selected.set(key, mergeSessionObservation(selected.get(key), e));
+    selected.set(key, mergeSessionObservation(selected.get(key), repriceObservation(e)));
   }
   const ordered = [...selected.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const bySession = new Map<string, SessionObservation[]>();
@@ -311,8 +343,11 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
     const knownCosts = costs.filter(event => event.costUsd !== null);
     row.costUsd = knownCosts.length ? knownCosts.reduce((sum, event) => sum + event.costUsd!, 0) : null;
     const kinds = new Set(costs.filter(event => event.tokens > 0 || event.costUsd !== null).map(event => event.costKind));
-    if (totals.some(event => event.costIncomplete)) kinds.add('unknown');
+    if (costs.some(event => event.costIncomplete)) kinds.add('unknown');
     row.costKind = kinds.size === 1 ? [...kinds][0]! : kinds.size > 1 ? 'mixed' : 'unknown';
+    row.models = summarizeSessionModels(calls);
+    row.detailsComplete = calls.length > 0 && calls.every(event => event.tokenParts && TOKEN_FIELDS.reduce((sum, key) => sum + event.tokenParts![key], 0) === event.tokens);
+    row.unallocatedCostUsd = totals.length ? row.costUsd : null;
     row.sharePercent = row.tokens !== null && totalTokens > 0 ? row.tokens / totalTokens * 100 : null;
     for (const event of calls) addBilling(event.billing, event.tokens, totals.length ? null : event.costUsd, totals.length ? 'unknown' : event.costKind);
     for (const event of totals) addBilling(event.billing, 0, event.costUsd, event.costIncomplete ? 'mixed' : event.costKind);
@@ -321,4 +356,24 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   if (totalTokens > attributedTokens) addBilling(emptyBilling(), totalTokens - attributedTokens, null, 'unknown');
   return { sessions, totalTokens, attributedTokens, otherTokens: Math.max(0, totalTokens - attributedTokens), tokenTotalMismatch: attributedTokens > options.totalTokens,
     missingSources: [...new Set([...(options.missingSources ?? []), ...missingParents])], observedAt: new Date(options.now ?? Date.now()).toISOString(), billing: [...services.values()].sort((a, b) => b.tokens - a.tokens) };
+}
+
+function repriceObservation(event: SessionObservation): SessionObservation {
+  if (!event.usageKnown || !event.tokenParts || event.costKind === 'recorded' || event.costBasis !== 'request-facts') return event;
+  const cost = explainRowCost({ ...event.tokenParts, pricing_requests: event.pricingFact ? [event.pricingFact] : undefined,
+    hour_start: event.timestamp, source: event.source, model: event.model, project: '', total_tokens: event.tokens, conversation_count: 0 });
+  return { ...event, costUsd: cost.costUsd, costKind: cost.costUsd === null ? 'unknown' : 'estimated', costIncomplete: cost.unpricedTokens > 0 };
+}
+function summarizeSessionModels(events: SessionObservation[]): SessionModelUsage[] {
+  const groups = new Map<string, SessionObservation[]>();
+  for (const event of events) { const rows = groups.get(event.model) ?? []; rows.push(event); groups.set(event.model, rows); }
+  return [...groups].map(([model, rows]) => {
+    const complete = rows.every(row => !!row.tokenParts);
+    const kinds = new Set(rows.map(row => row.costKind));
+    const knownCostUsd = rows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
+    const parts = Object.fromEntries(TOKEN_FIELDS.map(key => [key, complete ? rows.reduce((sum, row) => sum + row.tokenParts![key], 0) : null])) as Record<typeof TOKEN_FIELDS[number], number | null>;
+    return { ...parts, model, tokens: rows.reduce((sum, row) => sum + row.tokens, 0), requests: rows.every(row => row.requestKnown === true) ? rows.length : null,
+      costUsd: rows.some(row => row.costUsd === null || row.costIncomplete) ? null : knownCostUsd, knownCostUsd,
+      costKind: kinds.size === 1 ? [...kinds][0]! : 'mixed' as const, serviceTiers: [...new Set(rows.map(row => row.pricingFact?.serviceTier ?? 'unknown'))] };
+  }).sort((a, b) => b.tokens - a.tokens || a.model.localeCompare(b.model));
 }

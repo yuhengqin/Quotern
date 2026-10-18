@@ -12,8 +12,7 @@ import { DashboardLoadingSkeleton } from '@/components/DashboardLoadingSkeleton'
 import { DashboardOverviewCard } from '@/components/DashboardOverviewCard';
 import { SessionActivityPanel } from '@/components/SessionActivityPanel';
 import { DashboardRangeSyncOverlay } from '@/components/DashboardRangeSyncOverlay';
-import { DailyUsageTrendCard } from '@/components/DailyUsageTrendCard';
-import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
+import { UsageTrendExplorer } from '@/components/UsageTrendExplorer';
 // 分时热力图：暂时注释，保留组件便于以后恢复
 // import { HourlyActivityHeatmap } from '@/components/HourlyActivityHeatmap';
 import { StatusBanner } from '@/components/StatusBanner';
@@ -380,20 +379,8 @@ export function DashboardPage() {
             aria-label={t('usage.page.charts')}
             className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2"
           >
-            <TokenUsageTrendCard
-              dailyRows={visibleTrendRows.dailyRows}
-              dayScoped={dayScoped}
-              hourly={isHourly}
-              hourlyRows={visibleTrendRows.hourlyRows}
-            />
-            <DailyUsageTrendCard
-              rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined}
-              dayScoped={dayScoped}
-              hourly={isHourly}
-              hourlyRows={visibleTrendRows.hourlyRows}
-              rangeDays={rangeDays}
-              rows={visibleTrendRows.dailyRows}
-            />
+            <UsageTrendExplorer variant="tokens" days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} />
+            <UsageTrendExplorer variant="usage" days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined} />
             {/* 分时活跃热力图：按天热力图已并入概览大卡片，此处注释便于以后恢复
             <HourlyActivityHeatmap rows={data.hourlyUsage} />
             */}

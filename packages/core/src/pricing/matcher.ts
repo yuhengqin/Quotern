@@ -17,6 +17,7 @@ export interface PricingModelMetadata {
 }
 
 export interface PricingData {
+  request_rules?: import('./request-pricing.js').RequestPricingRule[];
   _meta?: Record<string, unknown>;
   exact: Record<string, ModelPricingRates>;
   model_metadata?: Record<string, PricingModelMetadata>;

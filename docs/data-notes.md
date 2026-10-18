@@ -131,6 +131,20 @@ Dashboard 与 Desktop 共享价格页及目录转换，订阅行显示“订阅�
 
 “我的常用”使用固定近 30 天的模型 Token 用量，先按 `{source, model}` 解析到准确定价 ID，再跨 Agent 汇总。身份解析使用精确名称、明确的来源别名及无歧义的规范化，不采用费用估算的模糊匹配或默认价格，保留 fast/flex/batch 和独立快照等计价条目。用量请求独立于价格目录；无可匹配用量或请求失败时，价格仍可查看并暂按最新旗舰排序。Desktop 共享价格页通过显式适配器读取 IPC 用量，不依赖浏览器 HTTP 端口。
 
+## 请求级计价、模型趋势与会话详情
+
+`QueueBucket.pricing_requests` 是可选的本地数值证据，不改变桶的五类 Token 数量、不参与上传。Claude 对同一调用保留完整流式快照和首次桶归属；后续快照按请求哈希替换，单纯补充 TTL/档位也会发出零 Token 更新。Codex 保存日志中的 Standard/Fast/Flex 档位，并在旧游标首次续读时从已消费前缀恢复状态；明确未知值会清除旧档位。累计差分和账本补差不能被伪装成完整单请求输入。
+
+费用计算先从旧桶数量中扣掉有完整证据的请求，再计算这些请求的费用，其余数量沿用原估价。新 Codex 请求的输出与推理已在 parser 拆开，按两者之和计一次输出费用；未带请求证据的旧桶仍保留原有兼容口径。不能据此声称所有历史推理费用已校正。
+
+覆盖表可提供 `request_rules` 数组，每条明确 `model`（准确定价 ID）、`source`、`rates` 与 HTTPS `reference`，可选 `serviceTier`、`minInputTokens`、`effectiveFrom` 和 `effectiveTo`。阈值是整个请求输入严格大于阈值时，对整个请求采用该档费率；只看半小时累计值不会触发。时间为左闭右开，未提供边界的规则由维护者承担适用范围。TTL 费率使用 `cache_write_5m` / `cache_write_1h`，未指定的费率继续取基础表；缺失与明确零费率分别保留。
+
+内置当前修饰规则于 2026-10-18 核对 [Anthropic 定价](https://platform.claude.com/docs/en/about-claude/pricing)与 [OpenAI 定价](https://developers.openai.com/api/docs/pricing)，仅从该日 UTC 起应用，不能反向证明历史费率。内置范围为 Claude 官方定价 ID 的 5m/1h 缓存、明确支持型号的 Fast 与 Haiku 5.5 请求长度档，以及 Codex 中 GPT-6 Astra / GPT-6.1 Sol / GPT-6 Luna 的 Fast/Flex。其他型号或渠道需明确规则，不能套用相同倍率。表生成时间仍不是供应商调价时间，`requestPricing` 另报告请求覆盖、沿用旧口径的 Token、档位与规则出处。
+
+会话缓存 Schema 10 在原独立观察上增加可选 `tokenParts`、`pricingFact` 与请求证据。已有日志会重扫补齐，已删除日志的旧总量继续可读，但拆分未知。带新事实的估价在读取时按当前规则重算，来源报告金额保持原记录。模型表逐调用归属，同一窗口的会话来源累计金额不按模型比例分配；模型表可能是调用估价而会话总额来自来源，界面明确说明。任务时长在分会话前按真实 turn UUID 及父子关系确定归属，避免 fork 重复计时。确定的 Codex 重复累计通知不污染已知请求数。
+
+`GET /functions/tud-usage-trend` 支持 `granularity=hourly|daily|weekly|monthly`、`days` 或成对 `fromDate/toDate`，以及 `sources/model/project`。沿用报告的参数、采集下限和时区，图表范围最多 367 个自然日；小时 key 包含日期，今天补零截止当前小时。每个时间点直接按桶计算模型费用，不按 Token 占比分摊；周一开周，首末周/月只含选定日期。`costUsd=null` 保留未知价格，图表显示 `knownCostUsd` 并提示部分未计价。粒度仅影响图表，不修改日期、来源、概览或分享筛选。
+
 ## 日历、封存与配置写入
 
 队列时间使用 UTC，面板日期分组使用 [timezone.ts](../packages/core/src/timezone.ts) 的本地日历规则。今天实时计算，过去日期读取封存缓存。启动时补齐有记录但未封存的日期；跨午夜或休眠多日后，即使同步没有写出新桶，也要触发日历封存检查。历史桶变化时重封受影响日期。

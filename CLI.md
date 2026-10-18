@@ -67,6 +67,7 @@ quotern start
 | `quotern sync` | 手动同步本地用量数据 |
 | `quotern doctor` | 检查运行环境、本地数据源及服务状态 |
 | `quotern usage [period]` | 只读查询已采集用量，支持文本、JSON、CSV |
+| `quotern statusline` | 从 Claude stdin 显示会话费用、今日估价、上下文和会话平均费用速率 |
 | `quotern help` | 显示帮助 |
 
 ## 常用选项
@@ -98,6 +99,23 @@ JSON 使用 `schemaVersion: 1`，包含 `summary`、`rows`、`filters` 和 `cove
 `overview` 额外返回 `breakdowns.daily`、`breakdowns.models`、`breakdowns.projects`：同一次读取后筛选的记录生成全部维度，共用顶层范围、筛选和覆盖说明，不能将不同维度相加。`rows` 保留总计行；CSV 的 `period` 列分别标识 `summary/daily/models/projects`。Skill 将“查看用量信息”等宽泛请求默认交付为 Quotern 样式的综合 HTML 概览；明确的单项查询仍按问题简洁回答。
 
 Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)。推荐通过 `npx skills` 跨工具安装，见 [安装方法](./README.md#推荐使用-npx-skills-安装)；也可让 Agent 按 [安装助手说明](./README_AI.md) 执行。手动复制完整 Skill 文件夹作为备用。Skill 只调用上述 JSON 查询，不维护第二套解析器，也不会隐式启动或修复服务。
+
+## Claude statusline
+
+将下面的配置合入 Claude Code 的用户或项目设置：
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "quotern statusline"
+  }
+}
+```
+
+需要 `quotern` 已安装并可从 Claude 启动的 shell 找到；也可将 command 换成已安装 CLI 的绝对路径。支持 `--lang zh-CN|en|ja|ko` 和 `--data-dir <已有数据目录>`。配置格式见 [Claude Code 官方文档](https://code.claude.com/docs/en/statusline)。
+
+会话费用和当前上下文优先使用 Claude 通过 stdin 传来的数值；今日费用只读本地 Claude 统计，并显示最近同步时刻。费用未知时显示未知，部分价格缺失时显示已知小计；会话均速为宿主会话金额除以已运行时长，不是生成速度或订阅额度消耗率。宿主金额也是参考价估算，不能当作付款账单。命令不会启动服务、联网、同步或改写 Claude 设置，空/坏输入也只输出一行未知读数。
 
 ## 数据与同步
 

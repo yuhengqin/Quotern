@@ -36,7 +36,7 @@ test('salvageIdentityFromCorruptConfig extracts only device identity', () => {
 
 test('loadConfig recovers device identity from corrupt JSON', async () => {
   await withIsolatedConfigHome(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'ai-usage-cfg-'));
+    const dir = await mkdtemp(join(tmpdir(), 'quotern-cfg-'));
     await writeFile(
       configPath(dir),
       `{
@@ -61,7 +61,7 @@ test('loadConfig recovers device identity from corrupt JSON', async () => {
 
 test('loadConfig recovers from non-object JSON without salvaged token', async () => {
   await withIsolatedConfigHome(async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'ai-usage-cfg-'));
+    const dir = await mkdtemp(join(tmpdir(), 'quotern-cfg-'));
     await writeFile(configPath(dir), '[]', 'utf8');
     const result = await loadConfig(dir);
     assert.ok(result.recoveredFromCorrupt);

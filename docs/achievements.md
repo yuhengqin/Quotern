@@ -49,7 +49,7 @@ Desktop 与 CLI 浏览器面板均可从用量页顶部的奖章入口、热力�
 
 ## 存储与客户端
 
-状态保存在 `~/.ai-usage/achievements/state.json`，独立于用量缓存。跨进程锁内重读合并并原子替换，Desktop 与 CLI 通过同一数据目录共享已获得、已读、提示和展示架设置；损坏文件保留并明确报错。
+状态保存在 `~/.quotern/achievements/state.json`，独立于用量缓存。跨进程锁内重读合并并原子替换，Desktop 与 CLI 通过同一数据目录共享已获得、已读、提示和展示架设置；损坏文件保留并明确报错。
 
 Core 的 `/functions/tud-achievements` 提供 GET 快照与 POST `claim-notice`、`seen`、`preferences`、`project` 操作。快照附带项目候选与项目设置，`project` 接受项目 id、名称、确认、忽略及合并目标，拒绝未知项目和合并循环。HTTP 和 Desktop IPC 共用同一路由，Desktop 无需额外启动 HTTP 服务。通知在锁内一次性领取；客户端也按顺序提交状态操作，避免刷新覆盖刚保存的设置。
 

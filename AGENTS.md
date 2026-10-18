@@ -55,7 +55,7 @@ pnpm install
 
 ## Runtime
 
-数据目录 `~/.ai-usage/`（`packages/core/src/paths.ts`），日志 `~/.ai-usage/logs/`。
+数据目录 `~/.quotern/`（`packages/core/src/paths.ts`），日志 `~/.quotern/logs/`。
 
 `tud.pid`（`{pid,kind}`，`kind` ∈ `{cli,desktop}`）互斥：Desktop 启动停 CLI 并抢 owner；之后 CLI `start` 只开面板（observer），不创建常驻采集调度。
 

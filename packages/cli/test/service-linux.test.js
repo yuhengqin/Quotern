@@ -70,7 +70,7 @@ test('buildLinuxUnit writes ExecStart, Restart, and log paths', () => {
     '/usr/bin/node',
     ['/usr/lib/node_modules/quotern/bin/quotern.js', 'start'],
     '/home/dev',
-    '/home/dev/.ai-usage/logs/daemon.log',
+    '/home/dev/.quotern/logs/daemon.log',
   );
 
   assert.match(
@@ -82,8 +82,8 @@ test('buildLinuxUnit writes ExecStart, Restart, and log paths', () => {
   assert.match(unit, /^WorkingDirectory=\/home\/dev$/m);
   assert.match(unit, /^Environment=HOME=\/home\/dev$/m);
   assert.doesNotMatch(unit, /^Environment=(?:LANG|LC_ALL)=/m);
-  assert.match(unit, /StandardOutput=append:\/home\/dev\/\.ai-usage\/logs\/daemon\.log/);
-  assert.match(unit, /StandardError=append:\/home\/dev\/\.ai-usage\/logs\/daemon\.log/);
+  assert.match(unit, /StandardOutput=append:\/home\/dev\/\.quotern\/logs\/daemon\.log/);
+  assert.match(unit, /StandardError=append:\/home\/dev\/\.quotern\/logs\/daemon\.log/);
   assert.match(unit, /^WantedBy=default\.target$/m);
   assert.match(unit, /\/home\/dev\/\.local\/bin/);
 });
@@ -97,11 +97,11 @@ test('systemdQuote and buildLinuxUnit escape spaces and percent', () => {
     '/home/foo bar/node',
     ['/home/foo bar/quotern.js', 'start'],
     '/home/foo bar',
-    '/home/foo bar/.ai-usage/logs/daemon.log',
+    '/home/foo bar/.quotern/logs/daemon.log',
   );
   assert.match(unit, /ExecStart="\/home\/foo bar\/node" "\/home\/foo bar\/quotern\.js" start/);
   assert.match(unit, /WorkingDirectory="\/home\/foo bar"/);
-  assert.match(unit, /StandardOutput=append:"\/home\/foo bar\/\.ai-usage\/logs\/daemon\.log"/);
+  assert.match(unit, /StandardOutput=append:"\/home\/foo bar\/\.quotern\/logs\/daemon\.log"/);
 });
 
 test(

@@ -31,7 +31,7 @@ function baseConfig(dataDir: string): TudConfig {
 }
 
 test('readNotifySignalSource returns source from JSON payload', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-signal-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-signal-'));
   await writeFile(
     join(dir, 'notify.signal'),
     JSON.stringify({ ts: '2026-01-01T00:00:00Z', source: 'codex' }),
@@ -41,7 +41,7 @@ test('readNotifySignalSource returns source from JSON payload', async () => {
 });
 
 test('readNotifySignalSource returns undefined when missing or invalid', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-signal-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-signal-'));
   assert.equal(await readNotifySignalSource(dir), undefined);
 
   await writeFile(join(dir, 'notify.signal'), 'not-json', 'utf8');
@@ -56,7 +56,7 @@ test('readNotifySignalSource returns undefined when missing or invalid', async (
 });
 
 test('createSyncRunner poll/manual sync all sources without checking hooks', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-runner-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-sync-runner-'));
   const config = baseConfig(dir);
   const calls: Array<{ source: string | undefined; reason: string }> = [];
 
@@ -86,7 +86,7 @@ test('createSyncRunner poll/manual sync all sources without checking hooks', asy
 });
 
 test('createSyncRunner notify.signal respects source from payload', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-source-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-sync-source-'));
   const config = baseConfig(dir);
   const sources: Array<string | undefined> = [];
 
@@ -119,11 +119,11 @@ test('createSyncRunner notify.signal respects source from payload', async () => 
 });
 
 test('syncAll with source=claude|codex only runs that channel', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-all-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-sync-all-'));
   const config = baseConfig(dir);
   // Same sandbox as sync-staggered: without it this case parsed the real
   // ~/.claude and ~/.codex (~55s here) just to assert which channel ran.
-  const home = await mkdtemp(join(tmpdir(), 'ai-usage-sync-all-home-'));
+  const home = await mkdtemp(join(tmpdir(), 'quotern-sync-all-home-'));
   const restoreEnv = isolateAgentHome(home);
   try {
     await seedClaudeSession(home);
@@ -152,7 +152,7 @@ test('syncAll with source=claude|codex only runs that channel', async () => {
 });
 
 test('createSyncRunner coalesces overlapping poll and notify', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-busy-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-sync-busy-'));
   const config = baseConfig(dir);
   let active = 0;
   let maxActive = 0;
@@ -182,7 +182,7 @@ test('createSyncRunner coalesces overlapping poll and notify', async () => {
 });
 
 test('watchRuntimeSignals runSyncOverride bypasses in-process createSyncRunner', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-override-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-sync-override-'));
   const config = baseConfig(dir);
   const reasons: string[] = [];
   const { stop, runSync } = watchRuntimeSignals({
@@ -205,7 +205,7 @@ test('watchRuntimeSignals runSyncOverride bypasses in-process createSyncRunner',
 });
 
 test('watchRuntimeSignals reports active status across overlapping sync callers', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-sync-activity-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-sync-activity-'));
   const config = baseConfig(dir);
   const active: boolean[] = [];
   let finish!: () => void;

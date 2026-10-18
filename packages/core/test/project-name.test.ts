@@ -55,7 +55,7 @@ test(
   () => {
     resetProjectNameCache();
     const root = makeTempDir('tud-proj-git-');
-    const repo = join(root, 'ai-usage');
+    const repo = join(root, 'quotern');
     const nested = join(repo, 'packages', 'core');
     try {
       mkdirSync(nested, { recursive: true });
@@ -71,8 +71,8 @@ test(
         },
       });
       writeFileSync(join(repo, 'README.md'), 'x\n');
-      assert.equal(resolveProjectName(nested), 'ai-usage');
-      assert.equal(resolveProjectName(repo), 'ai-usage');
+      assert.equal(resolveProjectName(nested), 'quotern');
+      assert.equal(resolveProjectName(repo), 'quotern');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

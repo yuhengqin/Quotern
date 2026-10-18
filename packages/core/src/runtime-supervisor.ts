@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 
-import { DEFAULT_DATA_DIR, heartbeatPath, isIsolatedDevRuntime } from './paths.js';
+import { resolveDataDir, heartbeatPath, isIsolatedDevRuntime } from './paths.js';
 import {
   argsMatchRuntimeKind,
   clearPid,
@@ -221,7 +221,7 @@ export async function evictRuntimeKind(
 ): Promise<number[]> {
   if (isIsolatedDevRuntime()) return [];
   const exceptPid = opts?.exceptPid ?? process.pid;
-  const dataDir = opts?.dataDir ?? DEFAULT_DATA_DIR;
+  const dataDir = opts?.dataDir ?? resolveDataDir();
   const snapshots = listProcessSnapshots();
   const protectedPids = protectedSessionPids(snapshots, exceptPid);
   const stopped: number[] = [];
@@ -247,7 +247,7 @@ export async function evictRuntimeKind(
 
 export async function touchRuntimeHeartbeat(
   owner: { pid?: number; kind: RuntimeKind },
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<void> {
   await mkdir(dataDir, { recursive: true });
   const payload: RuntimeHeartbeat = {
@@ -259,7 +259,7 @@ export async function touchRuntimeHeartbeat(
 }
 
 export async function readRuntimeHeartbeat(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<RuntimeHeartbeat | null> {
   const path = heartbeatPath(dataDir);
   if (!existsSync(path)) return null;
@@ -288,7 +288,7 @@ export async function readRuntimeHeartbeat(
 }
 
 export async function clearRuntimeHeartbeat(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<void> {
   const path = heartbeatPath(dataDir);
   if (!existsSync(path)) return;

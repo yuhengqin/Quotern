@@ -48,7 +48,7 @@ test('aggregateForIngest merges across projects and omits project from ingest', 
     makeRow({
       source: 'claude',
       model: 'claude-opus-4-6',
-      project: 'ai-usage',
+      project: 'quotern',
       input_tokens: 100,
       output_tokens: 50,
       total_tokens: 150,

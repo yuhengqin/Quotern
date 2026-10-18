@@ -883,7 +883,7 @@ test('parseCodebuddyIncremental uses base64 pathHint on anonymous extension tree
 
 test('loadCodebuddyEditorWorkspaceMaps reads current.json without conversations dir', async () => {
   const root = await mkdtemp(join(tmpdir(), 'tud-cb-current-'));
-  const cwd = '/Users/sugar/Documents/github/ai-usage';
+  const cwd = '/Users/sugar/Documents/github/quotern';
   const pathB64 = Buffer.from(cwd, 'utf8').toString('base64url');
   const sessionId = 'sess-from-current';
   await mkdir(join(root, pathB64), { recursive: true });

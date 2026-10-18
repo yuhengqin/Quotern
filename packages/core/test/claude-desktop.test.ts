@@ -50,7 +50,7 @@ test('claudeCliProjectsDirs includes ~/.claude/projects', () => {
 });
 
 test('claudeDesktopProjectsDirs finds local-agent .claude/projects', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-desktop-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-desktop-'));
   const projectFolder = join(
     appSupportDir(tempHome, 'Claude-3p'),
     'local-agent-mode-sessions',
@@ -82,7 +82,7 @@ test('claudeDesktopProjectsDirs finds local-agent .claude/projects', async () =>
 });
 
 test('parseClaudeIncremental reads Desktop local-agent JSONL', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-parse-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-parse-'));
   const projectFolder = join(
     appSupportDir(tempHome, 'Claude-3p'),
     'local-agent-mode-sessions',
@@ -129,8 +129,8 @@ test(
   { skip: !hasGit() },
   async () => {
     resetProjectNameCache();
-    const tempRoot = await mkdtemp(join(tmpdir(), 'ai-usage-claude-cwd-'));
-    const repo = join(tempRoot, 'ai-usage');
+    const tempRoot = await mkdtemp(join(tmpdir(), 'quotern-claude-cwd-'));
+    const repo = join(tempRoot, 'quotern');
     const nested = join(repo, 'apps', 'desktop');
     mkdirSync(nested, { recursive: true });
     execFileSync('git', ['-c', 'init.defaultBranch=main', 'init', '--template='], {
@@ -145,12 +145,12 @@ test(
       },
     });
 
-    const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-home-'));
+    const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-home-'));
     const projectFolder = join(
       tempHome,
       '.claude',
       'projects',
-      '-Users-dev-ai-usage-apps-desktop',
+      '-Users-dev-quotern-apps-desktop',
     );
     await mkdir(projectFolder, { recursive: true });
 
@@ -187,7 +187,7 @@ test(
     try {
       const { result } = await parseClaudeIncremental({}, '2026-01-01T00:00:00.000Z');
       assert.equal(result.eventsParsed, 1);
-      assert.equal(result.buckets[0]?.project, 'ai-usage');
+      assert.equal(result.buckets[0]?.project, 'quotern');
     } finally {
       restoreEnv();
       if (prevClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
@@ -200,7 +200,7 @@ test(
 
 test('parseClaudeIncremental reuses cached project for grown files without re-peeking cwd', async () => {
   resetProjectNameCache();
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-projcache-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-projcache-'));
   const projectFolder = join(tempHome, '.claude', 'projects', '-Users-dev-first-app');
   await mkdir(projectFolder, { recursive: true });
   const filePath = join(projectFolder, 'session.jsonl');
@@ -263,7 +263,7 @@ test('parseClaudeIncremental reuses cached project for grown files without re-pe
 });
 
 test('parseClaudeIncremental falls back to encoded path when no cwd', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-nocwd-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-nocwd-'));
   const projectFolder = join(
     tempHome,
     '.claude',
@@ -322,7 +322,7 @@ function makeAssistantLine(opts: {
 }
 
 async function withTempClaudeHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-home-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-home-'));
   const restoreEnv = pinHomeEnv(tempHome);
   const prevClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
   delete process.env.CLAUDE_CONFIG_DIR;

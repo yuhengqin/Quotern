@@ -45,7 +45,7 @@ const POLL_MS = 10_000;
 /**
  * Load the same usage snapshot as the root page.
  *
- * Desktop reads via IPC → in-process local-api (same ~/.ai-usage as CLI).
+ * Desktop reads via IPC → in-process local-api (same ~/.quotern as CLI).
  * Empty or failed responses remain empty so the UI never substitutes sample data.
  *
  * CPU-friendly refresh strategy:

@@ -4,7 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
-  DEFAULT_DATA_DIR,
+  resolveDataDir,
   argsMatchRuntimeKind,
   logsDir,
   clearPid,
@@ -35,11 +35,11 @@ export {
   writeRuntimeOwner,
 };
 
-export function daemonLogPath(dataDir = DEFAULT_DATA_DIR): string {
+export function daemonLogPath(dataDir = resolveDataDir()): string {
   return join(logsDir(dataDir), 'daemon.log');
 }
 
-export async function ensureDaemonLogDir(dataDir = DEFAULT_DATA_DIR): Promise<string> {
+export async function ensureDaemonLogDir(dataDir = resolveDataDir()): Promise<string> {
   const dir = logsDir(dataDir);
   await mkdir(dir, { recursive: true });
   return dir;
@@ -115,7 +115,7 @@ async function recoverPidFromHealth(dataDir: string, port: number): Promise<numb
 }
 
 export async function waitForPid(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
   timeoutMs = 15_000,
 ): Promise<number | null> {
   const deadline = Date.now() + timeoutMs;
@@ -157,7 +157,7 @@ export async function waitForServiceReady(
 }
 
 export async function readDaemonLogTail(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
   maxChars = 2000,
 ): Promise<string> {
   try {

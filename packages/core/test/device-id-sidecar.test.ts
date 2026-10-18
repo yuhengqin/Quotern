@@ -40,7 +40,7 @@ test('resolveOrCreateDeviceId reuses sidecar after wipe of data dir', async () =
 
 test('loadConfig migrates existing deviceId to sidecar and recovers after wipe', async () => {
   await withIsolatedConfigHome(async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), 'ai-usage-data-'));
+    const dataDir = await mkdtemp(join(tmpdir(), 'quotern-data-'));
     try {
       const deviceId = '550e8400-e29b-41d4-a716-446655440000';
       await writeFile(
@@ -61,7 +61,7 @@ test('loadConfig migrates existing deviceId to sidecar and recovers after wipe',
       assert.equal(await readFile(stableDeviceIdPath(), 'utf8'), `${deviceId}\n`);
 
       await rm(dataDir, { recursive: true, force: true });
-      const dataDir2 = await mkdtemp(join(tmpdir(), 'ai-usage-data-'));
+      const dataDir2 = await mkdtemp(join(tmpdir(), 'quotern-data-'));
       try {
         const reloaded = await loadConfig(dataDir2);
         assert.equal(reloaded.config.deviceId, deviceId);

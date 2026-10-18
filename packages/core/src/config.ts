@@ -290,6 +290,7 @@ async function loadConfigUnlocked(dir: string): Promise<LoadConfigResult> {
     return recoverCorruptConfig(dir, path, raw);
   }
   const config = parsed as TudConfig;
+  const directoryChanged = config.dataDir !== dir;
   config.dataDir = dir;
   let identityChanged = false;
   if (!isDeviceId(config.deviceId)) {
@@ -303,7 +304,7 @@ async function loadConfigUnlocked(dir: string): Promise<LoadConfigResult> {
   if (deviceIdCreated) {
     await writeStableDeviceId(config.deviceId);
   }
-  if (identityChanged || changed) {
+  if (identityChanged || changed || directoryChanged) {
     await writeConfigUnlocked(dir, config);
   }
   return { dir, config };

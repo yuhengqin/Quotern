@@ -145,7 +145,7 @@ test('projectDashboardForDate builds project usage from that day projects', () =
         models: { [claudeOpus]: 200, [codexGpt]: 100 },
         projects: [
           {
-            project: 'ai-usage',
+            project: 'quotern',
             tokens: 300,
             models: { [claudeOpus]: 200, [codexGpt]: 100 },
           },
@@ -168,7 +168,7 @@ test('projectDashboardForDate builds project usage from that day projects', () =
     {
       projectRows: [
         {
-          project: 'ai-usage',
+          project: 'quotern',
           tokens: 300,
           costUsd: 3,
           pct: 85.7,
@@ -213,11 +213,11 @@ test('projectDashboardForDate builds project usage from that day projects', () =
 
   const dayView = projectDashboardForDate(rangeView, yesterday);
   assert.equal(dayView.projectModelUsage.length, 1);
-  assert.equal(dayView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(dayView.projectModelUsage[0]?.project, 'quotern');
   assert.equal(dayView.projectModelUsage[0]?.tokens, 300);
   assert.equal(dayView.projectModelUsage[0]?.models.length, 2);
   assert.ok(
-    dayView.distributions.projects.some((row) => row.label === 'ai-usage'),
+    dayView.distributions.projects.some((row) => row.label === 'quotern'),
   );
   assert.ok(
     !dayView.distributions.projects.some((row) => row.label === 'docs-site'),
@@ -236,12 +236,12 @@ test('project usage decodes URI-encoded cwd and merges with folder name', () => 
         models: {},
         projects: [
           {
-            project: '%2FUsers%2Fme%2Fcode%2Fai-usage',
+            project: '%2FUsers%2Fme%2Fcode%2Fquotern',
             tokens: 200,
             models: { [dailyModelKey('grok', 'grok-4')]: 200 },
           },
           {
-            project: 'ai-usage',
+            project: 'quotern',
             tokens: 100,
             models: { [dailyModelKey('codex', 'gpt-5')]: 100 },
           },
@@ -251,7 +251,7 @@ test('project usage decodes URI-encoded cwd and merges with folder name', () => 
     {
       projectRows: [
         {
-          project: '%2FUsers%2Fme%2Fcode%2Fai-usage',
+          project: '%2FUsers%2Fme%2Fcode%2Fquotern',
           tokens: 200,
           costUsd: 2,
           pct: 66.7,
@@ -266,7 +266,7 @@ test('project usage decodes URI-encoded cwd and merges with folder name', () => 
           ],
         },
         {
-          project: 'ai-usage',
+          project: 'quotern',
           tokens: 100,
           costUsd: 1,
           pct: 33.3,
@@ -286,12 +286,12 @@ test('project usage decodes URI-encoded cwd and merges with folder name', () => 
 
   const rangeView = buildDashboardDataFromDataset(dataset, 7);
   assert.equal(rangeView.projectModelUsage.length, 1);
-  assert.equal(rangeView.projectModelUsage[0]?.project, 'ai-usage');
-  assert.equal(rangeView.projectModelUsage[0]?.label, 'ai-usage');
+  assert.equal(rangeView.projectModelUsage[0]?.project, 'quotern');
+  assert.equal(rangeView.projectModelUsage[0]?.label, 'quotern');
   assert.equal(rangeView.projectModelUsage[0]?.tokens, 300);
   assert.equal(rangeView.projectModelUsage[0]?.models.length, 2);
   assert.ok(
-    rangeView.distributions.projects.some((row) => row.label === 'ai-usage'),
+    rangeView.distributions.projects.some((row) => row.label === 'quotern'),
   );
   assert.ok(
     !rangeView.distributions.projects.some((row) => row.label.includes('%2F')),
@@ -299,7 +299,7 @@ test('project usage decodes URI-encoded cwd and merges with folder name', () => 
 
   const dayView = projectDashboardForDate(rangeView, yesterday);
   assert.equal(dayView.projectModelUsage.length, 1);
-  assert.equal(dayView.projectModelUsage[0]?.project, 'ai-usage');
+  assert.equal(dayView.projectModelUsage[0]?.project, 'quotern');
   assert.equal(dayView.projectModelUsage[0]?.tokens, 300);
 });
 

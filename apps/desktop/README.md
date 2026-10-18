@@ -1,13 +1,13 @@
 # quotern-desktop
 
-Electron 桌面客户端：与 CLI 共用 `~/.ai-usage` 数据。主进程管理本地 API 和窗口，通常由 utilityProcess 执行 Core 采集。职责和恢复边界见[运行维护注意事项](../../docs/runtime-notes.md)。
+Electron 桌面客户端：与 CLI 共用 `~/.quotern` 数据。主进程管理本地 API 和窗口，通常由 utilityProcess 执行 Core 采集。职责和恢复边界见[运行维护注意事项](../../docs/runtime-notes.md)。
 
 ## 当前能力
 
 - 主进程加载配置、注册 Hook 并启动采集 worker，应用结果到 `BucketStore`；`notify.signal` 和后台轮询驱动采集，空闲轮询从 1 分钟退避到 2、5 分钟
-- 共用 `~/.ai-usage/bin/notify.sh` 或 Windows 的 `notify.cmd` / `notify.ps1`（纯信号，不 spawn CLI）；由桌面持有 `tud.pid` 执行本地采集
+- 共用 `~/.quotern/bin/notify.sh` 或 Windows 的 `notify.cmd` / `notify.ps1`（纯信号，不 spawn CLI）；由桌面持有 `tud.pid` 执行本地采集
 - 启动时优先清掉 CLI（含 launchd / Windows 计划任务自启）并强制抢占 runtime，不再降级为 observer
-- 心跳文件 `~/.ai-usage/tud.heartbeat`：运行中续期；runtime 挂掉会自动拉起。对端桌面心跳过期时，新实例会 kill 旧进程再启动
+- 心跳文件 `~/.quotern/tud.heartbeat`：运行中续期；runtime 挂掉会自动拉起。对端桌面心跳过期时，新实例会 kill 旧进程再启动
 - `config.json` 损坏时尝试备份为 `config.json.bak.<ts>` 并重建，优先保留设备标识
 - 通过 **内存 Hono local-api**（不占 :8452）经 IPC 向渲染层提供与 CLI 相同的 `/functions/tud-*` 契约
 - Dashboard / 设置读同一本地 queue
@@ -51,7 +51,7 @@ pnpm --filter quotern-desktop test
 
 | | CLI (`quotern start`) | Desktop |
 |--|--|--|
-| 数据目录 | `~/.ai-usage` | 同左 |
+| 数据目录 | `~/.quotern` | 同左 |
 | Hook | 同一组平台信号脚本 | 同左（启动时自动注册） |
 | 读数方式 | HTTP `:8452` | 主进程 Core + IPC |
 | Sync / poll | owner 时有；遇桌面 owner 则观察模式 | 启动即 owner：先停 CLI 再独占 sync |

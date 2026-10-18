@@ -37,7 +37,7 @@ const sharedRenderPlugins = () => [
  *  - preload:  预加载入口 src/preload/index.ts     → out/preload/index.js
  *  - renderer: index.html（面板 + 托盘）
  *
- * Main 嵌入 quotern-core（读 ~/.ai-usage，内存 local-api）；renderer 经 IPC 取数。
+ * Main 嵌入 quotern-core（读 ~/.quotern，内存 local-api）；renderer 经 IPC 取数。
  *
  * quotern-core / quotern-i18n / hono 为纯 ESM（exports 仅有 import），Electron main 产物是 CJS，
  * 不能 require 它们 — 打进 main bundle，避免 ERR_PACKAGE_PATH_NOT_EXPORTED。

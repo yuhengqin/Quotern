@@ -11,7 +11,7 @@
  *   node scripts/monitor-app-usage.mjs --log /tmp/tud-cpu.jsonl   # 同时落盘采样数据
  *
  * 打开 http://localhost:4650 查看实时曲线。
- * 会自动 tail ~/.ai-usage/logs/sync.log，把每轮同步的开始/完成/出错
+ * 会自动 tail ~/.quotern/logs/sync.log，把每轮同步的开始/完成/出错
  * （含 reason：poll / notify.signal / startup 和耗时）标成竖线，
  * 方便对照后台轮询和"点同步"时的 CPU 峰值。页面上也有手动"标记"按钮。
  */
@@ -38,7 +38,7 @@ const workspacePattern = fileURLToPath(new URL('../', import.meta.url))
 const DEFAULT_PATTERN =
   `Quotern\\.app|tud-sync-worker|${workspacePattern}.*electron/dist/Electron\\.app`;
 const PATTERN = new RegExp(argValue('pattern', DEFAULT_PATTERN));
-const DATA_DIR = process.env.TUD_DATA_DIR || join(homedir(), '.ai-usage');
+const DATA_DIR = process.env.TUD_DATA_DIR || join(homedir(), '.quotern');
 const SYNC_DONE_PATH = join(DATA_DIR, 'sync.done');
 const SYNC_LOG_PATH = join(DATA_DIR, 'logs', 'sync.log');
 

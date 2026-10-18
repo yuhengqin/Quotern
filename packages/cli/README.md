@@ -21,7 +21,7 @@ quotern service start
 
 Linux 后台服务依赖 systemd 用户实例（`systemctl --user`）。无 systemd 时改用 `quotern start` 前台运行。
 
-首次启动会写入数据目录 `~/.ai-usage/`，尝试注册 Claude / Codex Hook，并同步本地用量。
+首次启动会写入数据目录 `~/.quotern/`，尝试注册 Claude / Codex Hook，并同步本地用量。
 
 常用管理：
 
@@ -62,12 +62,12 @@ quotern sync --source=minimax-code    # MiniMax Code 桌面端 / mcode CLI（别
 
 ## 数据与同步
 
-- 数据目录：`~/.ai-usage/`
+- 数据目录：`~/.quotern/`
 - Claude / Codex：Hook 写入信号，由常驻进程调度同步；另有后台轮询补充
 - Cursor：轮询模式（无 Hook）
 - 本机用量保存在本地统计队列。
 
-调试日志：`~/.ai-usage/logs/notify.log`、`~/.ai-usage/logs/sync.log`。
+调试日志：`~/.quotern/logs/notify.log`、`~/.quotern/logs/sync.log`。
 
 服务注册、观察模式与排障边界见[运行维护注意事项](../../docs/runtime-notes.md)。
 

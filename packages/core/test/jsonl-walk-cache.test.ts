@@ -56,14 +56,14 @@ test('accumulateBucket decodes URI-encoded cwd and merges with folder name', () 
     state,
     'grok',
     'grok-4',
-    '%2FUsers%2Fme%2Fcode%2Fai-usage',
+    '%2FUsers%2Fme%2Fcode%2Fquotern',
     hour,
     tokenDelta(200),
   );
-  accumulateBucket(state, 'grok', 'grok-4', 'ai-usage', hour, tokenDelta(100));
+  accumulateBucket(state, 'grok', 'grok-4', 'quotern', hour, tokenDelta(100));
 
   assert.equal(state.size, 1);
   const row = [...state.values()][0]!;
-  assert.equal(row.project, 'ai-usage');
+  assert.equal(row.project, 'quotern');
   assert.equal(row.total_tokens, 300);
 });

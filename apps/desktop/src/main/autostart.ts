@@ -1,7 +1,7 @@
 /**
  * Desktop open-at-login preference + OS login item registration.
  *
- * Preference lives in Electron userData (not ~/.ai-usage/config.json).
+ * Preference lives in Electron userData (not ~/.quotern/config.json).
  * setLoginItemSettings only runs when packaged so `electron-vite dev`
  * does not register the Electron binary itself.
  */

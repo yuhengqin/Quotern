@@ -78,7 +78,7 @@ pnpm --filter quotern-desktop test
 
 新后台服务使用 macOS `dev.quotern.cli`、Windows `quotern` 计划任务和 Linux `quotern.service`。注册或停止时一并清理旧名称的自启项；Desktop 接管时也会清理新旧 macOS / Windows CLI 自启项。桌面 `appId` 为 `dev.quotern.desktop`，Windows NSIS GUID 保持原安装身份，便于升级。
 
-统计仍保存在 `~/.ai-usage/`。设备身份路径的回退规则见[架构注意事项](./architecture-notes.md)。桌面启动会复用已有旧 userData，以保留主题、托盘设置、浏览器存储及更新恢复标记；新安装使用新名称。旧标识仅用于升级兼容及历史发布记录。
+统计仍保存在 `~/.quotern/`。设备身份路径的回退规则见[架构注意事项](./architecture-notes.md)。桌面启动会复用已有旧 userData，以保留主题、托盘设置、浏览器存储及更新恢复标记；新安装使用新名称。旧标识仅用于升级兼容及历史发布记录。
 
 源码、下载与发布目标统一为 `yuhengqin/Quotern`。桌面更新读取随安装包生成的 GitHub 配置及 Release 附件；源码不维护静态更新清单。私有仓库更新凭据由客户端环境提供，说明见 [Desktop 自动更新发布](../apps/desktop/README.md#自动更新发布)。
 
@@ -90,7 +90,7 @@ pnpm --filter quotern-desktop test
 
 图库最多三张。第四张完成裁剪后须明确选择替换对象，默认建议最久未使用的一张；新增、替换和删除都在持久化成功后更新图库。每次打开分享默认使用最新保存的自定义背景，手动选择旧图只更新使用时间。
 
-背景图库由 Core 保存在 `dataDir/share-backgrounds/`（默认 `~/.ai-usage/share-backgrounds/`）：`index.json` 保存元数据及迁移收据，图片按内容哈希保存为独立二进制文件。浏览器走 HTTP，Desktop 走通用 local-api IPC，访问同一数据目录的所有端共享素材；当前选择属于各自分享会话。读写均使用独立跨进程文件锁，CLI observer 和 Desktop 并行使用时不会覆盖彼此的修改。打开分享或窗口重新获得焦点时自动读取最新图库，裁剪和上传期间暂停自动刷新；仅在读取失败或迁移未完成时显示对应重试入口。
+背景图库由 Core 保存在 `dataDir/share-backgrounds/`（默认 `~/.quotern/share-backgrounds/`）：`index.json` 保存元数据及迁移收据，图片按内容哈希保存为独立二进制文件。浏览器走 HTTP，Desktop 走通用 local-api IPC，访问同一数据目录的所有端共享素材；当前选择属于各自分享会话。读写均使用独立跨进程文件锁，CLI observer 和 Desktop 并行使用时不会覆盖彼此的修改。打开分享或窗口重新获得焦点时自动读取最新图库，裁剪和上传期间暂停自动刷新；仅在读取失败或迁移未完成时显示对应重试入口。
 
 首次在原浏览器、原地址打开分享时，会读取旧 IndexedDB `quotern-share-backgrounds`；Desktop 读取旧 userData 的 `share-backgrounds.json`。有空位时自动导入，按图片内容去重并保留时间，满额的图片显示待迁移提示，用户删除不需要的共享背景后可「重试迁移」。旧 IndexedDB / JSON 始终保留为备份；Core 记录已迁移图片的内容收据，重试或删除已导入图片后重新打开，不会重复导入或复活。旧源读取失败不影响已有共享图库。不同浏览器及不同 origin 的旧数据只能由对应浏览器和地址读取，需分别打开一次。备份新图库时复制整个 `share-backgrounds/`，不要只复制索引。
 

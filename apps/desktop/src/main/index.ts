@@ -77,7 +77,7 @@ import { LOCALE_CHANGED_CHANNEL, LOCALE_GET_CHANNEL, LOCALE_SET_CHANNEL } from '
 import { createLocaleController } from './locale-controller';
 import { NATIVE_MESSAGES } from './native-messages';
 import {
-  DEFAULT_DATA_DIR,
+  resolveDataDir,
   evictRuntimeKind,
   isHeartbeatFresh,
   readRuntimeHeartbeat,
@@ -100,7 +100,7 @@ const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
 /**
  * quotern-desktop main entry.
  *
- * Opens the desktop UI while the shared ~/.ai-usage Core runtime starts.
+ * Opens the desktop UI while the shared ~/.quotern Core runtime starts.
  */
 
 const windows = new Set<DesktopWindow>();
@@ -128,7 +128,7 @@ const mainWindowLauncher = createMainWindowLauncher(showMainWindowNow, () => {
 });
 
 async function acquireDesktopInstanceLock(): Promise<boolean> {
-  const dir = DEFAULT_DATA_DIR;
+  const dir = resolveDataDir();
   if (!isHeartbeatFresh(await readRuntimeHeartbeat(dir))) {
     console.warn('[tud-desktop] stale desktop heartbeat; evicting leftover instances');
     try {

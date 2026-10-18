@@ -167,7 +167,7 @@ export function buildSyncStatus(
       qoder: poll('qoder', 'Qoder / Qoder CN 使用本地 SQLite / transcript，定时轮询同步', countQoderRows(rows)),
       trae: poll(
         'trae',
-        'Trae / Trae CN 需 SQLCipher 密钥（~/.ai-usage/trae-keys/）；无密钥时 sync 会 skipped',
+        'Trae / Trae CN 需 SQLCipher 密钥（~/.quotern/trae-keys/）；无密钥时 sync 会 skipped',
         countTraeRows(rows),
       ),
       gemini: poll('gemini', 'Gemini CLI 读取 ~/.gemini/tmp 会话，定时轮询同步', countGeminiRows(rows)),

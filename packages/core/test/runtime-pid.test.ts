@@ -46,7 +46,7 @@ test('parseRuntimeOwner accepts JSON and legacy plain pid', () => {
 });
 
 test('claimRuntimeOwner becomes owner when no pid', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   const claim = await claimRuntimeOwner(dir, {
     pid: process.pid,
     kind: 'cli',
@@ -72,7 +72,7 @@ test('claimRuntimeOwner becomes owner when no pid', async () => {
 });
 
 test('claimRuntimeOwner returns observer with owner kind', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   await writeRuntimeOwner({ pid: process.pid, kind: 'desktop' }, dir);
   const claim = await claimRuntimeOwner(dir, {
     pid: process.pid + 99999,
@@ -86,14 +86,14 @@ test('claimRuntimeOwner returns observer with owner kind', async () => {
 });
 
 test('legacy leftover pid of an unrelated live process is cleared', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   await writeFile(pidFilePath(dir), `${process.pid}\n`, 'utf8');
   assert.equal(await getRunningOwner(dir), null);
   assert.equal(await getRunningPid(dir), null);
 });
 
 test('stale desktop pid without matching process is cleared', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   await writeFile(
     pidFilePath(dir),
     `${JSON.stringify({ pid: process.pid, kind: 'desktop' })}\n`,
@@ -113,7 +113,7 @@ test('readProcessStart uses C locale weekday/month names', () => {
 });
 
 test('startedAt mismatch is treated as PID reuse', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   await writeFile(
     pidFilePath(dir),
     `${JSON.stringify({
@@ -127,7 +127,7 @@ test('startedAt mismatch is treated as PID reuse', async () => {
 });
 
 test('releaseRuntimeOwner only clears own pid', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   await writePid(process.pid, dir, 'desktop');
   await releaseRuntimeOwner(dir, process.pid + 1);
   assert.equal(await getRunningPid(dir), process.pid);
@@ -255,7 +255,7 @@ test('stopPid refuses to signal the current process', async () => {
 });
 
 test('claimRuntimeOwner force takes over a live owner', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-pid-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-pid-'));
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], {
     stdio: 'ignore',
   });
@@ -290,7 +290,7 @@ test('claimRuntimeOwner force takes over a live owner', async () => {
 });
 
 test('heartbeat freshness expires after stale window or dead pid', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-hb-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-hb-'));
   await touchRuntimeHeartbeat({ pid: process.pid, kind: 'desktop' }, dir);
   const fresh = await readRuntimeHeartbeat(dir);
   assert.ok(fresh);

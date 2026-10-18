@@ -40,7 +40,7 @@ OpenCode Go 保留五小时、周、月三种窗口，兼容官方 `usage.rollin
 
 历史保存在 Electron `userData/quota/history.json`，设置在同目录的 `preferences.json`。开发模式位于本 worktree 的 `.quotern-dev/electron/` 下。历史只保存不可逆账号键、来源、窗口身份、时间、百分比和重置时间，保留 90 天；不保存令牌或原始供应商响应。凭据指纹与历史账号键分离，稳定账号 ID 优先；只有不透明凭据时保守使用指纹，凭据更新可能开启新的历史序列。无法确认账号的本地引擎只显示当前额度。
 
-CLI 将额度历史与设置保存在其数据目录的 `quota/` 下（正式运行默认 `~/.ai-usage/quota/`，隔离开发为 `.quotern-dev/data/quota/`）。两端不共享这两个可写文件，也不自动迁移对方的偏好和历史，避免同时运行时互相覆盖。
+CLI 将额度历史与设置保存在其数据目录的 `quota/` 下（正式运行默认 `~/.quotern/quota/`，隔离开发为 `.quotern-dev/data/quota/`）。两端不共享这两个可写文件，也不自动迁移对方的偏好和历史，避免同时运行时互相覆盖。
 
 CLI 的 Node 网络与 Desktop 的 Chromium 网络配置不同。若网络需要代理，已设置 `HTTP_PROXY` / `HTTPS_PROXY` 仍可能不足；使用 Node 24 时，在启动 CLI 的同一终端先设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY = '1'`）。这让 Node 的 `fetch` 使用已有环境代理，不会修改系统代理，见 [Node 官方说明](https://nodejs.org/docs/v24.0.2/api/cli.html#node_use_env_proxy1)。该开关不适用于所有早期 Node 版本。
 

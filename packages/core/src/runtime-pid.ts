@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { DEFAULT_DATA_DIR } from './paths.js';
+import { resolveDataDir } from './paths.js';
 
 /** Who holds exclusive sync/upload ownership in `tud.pid`. */
 export type RuntimeKind = 'cli' | 'desktop';
@@ -18,7 +18,7 @@ export interface RuntimeOwner {
   startedAt?: string;
 }
 
-export function pidFilePath(dataDir = DEFAULT_DATA_DIR): string {
+export function pidFilePath(dataDir = resolveDataDir()): string {
   return join(dataDir, 'tud.pid');
 }
 
@@ -328,7 +328,7 @@ export function parseRuntimeOwner(raw: string): RuntimeOwner | null {
 }
 
 export async function readRuntimeOwner(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<RuntimeOwner | null> {
   const path = pidFilePath(dataDir);
   if (!existsSync(path)) return null;
@@ -342,14 +342,14 @@ export async function readRuntimeOwner(
 
 /** Pid-only helper; use `readRuntimeOwner` when `kind` is needed. */
 export async function readPid(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<number | null> {
   return (await readRuntimeOwner(dataDir))?.pid ?? null;
 }
 
 export async function writeRuntimeOwner(
   owner: RuntimeOwner,
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<void> {
   await mkdir(dataDir, { recursive: true });
   const startedAt = owner.startedAt ?? readProcessStart(owner.pid) ?? undefined;
@@ -364,13 +364,13 @@ export async function writeRuntimeOwner(
 /** Write owner record; defaults `kind` to `cli` for callers that only pass a pid. */
 export async function writePid(
   pid: number,
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
   kind: RuntimeKind = 'cli',
 ): Promise<void> {
   await writeRuntimeOwner({ pid, kind }, dataDir);
 }
 
-export async function clearPid(dataDir = DEFAULT_DATA_DIR): Promise<void> {
+export async function clearPid(dataDir = resolveDataDir()): Promise<void> {
   const path = pidFilePath(dataDir);
   if (!existsSync(path)) return;
   try {
@@ -381,7 +381,7 @@ export async function clearPid(dataDir = DEFAULT_DATA_DIR): Promise<void> {
 }
 
 export async function getRunningOwner(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<RuntimeOwner | null> {
   const owner = await readRuntimeOwner(dataDir);
   if (owner == null) return null;
@@ -394,7 +394,7 @@ export async function getRunningOwner(
 
 /** Pid-only helper; use `getRunningOwner` when `kind` is needed. */
 export async function getRunningPid(
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = resolveDataDir(),
 ): Promise<number | null> {
   return (await getRunningOwner(dataDir))?.pid ?? null;
 }

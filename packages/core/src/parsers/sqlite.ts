@@ -154,7 +154,7 @@ export function readSqliteWithSnapshot<T>(
       // fall through: treat unstat-able DB as too big to snapshot
     }
     if (dbSize > MAX_SNAPSHOT_BYTES) throw err;
-    const snapshotDir = mkdtempSync(join(tmpdir(), 'ai-usage-sqlite-'));
+    const snapshotDir = mkdtempSync(join(tmpdir(), 'quotern-sqlite-'));
     const snapshotPath = join(snapshotDir, 'state.vscdb');
     try {
       copyFileSync(dbPath, snapshotPath);

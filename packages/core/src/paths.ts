@@ -7,7 +7,7 @@ export function isIsolatedDevRuntime(): boolean {
 }
 
 function defaultDataDir(): string {
-  const production = join(homedir(), '.ai-usage');
+  const production = join(homedir(), '.quotern');
   if (!isIsolatedDevRuntime()) return production;
   const dataDir = process.env.QUOTERN_DATA_DIR?.trim();
   const configHome = process.env.QUOTERN_CONFIG_HOME?.trim();
@@ -56,11 +56,8 @@ export function pollIntervalLabel(): string {
 }
 
 export function resolveDataDir(override?: string): string {
-  if (override?.trim()) {
-    const d = override.trim();
-    return d.startsWith('~') ? join(homedir(), d.slice(1)) : d;
-  }
-  return DEFAULT_DATA_DIR;
+  const d = override?.trim();
+  return d ? (d.startsWith('~') ? join(homedir(), d.slice(1)) : d) : DEFAULT_DATA_DIR;
 }
 
 export function configPath(dataDir: string): string {
@@ -69,7 +66,7 @@ export function configPath(dataDir: string): string {
 
 /**
  * XDG / AppData config root for durable install identity (survives wiping
- * `~/.ai-usage`). Override with `QUOTERN_CONFIG_HOME` in tests.
+ * `~/.quotern`). Override with `QUOTERN_CONFIG_HOME` in tests.
  */
 export function quoternUserConfigDir(): string {
   const override = process.env.QUOTERN_CONFIG_HOME?.trim();
@@ -107,7 +104,7 @@ export function cacheDir(dataDir: string): string {
   return join(dataDir, 'cache');
 }
 
-/** Sealed (closed-day) daily aggregate cache under ~/.ai-usage/cache/. */
+/** Sealed (closed-day) daily aggregate cache under ~/.quotern/cache/. */
 export function sealedDailyCachePath(dataDir: string): string {
   return join(cacheDir(dataDir), 'daily-sealed.json');
 }

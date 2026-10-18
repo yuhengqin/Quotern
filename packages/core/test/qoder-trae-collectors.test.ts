@@ -71,7 +71,7 @@ test('aggregateForIngest keeps collectors separate', () => {
 });
 
 test('parseClaudeIncremental tags cli vs desktop collectors', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-collectors-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-collectors-'));
   const cliProjects = join(tempHome, '.claude', 'projects', 'proj-cli');
   const desktopProjects = join(
     appSupportDir(tempHome, 'Claude'),
@@ -130,7 +130,7 @@ test('parseClaudeIncremental tags cli vs desktop collectors', async () => {
 });
 
 test('parseQoderIncremental reads IDE local.db with collector split', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-qoder-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-qoder-'));
   const cnDbDir = join(
     appSupportDir(tempHome, 'QoderCN'),
     'SharedClientCache',
@@ -225,7 +225,7 @@ function encryptPage(key: Buffer, plaintextPage: Buffer, pageNumber: number): Bu
 }
 
 test('trae decrypt + parseTraeIncremental via env decrypted db', async () => {
-  const temp = await mkdtemp(join(tmpdir(), 'ai-usage-trae-'));
+  const temp = await mkdtemp(join(tmpdir(), 'quotern-trae-'));
   const plainPath = join(temp, 'plain.db');
   const db = new DatabaseSync(plainPath);
   db.exec(`
@@ -279,7 +279,7 @@ test('trae decrypt + parseTraeIncremental via env decrypted db', async () => {
 });
 
 test('parseTraeIncremental skips when encrypted DB exists but key missing', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-trae-nokey-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-trae-nokey-'));
   const dbDir = join(appSupportDir(tempHome, 'Trae CN'), 'ModularData', 'ai-agent');
   await mkdir(dbDir, { recursive: true });
   // Not a real SQLCipher DB — existence alone triggers key-required skip.
@@ -287,7 +287,7 @@ test('parseTraeIncremental skips when encrypted DB exists but key missing', asyn
 
   const restoreEnv = pinHomeEnv(tempHome);
   try {
-    const dataDir = join(tempHome, '.ai-usage');
+    const dataDir = join(tempHome, '.quotern');
     await mkdir(dataDir, { recursive: true });
     const { result } = await parseTraeIncremental({}, '2020-01-01T00:00:00.000Z', {
       dataDir,
@@ -300,7 +300,7 @@ test('parseTraeIncremental skips when encrypted DB exists but key missing', asyn
 });
 
 test('verifyTraeSqlcipherKey accepts round-trip encrypted page', async () => {
-  const temp = await mkdtemp(join(tmpdir(), 'ai-usage-trae-key-'));
+  const temp = await mkdtemp(join(tmpdir(), 'quotern-trae-key-'));
   const key = randomBytes(32);
   const plainPage = Buffer.alloc(PAGE_SIZE, 0);
   Buffer.from('SQLite format 3\0').copy(plainPage, 0);

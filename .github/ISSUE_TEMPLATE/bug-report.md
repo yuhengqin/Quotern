@@ -59,7 +59,7 @@ Dashboard：CLI 包版本；源码开发时注明提交与启动命令
 
 <!--
 附上截图或完整报错文案。
-日志在 ~/.ai-usage/logs/ 下：daemon.log（本地服务）、sync.log（本地采集）、notify.log（通知）。
+日志在 ~/.quotern/logs/ 下：daemon.log（本地服务）、sync.log（本地采集）、notify.log（通知）。
 贴关键片段即可，注意先去掉里面的敏感信息。
 -->
 

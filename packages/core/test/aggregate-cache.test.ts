@@ -19,7 +19,7 @@ function makeRow(
   totalTokens: number,
   source = 'codex',
   model = 'gpt-5',
-  project = 'ai-usage',
+  project = 'quotern',
 ): QueueBucket {
   return {
     hour_start: hourStart,
@@ -162,7 +162,7 @@ test('AggregateCache merge keeps 8-decimal costs so two 4.516 days do not become
         hour_start: `${twoDaysAgo}T04:00:00.000Z`,
         source: 'cursor',
         model: 'composer-1',
-        project: 'ai-usage',
+        project: 'quotern',
         input_tokens: 0,
         output_tokens: 0,
         cached_input_tokens: 0,
@@ -176,7 +176,7 @@ test('AggregateCache merge keeps 8-decimal costs so two 4.516 days do not become
         hour_start: `${yesterday}T04:00:00.000Z`,
         source: 'cursor',
         model: 'composer-1',
-        project: 'ai-usage',
+        project: 'quotern',
         input_tokens: 0,
         output_tokens: 0,
         cached_input_tokens: 0,

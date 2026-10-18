@@ -285,8 +285,8 @@ describe('dashboard card and trend consistency', () => {
 describe('filterProjectRowsBySources', () => {
   const rows = [
     {
-      project: 'ai-usage',
-      label: 'ai-usage',
+      project: 'quotern',
+      label: 'quotern',
       tokens: 1000,
       costUsd: 0.01,
       pct: 50,
@@ -332,7 +332,7 @@ describe('filterProjectRowsBySources', () => {
   it('keeps matching models and drops empty projects', () => {
     const result = filterProjectRowsBySources(rows, ['claude']);
     assert.equal(result.length, 1);
-    assert.equal(result[0]?.project, 'ai-usage');
+    assert.equal(result[0]?.project, 'quotern');
     assert.equal(result[0]?.tokens, 300);
     assert.equal(result[0]?.models.length, 1);
     assert.equal(result[0]?.models[0]?.source, 'claude');

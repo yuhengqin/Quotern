@@ -55,7 +55,7 @@ const FORK_FILE = [
 ].join('\n');
 
 test('parseCodexIncremental normalizes input and skips fork replay', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '06', '09');
   await mkdir(sessionsDir, { recursive: true });
 
@@ -75,7 +75,7 @@ test('parseCodexIncremental normalizes input and skips fork replay', async () =>
 });
 
 test('parseCodexIncremental reads cache write alias and preserves the canonical field', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-cache-write-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-cache-write-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions');
   await mkdir(sessionsDir, { recursive: true });
   const cases = [
@@ -108,7 +108,7 @@ test('parseCodexIncremental reads cache write alias and preserves the canonical 
 });
 
 test('parseCodexIncremental keeps cache write cumulative deltas across scans', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-cache-delta-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-cache-delta-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions');
   await mkdir(sessionsDir, { recursive: true });
   const filePath = join(sessionsDir, 'rollout-cache-delta.jsonl');
@@ -142,7 +142,7 @@ test('parseCodexIncremental keeps cache write cumulative deltas across scans', a
 });
 
 test('codexHomeCandidates splits env path lists and deduplicates roots', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-env-list-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-env-list-'));
   const snapshot = snapshotCodexEnv();
   process.env.HOME = tempHome;
   process.env.USERPROFILE = tempHome;
@@ -157,7 +157,7 @@ test('codexHomeCandidates splits env path lists and deduplicates roots', async (
 });
 
 test('codexHomeCandidates reads CC Switch override and keeps default ~/.codex', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-cc-switch-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-cc-switch-'));
   const ccSwitchDir = join(tempHome, '.cc-switch');
   const alternateCodex = join(tempHome, 'codex-alt');
   await mkdir(ccSwitchDir, { recursive: true });
@@ -184,7 +184,7 @@ test('codexHomeCandidates reads CC Switch override and keeps default ~/.codex', 
 });
 
 test('codexHomeCandidates keeps CC Switch and ~/.codex when CODEX_HOME is set', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-cc-switch-env-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-cc-switch-env-'));
   const ccSwitchDir = join(tempHome, '.cc-switch');
   const alternateCodex = join(tempHome, 'codex-alt');
   await mkdir(ccSwitchDir, { recursive: true });
@@ -216,7 +216,7 @@ const EXTRA_TOKEN_LINE =
   '{"type":"event_msg","timestamp":"2026-06-09T20:47:00.000Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":30,"cached_input_tokens":0,"output_tokens":5,"reasoning_output_tokens":0,"total_tokens":35},"model":"gpt-5.4"}}}';
 
 test('parseCodexIncremental reuses cached session meta for unchanged files', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '06', '12');
   await mkdir(sessionsDir, { recursive: true });
   const filePath = join(sessionsDir, 'rollout-meta-cache.jsonl');
@@ -250,7 +250,7 @@ test('parseCodexIncremental reuses cached session meta for unchanged files', asy
 });
 
 test('parseCodexIncremental uses the model from thread settings', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '06', '10');
   await mkdir(sessionsDir, { recursive: true });
   await writeFile(
@@ -314,7 +314,7 @@ test('modelFromRolloutEvent reads turn_context, thread settings, and world_state
 });
 
 test('parseCodexIncremental persists lastModel across tail scans without info.model', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '08', '21');
   await mkdir(sessionsDir, { recursive: true });
   const filePath = join(sessionsDir, 'rollout-last-model.jsonl');
@@ -335,7 +335,7 @@ test('parseCodexIncremental persists lastModel across tail scans without info.mo
 });
 
 test('parseCodexIncremental recovers lastModel from the skipped prefix', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '08', '21');
   await mkdir(sessionsDir, { recursive: true });
   const filePath = join(sessionsDir, 'rollout-prefix-recover.jsonl');
@@ -355,7 +355,7 @@ test('parseCodexIncremental recovers lastModel from the skipped prefix', async (
 });
 
 test('parseCodexIncremental uses the model from world_state', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '08', '21');
   await mkdir(sessionsDir, { recursive: true });
   await writeFile(
@@ -376,7 +376,7 @@ test('parseCodexIncremental uses the model from world_state', async () => {
 });
 
 test('parseCodexIncremental folds early unknown token_count into the later model', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '08', '21');
   await mkdir(sessionsDir, { recursive: true });
   await writeFile(
@@ -401,7 +401,7 @@ test('parseCodexIncremental folds early unknown token_count into the later model
 });
 
 test('parseCodexIncremental does not lose a record written across two scans', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-codex-partial-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-codex-partial-'));
   const sessionsDir = join(tempHome, '.codex', 'sessions', '2026', '06', '09');
   await mkdir(sessionsDir, { recursive: true });
   const filePath = join(sessionsDir, 'rollout-partial.jsonl');

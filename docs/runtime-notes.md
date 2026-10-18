@@ -4,6 +4,8 @@
 
 ## Runtime owner 与 CLI 服务
 
+正式运行统一使用 `~/.quotern/`，不提供其他目录名称的识别、自动迁移或兼容入口。隔离开发继续使用当前 worktree 的 `.quotern-dev/data`。
+
 同一数据目录的常驻采集由一个 owner 管理，`tud.pid` 记录 `{ pid, kind }`。Desktop 启动时先处理 CLI 自启，再停止 CLI 并接管；macOS / Windows 有对应的 CLI 自启撤销实现。Linux 的撤销分支没有实现，不能据其他平台行为作保证。
 
 Desktop 已运行时，另开 `quotern start` 会作为 observer 提供浏览器面板，通过同步完成信号刷新读数，不建立自己的常驻采集调度。`quotern service stop` 停止 CLI 服务时应保留 Desktop owner。
@@ -59,8 +61,8 @@ Desktop 主进程维护窗口、IPC、BucketStore 和 local-api，通常把同�
 运行时只读取 Quotern 的设备身份和 Desktop 配置目录，识别 Quotern 进程及自启服务。已有安装在升级前需完成一次显式迁移。
 
 1. 退出 Desktop，停止 CLI；如曾注册旧名称的自启服务，先用原版本的 `service stop` 撤销它。迁移过程中保持应用关闭。
-2. 备份 `~/.ai-usage/`。统计队列、游标、缓存及配置继续使用该目录，无需改名。
-3. 将原设备身份目录完整复制到新目录：Windows 为 `%APPDATA%/quotern`，其他平台为 `$XDG_CONFIG_HOME/quotern`，未设置时为 `~/.config/quotern`；使用目录覆盖变量时改为 `QUOTERN_CONFIG_HOME`。确认 `device-id` 与 `~/.ai-usage/config.json` 中的 `deviceId` 一致。
+2. 备份当前统计数据，并确认正式统计目录为 `~/.quotern/`。
+3. 将原设备身份目录完整复制到新目录：Windows 为 `%APPDATA%/quotern`，其他平台为 `$XDG_CONFIG_HOME/quotern`，未设置时为 `~/.config/quotern`；使用目录覆盖变量时改为 `QUOTERN_CONFIG_HOME`。确认 `device-id` 与 `~/.quotern/config.json` 中的 `deviceId` 一致。
 4. 如有 Desktop 设置，将原 Electron `userData` 整个目录复制到新版本的配置目录。正式安装通常为 `appData/Quotern`，仓库开发版为 `appData/quotern-desktop`；`appData` 在 macOS 为 `~/Library/Application Support`，Windows 为 `%APPDATA%`，Linux 为 `$XDG_CONFIG_HOME` 或 `~/.config`。需保留 `desktop-prefs.json`、`auto-update.json`、`Local Storage`、数据库及其他会话文件。
 5. 启动 Quotern，核对设备身份、统计数据和设置。如需自启，用 `quotern service start` 重新注册。
 

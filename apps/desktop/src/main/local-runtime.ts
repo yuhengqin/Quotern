@@ -13,7 +13,7 @@ import {
   createAggregateCache,
   createApplyAfterSync,
   createLocalApiApp,
-  DEFAULT_DATA_DIR,
+  resolveDataDir,
   isIsolatedDevRuntime,
   evictRuntimeKind,
   getHookStatus,
@@ -264,7 +264,7 @@ function buildApp(state: {
   });
 }
 
-/** Start Core runtime against the shared ~/.ai-usage data dir. */
+/** Start Core runtime against the shared ~/.quotern data dir. */
 export async function startLocalRuntime(): Promise<{
   dataDir: string;
   role: 'owner';
@@ -292,7 +292,7 @@ async function startLocalRuntimeUnlocked(): Promise<{
   await evictCliAutostart();
   await evictRuntimeKind('cli', {
     exceptPid: process.pid,
-    dataDir: DEFAULT_DATA_DIR,
+    dataDir: resolveDataDir(),
   });
 
   const { dir, config, recoveredFromCorrupt } = await loadConfig();
@@ -615,7 +615,7 @@ export async function stopLocalRuntime(): Promise<void> {
     ownedPid = false;
   }
   if (quitting) {
-    await clearRuntimeHeartbeat(runtime?.dir ?? DEFAULT_DATA_DIR);
+    await clearRuntimeHeartbeat(runtime?.dir ?? resolveDataDir());
   }
   lastPublishedCalendarDay = '';
   runtime = null;

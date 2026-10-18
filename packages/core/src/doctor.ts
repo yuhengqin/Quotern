@@ -6,7 +6,7 @@ import {
   loadConfig,
 } from './config.js';
 import {
-  DEFAULT_DATA_DIR,
+  resolveDataDir,
   DEFAULT_PORT,
   cursorsPath,
   logsDir as resolveLogsDir,
@@ -148,7 +148,7 @@ function rememberSuggestion(suggestions: string[], item: DoctorCheckItem): void 
 export async function runDoctorDiagnostics(
   options: RunDoctorOptions = {},
 ): Promise<DoctorReport> {
-  const dataDir = options.dataDir ?? DEFAULT_DATA_DIR;
+  let dataDir = resolveDataDir(options.dataDir);
   let config: TudConfig;
   let configError: string | null = null;
   let recoveredBackupPath: string | null = null;
@@ -158,6 +158,7 @@ export async function runDoctorDiagnostics(
       config = options.config;
     } else {
       const loaded = await loadConfig(dataDir);
+      dataDir = loaded.dir;
       config = loaded.config;
       if (loaded.recoveredFromCorrupt) {
         recoveredBackupPath = loaded.recoveredFromCorrupt.backupPath;

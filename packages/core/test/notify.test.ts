@@ -25,7 +25,7 @@ import {
   syncLogPath,
 } from '../src/paths.js';
 
-const DATA_DIR = '/Users/test/.ai-usage';
+const DATA_DIR = '/Users/test/.quotern';
 
 test('buildNotifySh writes signal only (no CLI/npx/node spawn sync)', () => {
   const script = buildNotifySh(DATA_DIR);
@@ -41,7 +41,8 @@ test('buildNotifySh writes signal only (no CLI/npx/node spawn sync)', () => {
   assert.doesNotMatch(script, /fallbackPkg/);
   assert.doesNotMatch(script, /'sync', '--source'/);
   assert.doesNotMatch(script, /npx/);
-  assert.doesNotMatch(script, /quotern/);
+  // The data directory includes the brand; reject CLI invocation, not paths.
+  assert.doesNotMatch(script, /\bquotern(?:\.cmd|\.js)?\s+(?:start|sync|upload)\b/);
   assert.doesNotMatch(script, /fetch\(/);
   assert.doesNotMatch(script, /tud-trigger-sync/);
   assert.doesNotMatch(script, /notify\.error/);
@@ -92,11 +93,11 @@ test('buildHookCommand uses forward slashes on Windows for Git Bash', () => {
       '"C:/Users/test/my notify/notify.cmd" --source=claude',
     );
     assert.equal(
-      buildHookCommand('C:\\Users\\test\\.ai-usage\\bin\\notify.cmd', 'codex'),
-      'C:/Users/test/.ai-usage/bin/notify.cmd --source=codex',
+      buildHookCommand('C:\\Users\\test\\.quotern\\bin\\notify.cmd', 'codex'),
+      'C:/Users/test/.quotern/bin/notify.cmd --source=codex',
     );
     assert.doesNotMatch(
-      buildHookCommand('C:\\Users\\test\\.ai-usage\\bin\\notify.cmd', 'claude'),
+      buildHookCommand('C:\\Users\\test\\.quotern\\bin\\notify.cmd', 'claude'),
       /\\/,
     );
   });
@@ -115,7 +116,7 @@ test('notifyScriptPath is platform-native (no .mjs)', () => {
 test('writeNotifyScript creates executable sh that writes notify.signal', async () => {
   if (process.platform === 'win32') return;
 
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-notify-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-notify-'));
   const notifyPath = await writeNotifyScript(dir);
   assert.ok(notifyPath.endsWith('notify.sh'));
 
@@ -136,7 +137,7 @@ test('writeNotifyScript creates executable sh that writes notify.signal', async 
 test('notify.sh recovers from legacy millisecond throttle stamps', async () => {
   if (process.platform === 'win32') return;
 
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-notify-ms-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-notify-ms-'));
   const notifyPath = await writeNotifyScript(dir);
   // Simulate leftover notify.mjs stamp (ms) that previously permanently blocked signals.
   const { writeFile } = await import('node:fs/promises');
@@ -154,7 +155,7 @@ test('notify.sh recovers from legacy millisecond throttle stamps', async () => {
 });
 
 test('writeNotifyScript clears stale throttle files', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-notify-clear-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-notify-clear-'));
   const { writeFile, access } = await import('node:fs/promises');
   const throttle = join(dir, 'notify.throttle.claude');
   await writeFile(throttle, '1785311383802', 'utf8');
@@ -182,7 +183,7 @@ test('path helpers for sync signals and logs', () => {
 });
 
 test('appendJsonLog appends JSONL and rotates at max size', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'ai-usage-log-'));
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-log-'));
   const logPath = join(dir, 'test.log');
 
   await appendJsonLog(logPath, { event: 'one' });

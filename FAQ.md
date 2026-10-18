@@ -23,24 +23,24 @@ npx quotern@latest service stop
 
 ```bash
 # macOS / Linux
-python3 -m json.tool ~/.ai-usage/config.json
+python3 -m json.tool ~/.quotern/config.json
 # 修不好则备份后让应用重建配置
-mv ~/.ai-usage/config.json ~/.ai-usage/config.json.bak
+mv ~/.quotern/config.json ~/.quotern/config.json.bak
 ```
 
 ```powershell
 # Windows
-python -m json.tool $env:USERPROFILE\.ai-usage\config.json
-Move-Item $env:USERPROFILE\.ai-usage\config.json $env:USERPROFILE\.ai-usage\config.json.bak
+python -m json.tool $env:USERPROFILE\.quotern\config.json
+Move-Item $env:USERPROFILE\.quotern\config.json $env:USERPROFILE\.quotern\config.json.bak
 ```
 
 修好或改名后，托盘退出再打开。
 
 **Case 4：残留进程 / 锁文件**
 
-先运行 `quotern doctor`、`quotern service status`，核对 `~/.ai-usage/tud.pid` 中的 PID 与实际进程。通过托盘退出桌面端、用 `quotern service stop` 停止 CLI；确认对应进程已经退出后，再处理残留 PID 文件并重开。不要仅凭命令行含仓库名批量终止进程，IDE 插件进程也可能包含该路径。
+先运行 `quotern doctor`、`quotern service status`，核对 `~/.quotern/tud.pid` 中的 PID 与实际进程。通过托盘退出桌面端、用 `quotern service stop` 停止 CLI；确认对应进程已经退出后，再处理残留 PID 文件并重开。不要仅凭命令行含仓库名批量终止进程，IDE 插件进程也可能包含该路径。
 
-日志：macOS / Linux `~/.ai-usage/logs/`，Windows `%USERPROFILE%\.ai-usage\logs\`。进程识别和恢复规则见[运行维护注意事项](./docs/runtime-notes.md)。
+日志：macOS / Linux `~/.quotern/logs/`，Windows `%USERPROFILE%\.quotern\logs\`。进程识别和恢复规则见[运行维护注意事项](./docs/runtime-notes.md)。
 
 ### Linux 上 `quotern service start` 失败？
 
@@ -64,5 +64,5 @@ systemd=true
 ```bash
 journalctl --user -u quotern
 # 以及
-less ~/.ai-usage/logs/daemon.log
+less ~/.quotern/logs/daemon.log
 ```

@@ -40,7 +40,7 @@ pnpm install
 | 可复现的缺陷 | [🐞 Bug 报告](https://github.com/yuhengqin/Quotern/issues/new?template=bug-report.md) |
 | 新功能 / 改进建议 | [🆕 需求与改进](https://github.com/yuhengqin/Quotern/issues/new?template=feature-request.md) |
 
-Bug 报告务必写清**端、版本、操作系统、复现步骤**，缺这几项我们没法定位。日志在 `~/.ai-usage/logs/` 下（`daemon.log` / `sync.log` / `notify.log`）。
+Bug 报告务必写清**端、版本、操作系统、复现步骤**，缺这几项我们没法定位。日志在 `~/.quotern/logs/` 下（`daemon.log` / `sync.log` / `notify.log`）。
 
 ## 分支规范
 
@@ -91,7 +91,7 @@ PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Window
 
 ## 按端启动
 
-数据目录：`~/.ai-usage/`。Desktop 启动会接管 runtime 并停止 CLI；Desktop 已运行时再执行 `quotern start`，CLI 以观察模式提供浏览器面板，采集仍由 Desktop 负责。
+数据目录：`~/.quotern/`。Desktop 启动会接管 runtime 并停止 CLI；Desktop 已运行时再执行 `quotern start`，CLI 以观察模式提供浏览器面板，采集仍由 Desktop 负责。
 
 本地 CLI 用量页（`http://127.0.0.1:8452`）来自 `packages/dashboard`；桌面端使用独立的 renderer 源码副本。
 
@@ -122,7 +122,7 @@ pnpm dev:status       # 只读查看当前 worktree 的端口与会话归属
 
 ### Dashboard 开发
 
-本地浏览器面板通过 CLI 提供数据。执行 `pnpm dev:cli`，打开启动输出中的 Vite 地址即可调试。开发数据保存在当前 worktree 的 `.quotern-dev/`，不接管正式 `~/.ai-usage/` runtime。
+本地浏览器面板通过 CLI 提供数据。执行 `pnpm dev:cli`，打开启动输出中的 Vite 地址即可调试。开发数据保存在当前 worktree 的 `.quotern-dev/`，不接管正式 `~/.quotern/` runtime。
 
 ## 发版
 

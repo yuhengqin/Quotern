@@ -3,7 +3,7 @@ import { unlink } from 'node:fs/promises';
 
 import type { CursorsFile, QueueBucket, TokenTotals } from '../types.js';
 import {
-  DEFAULT_DATA_DIR,
+  resolveDataDir,
   traeAgentDbEntries,
   traeSqlcipherKeyPath,
 } from '../paths.js';
@@ -178,7 +178,7 @@ export interface ParseTraeResult {
 }
 
 export interface ParseTraeOptions {
-  /** Override data dir for key cache (defaults to ~/.ai-usage). */
+  /** Override data dir for key cache (defaults to ~/.quotern). */
   dataDir?: string;
 }
 
@@ -188,7 +188,7 @@ export async function parseTraeIncremental(
   options?: ParseTraeOptions,
 ): Promise<{ result: ParseTraeResult; cursors: CursorsFile }> {
   const sinceMs = new Date(statsSince).getTime();
-  const dataDir = options?.dataDir ?? DEFAULT_DATA_DIR;
+  const dataDir = resolveDataDir(options?.dataDir);
 
   if (!cursors.trae) {
     cursors.trae = { seenHashes: [], lastError: null };

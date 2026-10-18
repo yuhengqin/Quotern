@@ -57,7 +57,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 
 ## 数据目录与文件归属
 
-默认数据目录由 [paths.ts](../packages/core/src/paths.ts) 定义为用户主目录下的 `.ai-usage`。
+默认数据目录由 [paths.ts](../packages/core/src/paths.ts) 定义为用户主目录下的 `.quotern`。
 
 | 文件 | 作用 |
 | --- | --- |

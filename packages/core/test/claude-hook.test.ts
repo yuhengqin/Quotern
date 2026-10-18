@@ -10,7 +10,7 @@ import { buildHookCommand, upsertClaudeHook } from '../src/hooks/claude.js';
 const OTTY_STOP_HOOK = 'otty-agent-hook --event=stop';
 
 test('upsertClaudeHook keeps Otty Stop hooks next to the quotern notify command', async () => {
-  const tempHome = await mkdtemp(join(tmpdir(), 'ai-usage-claude-hook-'));
+  const tempHome = await mkdtemp(join(tmpdir(), 'quotern-claude-hook-'));
   const prevHome = process.env.HOME;
   const prevUserProfile = process.env.USERPROFILE;
   process.env.HOME = tempHome;
@@ -33,7 +33,7 @@ test('upsertClaudeHook keeps Otty Stop hooks next to the quotern notify command'
       'utf8',
     );
 
-    const notifyPath = join(tempHome, '.ai-usage', 'bin', 'notify.sh');
+    const notifyPath = join(tempHome, '.quotern', 'bin', 'notify.sh');
     const result = await upsertClaudeHook(notifyPath);
     assert.equal(result.configured, true);
     assert.equal(result.changed, true);

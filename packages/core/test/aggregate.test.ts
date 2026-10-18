@@ -42,8 +42,8 @@ function makeRow(
 test('aggregateModelBreakdown merges URI-encoded cwd with folder name', () => {
   const result = aggregateModelBreakdown(
     [
-      makeRow('%2FUsers%2Fme%2Fcode%2Fai-usage', 200),
-      makeRow('ai-usage', 100),
+      makeRow('%2FUsers%2Fme%2Fcode%2Fquotern', 200),
+      makeRow('quotern', 100),
       makeRow('%2FUsers%2Fme%2Fcode%2Fdocs-site', 50),
     ],
     30,
@@ -57,7 +57,7 @@ test('aggregateModelBreakdown merges URI-encoded cwd with folder name', () => {
       pct,
     })),
     [
-      { project: 'ai-usage', tokens: 300, pct: 85.7 },
+      { project: 'quotern', tokens: 300, pct: 85.7 },
       { project: 'docs-site', tokens: 50, pct: 14.3 },
     ],
   );
@@ -65,7 +65,7 @@ test('aggregateModelBreakdown merges URI-encoded cwd with folder name', () => {
 
 test('aggregateModelBreakdown includes project totals and percentages', () => {
   const result = aggregateModelBreakdown(
-    [makeRow('ai-usage', 300), makeRow('docs-site', 100)],
+    [makeRow('quotern', 300), makeRow('docs-site', 100)],
     30,
     '1970-01-01T00:00:00.000Z',
   );
@@ -79,7 +79,7 @@ test('aggregateModelBreakdown includes project totals and percentages', () => {
       pct,
     })),
     [
-      { project: 'ai-usage', tokens: 300, pct: 75 },
+      { project: 'quotern', tokens: 300, pct: 75 },
       { project: 'docs-site', tokens: 100, pct: 25 },
     ],
   );
@@ -88,15 +88,15 @@ test('aggregateModelBreakdown includes project totals and percentages', () => {
 test('aggregateModelBreakdown nests source+model under each project', () => {
   const result = aggregateModelBreakdown(
     [
-      makeRow('ai-usage', 200, 'claude', 'opus'),
-      makeRow('ai-usage', 100, 'codex', 'gpt-5'),
+      makeRow('quotern', 200, 'claude', 'opus'),
+      makeRow('quotern', 100, 'codex', 'gpt-5'),
       makeRow('docs-site', 50, 'claude', 'opus'),
     ],
     30,
     '1970-01-01T00:00:00.000Z',
   );
 
-  const aiUsage = result.projects.find((row) => row.project === 'ai-usage');
+  const aiUsage = result.projects.find((row) => row.project === 'quotern');
   assert.ok(aiUsage);
   assert.deepEqual(
     aiUsage.models.map(({ source, model, tokens, pct }) => ({
@@ -191,8 +191,8 @@ test('aggregateDaily keeps cache columns when local_metrics request evidence is 
 test('aggregateDaily merges URI-encoded cwd with folder name', () => {
   const result = aggregateDaily(
     [
-      makeRow('%2FUsers%2Fme%2Fcode%2Fai-usage', 200, 'claude', 'opus'),
-      makeRow('ai-usage', 100, 'codex', 'gpt-5'),
+      makeRow('%2FUsers%2Fme%2Fcode%2Fquotern', 200, 'claude', 'opus'),
+      makeRow('quotern', 100, 'codex', 'gpt-5'),
     ],
     30,
     '1970-01-01T00:00:00.000Z',
@@ -202,15 +202,15 @@ test('aggregateDaily merges URI-encoded cwd with folder name', () => {
   const projects = result.days[0]?.projects ?? [];
   assert.deepEqual(
     projects.map(({ project, tokens }) => ({ project, tokens })),
-    [{ project: 'ai-usage', tokens: 300 }],
+    [{ project: 'quotern', tokens: 300 }],
   );
 });
 
 test('aggregateDaily nests projects with source+model keys', () => {
   const result = aggregateDaily(
     [
-      makeRow('ai-usage', 200, 'claude', 'opus'),
-      makeRow('ai-usage', 100, 'codex', 'gpt-5'),
+      makeRow('quotern', 200, 'claude', 'opus'),
+      makeRow('quotern', 100, 'codex', 'gpt-5'),
       makeRow('docs-site', 50, 'claude', 'opus'),
     ],
     30,
@@ -222,11 +222,11 @@ test('aggregateDaily nests projects with source+model keys', () => {
   assert.deepEqual(
     projects.map(({ project, tokens }) => ({ project, tokens })),
     [
-      { project: 'ai-usage', tokens: 300 },
+      { project: 'quotern', tokens: 300 },
       { project: 'docs-site', tokens: 50 },
     ],
   );
-  const aiUsage = projects.find((row) => row.project === 'ai-usage');
+  const aiUsage = projects.find((row) => row.project === 'quotern');
   assert.ok(aiUsage);
   assert.equal(aiUsage.models[dailyModelKey('claude', 'opus')], 200);
   assert.equal(aiUsage.models[dailyModelKey('codex', 'gpt-5')], 100);
@@ -298,7 +298,7 @@ function makeCursorCostRow(
     hour_start: hourStart,
     source: 'cursor',
     model,
-    project: 'ai-usage',
+    project: 'quotern',
     input_tokens: 0,
     output_tokens: 0,
     cached_input_tokens: 0,

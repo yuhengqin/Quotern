@@ -97,7 +97,7 @@ JSON 使用 `schemaVersion: 1`，包含 `summary`、`rows`、`filters` 和 `cove
 
 `overview` 额外返回 `breakdowns.daily`、`breakdowns.models`、`breakdowns.projects`：同一次读取后筛选的记录生成全部维度，共用顶层范围、筛选和覆盖说明，不能将不同维度相加。`rows` 保留总计行；CSV 的 `period` 列分别标识 `summary/daily/models/projects`。Skill 将“查看用量信息”等宽泛请求默认交付为 Quotern 样式的综合 HTML 概览；明确的单项查询仍按问题简洁回答。
 
-Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)。将该 `quotern-usage` 文件夹复制到所用 Agent 的技能目录（例如项目 `.agents/skills/`），或从已安装的 `quotern/skills/quotern-usage` 复制。Skill 只调用上述 JSON 查询，不维护第二套解析器，也不会隐式启动或修复服务。
+Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)。推荐通过 `npx skills` 跨工具安装，见 [安装方法](./README.md#推荐使用-npx-skills-安装)；也可让 Agent 按 [安装助手说明](./README_AI.md) 执行。手动复制完整 Skill 文件夹作为备用。Skill 只调用上述 JSON 查询，不维护第二套解析器，也不会隐式启动或修复服务。
 
 ## 数据与同步
 

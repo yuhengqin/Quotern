@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import net from 'node:net';
 import http from 'node:http';
@@ -28,7 +28,7 @@ async function fixture(t) {
   });
   return root;
 }
-async function listener(t, port = 0) {
+async function listener(t, port = 0, host = '127.0.0.1') {
   const sockets = new Set();
   const server = net.createServer((socket) => {
     sockets.add(socket);
@@ -36,7 +36,7 @@ async function listener(t, port = 0) {
     socket.on('error', () => {});
     socket.end('other-session');
   });
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   t.after(() => {
     for (const socket of sockets) socket.destroy();
     return new Promise((resolve) => server.close(resolve));
@@ -60,6 +60,32 @@ test('occupied explicit port fails without stopping its listener', async (t) => 
   await assert.rejects(createDevSession(root, 'api', { QUOTERN_DEV_API_PORT: String(port) }), /占用/);
   const socket = net.connect(port, '127.0.0.1');
   assert.equal(await new Promise((resolve) => socket.once('data', (data) => resolve(data.toString()))), 'other-session');
+});
+
+test('host defaults to loopback and is normalized for all child services', async (t) => {
+  for (const [input, expected] of [[undefined, '127.0.0.1'], ['', '127.0.0.1'], ['  ', '127.0.0.1'], [' 0.0.0.0 ', '0.0.0.0']]) {
+    const session = await createDevSession(await fixture(t), 'cli', { QUOTERN_DEV_HOST: input });
+    assert.equal(session.env.QUOTERN_DEV_HOST, expected);
+    assert.equal(session.record.host, expected);
+    assert.equal(session.env.VITE_CLI_API_ORIGIN, `http://127.0.0.1:${session.config.apiPort}`);
+  }
+});
+
+test('wildcard port selection detects listeners on another interface without stopping them', async (t) => {
+  const host = Object.values(networkInterfaces()).flat().find(address => address.family === 'IPv4' && !address.internal)?.address;
+  if (!host) return t.skip('no non-loopback IPv4 interface');
+  const port = await listener(t, 0, host);
+  const root = await fixture(t);
+  await mkdir(join(root, '.quotern-dev'));
+  await writeFile(join(root, '.quotern-dev/instance.json'), JSON.stringify({ apiPort: port }));
+  await assert.rejects(createDevSession(root, 'api', { QUOTERN_DEV_HOST: '0.0.0.0', QUOTERN_DEV_API_PORT: String(port) }), /占用/);
+  const session = await createDevSession(root, 'api', { QUOTERN_DEV_HOST: '0.0.0.0' });
+  assert.notEqual(session.config.apiPort, port);
+  const socket = net.connect(port, host);
+  assert.equal(await new Promise((resolve, reject) => {
+    socket.once('error', reject);
+    socket.once('data', data => resolve(data.toString()));
+  }), 'other-session');
 });
 
 test('two worktrees get private state and a free port when the saved port is busy', async (t) => {
@@ -152,7 +178,7 @@ test('a published API lease cannot authorize an unrelated server on its port', a
   await assert.rejects(createDevSession(root, 'ui', {}), /API.*标识|API.*就绪/);
 });
 
-async function staleDesktop(t, patch = {}) {
+async function staleDesktop(t, patch = {}, tracked = true) {
   const root = await fixture(t);
   const startedAt = new Date().toISOString();
   const child = spawn(process.execPath, ['-e', ''], { windowsHide: true });
@@ -163,6 +189,14 @@ async function staleDesktop(t, patch = {}) {
     ...patch,
   };
   const dir = join(root, '.quotern-dev');
+  if (process.platform !== 'win32' && tracked && !record.processTracker) {
+    record.processTracker = { kind: 'posix-pgroups-v1', proofToken: randomUUID() };
+    await mkdir(join(dir, 'process-groups'), { recursive: true });
+    await writeFile(join(dir, 'process-groups/old-desktop.json'), JSON.stringify({
+      ...record.processTracker, sessionId: record.sessionId, mode: record.mode, pid: record.pid,
+      worktree: record.worktree, startedAt: record.startedAt, pendingSpawn: false, pgids: [],
+    }));
+  }
   for (const name of ['runtime', 'desktop-ui']) {
     await mkdir(join(dir, `${name}.lock`), { recursive: true });
     await writeFile(join(dir, `${name}.lock/owner.json`), JSON.stringify(record));
@@ -179,6 +213,52 @@ test('confirmed stopped session locks are recovered on the next desktop launch',
     const owner = JSON.parse(await readFile(join(dir, `${name}.lock/owner.json`), 'utf8'));
     assert.equal(owner.sessionId, session.record.sessionId);
   }
+});
+
+test('POSIX crashed sessions recover only with complete matching process-group evidence', { skip: process.platform === 'win32' }, async (t) => {
+  const { root, dir } = await staleDesktop(t, { status: 'running' });
+  const session = await createDevSession(root, 'desktop', {});
+  assert.notEqual(session.record.sessionId, 'old-desktop');
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, session.record.sessionId);
+});
+
+test('POSIX legacy sessions without complete group history remain blocked', { skip: process.platform === 'win32' }, async (t) => {
+  for (const status of ['running', 'stopped']) {
+    const { root, dir } = await staleDesktop(t, { status }, false);
+    await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+    assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+  }
+});
+
+test('POSIX recovery preserves locks for missing, corrupt, incomplete or mismatched group records', { skip: process.platform === 'win32' }, async (t) => {
+  const { root, dir } = await staleDesktop(t, { status: 'running' });
+  const path = join(dir, 'process-groups/old-desktop.json');
+  const proof = JSON.parse(await readFile(path, 'utf8'));
+  await rm(path);
+  await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  await writeFile(path, '{broken');
+  await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  for (const patch of [{ pendingSpawn: true }, { proofToken: randomUUID() }, { sessionId: 'other' }, { mode: 'api' }, { kind: 'other' }, { pgids: [0] }, { pgids: [] , pendingSpawn: null }]) {
+    await writeFile(path, JSON.stringify({ ...proof, ...patch }));
+    await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  }
+  assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
+});
+
+test('POSIX recovery checks journal groups omitted from the current child list and never stops them', { skip: process.platform === 'win32' }, async (t) => {
+  const group = spawn(process.execPath, ['-e', 'setInterval(() => {},1000)'], { detached: true, stdio: 'ignore' });
+  const exited = once(group, 'exit');
+  t.after(async () => { if (group.exitCode == null && group.signalCode == null) group.kill(); await exited; });
+  const { root, dir } = await staleDesktop(t, { status: 'running', children: [] });
+  const path = join(dir, 'process-groups/old-desktop.json');
+  const proof = JSON.parse(await readFile(path, 'utf8'));
+  await writeFile(path, JSON.stringify({ ...proof, pgids: [group.pid] }));
+  await assert.rejects(createDevSession(root, 'desktop', {}), /进程组/);
+  assert.doesNotThrow(() => process.kill(group.pid, 0));
+  group.kill();
+  await exited;
+  const session = await createDevSession(root, 'desktop', {});
+  assert.notEqual(session.record.sessionId, 'old-desktop');
 });
 
 test('recovery refuses a live recorded child and preserves the old locks', async (t) => {

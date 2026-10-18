@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, open, readFile, realpath, rm, writeFile, rename, lstat, readdir, unlink, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { networkInterfaces } from 'node:os';
 import net from 'node:net';
 import { sessionEndEvidence } from './dev-processes.mjs';
 
@@ -43,19 +44,36 @@ export async function readDevStatus(root) {
   }
   return { config: await readJson(join(dir, 'instance.json')), sessions };
 }
-async function portAvailable(port) {
+async function portAvailableOnHost(port, host) {
   const server = net.createServer();
   return new Promise((resolve, reject) => {
     server.once('error', (error) => {
       if (error.code === 'EADDRINUSE' || error.code === 'EACCES') resolve(false);
       else reject(error);
     });
-    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
+    server.listen(port, host, () => server.close(() => resolve(true)));
   });
 }
-async function choosePort(first, explicit, excluded) {
+async function portAvailable(port, host) {
+  const hosts = new Set();
+  // Windows may allow a wildcard bind beside an existing specific-address
+  // listener. Probe local IPv4 addresses first so those listeners stay protected.
+  if (process.platform === 'win32' && host === '0.0.0.0') {
+    for (const addresses of Object.values(networkInterfaces())) {
+      for (const address of addresses) {
+        if (address.family === 'IPv4') hosts.add(address.address);
+      }
+    }
+  }
+  hosts.add(host);
+  for (const listenHost of hosts) {
+    if (!await portAvailableOnHost(port, listenHost)) return false;
+  }
+  return true;
+}
+async function choosePort(first, explicit, excluded, host) {
   for (let port = first; port <= 65535; port++) {
-    if (!excluded.has(port) && await portAvailable(port)) return port;
+    if (!excluded.has(port) && await portAvailable(port, host)) return port;
     if (explicit) throw new Error(`开发端口 ${port} 已被占用；请选择其他端口，不要停止其他会话的服务`);
   }
   throw new Error('没有可用的开发端口');
@@ -127,6 +145,7 @@ async function recoverLease(root, dir, resource, path) {
 /** Leases never signal a PID. Only positively checked, matching stale leases recover. */
 export async function createDevSession(root, mode, inputEnv = process.env) {
   if (!MODES[mode]) throw new Error(`未知开发模式：${mode}`);
+  const host = inputEnv.QUOTERN_DEV_HOST?.trim() || '127.0.0.1';
   root = await realpath(root);
   const explicit = {};
   for (const [key, [variable]] of Object.entries(PORTS)) {
@@ -138,7 +157,7 @@ export async function createDevSession(root, mode, inputEnv = process.env) {
   const dir = join(root, '.quotern-dev');
   await mkdir(dir, { recursive: true });
   const record = {
-    sessionId: randomUUID(), mode, pid: process.pid, worktree: root,
+    sessionId: randomUUID(), mode, pid: process.pid, worktree: root, host,
     branch: '', command: process.argv, startedAt: new Date().toISOString(),
     status: 'starting', children: [],
   };
@@ -217,7 +236,7 @@ export async function createDevSession(root, mode, inputEnv = process.env) {
       }
       for (const key of active) {
         const excluded = new Set(Object.keys(PORTS).filter((other) => other !== key).map((other) => config[other]));
-        config[key] = await choosePort(explicit[key] ?? config[key], explicit[key] != null || (key === 'apiPort' && pinnedApi), excluded);
+        config[key] = await choosePort(explicit[key] ?? config[key], explicit[key] != null || (key === 'apiPort' && pinnedApi), excluded, host);
       }
       config.worktree = root;
       config.dataDir = join(dir, 'data');
@@ -236,6 +255,7 @@ export async function createDevSession(root, mode, inputEnv = process.env) {
     const env = {
       ...inputEnv, QUOTERN_DEV_ISOLATED: '1', QUOTERN_DATA_DIR: config.dataDir,
       QUOTERN_DEV_INSTANCE_ID: record.sessionId,
+      QUOTERN_DEV_HOST: host,
       QUOTERN_CONFIG_HOME: config.configHome, QUOTERN_DESKTOP_USER_DATA: config.desktopUserData,
       QUOTERN_DEV_API_PORT: String(config.apiPort), QUOTERN_DEV_UI_PORT: String(config.uiPort),
       QUOTERN_DEV_DESKTOP_PORT: String(config.desktopPort), VITE_CLI_API_ORIGIN: origin,

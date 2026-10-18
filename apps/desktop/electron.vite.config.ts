@@ -94,7 +94,7 @@ export default defineConfig({
       ],
     },
     server: {
-      host: '127.0.0.1',
+      host: process.env.QUOTERN_DEV_HOST?.trim() || '127.0.0.1',
       port: Number(process.env.QUOTERN_DEV_DESKTOP_PORT || 5195),
       strictPort: true,
     },

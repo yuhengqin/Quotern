@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { createDevSession, readDevStatus } from './dev-instance.mjs';
 import { startWindowsJob } from './dev-windows-job.mjs';
+import { createPosixGroupTracker, posixGroupEndEvidence } from './dev-processes.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mode = process.argv[2] ?? 'cli';
@@ -18,17 +19,20 @@ if (mode === 'status') {
 
 async function run() {
   const session = await createDevSession(root, mode);
+  const listenHost = session.env.QUOTERN_DEV_HOST;
   const log = createWriteStream(session.record.logPath, { flags: 'a' });
   const children = [];
   let closing = false;
   let windowsJob;
-  let jobSetup;
+  let posixTracker;
+  let trackingSetup;
   let finish;
   const done = new Promise((resolve) => { finish = resolve; });
   let stateQueue = Promise.resolve();
   const update = (patch) => (stateQueue = stateQueue.then(() => session.update(patch)));
   function launch(name, command, args, cwd, ipc = false) {
     if (closing) throw new Error('开发会话正在关闭，禁止启动新进程');
+    posixTracker?.beforeSpawn();
     const child = spawn(command, args, { cwd, env: session.env, windowsHide: true,
       detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe', ...(ipc ? ['ipc'] : [])] });
     children.push({ name, child });
@@ -36,6 +40,7 @@ async function run() {
       stream.on('data', (data) => { destination.write(data); log.write(data); });
     }
     child.on('error', (error) => { console.error(`${name}: ${error.message}`); void shutdown(1); });
+    posixTracker?.afterSpawn(child.pid);
     void update({ children: children.filter(({ child: c }) => c.exitCode == null && c.signalCode == null).map(({ name: n, child: c }) => ({ name: n, pid: c.pid })) });
     return child;
   }
@@ -45,12 +50,11 @@ async function run() {
     try {
       // Do not release ownership while an in-flight setup can still update the
       // session record or attach this supervisor to its Job.
-      if (jobSetup) windowsJob = await jobSetup;
+      if (trackingSetup) windowsJob = await trackingSetup;
       const cleaned = await Promise.all(children.map(async ({ name, child }) => {
         if (!child.pid) return true;
-        // Completed build commands are not running services.
-        if (name === 'build' && child.exitCode != null) return true;
         if (process.platform === 'win32') {
+          if (name === 'build' && child.exitCode != null) return true;
           if (child.exitCode != null || child.signalCode != null) return false;
           if (child.connected) {
             let acknowledged = false;
@@ -70,17 +74,22 @@ async function run() {
           try { process.kill(-child.pid, 0); return true; }
           catch (error) { if (error.code === 'ESRCH') return false; throw error; }
         };
+        // Once the leader exits, its historical PGID can be reused. Probe only;
+        // neither a completed build nor an exited service authorizes signals.
+        if (child.exitCode != null || child.signalCode != null) return waitUntil(() => !groupAlive(), 2500);
         if (!groupAlive()) return true;
         try { process.kill(-child.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
         if (await waitUntil(() => !groupAlive(), 2500)) return true;
+        if (child.exitCode != null || child.signalCode != null) return false;
         try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
         return waitUntil(() => !groupAlive(), 2500);
       }));
       await stateQueue;
-      const confirmed = windowsJob ? await windowsJob.childrenEnded() : cleaned.every(Boolean);
+      const groupReason = posixTracker ? await posixGroupEndEvidence(session.record) : null;
+      const confirmed = windowsJob ? await windowsJob.childrenEnded() : cleaned.every(Boolean) && !groupReason;
       if (confirmed) await session.close(code);
       else {
-        console.error('部分服务父进程已退出或进程树清理未确认；保留归属锁，请检查 dev:status 及所属后代进程');
+        console.error(groupReason || '部分服务父进程已退出或进程树清理未确认；保留归属锁，请检查 dev:status 及所属后代进程');
         code = 1;
         await session.update({ status: 'cleanup-required', exitCode: code, stoppedAt: new Date().toISOString() });
       }
@@ -127,12 +136,17 @@ async function run() {
     return join(dirname(require.resolve(`${tool}/package.json`)), relativeBin);
   }
   try {
-    jobSetup = startWindowsJob(session);
-    windowsJob = await jobSetup;
+    trackingSetup = process.platform === 'win32' ? startWindowsJob(session) : (async () => {
+      posixTracker = createPosixGroupTracker(session.record);
+      await update({ processTracker: posixTracker.descriptor });
+      return null;
+    })();
+    windowsJob = await trackingSetup;
     if (closing) return await done;
     console.log(`[Quotern dev] ${session.record.branch || '(detached)'} · ${root}`);
     console.log(`会话 ${session.record.sessionId} / PID ${process.pid}`);
-    console.log(`API http://127.0.0.1:${session.config.apiPort} · Vite http://127.0.0.1:${mode === 'desktop' ? session.config.desktopPort : session.config.uiPort}`);
+    const apiAddress = mode === 'desktop' ? 'IPC' : mode === 'ui' ? session.env.VITE_CLI_API_ORIGIN : `http://${listenHost}:${session.config.apiPort}`;
+    console.log(`API ${apiAddress} · Vite http://${listenHost}:${mode === 'desktop' ? session.config.desktopPort : session.config.uiPort}`);
     console.log(`数据 ${session.config.dataDir}\n归属 ${session.recordPath}\n日志 ${session.record.logPath}`);
     if (mode !== 'ui') {
       const entry = process.env.npm_execpath;
@@ -147,11 +161,11 @@ async function run() {
     if (closing) return await done;
     const services = [];
     if (mode === 'cli' || mode === 'api') {
-      services.push(launch('cli', process.execPath, [join(root, 'packages/cli/bin/quotern.js'), 'start', '--port', String(session.config.apiPort), '--host', '127.0.0.1', '--quotern-dev-instance', session.record.sessionId], root, true));
+      services.push(launch('cli', process.execPath, [join(root, 'packages/cli/bin/quotern.js'), 'start', '--port', String(session.config.apiPort), '--host', listenHost, '--quotern-dev-instance', session.record.sessionId], root, true));
     }
     if (mode === 'cli' || mode === 'ui') {
       const cwd = join(root, 'packages/dashboard');
-      services.push(launch('vite', process.execPath, [toolBin(cwd, 'vite', 'bin/vite.js'), '--host', '127.0.0.1', '--port', String(session.config.uiPort), '--strictPort'], cwd));
+      services.push(launch('vite', process.execPath, [toolBin(cwd, 'vite', 'bin/vite.js'), '--host', listenHost, '--port', String(session.config.uiPort), '--strictPort'], cwd));
     }
     if (mode === 'desktop') {
       const cwd = join(root, 'apps/desktop');

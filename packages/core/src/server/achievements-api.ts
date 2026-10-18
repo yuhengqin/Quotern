@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { isIP } from 'node:net';
 import { AchievementError, AchievementStore, validateAchievementOperation } from '../achievements/store.js';
 import { readAchievementFacts } from '../achievements/facts.js';
 
@@ -17,7 +18,10 @@ export function registerAchievementsApi(parent: Hono, dataDir: string): void {
     if (origin) {
       let allowed = false;
       try {
-        const source = new URL(origin), target = new URL(c.req.url);
+        const source = new URL(origin);
+        const requestTarget = new URL(`http://${c.req.header('Host') ?? new URL(c.req.url).host}`);
+        // Only IP literals may override the configured host; arbitrary names can be rebound.
+        const target = isIP(requestTarget.hostname.replace(/^\[|\]$/g, '')) ? requestTarget : new URL(c.req.url);
         allowed = ['http:', 'https:'].includes(source.protocol) && (source.hostname === target.hostname || ['localhost', '127.0.0.1', '[::1]'].includes(source.hostname));
       } catch { /* null and malformed origins cannot access local usage records. */ }
       if (!allowed) throw new AchievementError('当前网页无权访问本机成就收藏', 403);

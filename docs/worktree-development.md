@@ -37,7 +37,7 @@ $env:QUOTERN_DEV_UI_PORT = '5204'
 pnpm dev:cli
 ```
 
-Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。环境变量仅用于本地启动，不提交 `.env*`，也不改仓库默认端口来绕过冲突。
+Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。CLI API、浏览器 Vite 和 Desktop renderer 的监听地址默认 `127.0.0.1`；需要局域网访问时，在启动命令的环境中设置 `QUOTERN_DEV_HOST=0.0.0.0`，例如 `QUOTERN_DEV_HOST=0.0.0.0 pnpm dev:cli`。端口预检使用同一监听地址；未显式指定的端口遇到其他网卡占用时也会另选空闲端口，显式端口冲突仍报错。浏览器使用宿主机的实际局域网 IP 和启动输出中的端口访问；Vite 到 CLI 的代理仍走 `127.0.0.1`。Desktop 数据仍经 Electron IPC 读取，对外开放 renderer 不会提供 Desktop HTTP API。上述环境变量仅用于本地启动，不提交 `.env*`，也不改仓库默认端口来绕过冲突。
 
 只改 UI 时可明确复用已有 API：
 
@@ -59,6 +59,7 @@ pnpm dev:cli:ui
 | `*.lock/owner.json` | runtime / UI 资源归属；重复启动拒绝抢占 |
 | `*.guard/owner.json` | 资源锁获取、恢复、释放共用的短期互斥；记录检查进程 PID 和开始时间 |
 | `jobs/<sessionId>.json` | Windows Job 已清空的完成凭据；由独立监视进程原子发布，缺失不代表已经退出 |
+| `process-groups/<sessionId>.json` | POSIX 同步 spawn 记录，包含完整历史 PGID、创建中标记及会话归属凭据 |
 | `data/` | 配置、`tud.pid`、heartbeat、采集队列、游标、缓存、图片和运行日志 |
 | `config-home/` | 开发设备身份 sidecar |
 | `electron/` | 独立 Electron userData / sessionData、偏好和浏览器存储 |
@@ -79,11 +80,12 @@ pnpm dev:cli:ui
 - Windows 正常退出在停止派生新进程并完成所属子进程的清理后，查询 Job，确认只剩 supervisor 才释放锁。服务父进程意外退出时不按死 PID 扩大停止范围；若 Job 仍有其他成员或查询失败，记录 `cleanup-required` 并保留锁。
 - 禁止按端口批量结束进程、按 `node` / `electron` / `vite` 进程名清理，或调用系统 `service stop` 腾端口。端口相同、目录相似、PID 文件存在，都不足以证明归属。
 - `dev:status` 不会停止进程或自动修复。`supervisorAlive` 仅表示 PID 是否存在，不能单独证明原会话仍在运行，也不能排除 PID 重用。
-- 下次 `pnpm dev:*` 遇到残留资源锁时会尝试只读检查并自动恢复：锁和会话记录的 sessionId、mode、PID、worktree、开始时间必须匹配，supervisor 和记录的所有子 PID 均须不存在；仍存在的 PID 即使可能被复用也保守拦截。旧版本已记录正常清理完成且没有 Job 元数据的 `stopped` 会话可直接恢复。
+- 下次 `pnpm dev:*` 遇到残留资源锁时会尝试只读检查并自动恢复：锁和会话记录的 sessionId、mode、PID、worktree、开始时间必须匹配，supervisor 和记录的所有子 PID 均须不存在；仍存在的 PID 即使可能被复用也保守拦截。Windows 旧版本已记录正常清理完成且没有 Job 元数据的 `stopped` 会话可直接恢复。
 - 新 Windows 会话的监视进程在 supervisor 退出后继续观察，仅在原 supervisor 句柄已结束且 Job 活跃进程数为零时，将完成凭据写入临时文件并原子发布。恢复必须核对凭据的会话身份、Job 名称和随机 proofToken；即使会话已标记 `stopped`，崩溃遗留的锁也须有该凭据。监视进程失踪、查询失败、凭据缺失或损坏均不代表成功；恢复不会扫描整机孤儿、停止进程或以端口空闲作为清锁依据。
 - Job 默认继承覆盖普通进程创建方式产生的本会话后代，独立宿主在 supervisor 加入 Job 之前创建；本方案不主动设置 `KILL_ON_JOB_CLOSE` 或允许后代 breakaway。外层终端 / Codex / Node 的 Job 限制仍然有效，可能在主管退出时清理所属后代或监视进程；监视进程被清理而未发布凭据时保留锁。通过 WMI、计划任务或已有外部服务代为创建的进程不属于这里的普通后代继承保证。Job 机制见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)。
 - 旧 Windows 异常会话没有 Job 归属和完成凭据，保留锁并提示一次人工核验恢复，不能用新机制反推旧进程归属。
-- 非 Windows 平台对异常退出会话仍保留锁：现有异步子进程记录无法证明进程组列表完整。无法自动恢复时，先人工核对会话记录、进程命令行和后代归属；确认全部结束后才可删除对应残留锁。未知、缺失、损坏或不匹配的记录不会自动接管。
+- POSIX 启动器在每次 spawn 前同步原子写入“创建中”记录，spawn 后登记独立 PGID 并清除该标记；已退出 build 的组也保留在历史中。恢复时要求进程组记录的身份和随机凭据匹配、无未完成 spawn，全部登记 PID / PGID 均不存在才清锁。恢复只探测，不发送终止信号；正常关闭也须通过完整进程组记录检查，组长已退出（包括被信号结束）的历史 PGID 只作探测，避免误伤复用该编号的其他组。
+- 该记录覆盖启动器直接创建的进程组；自行脱离这些组的后代不在其证明范围。POSIX 旧会话缺少完整进程组记录、记录损坏或创建期间异常退出时仍保留锁，需要人工核验。不要仅凭直接子 PID 已退出或端口空闲推断所有后代已退出。
 - 同一资源锁的获取、恢复和释放通过 `*.guard/` 串行执行，清理前再次核对记录，避免并发启动误删新锁。若检查过程本身崩溃留下 guard，等待约 24 秒后会提示人工核对；guard 不自动回收。不要删除正在使用的 guard / `config.lock` 或清空整个 `.quotern-dev/`。
 
 ## 验收与文档

@@ -1,8 +1,8 @@
 {
   "_meta": {
     "units": "usd_per_million_tokens",
-    "generated_at": "2026-10-17T03:59:12.227Z",
-    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev. Incremental models.dev sync on 2026-10-17: kept=448 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped."
+    "generated_at": "2026-10-18T03:18:12.067Z",
+    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev. Incremental models.dev sync on 2026-10-17: kept=448 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-18: kept=448 (added=0, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped."
   },
   "exact": {
     "alibaba/qvq-max": {
@@ -1607,7 +1607,8 @@
     },
     "zai/glm-4.5v": {
       "input": 0.6,
-      "output": 1.8
+      "output": 1.8,
+      "cache_read": 0.11
     },
     "zai/glm-4.6": {
       "input": 0.6,
@@ -1617,7 +1618,8 @@
     },
     "zai/glm-4.6v": {
       "input": 0.3,
-      "output": 0.9
+      "output": 0.9,
+      "cache_read": 0.05
     },
     "zai/glm-4.7-flashx": {
       "input": 0.07,
@@ -1657,7 +1659,8 @@
     },
     "zhipuai/glm-4.5v": {
       "input": 0.6,
-      "output": 1.8
+      "output": 1.8,
+      "cache_read": 0.11
     },
     "zhipuai/glm-4.6": {
       "input": 0.6,
@@ -1667,7 +1670,8 @@
     },
     "zhipuai/glm-4.6v": {
       "input": 0.3,
-      "output": 0.9
+      "output": 0.9,
+      "cache_read": 0.05
     },
     "zhipuai/glm-4.7": {
       "input": 0.6,
@@ -3787,12 +3791,12 @@
       "display_name": "Claude Opus 4.7"
     },
     "deepseek/deepseek-v4-flash": {
-      "release_date": "2026-09-10",
+      "release_date": "2026-10-17",
       "release_date_source": "models.dev",
       "context_window": 1000000,
       "context_window_source": "models.dev",
-      "display_name": "DeepSeek V4.1 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      "display_name": "DeepSeek V4.1 Flash 1017",
+      "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017"
     },
     "deepseek/deepseek-v4-pro": {
       "release_date": "2026-08-12",
@@ -3887,12 +3891,12 @@
       "display_name": "Claude Sonnet 5"
     },
     "deepseek/deepseek-v4-flash-vision-exp": {
-      "release_date": "2026-09-10",
+      "release_date": "2026-10-17",
       "release_date_source": "models.dev",
       "context_window": 1000000,
       "context_window_source": "models.dev",
-      "display_name": "DeepSeek V4.1 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      "display_name": "DeepSeek V4.1 Flash 1017",
+      "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017"
     },
     "google/deep-research-max-preview-04-2026": {
       "release_date": "2026-04-21",
@@ -5247,12 +5251,12 @@
       "canonical_model_id": "meta/muse-spark-1.3"
     },
     "deepseek/deepseek-flash": {
-      "release_date": "2026-09-10",
+      "release_date": "2026-10-17",
       "release_date_source": "models.dev",
       "context_window": 1000000,
       "context_window_source": "models.dev",
-      "display_name": "DeepSeek V4.1 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      "display_name": "DeepSeek V4.1 Flash 1017",
+      "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017"
     },
     "zhipuai/glm-5.3-flashx": {
       "release_date": "2026-09-18",
@@ -5427,1086 +5431,1086 @@
   },
   "subscription_models": {
     "alibaba-token-plan/qwen3.7-max": {
-      "display_name": "Qwen3.7 Max",
-      "canonical_model_id": "alibaba/qwen3.7-max",
       "release_date": "2026-05-21",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.7 Max",
+      "canonical_model_id": "alibaba/qwen3.7-max"
     },
     "alibaba-token-plan/deepseek-v4-flash-0731": {
-      "display_name": "DeepSeek V4 Flash 0731",
-      "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
       "release_date": "2026-07-31",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Flash 0731",
+      "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
     },
     "alibaba-token-plan/qwen3.8-max": {
-      "display_name": "Qwen3.8 Max",
-      "canonical_model_id": "alibaba/qwen3.8-max",
       "release_date": "2026-08-03",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.8 Max",
+      "canonical_model_id": "alibaba/qwen3.8-max"
     },
     "alibaba-token-plan/glm-5": {
-      "display_name": "GLM-5",
-      "canonical_model_id": "zhipuai/glm-5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5",
+      "canonical_model_id": "zhipuai/glm-5"
     },
     "alibaba-token-plan/deepseek-v4.1-flash": {
-      "display_name": "DeepSeek V4.1 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4.1-flash",
       "release_date": "2026-09-10",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4.1 Flash",
+      "canonical_model_id": "deepseek/deepseek-v4.1-flash"
     },
     "alibaba-token-plan/qwen3.8-max-preview": {
-      "display_name": "Qwen3.8 Max Preview",
-      "canonical_model_id": "alibaba/qwen3.8-max-preview",
       "release_date": "2026-07-19",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.8 Max Preview",
+      "canonical_model_id": "alibaba/qwen3.8-max-preview"
     },
     "alibaba-token-plan/kimi-k2.6": {
-      "display_name": "Kimi K2.6",
-      "canonical_model_id": "moonshotai/kimi-k2.6",
       "release_date": "2026-04-21",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.6",
+      "canonical_model_id": "moonshotai/kimi-k2.6"
     },
     "alibaba-token-plan/kimi-k2.5": {
-      "display_name": "Kimi K2.5",
-      "canonical_model_id": "moonshotai/kimi-k2.5",
       "release_date": "2026-01",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.5",
+      "canonical_model_id": "moonshotai/kimi-k2.5"
     },
     "alibaba-token-plan/qwen3.6-flash": {
-      "display_name": "Qwen3.6 Flash",
-      "canonical_model_id": "alibaba/qwen3.6-flash",
       "release_date": "2026-04-27",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.6 Flash",
+      "canonical_model_id": "alibaba/qwen3.6-flash"
     },
     "alibaba-token-plan/deepseek-v4-pro-0813": {
-      "display_name": "DeepSeek V4 Pro 0813",
-      "canonical_model_id": "deepseek/deepseek-v4-pro-0813",
       "release_date": "2026-08-12",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Pro 0813",
+      "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
     },
     "alibaba-token-plan/MiniMax-M2.5": {
-      "display_name": "MiniMax-M2.5",
-      "canonical_model_id": "minimax/MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 196608,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5",
+      "canonical_model_id": "minimax/MiniMax-M2.5"
     },
     "alibaba-token-plan/qwen3.8-flash": {
-      "display_name": "Qwen3.8 Flash",
-      "canonical_model_id": "alibaba/qwen3.8-flash",
       "release_date": "2026-08-26",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.8 Flash",
+      "canonical_model_id": "alibaba/qwen3.8-flash"
     },
     "alibaba-token-plan/glm-5.2": {
-      "display_name": "GLM-5.2",
-      "canonical_model_id": "zhipuai/glm-5.2",
       "release_date": "2026-06-13",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.2",
+      "canonical_model_id": "zhipuai/glm-5.2"
     },
     "alibaba-token-plan/glm-5.1": {
-      "display_name": "GLM-5.1",
-      "canonical_model_id": "zhipuai/glm-5.1",
       "release_date": "2026-04-07",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.1",
+      "canonical_model_id": "zhipuai/glm-5.1"
     },
     "alibaba-token-plan/deepseek-v4-pro": {
-      "display_name": "DeepSeek V4 Pro",
-      "canonical_model_id": "deepseek/deepseek-v4-pro",
       "release_date": "2026-04-24",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Pro",
+      "canonical_model_id": "deepseek/deepseek-v4-pro"
     },
     "alibaba-token-plan/qwen3.6-plus": {
-      "display_name": "Qwen3.6 Plus",
-      "canonical_model_id": "alibaba/qwen3.6-plus",
       "release_date": "2026-04-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.6 Plus",
+      "canonical_model_id": "alibaba/qwen3.6-plus"
     },
     "alibaba-token-plan/deepseek-v3.2": {
-      "display_name": "DeepSeek V3.2",
       "release_date": "2025-12-03",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V3.2"
     },
     "alibaba-token-plan/glm-5.3": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "alibaba-token-plan/kimi-k2.7-code": {
-      "display_name": "Kimi K2.7 Code",
-      "canonical_model_id": "moonshotai/kimi-k2.7-code",
       "release_date": "2026-06-12",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.7 Code",
+      "canonical_model_id": "moonshotai/kimi-k2.7-code"
     },
     "alibaba-token-plan/qwen3.7-plus": {
-      "display_name": "Qwen3.7 Plus",
-      "canonical_model_id": "alibaba/qwen3.7-plus",
       "release_date": "2026-06-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.7 Plus",
+      "canonical_model_id": "alibaba/qwen3.7-plus"
     },
     "alibaba-token-plan/deepseek-v4-flash": {
-      "display_name": "DeepSeek V4 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4-flash",
       "release_date": "2026-04-24",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Flash",
+      "canonical_model_id": "deepseek/deepseek-v4-flash"
     },
     "stepfun-ai-step-plan/step-5-preview": {
-      "display_name": "Step 5 Preview",
-      "canonical_model_id": "stepfun/step-5-preview",
       "release_date": "2026-09-16",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 5 Preview",
+      "canonical_model_id": "stepfun/step-5-preview"
     },
     "stepfun-ai-step-plan/step-3.5-flash-2603": {
-      "display_name": "Step 3.5 Flash 2603",
-      "canonical_model_id": "stepfun/step-3.5-flash-2603",
       "release_date": "2026-04-02",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 3.5 Flash 2603",
+      "canonical_model_id": "stepfun/step-3.5-flash-2603"
     },
     "stepfun-ai-step-plan/step-3.5-flash": {
-      "display_name": "Step 3.5 Flash",
-      "canonical_model_id": "stepfun/step-3.5-flash",
       "release_date": "2026-01-29",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 3.5 Flash",
+      "canonical_model_id": "stepfun/step-3.5-flash"
     },
     "stepfun-ai-step-plan/step-3.7-flash": {
-      "display_name": "Step 3.7 Flash",
-      "canonical_model_id": "stepfun/step-3.7-flash",
       "release_date": "2026-05-29",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 3.7 Flash",
+      "canonical_model_id": "stepfun/step-3.7-flash"
     },
     "minimax-coding-plan/MiniMax-M3": {
-      "display_name": "MiniMax-M3",
       "release_date": "2026-06-01",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M3"
     },
     "minimax-coding-plan/MiniMax-M2.1": {
-      "display_name": "MiniMax-M2.1",
       "release_date": "2025-12-23",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.1"
     },
     "minimax-coding-plan/MiniMax-M3.1-Flash-Preview": {
-      "display_name": "MiniMax-M3.1-Flash-Preview",
-      "canonical_model_id": "minimax/MiniMax-M3.1-Flash-Preview",
       "release_date": "2026-09-27",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M3.1-Flash-Preview",
+      "canonical_model_id": "minimax/MiniMax-M3.1-Flash-Preview"
     },
     "minimax-coding-plan/MiniMax-M2.5": {
-      "display_name": "MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5"
     },
     "minimax-coding-plan/MiniMax-M2.7": {
-      "display_name": "MiniMax-M2.7",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.7"
     },
     "minimax-coding-plan/MiniMax-M2.7-highspeed": {
-      "display_name": "MiniMax-M2.7-highspeed",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.7-highspeed"
     },
     "minimax-coding-plan/MiniMax-M2": {
-      "display_name": "MiniMax-M2",
       "release_date": "2025-10-27",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2"
     },
     "minimax-coding-plan/MiniMax-M2.5-highspeed": {
-      "display_name": "MiniMax-M2.5-highspeed",
       "release_date": "2026-02-13",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5-highspeed"
     },
     "alibaba-coding-plan/qwen3-coder-next": {
-      "display_name": "Qwen3 Coder Next",
       "release_date": "2026-02-03",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3 Coder Next"
     },
     "alibaba-coding-plan/qwen3.5-plus": {
-      "display_name": "Qwen3.5 Plus",
       "release_date": "2026-02-16",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.5 Plus"
     },
     "alibaba-coding-plan/glm-5": {
-      "display_name": "GLM-5",
       "release_date": "2026-02-11",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5"
     },
     "alibaba-coding-plan/kimi-k2.5": {
-      "display_name": "Kimi K2.5",
       "release_date": "2026-01-27",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.5"
     },
     "alibaba-coding-plan/qwen3-max-2026-01-23": {
-      "display_name": "Qwen3 Max",
       "release_date": "2026-01-23",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3 Max"
     },
     "alibaba-coding-plan/qwen3-coder-plus": {
-      "display_name": "Qwen3 Coder Plus",
       "release_date": "2025-07-23",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3 Coder Plus"
     },
     "alibaba-coding-plan/MiniMax-M2.5": {
-      "display_name": "MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 196608,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5"
     },
     "alibaba-coding-plan/glm-4.7": {
-      "display_name": "GLM-4.7",
       "release_date": "2025-12-22",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-4.7"
     },
     "alibaba-coding-plan/qwen3.6-plus": {
-      "display_name": "Qwen3.6 Plus",
       "release_date": "2026-04-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.6 Plus"
     },
     "alibaba-coding-plan/qwen3.7-plus": {
-      "display_name": "Qwen3.7 Plus",
-      "canonical_model_id": "alibaba/qwen3.7-plus",
       "release_date": "2026-06-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.7 Plus",
+      "canonical_model_id": "alibaba/qwen3.7-plus"
     },
     "xiaomi-token-plan-cn/mimo-v2.6-pro": {
-      "display_name": "MiMo-V2.6-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2.6-pro",
       "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.6-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2.6-pro"
     },
     "xiaomi-token-plan-cn/mimo-v2.5": {
-      "display_name": "MiMo-V2.5",
-      "canonical_model_id": "xiaomi/mimo-v2.5",
       "release_date": "2026-04-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.5",
+      "canonical_model_id": "xiaomi/mimo-v2.5"
     },
     "xiaomi-token-plan-cn/mimo-v2-pro": {
-      "display_name": "MiMo-V2-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2-pro",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2-pro"
     },
     "xiaomi-token-plan-cn/mimo-v2.5-pro": {
-      "display_name": "MiMo-V2.5-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2.5-pro",
       "release_date": "2026-04-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.5-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2.5-pro"
     },
     "xiaomi-token-plan-cn/mimo-v2.6-flash": {
-      "display_name": "MiMo-V2.6-Flash",
-      "canonical_model_id": "xiaomi/mimo-v2.6-flash",
       "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.6-Flash",
+      "canonical_model_id": "xiaomi/mimo-v2.6-flash"
     },
     "alibaba-token-plan-cn/qwen3.7-max": {
-      "display_name": "Qwen3.7 Max",
-      "canonical_model_id": "alibaba/qwen3.7-max",
       "release_date": "2026-05-21",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.7 Max",
+      "canonical_model_id": "alibaba/qwen3.7-max"
     },
     "alibaba-token-plan-cn/deepseek-v4-flash-0731": {
-      "display_name": "DeepSeek V4 Flash 0731",
-      "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
       "release_date": "2026-07-31",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Flash 0731",
+      "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
     },
     "alibaba-token-plan-cn/qwen3.8-max": {
-      "display_name": "Qwen3.8 Max",
-      "canonical_model_id": "alibaba/qwen3.8-max",
       "release_date": "2026-08-03",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.8 Max",
+      "canonical_model_id": "alibaba/qwen3.8-max"
     },
     "alibaba-token-plan-cn/glm-5": {
-      "display_name": "GLM-5",
-      "canonical_model_id": "zhipuai/glm-5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5",
+      "canonical_model_id": "zhipuai/glm-5"
     },
     "alibaba-token-plan-cn/deepseek-v4.1-flash": {
-      "display_name": "DeepSeek V4.1 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4.1-flash",
       "release_date": "2026-09-10",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4.1 Flash",
+      "canonical_model_id": "deepseek/deepseek-v4.1-flash"
     },
     "alibaba-token-plan-cn/qwen3.8-max-preview": {
-      "display_name": "Qwen3.8 Max Preview",
-      "canonical_model_id": "alibaba/qwen3.8-max-preview",
       "release_date": "2026-07-19",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.8 Max Preview",
+      "canonical_model_id": "alibaba/qwen3.8-max-preview"
     },
     "alibaba-token-plan-cn/kimi-k2.6": {
-      "display_name": "Kimi K2.6",
-      "canonical_model_id": "moonshotai/kimi-k2.6",
       "release_date": "2026-04-21",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.6",
+      "canonical_model_id": "moonshotai/kimi-k2.6"
     },
     "alibaba-token-plan-cn/kimi-k2.5": {
-      "display_name": "Kimi K2.5",
-      "canonical_model_id": "moonshotai/kimi-k2.5",
       "release_date": "2026-01",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.5",
+      "canonical_model_id": "moonshotai/kimi-k2.5"
     },
     "alibaba-token-plan-cn/qwen3.6-flash": {
-      "display_name": "Qwen3.6 Flash",
-      "canonical_model_id": "alibaba/qwen3.6-flash",
       "release_date": "2026-04-27",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.6 Flash",
+      "canonical_model_id": "alibaba/qwen3.6-flash"
     },
     "alibaba-token-plan-cn/deepseek-v4-pro-0813": {
-      "display_name": "DeepSeek V4 Pro 0813",
-      "canonical_model_id": "deepseek/deepseek-v4-pro-0813",
       "release_date": "2026-08-12",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Pro 0813",
+      "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
     },
     "alibaba-token-plan-cn/MiniMax-M2.5": {
-      "display_name": "MiniMax-M2.5",
-      "canonical_model_id": "minimax/MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 196608,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5",
+      "canonical_model_id": "minimax/MiniMax-M2.5"
     },
     "alibaba-token-plan-cn/qwen3.8-flash": {
-      "display_name": "Qwen3.8 Flash",
-      "canonical_model_id": "alibaba/qwen3.8-flash",
       "release_date": "2026-08-26",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.8 Flash",
+      "canonical_model_id": "alibaba/qwen3.8-flash"
     },
     "alibaba-token-plan-cn/glm-5.2": {
-      "display_name": "GLM-5.2",
-      "canonical_model_id": "zhipuai/glm-5.2",
       "release_date": "2026-06-13",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.2",
+      "canonical_model_id": "zhipuai/glm-5.2"
     },
     "alibaba-token-plan-cn/glm-5.1": {
-      "display_name": "GLM-5.1",
-      "canonical_model_id": "zhipuai/glm-5.1",
       "release_date": "2026-04-07",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.1",
+      "canonical_model_id": "zhipuai/glm-5.1"
     },
     "alibaba-token-plan-cn/deepseek-v4-pro": {
-      "display_name": "DeepSeek V4 Pro",
-      "canonical_model_id": "deepseek/deepseek-v4-pro",
       "release_date": "2026-04-24",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Pro",
+      "canonical_model_id": "deepseek/deepseek-v4-pro"
     },
     "alibaba-token-plan-cn/qwen3.6-plus": {
-      "display_name": "Qwen3.6 Plus",
-      "canonical_model_id": "alibaba/qwen3.6-plus",
       "release_date": "2026-04-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.6 Plus",
+      "canonical_model_id": "alibaba/qwen3.6-plus"
     },
     "alibaba-token-plan-cn/deepseek-v3.2": {
-      "display_name": "DeepSeek V3.2",
       "release_date": "2025-12-03",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V3.2"
     },
     "alibaba-token-plan-cn/glm-5.3": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "alibaba-token-plan-cn/kimi-k2.7-code": {
-      "display_name": "Kimi K2.7 Code",
-      "canonical_model_id": "moonshotai/kimi-k2.7-code",
       "release_date": "2026-06-12",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.7 Code",
+      "canonical_model_id": "moonshotai/kimi-k2.7-code"
     },
     "alibaba-token-plan-cn/qwen3.7-plus": {
-      "display_name": "Qwen3.7 Plus",
-      "canonical_model_id": "alibaba/qwen3.7-plus",
       "release_date": "2026-06-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.7 Plus",
+      "canonical_model_id": "alibaba/qwen3.7-plus"
     },
     "alibaba-token-plan-cn/deepseek-v4-flash": {
-      "display_name": "DeepSeek V4 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4-flash",
       "release_date": "2026-04-24",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Flash",
+      "canonical_model_id": "deepseek/deepseek-v4-flash"
     },
     "minimax-cn-coding-plan/MiniMax-M3": {
-      "display_name": "MiniMax-M3",
       "release_date": "2026-06-01",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M3"
     },
     "minimax-cn-coding-plan/MiniMax-M2.1": {
-      "display_name": "MiniMax-M2.1",
       "release_date": "2025-12-23",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.1"
     },
     "minimax-cn-coding-plan/MiniMax-M3.1-Flash-Preview": {
-      "display_name": "MiniMax-M3.1-Flash-Preview",
-      "canonical_model_id": "minimax/MiniMax-M3.1-Flash-Preview",
       "release_date": "2026-09-27",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M3.1-Flash-Preview",
+      "canonical_model_id": "minimax/MiniMax-M3.1-Flash-Preview"
     },
     "minimax-cn-coding-plan/MiniMax-M2.5": {
-      "display_name": "MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5"
     },
     "minimax-cn-coding-plan/MiniMax-M2.7": {
-      "display_name": "MiniMax-M2.7",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.7"
     },
     "minimax-cn-coding-plan/MiniMax-M2.7-highspeed": {
-      "display_name": "MiniMax-M2.7-highspeed",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.7-highspeed"
     },
     "minimax-cn-coding-plan/MiniMax-M2": {
-      "display_name": "MiniMax-M2",
       "release_date": "2025-10-27",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2"
     },
     "minimax-cn-coding-plan/MiniMax-M2.5-highspeed": {
-      "display_name": "MiniMax-M2.5-highspeed",
       "release_date": "2026-02-13",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5-highspeed"
     },
     "stepfun-step-plan/step-5-preview": {
-      "display_name": "Step 5 Preview",
-      "canonical_model_id": "stepfun/step-5-preview",
       "release_date": "2026-09-16",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 5 Preview",
+      "canonical_model_id": "stepfun/step-5-preview"
     },
     "stepfun-step-plan/step-router-v1": {
-      "display_name": "Step Router v1",
       "release_date": "2026-05-29",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step Router v1"
     },
     "stepfun-step-plan/step-3.5-flash-2603": {
-      "display_name": "Step 3.5 Flash 2603",
-      "canonical_model_id": "stepfun/step-3.5-flash-2603",
       "release_date": "2026-04-02",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 3.5 Flash 2603",
+      "canonical_model_id": "stepfun/step-3.5-flash-2603"
     },
     "stepfun-step-plan/step-3.5-flash": {
-      "display_name": "Step 3.5 Flash",
-      "canonical_model_id": "stepfun/step-3.5-flash",
       "release_date": "2026-01-29",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 3.5 Flash",
+      "canonical_model_id": "stepfun/step-3.5-flash"
     },
     "stepfun-step-plan/step-3.7-flash": {
-      "display_name": "Step 3.7 Flash",
-      "canonical_model_id": "stepfun/step-3.7-flash",
       "release_date": "2026-05-29",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Step 3.7 Flash",
+      "canonical_model_id": "stepfun/step-3.7-flash"
     },
     "xiaomi-token-plan-ams/mimo-v2.6-pro": {
-      "display_name": "MiMo-V2.6-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2.6-pro",
       "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.6-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2.6-pro"
     },
     "xiaomi-token-plan-ams/mimo-v2.6-flash": {
-      "display_name": "MiMo-V2.6-Flash",
-      "canonical_model_id": "xiaomi/mimo-v2.6-flash",
       "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.6-Flash",
+      "canonical_model_id": "xiaomi/mimo-v2.6-flash"
     },
     "xiaomi-token-plan-ams/mimo-v2.5-pro": {
-      "display_name": "MiMo-V2.5-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2.5-pro",
       "release_date": "2026-04-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.5-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2.5-pro"
     },
     "xiaomi-token-plan-ams/mimo-v2-pro": {
-      "display_name": "MiMo-V2-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2-pro",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2-pro"
     },
     "xiaomi-token-plan-ams/mimo-v2.5": {
-      "display_name": "MiMo-V2.5",
-      "canonical_model_id": "xiaomi/mimo-v2.5",
       "release_date": "2026-04-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.5",
+      "canonical_model_id": "xiaomi/mimo-v2.5"
     },
     "zhipuai-coding-plan/glm-5.3-flash": {
-      "display_name": "GLM-5.3-Flash",
-      "canonical_model_id": "zhipuai/glm-5.3-flash",
       "release_date": "2026-08-26",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3-Flash",
+      "canonical_model_id": "zhipuai/glm-5.3-flash"
     },
     "zhipuai-coding-plan/glm-5.3-highspeed": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "zhipuai-coding-plan/glm-5.3": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "zhipuai-coding-plan/glm-4.6v": {
-      "display_name": "GLM-4.6V",
       "release_date": "2025-12-08",
       "release_date_source": "models.dev",
       "context_window": 128000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-4.6V"
     },
     "volcengine-coding-plan/doubao-seed-2.0-lite": {
-      "display_name": "Seed 2.0 Lite",
-      "canonical_model_id": "bytedance-seed/seed-2.0-lite",
       "release_date": "2026-02-14",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Seed 2.0 Lite",
+      "canonical_model_id": "bytedance-seed/seed-2.0-lite"
     },
     "volcengine-coding-plan/glm-5.3-flash": {
-      "display_name": "GLM-5.3-Flash",
-      "canonical_model_id": "zhipuai/glm-5.3-flash",
       "release_date": "2026-08-26",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3-Flash",
+      "canonical_model_id": "zhipuai/glm-5.3-flash"
     },
     "volcengine-coding-plan/kimi-k3": {
-      "display_name": "Kimi K3",
-      "canonical_model_id": "moonshotai/kimi-k3",
       "release_date": "2026-07-16",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K3",
+      "canonical_model_id": "moonshotai/kimi-k3"
     },
     "volcengine-coding-plan/doubao-seed-2.1-turbo": {
-      "display_name": "Seed 2.1 Turbo",
-      "canonical_model_id": "bytedance-seed/seed-2.1-turbo",
       "release_date": "2026-06-23",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Seed 2.1 Turbo",
+      "canonical_model_id": "bytedance-seed/seed-2.1-turbo"
     },
     "volcengine-coding-plan/minimax-m3": {
-      "display_name": "MiniMax-M3",
-      "canonical_model_id": "minimax/MiniMax-M3",
       "release_date": "2026-06-01",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M3",
+      "canonical_model_id": "minimax/MiniMax-M3"
     },
     "volcengine-coding-plan/doubao-seed-evolving": {
-      "display_name": "Seed Evolving",
-      "canonical_model_id": "bytedance-seed/seed-evolving",
       "release_date": "2026-06-23",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Seed Evolving",
+      "canonical_model_id": "bytedance-seed/seed-evolving"
     },
     "volcengine-coding-plan/deepseek-v4-pro": {
-      "display_name": "DeepSeek V4 Pro",
-      "canonical_model_id": "deepseek/deepseek-v4-pro",
       "release_date": "2026-04-24",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Pro",
+      "canonical_model_id": "deepseek/deepseek-v4-pro"
     },
     "volcengine-coding-plan/glm-5.3": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "volcengine-coding-plan/kimi-k2.7-code": {
-      "display_name": "Kimi K2.7 Code",
-      "canonical_model_id": "moonshotai/kimi-k2.7-code",
       "release_date": "2026-06-12",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.7 Code",
+      "canonical_model_id": "moonshotai/kimi-k2.7-code"
     },
     "volcengine-coding-plan/deepseek-v4-flash": {
-      "display_name": "DeepSeek V4 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4-flash",
       "release_date": "2026-04-24",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "DeepSeek V4 Flash",
+      "canonical_model_id": "deepseek/deepseek-v4-flash"
     },
     "zai-coding-plan/glm-5.3-flash": {
-      "display_name": "GLM-5.3-Flash",
-      "canonical_model_id": "zhipuai/glm-5.3-flash",
       "release_date": "2026-08-26",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3-Flash",
+      "canonical_model_id": "zhipuai/glm-5.3-flash"
     },
     "zai-coding-plan/glm-5.3-highspeed": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "zai-coding-plan/glm-5.2-highspeed": {
-      "display_name": "GLM-5.2",
-      "canonical_model_id": "zhipuai/glm-5.2",
       "release_date": "2026-06-13",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.2",
+      "canonical_model_id": "zhipuai/glm-5.2"
     },
     "zai-coding-plan/glm-4.7": {
-      "display_name": "GLM-4.7",
       "release_date": "2025-12-22",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-4.7"
     },
     "zai-coding-plan/glm-5.2": {
-      "display_name": "GLM-5.2",
-      "canonical_model_id": "zhipuai/glm-5.2",
       "release_date": "2026-06-13",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.2",
+      "canonical_model_id": "zhipuai/glm-5.2"
     },
     "zai-coding-plan/glm-5-turbo": {
-      "display_name": "GLM-5-Turbo",
       "release_date": "2026-03-16",
       "release_date_source": "models.dev",
       "context_window": 200000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5-Turbo"
     },
     "zai-coding-plan/glm-5.3": {
-      "display_name": "GLM-5.3",
-      "canonical_model_id": "zhipuai/glm-5.3",
       "release_date": "2026-08-14",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5.3",
+      "canonical_model_id": "zhipuai/glm-5.3"
     },
     "kimi-code-plan-cn/kimi-for-coding-highspeed": {
-      "display_name": "Kimi K2.7 Code Highspeed",
-      "canonical_model_id": "moonshotai/kimi-k2.7-code-highspeed",
       "release_date": "2026-06-12",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.7 Code Highspeed",
+      "canonical_model_id": "moonshotai/kimi-k2.7-code-highspeed"
     },
     "kimi-code-plan-cn/kimi-for-coding": {
-      "display_name": "Kimi K2.8 Preview",
-      "canonical_model_id": "moonshotai/kimi-k2.8-preview",
       "release_date": "2026-09-11",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.8 Preview",
+      "canonical_model_id": "moonshotai/kimi-k2.8-preview"
     },
     "kimi-code-plan-cn/k3-256k": {
-      "display_name": "Kimi K3",
-      "canonical_model_id": "moonshotai/kimi-k3",
       "release_date": "2026-07-16",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K3",
+      "canonical_model_id": "moonshotai/kimi-k3"
     },
     "kimi-code-plan-cn/k3": {
-      "display_name": "Kimi K3",
-      "canonical_model_id": "moonshotai/kimi-k3",
       "release_date": "2026-07-16",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K3",
+      "canonical_model_id": "moonshotai/kimi-k3"
     },
     "xiaomi-token-plan-sgp/mimo-v2.6-pro": {
-      "display_name": "MiMo-V2.6-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2.6-pro",
       "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.6-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2.6-pro"
     },
     "xiaomi-token-plan-sgp/mimo-v2.6-flash": {
-      "display_name": "MiMo-V2.6-Flash",
-      "canonical_model_id": "xiaomi/mimo-v2.6-flash",
       "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.6-Flash",
+      "canonical_model_id": "xiaomi/mimo-v2.6-flash"
     },
     "xiaomi-token-plan-sgp/mimo-v2.5-pro": {
-      "display_name": "MiMo-V2.5-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2.5-pro",
       "release_date": "2026-04-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.5-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2.5-pro"
     },
     "xiaomi-token-plan-sgp/mimo-v2-pro": {
-      "display_name": "MiMo-V2-Pro",
-      "canonical_model_id": "xiaomi/mimo-v2-pro",
       "release_date": "2026-03-18",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2-Pro",
+      "canonical_model_id": "xiaomi/mimo-v2-pro"
     },
     "xiaomi-token-plan-sgp/mimo-v2.5": {
-      "display_name": "MiMo-V2.5",
-      "canonical_model_id": "xiaomi/mimo-v2.5",
       "release_date": "2026-04-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiMo-V2.5",
+      "canonical_model_id": "xiaomi/mimo-v2.5"
     },
     "tencent-coding-plan/hunyuan-2.0-thinking": {
-      "display_name": "Tencent HY 2.0 Think",
       "release_date": "2026-03-08",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Tencent HY 2.0 Think"
     },
     "tencent-coding-plan/glm-5": {
-      "display_name": "GLM-5",
       "release_date": "2026-02-11",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5"
     },
     "tencent-coding-plan/minimax-m2.5": {
-      "display_name": "MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 204800,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5"
     },
     "tencent-coding-plan/hunyuan-2.0-instruct": {
-      "display_name": "Tencent HY 2.0 Instruct",
       "release_date": "2026-03-08",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Tencent HY 2.0 Instruct"
     },
     "tencent-coding-plan/kimi-k2.5": {
-      "display_name": "Kimi-K2.5",
       "release_date": "2026-01-27",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi-K2.5"
     },
     "tencent-coding-plan/tc-code-latest": {
-      "display_name": "Auto",
       "release_date": "2026-03-08",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Auto"
     },
     "tencent-coding-plan/hunyuan-turbos": {
-      "display_name": "Hunyuan-TurboS",
       "release_date": "2026-03-08",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Hunyuan-TurboS"
     },
     "tencent-coding-plan/hunyuan-t1": {
-      "display_name": "Hunyuan-T1",
       "release_date": "2026-03-08",
       "release_date_source": "models.dev",
       "context_window": 131072,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Hunyuan-T1"
     },
     "kimi-code-plan-global/kimi-for-coding-highspeed": {
-      "display_name": "Kimi K2.7 Code Highspeed",
-      "canonical_model_id": "moonshotai/kimi-k2.7-code-highspeed",
       "release_date": "2026-06-12",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.7 Code Highspeed",
+      "canonical_model_id": "moonshotai/kimi-k2.7-code-highspeed"
     },
     "kimi-code-plan-global/kimi-for-coding": {
-      "display_name": "Kimi K2.8 Preview",
-      "canonical_model_id": "moonshotai/kimi-k2.8-preview",
       "release_date": "2026-09-11",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.8 Preview",
+      "canonical_model_id": "moonshotai/kimi-k2.8-preview"
     },
     "kimi-code-plan-global/k3-256k": {
-      "display_name": "Kimi K3",
-      "canonical_model_id": "moonshotai/kimi-k3",
       "release_date": "2026-07-16",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K3",
+      "canonical_model_id": "moonshotai/kimi-k3"
     },
     "kimi-code-plan-global/k3": {
-      "display_name": "Kimi K3",
-      "canonical_model_id": "moonshotai/kimi-k3",
       "release_date": "2026-07-16",
       "release_date_source": "models.dev",
       "context_window": 1048576,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K3",
+      "canonical_model_id": "moonshotai/kimi-k3"
     },
     "tencent-token-plan/hy3": {
-      "display_name": "Hy3",
-      "canonical_model_id": "tencent/hy3",
       "release_date": "2026-07-06",
       "release_date_source": "models.dev",
       "context_window": 256000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Hy3",
+      "canonical_model_id": "tencent/hy3"
     },
     "tencent-token-plan/hy4-preview": {
-      "display_name": "Hy4 preview",
-      "canonical_model_id": "tencent/hy4-preview",
       "release_date": "2026-08-28",
       "release_date_source": "models.dev",
       "context_window": 1024000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Hy4 preview",
+      "canonical_model_id": "tencent/hy4-preview"
     },
     "alibaba-coding-plan-cn/qwen3-coder-next": {
-      "display_name": "Qwen3 Coder Next",
       "release_date": "2026-02-03",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3 Coder Next"
     },
     "alibaba-coding-plan-cn/qwen3.5-plus": {
-      "display_name": "Qwen3.5 Plus",
       "release_date": "2026-02-16",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.5 Plus"
     },
     "alibaba-coding-plan-cn/glm-5": {
-      "display_name": "GLM-5",
       "release_date": "2026-02-11",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-5"
     },
     "alibaba-coding-plan-cn/kimi-k2.5": {
-      "display_name": "Kimi K2.5",
       "release_date": "2026-01-27",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Kimi K2.5"
     },
     "alibaba-coding-plan-cn/qwen3-max-2026-01-23": {
-      "display_name": "Qwen3 Max",
       "release_date": "2026-01-23",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3 Max"
     },
     "alibaba-coding-plan-cn/qwen3-coder-plus": {
-      "display_name": "Qwen3 Coder Plus",
       "release_date": "2025-07-23",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3 Coder Plus"
     },
     "alibaba-coding-plan-cn/MiniMax-M2.5": {
-      "display_name": "MiniMax-M2.5",
       "release_date": "2026-02-12",
       "release_date_source": "models.dev",
       "context_window": 196608,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "MiniMax-M2.5"
     },
     "alibaba-coding-plan-cn/glm-4.7": {
-      "display_name": "GLM-4.7",
       "release_date": "2025-12-22",
       "release_date_source": "models.dev",
       "context_window": 202752,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "GLM-4.7"
     },
     "alibaba-coding-plan-cn/qwen3.6-plus": {
-      "display_name": "Qwen3.6 Plus",
       "release_date": "2026-04-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.6 Plus"
     },
     "alibaba-coding-plan-cn/qwen3.7-plus": {
-      "display_name": "Qwen3.7 Plus",
-      "canonical_model_id": "alibaba/qwen3.7-plus",
       "release_date": "2026-06-02",
       "release_date_source": "models.dev",
       "context_window": 1000000,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Qwen3.7 Plus",
+      "canonical_model_id": "alibaba/qwen3.7-plus"
     }
   }
 }

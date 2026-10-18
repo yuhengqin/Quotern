@@ -9,7 +9,7 @@
     "url": "git+https://github.com/yuhengqin/Quotern.git",
     "directory": "apps/desktop"
   },
-  "main": "./out/main/index.js",
+  "main": "./out/main/bootstrap.js",
   "scripts": {
     "dev": "node scripts/prepare-dsh-pet.mjs && electron-vite dev",
     "build": "node scripts/prepare-dsh-pet.mjs && electron-vite build && node scripts/prepare-native-runtime.cjs",

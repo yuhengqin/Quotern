@@ -69,6 +69,7 @@ import { restoreNativeTrapHandler } from './native-crash-signals';
 import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
 import { PetController } from './pet-controller';
+import { initializeDshPet } from './dsh-pet';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
 import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
@@ -237,6 +238,7 @@ function registerShareCardIpc(): void {
 let disposeTrayUsageSync: (() => void) | null = null;
 let onPowerResumeListener: (() => void) | null = null;
 let petController: PetController | null = null;
+let dshPet: Awaited<ReturnType<typeof initializeDshPet>> | null = null;
 let trayUsageRefreshGeneration = 0;
 
 const localeController = createLocaleController({
@@ -511,6 +513,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       petController?.updateQuotaState(state);
     } });
     if (process.platform === 'win32') {
+      try { dshPet = await initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow }); }
+      catch (error) { console.error('[tud-desktop] independent dsh-pet initialization failed:', error instanceof Error ? error.message : 'unknown'); }
       petController = new PetController({
         toggleMainWindow: () => {
           const window = getMainWindow();
@@ -597,6 +601,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     await initializeAutoUpdate({
       beforeInstall: async () => {
         quotaRuntime?.pause();
+        await dshPet?.controller.pause();
         hideTrayPopover();
         markTrayPopoverQuitting();
         markAppQuitting();
@@ -605,6 +610,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       },
       onInstallFailed: async () => {
         quotaRuntime?.start();
+        await dshPet?.controller.resume();
         resetAppQuitting();
         resetTrayPopoverQuitting();
         shutdownPromise = null;
@@ -629,7 +635,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     markAppQuitting();
     markTrayPopoverQuitting();
     setLocalRuntimeQuitting(true);
-    shutdownPromise = stopLocalRuntime().finally(() => {
+    shutdownPromise = Promise.all([stopLocalRuntime(), dshPet?.controller.pause()]).then(() => {}).finally(() => {
       app.quit();
     });
   });
@@ -637,6 +643,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   // before-quit/window close can be cancelled. Keep IPC and the update
   // watchdog alive until windows have closed and the app is actually exiting.
   app.on('will-quit', () => {
+    void dshPet?.dispose(); dshPet = null;
     quotaRuntime?.dispose(); quotaRuntime = null;
     ipcMain.removeHandler(THEME_GET_CHANNEL);
     ipcMain.removeHandler(LOCALE_GET_CHANNEL);

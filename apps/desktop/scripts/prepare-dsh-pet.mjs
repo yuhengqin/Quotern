@@ -36,6 +36,45 @@ export async function prepareDshPet({ vendorRoot = path.join(desktopRoot, 'vendo
     .replace(/("family"\s*:\s*)"candy"/, '$1"system"')
     .replace(/("display"\s*:\s*)"both"/g, '$1"desktop"');
   await writeFile(path.join(output, 'assets/config.jsonc'), config);
+  const runtimeFile = path.join(output, 'runtime/main.js');
+  let helper = await readFile(runtimeFile, 'utf8');
+  const replaceRequired = (source, from, to) => { if (!source.includes(from)) throw new Error('unsupported upstream helper patch'); return source.replace(from, to); };
+  helper = replaceRequired(helper, "[__filename, '--dsh-pet-dpi-probe']", "[...(app.isPackaged ? [] : [process.env.QUOTERN_DSH_APP_PATH]), '--quotern-dsh-pet-helper', '--dsh-pet-dpi-probe']");
+  helper = replaceRequired(helper, ".loadFile('index.html',", ".loadFile(path.join(__dirname, 'index.html'),");
+  const bridgeStart = helper.indexOf('let bridgeSeq = 0;'), bridgeEnd = helper.indexOf('app.whenReady().then(() => {', bridgeStart);
+  if (bridgeStart < 0 || bridgeEnd < bridgeStart) throw new Error('unsupported upstream bridge');
+  helper = helper.slice(0, bridgeStart) + `const { connectHost, fileResponse } = require('./quotern-adapter.cjs');
+let hostBridge;
+async function startBridgeCallback() {
+  hostBridge = connectHost(process.env.DSH_PET_PIPE, process.env.DSH_PET_TOKEN, exitForDeadHost);
+  await hostBridge.ready;
+  app.once('will-quit', () => hostBridge.close());
+}
+async function handleBridgeRequest(request) {
+  const url = new URL(request.url);
+  const resp = await hostBridge.request(request.method || 'GET', url.pathname + url.search, request.method === 'POST' ? await request.text() : undefined);
+  if (resp.file) return fileResponse(resp.file, request.headers.get('range'), resp.contentType);
+  return new Response(resp.body ?? '', {status: resp.status || 200, headers: {'access-control-allow-origin': '*', 'content-type': resp.contentType || 'application/json'}});
+}
+
+` + helper.slice(bridgeEnd);
+  helper = replaceRequired(helper, 'app.whenReady().then(() => {', 'app.whenReady().then(async () => {');
+  helper = replaceRequired(helper, '    startBridgeCallback();', "    try { await startBridgeCallback(); } catch { app.exit(2); return; }");
+  const openStart = helper.indexOf('  const openSite = (url) => {'), openEnd = helper.indexOf('  // 显示器热更新', openStart);
+  if (openStart < 0 || openEnd < openStart) throw new Error('unsupported upstream open-host');
+  helper = helper.slice(0, openStart) + "  ipcMain.on('pet:open-host', () => { void hostBridge.request('POST', '/dsh-pet-7340/open-host').catch(() => {}); });\n\n" + helper.slice(openEnd);
+  await writeFile(runtimeFile, helper);
+  const preloadFile = path.join(output, 'runtime/preload.js');
+  let preload = await readFile(preloadFile, 'utf8');
+  preload = replaceRequired(preload, 'openDshSite(url)', 'openHost()');
+  preload = replaceRequired(preload, "ipcRenderer.send('pet:open-site', { url });", "ipcRenderer.send('pet:open-host');");
+  await writeFile(preloadFile, preload);
+  const spriteFile = path.join(output, 'runtime/sprite.js');
+  let sprite = await readFile(spriteFile, 'utf8');
+  sprite = replaceRequired(sprite, "OPEN_TARGET === 'desktop' ? '打开 DeepSeek Harness' : '打开网站'", "'打开 Quotern'");
+  sprite = replaceRequired(sprite, 'window.petBridge.openDshSite(ORIGIN)', 'window.petBridge.openHost()');
+  await writeFile(spriteFile, sprite);
+  await build({ entryPoints: [path.join(desktopRoot, 'src/main/dsh-pet/helper-adapter.ts')], outfile: path.join(output, 'runtime/quotern-adapter.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',
     plugins: [{ name: 'quotern-window-label', setup(bundle) {
       bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]balance\.ts$/ }, async args => {

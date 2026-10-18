@@ -106,7 +106,8 @@ export class DshPetService {
       if (signal.aborted) { this.ownActivity(id, null); return failure(timeout.aborted ? 'timeout' : 'cancelled'); }
       if (!result.ok) { this.ownActivity(id, 'error'); this.notification('宠物回复失败', result.message ?? result.reason ?? '模型请求失败'); return result; }
       const say = this.options.config.vendor.extractChatImage(result.text!, pool);
-      await this.options.memory.append(instance.entry, id, [{ role: 'user', content: text, ts: this.now() }, { role: 'assistant', content: say.text, ts: this.now() }]);
+      try { await this.options.memory.append(instance.entry, id, [{ role: 'user', content: text, ts: this.now() }, { role: 'assistant', content: say.text, ts: this.now() }], signal); }
+      catch (error) { if (signal.aborted) { this.ownActivity(id, null); return failure('cancelled'); } throw error; }
       if (signal.aborted) { this.ownActivity(id, null); return failure('cancelled'); }
       this.poll.writePet(id, 'say', say); this.ownActivity(id, 'success'); this.notification('宠物回复完成', String(instance.pet.name ?? id));
       const { text: _text, ...action } = result; return action;
@@ -161,4 +162,5 @@ export class DshPetService {
     }
   }
   dispose(): void { this.lifetime.abort(); if (this.timer) clearInterval(this.timer); if (this.reloadTimer) clearTimeout(this.reloadTimer); this.options.models.dispose(); }
+  async drain(): Promise<void> { await Promise.allSettled([...this.conversations.values()]); }
 }

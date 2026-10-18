@@ -35,8 +35,8 @@ export class DshPetMemoryStore {
     const messages = this.data[assetRoot]?.[petId]?.messages ?? [];
     return rounds <= 0 ? [] : messages.slice(-Math.floor(rounds) * 2).map(message => ({ ...message }));
   }
-  append(assetRoot: string, petId: string, messages: MemoryMessage[]): Promise<void> {
-    return this.update(() => ({ ...this.data, [assetRoot]: { ...this.data[assetRoot], [petId]: { messages: [...(this.data[assetRoot]?.[petId]?.messages ?? []), ...messages] } } }));
+  append(assetRoot: string, petId: string, messages: MemoryMessage[], signal?: AbortSignal): Promise<void> {
+    return this.update(() => ({ ...this.data, [assetRoot]: { ...this.data[assetRoot], [petId]: { messages: [...(this.data[assetRoot]?.[petId]?.messages ?? []), ...messages] } } }), signal);
   }
   clear(petId: string): Promise<void> {
     return this.update(() => {
@@ -45,8 +45,8 @@ export class DshPetMemoryStore {
       return next;
     });
   }
-  private update(make: () => MemoryData): Promise<void> {
-    const run = this.writes.then(async () => { const data = make(); await atomicPrivateFile(this.file, JSON.stringify(data)); this.data = data; });
+  private update(make: () => MemoryData, signal?: AbortSignal): Promise<void> {
+    const run = this.writes.then(async () => { signal?.throwIfAborted(); const data = make(); await atomicPrivateFile(this.file, JSON.stringify(data), signal); this.data = data; });
     this.writes = run.catch(() => {});
     return run;
   }

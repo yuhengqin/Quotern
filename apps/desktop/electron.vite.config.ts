@@ -59,7 +59,7 @@ export default defineConfig({
       outDir: 'out/main',
       rollupOptions: {
         external: ['sharp'],
-        input: { index: resolve(__dirname, quotaPreview ? 'src/main/quota-preview.ts' : 'src/main/index.ts') },
+        input: quotaPreview ? { bootstrap: resolve(__dirname, 'src/main/quota-preview.ts') } : { bootstrap: resolve(__dirname, 'src/main/bootstrap.ts'), index: resolve(__dirname, 'src/main/index.ts') },
       },
     },
   },

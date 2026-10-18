@@ -7,6 +7,7 @@
  *  - tud.onDataSynced → Core poll / sync watcher refresh
  */
 import { contextBridge, ipcRenderer } from 'electron';
+import { DSH_PET_GET, DSH_PET_ACTION, DSH_PET_CHANGED, type DshPetAction, type DshPetState } from '../shared/dsh-pet';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
@@ -111,6 +112,11 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
 }
 
 const tudApi = {
+  dshPet: {
+    getState: (): Promise<DshPetState> => ipcRenderer.invoke(DSH_PET_GET),
+    dispatch: (action: DshPetAction): Promise<unknown> => ipcRenderer.invoke(DSH_PET_ACTION, action),
+    onState: (callback: (state: DshPetState) => void) => { const listener = (_event: unknown, state: DshPetState) => callback(state); ipcRenderer.on(DSH_PET_CHANGED, listener); return () => ipcRenderer.removeListener(DSH_PET_CHANGED, listener); },
+  },
   version: () => '0.1.0',
   platform: process.platform,
   quota: {

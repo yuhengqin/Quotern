@@ -153,11 +153,21 @@ function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): voi
 function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  return <div className="divide-y divide-separator">
+  return <div className="@container/session-list divide-y divide-separator">
       {rows.map(row => <details key={`${row.source}:${row.sessionId}`} className="group py-1">
-        <summary className="grid min-w-0 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent">
-          <div className="flex min-w-0 items-center gap-2.5"><ProviderIcon provider={row.source} size={20} /><div className="min-w-0"><p className="truncate text-sm font-medium" title={row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId}`}>{row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId.slice(-8)}`}</p><p className="truncate text-[11px] text-muted" title={row.projectLabel}>{row.projectLabel} · {row.model === 'unknown' ? t('usage.activity.modelNotRecorded') : row.model} · {age(row.lastActivityAt, locale)}</p></div></div>
-          <div className="shrink-0 text-right text-xs tabular-nums"><p>{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${number(row.tokens, locale)} Token`}</p><div className="text-[11px] text-muted"><Tooltip delay={200}>
+        <summary className="grid min-w-0 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent @3xl/session-list:gap-x-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <ProviderIcon provider={row.source} size={20} />
+            <div className="min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,1fr)_minmax(0,8rem)_5rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4">
+              <p className="truncate text-sm font-medium" title={row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId}`}>{row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId.slice(-8)}`}</p>
+              <p className="flex min-w-0 items-center gap-1 text-[11px] text-muted @3xl/session-list:contents">
+                <span className="truncate" title={row.projectLabel}>{row.projectLabel}</span>
+                <span aria-hidden className="shrink-0 @3xl/session-list:hidden">·</span>
+                <time className="shrink-0 whitespace-nowrap" dateTime={row.lastActivityAt} title={new Date(row.lastActivityAt).toLocaleString(locale)}>{age(row.lastActivityAt, locale)}</time>
+              </p>
+            </div>
+          </div>
+          <div className={`shrink-0 text-right text-xs tabular-nums @3xl/session-list:grid @3xl/session-list:items-center @3xl/session-list:gap-x-4 ${contribution ? '@3xl/session-list:grid-cols-[7.5rem_9.5rem]' : '@3xl/session-list:grid-cols-[7.5rem_7rem]'}`}><p className="whitespace-nowrap">{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${number(row.tokens, locale)} Token`}</p><div className="whitespace-nowrap text-[11px] text-muted"><Tooltip delay={200}>
             <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">
               {row.costUsd === null ? t('usage.activity.amountUnknown') : `$${row.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}{contribution && row.sharePercent !== null ? ` · ${row.sharePercent.toFixed(1)}%` : ''}
             </Tooltip.Trigger>
@@ -167,6 +177,7 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
           <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)}{row.billing.accountLabel ? ` · ${row.billing.accountLabel}` : row.billing.accountRef ? ` · ${t('usage.activity.accountRef', { ref: row.billing.accountRef.slice(0, 6) })}` : ''}</p>
           {row.billing.mode === 'unknown' && <p>{t('usage.activity.insufficientBillingEvidence')}</p>}
+          {!row.models?.length && <p>{row.model === 'unknown' ? t('usage.activity.modelNotRecorded') : row.model}</p>}
           {!row.models?.length && row.taskSeconds != null && <p><TaskTime row={row} /></p>}
           {!row.detailsComplete && <p>{t('usage.explorer.missingDetails')}</p>}
           {!!row.models?.length && <div className="min-w-0 max-w-full rounded-lg border border-separator">

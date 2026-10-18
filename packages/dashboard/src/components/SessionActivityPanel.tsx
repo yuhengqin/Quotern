@@ -116,9 +116,8 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   return <div className="divide-y divide-separator">
       {rows.map(row => <details key={`${row.source}:${row.sessionId}`} className="group py-1">
-        <summary className="grid min-w-0 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.6fr)_auto]">
+        <summary className="grid min-w-0 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent">
           <div className="flex min-w-0 items-center gap-2.5"><ProviderIcon provider={row.source} size={20} /><div className="min-w-0"><p className="truncate text-sm font-medium" title={row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId}`}>{row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId.slice(-8)}`}</p><p className="truncate text-[11px] text-muted" title={row.projectLabel}>{row.projectLabel} · {row.model === 'unknown' ? t('usage.activity.modelNotRecorded') : row.model} · {age(row.lastActivityAt, locale)}</p></div></div>
-          <div className="hidden min-w-0 sm:block"><ContextReading row={row} /></div>
           <div className="shrink-0 text-right text-xs tabular-nums"><p>{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${number(row.tokens, locale)} Token`}</p><div className="text-[11px] text-muted"><Tooltip delay={200}>
             <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">
               {row.costUsd === null ? t('usage.activity.amountUnknown') : `$${row.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}{contribution && row.sharePercent !== null ? ` · ${row.sharePercent.toFixed(1)}%` : ''}
@@ -127,7 +126,6 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
           </Tooltip></div></div>
         </summary>
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
-          <div className="sm:hidden"><ContextReading row={row} /></div>
           <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)}{row.billing.accountLabel ? ` · ${row.billing.accountLabel}` : row.billing.accountRef ? ` · ${t('usage.activity.accountRef', { ref: row.billing.accountRef.slice(0, 6) })}` : ''}</p>
           {row.billing.mode === 'unknown' && <p>{t('usage.activity.insufficientBillingEvidence')}</p>}
           {!row.models?.length && row.taskSeconds != null && <p><TaskTime row={row} /></p>}
@@ -141,7 +139,6 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
           </div>}
           {row.unallocatedCostUsd != null && <p>{t('usage.explorer.unallocatedCost')}</p>}
           <p>{t('usage.activity.recentDetails', { date: new Date(row.lastActivityAt).toLocaleString(locale), id: row.sessionId })}</p>
-          {row.context && Date.parse(row.context.observedAt) !== Date.parse(row.lastActivityAt) && <p>{t('usage.activity.contextUpdated', { date: new Date(row.context.observedAt).toLocaleString(locale) })}</p>}
         </div>
       </details>)}
     </div>;
@@ -151,21 +148,4 @@ function TaskTime({ row }: { row: SessionActivity }) {
   const { t, i18n } = useTranslation();
   if (row.taskSeconds == null) return null;
   return <span className="tabular-nums">{t('usage.explorer.taskTime')}: {(row.taskSeconds / 60).toLocaleString(i18n.resolvedLanguage ?? 'zh-CN', { maximumFractionDigits: 1 })} min · {t(row.taskTimingKind === 'recorded' ? 'usage.session.recordedTime' : row.taskTimingKind === 'mixed' ? 'usage.session.includesEstimate' : 'usage.session.estimate')}</span>;
-}
-
-function ContextReading({ row }: { row: SessionActivity }) {
-  const { t, i18n } = useTranslation();
-  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  const reading = row.context;
-  if (!reading) return <span className="text-[11px] text-muted">{t('usage.activity.contextNotRecorded')}</span>;
-  const capacity = reading.limitTokens;
-  const label = t(reading.kind === 'post-compaction' ? 'usage.activity.contextAfter' : reading.kind === 'request-input' ? 'usage.activity.contextInputEstimate' : 'usage.activity.context');
-  const description = t(Date.now() - Date.parse(reading.observedAt) > 900000 ? 'usage.activity.contextDetailsOld' : 'usage.activity.contextDetails', { kind: t(reading.kind === 'post-compaction' ? 'usage.activity.contextAfterCompaction' : reading.kind === 'request-input' ? 'usage.activity.contextRequestInput' : 'usage.activity.contextSnapshot'), date: new Date(reading.observedAt).toLocaleString(locale) });
-  return <Tooltip delay={200}>
-    <Tooltip.Trigger className="flex min-w-0 cursor-help flex-col gap-1 rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">
-      <p className="truncate text-[11px] tabular-nums text-muted">{reading.usedTokens === null ? t('usage.activity.contextUnknown', { label }) : capacity ? t('usage.activity.contextValueCapacity', { label, used: number(reading.usedTokens, locale), capacity: number(capacity, locale), percent: (reading.usedTokens / capacity * 100).toFixed(0) }) : t('usage.activity.contextValueUnknownCapacity', { label, used: number(reading.usedTokens, locale) })}</p>
-      {reading.usedTokens !== null && capacity && <progress aria-label={t('usage.activity.contextOccupancy', { source: sourceLabel(row.source), project: row.projectLabel })} max={capacity} value={Math.min(capacity, reading.usedTokens)} className="h-1 w-full max-w-44 overflow-hidden rounded-full accent-accent" />}
-    </Tooltip.Trigger>
-    <Tooltip.Content placement="top" className="max-w-xs text-xs">{description}</Tooltip.Content>
-  </Tooltip>;
 }

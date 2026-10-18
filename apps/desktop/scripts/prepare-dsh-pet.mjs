@@ -36,7 +36,20 @@ export async function prepareDshPet({ vendorRoot = path.join(desktopRoot, 'vendo
     .replace(/("family"\s*:\s*)"candy"/, '$1"system"')
     .replace(/("display"\s*:\s*)"both"/g, '$1"desktop"');
   await writeFile(path.join(output, 'assets/config.jsonc'), config);
-  await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning' });
+  await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',
+    plugins: [{ name: 'quotern-window-label', setup(bundle) {
+      bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]balance\.ts$/ }, async args => {
+        let contents = await readFile(args.path, 'utf8');
+        for (const [from, to] of [
+          ['monthly?: unknown;', 'monthly?: unknown; monthlyLabel?: unknown;'],
+          ['monthly?: number;', 'monthly?: number; monthlyLabel?: string;'],
+          ['      monthly,', '      monthly,\n      monthlyLabel: typeof d.monthlyLabel === "string" ? d.monthlyLabel : undefined,'],
+          ['  return WINDOW_LABELS[w];', '  if (w === "monthly" && v.monthlyLabel) return v.monthlyLabel;\n  return WINDOW_LABELS[w];'],
+        ]) { if (!contents.includes(from)) throw new Error('unsupported upstream balance renderer'); contents = contents.replace(from, to); }
+        return { loader: 'ts', contents };
+      });
+    } }],
+  });
   await build({
     stdin: { contents: hostModules.map(name => `export * from './${name}.ts';`).join('\n'), resolveDir: path.join(vendor, 'src/host'), loader: 'ts' },
     outfile: path.join(output, 'host.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning',

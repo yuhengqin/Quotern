@@ -58,6 +58,7 @@ export class DshPetController {
           this.enabled = action.enabled; await this.persist(); if (this.enabled && !this.paused) await this.start(); else await this.stop(); break;
         case 'retry': if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
         case 'save-config': await this.config.saveText(action.text); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
+        case 'patch-config': if (!action.patch || typeof action.patch !== 'object' || Array.isArray(action.patch)) throw new Error('配置无效'); await this.config.patchMain(action.patch); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
         case 'reset-config': await this.config.reset(); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
         case 'save-provider': await this.models.setProviders(action.provider); break;
         case 'remove-provider': if (typeof action.id !== 'string') throw new Error('服务商无效'); await this.models.removeProvider(action.id); break;

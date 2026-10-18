@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Label, ListBox, Select, Tabs } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { Area, Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
@@ -14,7 +14,7 @@ import type { DashboardDailyUsageRow, DashboardHourlyUsageRow } from '@/lib/dash
 import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
 import { DailyUsageTrendCard } from '@/components/DailyUsageTrendCard';
 import { localDateNow } from '@/lib/stats-timezone';
-import { formatTrendDateRange, getTrendControls, getTrendDateRange, type TrendSelection } from '../lib/usage-trend-controls';
+import { formatTrendDateRange, formatTrendPointLabels, getTrendAxisTicks, getTrendControls, getTrendDateRange, type TrendSelection } from '../lib/usage-trend-controls';
 
 interface Props {
   days: number; selectedDate: string | null; dateRange: DashboardDateRange | null;
@@ -32,6 +32,8 @@ export function UsageTrendExplorer(props: Props) {
 function LocalUsageTrendExplorer(props: Props) {
   const { t } = useTranslation();
   const [grain, setGrain] = useState<TrendSelection>('auto');
+  const chartGrid = useRef<HTMLDivElement>(null);
+  const [cardWidth, setCardWidth] = useState(320);
   const today = localDateNow();
   const range = getTrendDateRange(props.days, props.selectedDate, props.dateRange, today);
   const controls = getTrendControls(range, grain);
@@ -39,6 +41,21 @@ function LocalUsageTrendExplorer(props: Props) {
     if (grain !== controls.selection) setGrain(controls.selection);
   }, [grain, controls.selection]);
   const { data, error } = useUsageTrend(props.days, props.selectedDate, props.dateRange, props.sources, controls.granularity, props.enabled);
+  useEffect(() => {
+    const grid = chartGrid.current;
+    if (!grid) return;
+    const updateWidth = () => {
+      const widths = Array.from(grid.children).map(card => card.getBoundingClientRect().width).filter(width => width > 0);
+      if (widths.length) setCardWidth(Math.min(...widths));
+    };
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(grid);
+    Array.from(grid.children).forEach(card => observer.observe(card));
+    updateWidth();
+    return () => observer.disconnect();
+  }, []);
+  const singleDay = range.start === range.end;
+  const ticks = useMemo(() => data ? getTrendAxisTicks(data.points, data.granularity, singleDay, cardWidth) : [], [data, singleDay, cardWidth]);
   const options = [
     { value: 'auto', label: t('usage.explorer.autoResolved', { grain: t(`usage.explorer.${controls.autoGranularity}`) }) },
     ...controls.options.map(value => ({ value, label: t(`usage.explorer.${value}`) })),
@@ -50,9 +67,9 @@ function LocalUsageTrendExplorer(props: Props) {
         if (options.some(option => option.value === value)) setGrain(value as TrendSelection);
       }} />
     </div>
-    <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
-      <TrendChart variant="tokens" data={data} error={error} singleDay={range.start === range.end} />
-      <TrendChart variant="usage" data={data} error={error} singleDay={range.start === range.end} />
+    <div ref={chartGrid} className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+      <TrendChart variant="tokens" data={data} error={error} singleDay={singleDay} ticks={ticks} />
+      <TrendChart variant="usage" data={data} error={error} singleDay={singleDay} ticks={ticks} />
     </div>
   </div>;
 }
@@ -73,7 +90,7 @@ function TrendSelect({ label, value, options, onChange }: {
   </Select>;
 }
 
-function TrendChart({ variant, data, error, singleDay }: { variant: 'tokens' | 'usage'; data: UsageTrend | null; error: boolean; singleDay: boolean }) {
+function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'tokens' | 'usage'; data: UsageTrend | null; error: boolean; singleDay: boolean; ticks: string[] }) {
   const { t } = useTranslation();
   const [metric, setMetric] = useState<'tokens' | 'cost'>('tokens');
   const [view, setView] = useState<'all' | 'detail'>('all');
@@ -94,9 +111,15 @@ function TrendChart({ variant, data, error, singleDay }: { variant: 'tokens' | '
         : <><ChartContainer config={chart.config} className="h-[260px] w-full" initialDimension={{ width: 720, height: 260 }}>
           <ComposedChart data={chart.rows} accessibilityLayer margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" axisLine={false} tickLine={false} minTickGap={24} interval="preserveStartEnd" tick={{ fontSize: 11 }} />
+            <XAxis dataKey="label" axisLine={false} tickLine={false} ticks={ticks} interval={0} tick={({ x, y, payload }) => <text x={x} y={y} dy={12} fontSize={11} className="fill-muted" textAnchor={ticks.length > 1 && payload.value === ticks[0] ? 'start' : ticks.length > 1 && payload.value === ticks.at(-1) ? 'end' : 'middle'}>{payload.value}</text>} />
             <YAxis axisLine={false} tickLine={false} width={58} tickFormatter={value => metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value))} tick={{ fontSize: 11 }} />
-            <ChartTooltip formatter={(value, name) => [metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value)), chart.config[String(name)]?.label ?? name]} contentStyle={{ background: 'var(--overlay)', color: 'var(--overlay-foreground)', borderRadius: 10, border: 0 }} />
+            <ChartTooltip labelFormatter={data?.granularity === 'weekly' ? (label, payload) => {
+              const point = payload?.[0]?.payload as { tooltipLabel?: string; partialWeek?: boolean } | undefined;
+              return <div>
+                <p>{t('usage.explorer.reportedPeriod', { range: point?.tooltipLabel ?? String(label) })}</p>
+                {point?.partialWeek && <p className="mt-1 text-xs text-muted">{t('usage.explorer.partialWeek')}</p>}
+              </div>;
+            } : undefined} formatter={(value, name) => [metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value)), chart.config[String(name)]?.label ?? name]} contentStyle={{ background: 'var(--overlay)', color: 'var(--overlay-foreground)', borderRadius: 10, border: 0 }} />
             {chart.keys.map(key => metric === 'cost' && grouping === 'models' ? <Area key={key} type="monotone" dataKey={key} stackId="models" stroke={`var(--color-${key})`} fill={`var(--color-${key})`} fillOpacity={0.6} isAnimationActive={false} />
               : variant === 'usage' && metric === 'tokens' ? <Bar key={key} dataKey={key} fill={`var(--color-${key})`} stackId="tokens" maxBarSize={32} isAnimationActive={false} />
                 : <Line key={key} type="monotone" dataKey={key} stroke={`var(--color-${key})`} dot={chart.rows.length === 1 ? { r: 4 } : false} strokeWidth={2} isAnimationActive={false} />)}
@@ -120,8 +143,8 @@ function projectChart(data: UsageTrend, metric: 'tokens' | 'cost', detail: boole
     keys.forEach((key, i) => config[key] = { label: t(({ inputTokens: 'usage.common.input', outputTokens: 'usage.common.output', cacheReadTokens: 'usage.distribution.cacheRead', otherTokens: 'usage.common.other', tokens: 'usage.common.totalTokens' } as Record<string, string>)[key]!), color: chartColor(i) });
   } else { keys = ['cost']; config.cost = { label: t('usage.common.cost'), color: chartColor(4) }; }
   const rows = data.points.map(point => {
-    const label = data.granularity === 'hourly' ? `${singleDay ? '' : `${point.key.slice(5, 10)} `}${point.key.slice(-2)}:00` : data.granularity === 'monthly' ? point.key : point.key.slice(5);
-    const values: Record<string, string | number> = { label, tokens: point.tokens, inputTokens: point.inputTokens, cacheReadTokens: point.cacheReadTokens, outputTokens: point.outputTokens, otherTokens: point.cacheWriteTokens + point.reasoningTokens, cost: point.knownCostUsd };
+    const { axisLabel: label, tooltipLabel, partialWeek } = formatTrendPointLabels(point, data.granularity, singleDay);
+    const values: Record<string, string | number | boolean> = { label, tooltipLabel, partialWeek, tokens: point.tokens, inputTokens: point.inputTokens, cacheReadTokens: point.cacheReadTokens, outputTokens: point.outputTokens, otherTokens: point.cacheWriteTokens + point.reasoningTokens, cost: point.knownCostUsd };
     modelNames.forEach((model, i) => { values[`m${i}`] = point.models[model]?.knownCostUsd ?? 0; });
     values.other = Object.entries(point.models).reduce((sum, [model, value]) => sum + (modelNames.includes(model) ? 0 : value.knownCostUsd), 0);
     return values;

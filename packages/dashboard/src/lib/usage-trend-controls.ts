@@ -1,4 +1,4 @@
-import type { TrendGranularity } from 'quotern-core';
+import type { TrendGranularity, UsageTrendPoint } from 'quotern-core';
 import type { DashboardDateRange } from './dashboard-date-range.ts';
 
 export type TrendSelection = TrendGranularity | 'auto';
@@ -30,4 +30,27 @@ export function getTrendControls(range: DashboardDateRange, requested: TrendSele
 export function formatTrendDateRange(range: DashboardDateRange, today: string, todayLabel: string): string {
   if (range.start !== range.end) return `${range.start} – ${range.end}`;
   return range.start === today ? `${todayLabel} · ${range.start}` : range.start;
+}
+
+export function formatTrendPointLabels(point: Pick<UsageTrendPoint, 'key' | 'fromDate' | 'toDate'>, granularity: TrendGranularity, singleDay = false) {
+  if (granularity === 'weekly') {
+    const weekEnd = new Date(dateStamp(point.key) + 6 * DAY_MS).toISOString().slice(0, 10);
+    const date = (value: string) => value.replaceAll('-', '/');
+    return {
+      axisLabel: `${date(point.key).slice(5)}–${date(weekEnd).slice(point.key.slice(0, 7) === weekEnd.slice(0, 7) ? 8 : 5)}`,
+      tooltipLabel: point.fromDate === point.toDate ? date(point.fromDate) : `${date(point.fromDate)} – ${date(point.toDate).slice(point.fromDate.slice(0, 4) === point.toDate.slice(0, 4) ? 5 : 0)}`,
+      partialWeek: point.fromDate !== point.key || point.toDate !== weekEnd,
+    };
+  }
+  const axisLabel = granularity === 'hourly' ? `${singleDay ? '' : `${point.key.slice(5, 10)} `}${point.key.slice(-2)}:00` : granularity === 'monthly' ? point.key : point.key.slice(5);
+  return { axisLabel, tooltipLabel: axisLabel, partialWeek: false };
+}
+
+/** Both cards use the narrower card's label budget, including at responsive breakpoints. */
+export function getTrendAxisTicks(points: readonly Pick<UsageTrendPoint, 'key' | 'fromDate' | 'toDate'>[], granularity: TrendGranularity, singleDay: boolean, cardWidth: number): string[] {
+  const labels = points.map(point => formatTrendPointLabels(point, granularity, singleDay).axisLabel);
+  if (!labels.length) return [];
+  const labelWidth = Math.max(...labels.map(label => label.length)) * 7 + 24;
+  const count = Math.min(labels.length, Math.max(2, Math.min(5, Math.floor(Math.max(0, cardWidth - 100) / labelWidth))));
+  return Array.from({ length: count }, (_, i) => labels[count === 1 ? 0 : Math.round(i * (labels.length - 1) / (count - 1))]!);
 }

@@ -3,7 +3,7 @@ import { Card, Label, ListBox, Select, Tabs } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { Area, Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from 'recharts';
 import type { UsageTrend } from 'quotern-core';
-import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ChartPrimitives';
+import { CHART_TOOLTIP_SURFACE_CLASSNAME, ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ChartPrimitives';
 import { DashboardMetricTabs } from '@/components/DashboardMetricTabs';
 import { useUsageTrend } from '../hooks/useUsageTrend';
 import { chartColor } from '@/lib/chart-data';
@@ -21,6 +21,16 @@ interface Props {
   sources: readonly string[]; enabled: boolean; hourly: boolean; dayScoped: boolean;
   dailyRows: DashboardDailyUsageRow[]; hourlyRows: DashboardHourlyUsageRow[]; rangeLabel?: string;
 }
+
+const TOKEN_BREAKDOWN_KEYS = ['inputTokens', 'cacheReadTokens', 'outputTokens', 'otherTokens'] as const;
+const TOKEN_SERIES = {
+  tokens: { label: 'usage.common.totalTokens', color: chartColor(0) },
+  inputTokens: { label: 'usage.common.input', color: chartColor(0) },
+  cacheReadTokens: { label: 'usage.distribution.cacheRead', color: chartColor(2) },
+  outputTokens: { label: 'usage.common.output', color: chartColor(1) },
+  otherTokens: { label: 'usage.common.other', color: chartColor(5) },
+};
+
 /** Both clients share the interval and query so the two charts have comparable time axes. */
 export function UsageTrendExplorer(props: Props) {
   if (!isCliBackend()) return <>
@@ -95,7 +105,7 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
   const [metric, setMetric] = useState<'tokens' | 'cost'>('tokens');
   const [view, setView] = useState<'all' | 'detail'>('all');
   const [grouping, setGrouping] = useState<'total' | 'models'>('total');
-  const chart = useMemo(() => data ? projectChart(data, metric, variant === 'tokens' && view === 'detail', metric === 'cost' && grouping === 'models', t, singleDay) : null, [data, metric, view, grouping, variant, t, singleDay]);
+  const chart = useMemo(() => data ? projectChart(data, metric, metric === 'tokens' && (variant === 'usage' || view === 'detail'), metric === 'cost' && grouping === 'models', t, singleDay) : null, [data, metric, view, grouping, variant, t, singleDay]);
   return <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
     <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 pb-0">
       <Card.Title className="min-w-0 flex-1 basis-40">{t(variant === 'tokens' ? 'usage.explorer.tokenTitle' : 'usage.explorer.costTitle')}</Card.Title>
@@ -113,7 +123,7 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" axisLine={false} tickLine={false} ticks={ticks} interval={0} tick={({ x, y, payload }) => <text x={x} y={y} dy={12} fontSize={11} className="fill-muted" textAnchor={ticks.length > 1 && payload.value === ticks[0] ? 'start' : ticks.length > 1 && payload.value === ticks.at(-1) ? 'end' : 'middle'}>{payload.value}</text>} />
             <YAxis axisLine={false} tickLine={false} width={58} tickFormatter={value => metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value))} tick={{ fontSize: 11 }} />
-            <ChartTooltip labelFormatter={data?.granularity === 'weekly' ? (label, payload) => {
+            <ChartTooltip content={metric === 'tokens' ? <TokenTrendTooltip weekly={data?.granularity === 'weekly'} /> : undefined} labelFormatter={data?.granularity === 'weekly' ? (label, payload) => {
               const point = payload?.[0]?.payload as { tooltipLabel?: string; partialWeek?: boolean } | undefined;
               return <div>
                 <p>{t('usage.explorer.reportedPeriod', { range: point?.tooltipLabel ?? String(label) })}</p>
@@ -130,6 +140,33 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
   </Card>;
 }
 
+/** Read the full bucket so the total-only line still exposes every Token component. */
+function TokenTrendTooltip({ active, payload, weekly }: {
+  active?: boolean;
+  payload?: readonly { payload?: Record<string, string | number | boolean> }[];
+  weekly?: boolean;
+}) {
+  const { t } = useTranslation();
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+
+  return <div className={`grid min-w-48 gap-2 px-3 py-2.5 text-xs ${CHART_TOOLTIP_SURFACE_CLASSNAME}`}>
+    <div className="font-medium">
+      {weekly ? t('usage.explorer.reportedPeriod', { range: String(point.tooltipLabel) }) : point.tooltipLabel}
+    </div>
+    {weekly && point.partialWeek && <p className="text-xs text-muted">{t('usage.explorer.partialWeek')}</p>}
+    <div className="grid gap-1.5">
+      {(['tokens', ...TOKEN_BREAKDOWN_KEYS] as const).map(key => <div className="flex items-center justify-between gap-4" key={key}>
+        <span className="inline-flex items-center gap-1.5 text-muted">
+          <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: TOKEN_SERIES[key].color }} />
+          {t(key === 'tokens' ? 'usage.common.total' : TOKEN_SERIES[key].label)}
+        </span>
+        <span className="font-mono font-medium tabular-nums">{formatTokens(Number(point[key]))}</span>
+      </div>)}
+    </div>
+  </div>;
+}
+
 function projectChart(data: UsageTrend, metric: 'tokens' | 'cost', detail: boolean, byModel: boolean, t: (key: string) => string, singleDay: boolean) {
   const config: ChartConfig = {};
   let keys: string[];
@@ -138,9 +175,9 @@ function projectChart(data: UsageTrend, metric: 'tokens' | 'cost', detail: boole
   if (byModel) {
     keys = modelNames.map((model, i) => { const key = `m${i}`; config[key] = { label: model, color: colors.get(model) }; return key; });
     if (data.models.length > 6) { keys.push('other'); config.other = { label: t('usage.explorer.otherModels'), color: chartColor(7) }; }
-  } else if (detail || metric === 'tokens' && data.granularity && !detail) {
-    keys = detail ? ['inputTokens', 'cacheReadTokens', 'outputTokens', 'otherTokens'] : ['tokens'];
-    keys.forEach((key, i) => config[key] = { label: t(({ inputTokens: 'usage.common.input', outputTokens: 'usage.common.output', cacheReadTokens: 'usage.distribution.cacheRead', otherTokens: 'usage.common.other', tokens: 'usage.common.totalTokens' } as Record<string, string>)[key]!), color: chartColor(i) });
+  } else if (metric === 'tokens') {
+    keys = detail ? [...TOKEN_BREAKDOWN_KEYS] : ['tokens'];
+    Object.entries(TOKEN_SERIES).forEach(([key, series]) => config[key] = { ...series, label: t(series.label) });
   } else { keys = ['cost']; config.cost = { label: t('usage.common.cost'), color: chartColor(4) }; }
   const rows = data.points.map(point => {
     const { axisLabel: label, tooltipLabel, partialWeek } = formatTrendPointLabels(point, data.granularity, singleDay);

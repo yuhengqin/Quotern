@@ -36,4 +36,7 @@ test('does not interpret generic task completion, tool output or silence as veri
   assert.equal(parseActivityRecord({ type: 'user', timestamp: at, sessionId: 'c', message: { content: [{ type: 'tool_result' }] } }, { ...context, source: 'claude' })?.state, 'result');
   assert.equal(parseActivityRecord({ type: 'tool/call', time: context.now, data: { name: 'ask_user_question' } }, { ...context, source: 'dsh' })?.state, 'waiting');
   assert.equal(parseActivityRecord({ type: 'turn/end', time: context.now, data: { reason: { kind: 'completed' } } }, { ...context, source: 'dsh' })?.state, 'success');
+  const todo = parseActivityRecord({ type: 'todo/write', time: context.now, data: { todos: [{ status: 'in_progress', content: 'Old' }, { status: 'in_progress', content: 'Current' }] } }, { ...context, source: 'dsh' });
+  assert.equal(todo?.taskOnly, true); assert.equal(todo?.task, 'Current');
+  assert.equal(parseActivityRecord({ type: 'turn/start', time: context.now }, { ...context, source: 'dsh' })?.task, null);
 });

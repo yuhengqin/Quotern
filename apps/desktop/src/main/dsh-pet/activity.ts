@@ -13,7 +13,7 @@ export function parseActivityRecord(raw: ObjectValue, context: ActivityContext):
   const value = raw.timestamp ?? raw.time ?? message.timestamp ?? payload.completed_at;
   const timestamp = typeof value === 'number' ? (value < 1e12 ? value * 1000 : value) : typeof value === 'string' ? Date.parse(value) : NaN;
   if (!Number.isFinite(timestamp) || timestamp < context.now - 120_000 || timestamp > context.now + 60_000) return null;
-  let state: WorkStatusState | null | undefined, terminal = false;
+  let state: WorkStatusState | null | undefined, terminal = false, task: string | null | undefined, taskOnly = false;
   const type = String(raw.type ?? '');
   let evidence = type;
   if (context.source === 'codex') {
@@ -32,7 +32,12 @@ export function parseActivityRecord(raw: ObjectValue, context: ActivityContext):
     if (type === 'tool_use' || (type === 'assistant' && content.some(part => part.type === 'tool_use'))) state = 'working';
     else if (type === 'tool_result' || (type === 'user' && content.some(part => part.type === 'tool_result')) || type === 'assistant') state = 'result';
   } else if (context.source === 'dsh') {
-    if (type === 'turn/start') state = 'thinking';
+    if (type === 'turn/start') { state = 'thinking'; task = null; }
+    else if (type === 'todo/write' && Array.isArray(data.todos)) {
+      const todos = data.todos.map(object), current = todos.filter(todo => todo.status === 'in_progress').at(-1) ?? todos.find(todo => todo.status === 'pending');
+      const content = typeof current?.content === 'string' ? current.content.trim() : '';
+      const points = Array.from(content); task = content ? points.slice(0, 40).join('') + (points.length > 40 ? '…' : '') : null; taskOnly = true; state = null;
+    }
     else if (type === 'tool/call') state = data.name === 'ask_user_question' ? 'waiting' : 'working';
     else if (type === 'approval/asked') state = 'waiting';
     else if (['tool/result', 'assistant/message', 'step/end'].includes(type)) state = 'result';
@@ -48,7 +53,7 @@ export function parseActivityRecord(raw: ObjectValue, context: ActivityContext):
   const sessionId = typeof raw.sessionId === 'string' ? raw.sessionId : context.sessionId;
   const turn = payload.turn_id ?? data.turnId ?? data.turn;
   const id = createHash('sha256').update(context.source).update(sessionId).update(JSON.stringify(raw)).digest('hex');
-  return { id, source: context.source, sessionId, timestamp: new Date(timestamp).toISOString(), state, evidence, terminal, ...(turn !== undefined ? { turnId: String(turn) } : {}) };
+  return { id, source: context.source, sessionId, timestamp: new Date(timestamp).toISOString(), state, evidence, terminal, ...(task !== undefined ? { task, taskOnly } : {}), ...(turn !== undefined ? { turnId: String(turn) } : {}) };
 }
 
 interface Cursor { offset: number; pending: Buffer; sessionId: string; birth: number; goalRound: boolean; closing: string | null; seedThrough: number }

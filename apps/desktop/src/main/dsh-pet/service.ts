@@ -24,7 +24,7 @@ export class DshPetService {
   private readonly poll;
   private readonly work;
   private readonly conversations = new Map<string, Promise<unknown>>();
-  private readonly whispers = new Set<string>();
+  private readonly whispers = new Map<string, AbortController>();
   private readonly events = new Set<string>();
   private readonly activity = new Map<string, { at: number; expires: number }>();
   private readonly whisperAt = new Map<string, number>();
@@ -94,6 +94,7 @@ export class DshPetService {
   }
   private prompt(instance: PetInstance): string { return `${String(instance.conf.whisperPrompt ?? '')}\n你的名字是“${String(instance.pet.name ?? instance.pet.id)}”。\n${this.options.config.vendor.timeContextOf(new Date(this.now()))}`; }
   private async chat(id: string, instance: PetInstance, text: string, external?: AbortSignal): Promise<unknown> {
+    this.whispers.get(id)?.abort();
     const timeout = AbortSignal.timeout(50_000);
     const signal = AbortSignal.any([this.lifetime.signal, timeout, ...(external ? [external] : [])]);
     const previous = this.conversations.get(id) ?? Promise.resolve();
@@ -117,13 +118,16 @@ export class DshPetService {
   }
   private async whisper(id: string, instance: PetInstance, external?: AbortSignal): Promise<unknown> {
     if (this.conversations.has(id) || this.whispers.has(id)) return failure('busy');
-    this.whispers.add(id);
-    const signal = AbortSignal.any([this.lifetime.signal, ...(external ? [external] : [])]);
+    const pending = new AbortController(); this.whispers.set(id, pending);
+    const signal = AbortSignal.any([this.lifetime.signal, pending.signal, ...(external ? [external] : [])]);
+    const session = `whisper:${id}`;
     try {
       const pool = instance.conf.whisperImageEnabled ? await this.memes(instance) : [];
       const image = pool.length ? pool[Math.floor(Math.random() * pool.length)] : undefined;
+      this.ownActivity(session, 'thinking');
       const result = await this.options.models.generate({ petId: id, kind: 'whisper', preferred: modelRef(instance.conf.whisperModel), messages: [{ role: 'system', content: this.prompt(instance) }, { role: 'user', content: `随口说一句20字以内的话。${image ? `配合这张表情包：${image.desc}` : ''}` }], signal });
-      if (signal.aborted) return failure('cancelled');
+      if (signal.aborted) { this.ownActivity(session, null); return failure('cancelled'); }
+      this.ownActivity(session, result.ok ? 'success' : 'error');
       if (result.ok) this.poll.writePet(id, 'say', { text: result.text, ...(image ? { image: image.name } : {}) });
       const { text: _text, ...action } = result; return action;
     } finally { this.whispers.delete(id); }
@@ -135,7 +139,8 @@ export class DshPetService {
     const at = Date.parse(event.timestamp), now = this.now(), key = `${event.source}:${event.sessionId}`;
     if (!Number.isFinite(at) || now - at > 120_000 || at > now + 60_000 || at < (this.activity.get(key)?.at ?? 0)) return;
     this.events.add(event.id); if (this.events.size > 10_000) this.events.delete(this.events.values().next().value!);
-    if (event.state) { this.work.setState(key, event.state, ++this.seq); this.activity.set(key, { at, expires: now + (event.terminal ? (event.state === 'result' ? 10_000 : 60_000) : 120_000) }); }
+    if (event.taskOnly) { this.work.setTask(key, event.task ?? null); }
+    else if (event.state) { this.work.setState(key, event.state, ++this.seq); if (event.task !== undefined) this.work.setTask(key, event.task); this.activity.set(key, { at, expires: now + (event.terminal ? (event.state === 'result' ? 10_000 : 60_000) : 120_000) }); }
     else { this.work.clear(key); this.activity.delete(key); }
     this.publishWork();
     if (event.source !== 'pet' && (event.state === 'waiting' || event.terminal && ['success', 'error'].includes(event.state ?? ''))) this.notification(event.state === 'waiting' ? 'Agent 需要确认' : event.state === 'success' ? 'Agent 本轮完成' : 'Agent 发生错误', `${event.source} · ${event.evidence}`);

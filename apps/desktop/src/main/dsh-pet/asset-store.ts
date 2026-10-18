@@ -37,7 +37,7 @@ export class DshPetAssetStore {
       const extension = name!.endsWith('.webm') ? 'webm' : 'mov';
       const roots = assetRoot === 'main'
         ? [{ base: this.root, parts: ['main-animation', extension, name!] }, { base: this.runtimeRoot, parts: ['assets', extension, name!] }]
-        : [{ base: this.root, parts: ['pet', `${assetRoot}-animation`, extension, name!] }];
+        : [{ base: this.root, parts: ['pet', `${assetRoot}-animation`, name!] }, { base: this.root, parts: ['pet', `${assetRoot}-animation`, extension, name!] }];
       for (const item of roots) {
         const file = await checkedFile(item.base, item.parts);
         if (file) return { file, contentType: extension === 'webm' ? 'video/webm' : 'video/quicktime' };

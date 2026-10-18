@@ -1,6 +1,6 @@
 # dsh-pet 独立接入 Quotern Windows Desktop
 
-日期：2026-10-19。状态：用户已确认本文，要求在独立 worktree 与新分支实现；正在准备实施计划。
+日期：2026-10-19。状态：用户已确认，已在独立 worktree 与分支实现；自动化和 Windows 打包自检已执行，现场验收边界见 [验收记录](../dsh-pet-validation.md)。
 
 ## 目标与已确认范围
 

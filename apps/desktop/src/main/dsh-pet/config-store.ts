@@ -35,8 +35,8 @@ export class DshPetConfigStore {
       await writeFile(staged, text, { flag: 'wx', mode: 0o600 });
       const merged = this.vendor.readAllConfig({ ...this.paths, userFile: staged });
       const baseline = parseJsonc(readFileSync(this.paths.defaultFile, 'utf8'));
-      if (raw.pets !== undefined && !this.vendor.saveUserConfig({ ...baseline, ...raw }, raw)) throw new Error('配置 pets 或设置字段无效');
-      for (const key of ['physics', 'font', 'confineToScreen', 'notificationsEnabled', 'whisperImageEnabled', 'chatImageEnabled', 'whisperModel', 'chatModel', 'eventsRefreshSec', 'animationWeights', 'animations']) {
+      if (!this.vendor.saveUserConfig({ ...baseline, ...raw }, raw)) throw new Error('配置 pets 或设置字段无效');
+      for (const key of ['physics', 'font', 'confineToScreen', 'notificationsEnabled', 'whisperImageEnabled', 'chatImageEnabled', 'whisperModel', 'chatModel', 'eventsRefreshSec', 'animationWeights', 'animations', 'chatMemoryRounds', 'chatImageLimit', 'whisperPrompt', 'workStatusTexts']) {
         if (Object.hasOwn(raw, key) && JSON.stringify(raw[key]) !== JSON.stringify(merged.main?.[key])) throw new Error(`配置 ${key} 无效，未保存`);
       }
       if (raw.pets !== undefined && Array.isArray(raw.pets) && (merged.main?.pets as unknown[])?.length !== raw.pets.length) throw new Error('配置 pets 含重复或无效 ID');
@@ -58,8 +58,10 @@ export class DshPetConfigStore {
         await this.save(JSON.stringify({ ...raw, pets: pets.map(pet => pet.id === id ? { ...pet, display } : pet) }, null, 2));
       } else {
         if (path.basename(found.entry) !== found.entry || /[\\/:]/.test(found.entry)) throw new Error('宠物包目录无效');
-        const file = path.join(this.paths.petDir, `${found.entry}-config.json`);
-        const raw = parseJsonc(readFileSync(file, 'utf8'));
+        if (lstatSync(this.paths.petDir).isSymbolicLink()) throw new Error('宠物包目录不能是链接');
+        const entry = this.vendor.readPetConfigEntry(this.paths, found.entry);
+        if (!entry?.raw || lstatSync(entry.path).isSymbolicLink()) throw new Error('宠物包配置无效');
+        const file = entry.path, raw = entry.raw;
         const pets = (raw.pets as Record<string, unknown>[]).map(pet => pet.id === id ? { ...pet, display } : pet);
         await atomicPrivateFile(file, JSON.stringify({ ...raw, pets }, null, 2));
       }

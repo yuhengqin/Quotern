@@ -20,7 +20,7 @@
     "release:mac": "pnpm build && electron-builder --mac --publish always",
     "release:win": "pnpm build && electron-builder --win --publish always",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test scripts/prepare-dsh-pet.test.mjs && node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node --test \"dist-test/**/*.test.js\""
+    "test": "node --test scripts/prepare-dsh-pet.test.mjs && node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node scripts/prepare-dsh-pet-tests.mjs && node --test \"dist-test/**/*.test.js\""
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "5.2.8",

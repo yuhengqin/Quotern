@@ -1,5 +1,15 @@
 # Desktop pet source and asset notices
 
+## Independent dsh-pet
+
+The separate Windows companion vendors [dsh-pet by PC2005-cloud](https://github.com/PC2005-cloud/dsh-pet), commit `6c5f04321be050525b5cbb7bb8ee5f53e89deb6f` (0.3.7). Unchanged source digests are in `vendor/dsh-pet/UPSTREAM.json`; output adaptations are documented in `PATCHES.md`.
+
+**Media has separate conditions:** upstream animations, prompts and source videos allow open-source use and prohibit commercial use. Derived introductions, displays and distribution must credit and link to https://github.com/PC2005-cloud/dsh-pet. This media is not covered by the code's MIT license. The unverified 上首软糖体 font is excluded; the default is the system font.
+
+Code: MIT License, Copyright (c) 2026 PC2005-cloud. The full MIT license is retained in `resources/dsh-pet/LICENSE` and `vendor/dsh-pet/LICENSE`.
+
+## Existing atlas companion
+
 The Windows desktop pet uses adapted source code and assets from [TokenTracker](https://github.com/xiufengsun/TokenTracker):
 `src/renderer/pet.jsx`, `src/renderer/lib/pet-*`, `src/renderer/lib/bot-appearance.js`,
 `src/renderer/ui/foundation/{BotAnimated,PetAtlasAnimated}.jsx`, and

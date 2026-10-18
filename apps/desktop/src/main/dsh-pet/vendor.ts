@@ -11,6 +11,7 @@ export interface VendorHost {
   readAllConfig(paths: ConfigPaths): MergedConfig;
   configVersion(paths: ConfigPaths): string;
   findPetInstance(config: MergedConfig, id: string): PetInstance | undefined;
+  readPetConfigEntry(paths: ConfigPaths, entry: string): { path: string; raw: Record<string, unknown> | undefined } | undefined;
   flattenPetList(config: MergedConfig): Record<string, unknown>[];
   saveUserConfig(raw: unknown, existing?: Record<string, unknown>): Record<string, unknown> | null;
   animationNames(animations: unknown): string[];

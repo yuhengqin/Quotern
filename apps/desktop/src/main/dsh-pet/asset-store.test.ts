@@ -9,9 +9,9 @@ test('uses each pack asset root and never falls back from an exclusive meme dire
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-assets-'));
   try {
     const store = new DshPetAssetStore(root, path.resolve('out/dsh-pet'));
-    await mkdir(path.join(root, 'pet/fish-animation/webm'), { recursive: true });
-    await writeFile(path.join(root, 'pet/fish-animation/webm/动作.webm'), 'pet movie');
-    assert.equal((await store.resolve('/thumb/fish/%E5%8A%A8%E4%BD%9C.webm'))?.file, path.join(root, 'pet/fish-animation/webm/动作.webm'));
+    await mkdir(path.join(root, 'pet/fish-animation'), { recursive: true });
+    await writeFile(path.join(root, 'pet/fish-animation/动作.webm'), 'pet movie');
+    assert.equal((await store.resolve('/thumb/fish/%E5%8A%A8%E4%BD%9C.webm'))?.file, path.join(root, 'pet/fish-animation/动作.webm'));
     await mkdir(path.join(root, 'memes'), { recursive: true });
     await writeFile(path.join(root, 'memes/hello.png'), 'main meme');
     await mkdir(path.join(root, 'pet/fish-memes'), { recursive: true });

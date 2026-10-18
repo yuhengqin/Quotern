@@ -34,6 +34,7 @@ function money(row: Pick<SessionActivity, 'costUsd' | 'costKind'>, locale: Suppo
     : `$${row.costUsd.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} · ${costLabel(row.costKind, locale)}`;
 }
 const attributionKey = (row: SessionActivitySnapshot['billing'][number]) => JSON.stringify([row.service, row.mode, row.accountRef]);
+type SessionUsage = Pick<SessionActivitySnapshot, 'totalTokens' | 'otherTokens' | 'tokenTotalMismatch'>;
 function accountLabel(row: Pick<SessionActivity['billing'], 'accountRef' | 'accountLabel'>, locale: SupportedLocale, unknownKey = 'usage.activity.accountUnknown') {
   return row.accountRef ? [row.accountLabel, translate(locale, 'usage.activity.accountRef', { ref: row.accountRef.slice(0, 8) })].filter(Boolean).join(' · ')
     : translate(locale, unknownKey);
@@ -56,19 +57,12 @@ export function SessionActivityViews({ snapshot }: { snapshot: SessionActivitySn
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const recent = useMemo(() => [...snapshot.sessions].sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt)), [snapshot.sessions]);
-  return <Tabs defaultSelectedKey="recent" variant="secondary" className="min-w-0">
+  return <Tabs defaultSelectedKey="sessions" variant="secondary" className="min-w-0">
     <Tabs.ListContainer><Tabs.List aria-label={t('usage.activity.views')}>
-      <Tabs.Tab id="recent">{t('usage.activity.recent')}<Tabs.Indicator /></Tabs.Tab>
-      <Tabs.Tab id="contribution">{t('usage.activity.contribution')}<Tabs.Indicator /></Tabs.Tab>
+      <Tabs.Tab id="sessions">{t('usage.activity.sessions')}<Tabs.Indicator /></Tabs.Tab>
       <Tabs.Tab id="billing">{t('usage.activity.billing')}<Tabs.Indicator /></Tabs.Tab>
     </Tabs.List></Tabs.ListContainer>
-    <Tabs.Panel id="recent" className="pt-3"><SessionList rows={recent} contribution={false} /></Tabs.Panel>
-    <Tabs.Panel id="contribution" className="pt-3">
-      <p className="mb-3 text-xs text-muted">{t('usage.activity.contributionSummary', { tokens: number(snapshot.totalTokens, locale) })}</p>
-      <SessionList rows={snapshot.sessions} contribution />
-      {snapshot.otherTokens > 0 && <div className="mt-2 flex justify-between gap-3 rounded-xl bg-surface-secondary px-3 py-2 text-xs text-muted"><span>{t('usage.activity.unattributed')}</span><span className="tabular-nums">{number(snapshot.otherTokens, locale)} · {(snapshot.otherTokens / snapshot.totalTokens * 100).toFixed(1)}%</span></div>}
-      <p className="mt-3 text-[11px] text-muted">{t('usage.activity.contributionNote')}</p>
-    </Tabs.Panel>
+    <Tabs.Panel id="sessions" className="pt-3"><SessionList rows={recent} usage={snapshot} /></Tabs.Panel>
     <Tabs.Panel id="billing" className="pt-3">
       <UsageAttribution snapshot={snapshot} />
       <p className="mt-3 text-[11px] text-muted">{t('usage.activity.billingNote')}</p>
@@ -98,28 +92,27 @@ function UsageAttribution({ snapshot }: { snapshot: SessionActivitySnapshot }) {
       </div>)}
       {!groups.length && <p className="py-4 text-sm text-muted">{t('usage.activity.noBilling')}</p>}
     </div>
-    {active && <SessionBrowser key={selected} rows={active.sessions} contribution={false} open onOpenChange={open => { if (!open) setSelected(null); }} title={t('usage.activity.relatedSessions')} closeLabel={t('usage.activity.closeRelatedSessions')} description={<>
+    {active && <SessionBrowser key={selected} rows={active.sessions} open onOpenChange={open => { if (!open) setSelected(null); }} title={t('usage.activity.relatedSessions')} closeLabel={t('usage.activity.closeRelatedSessions')} description={<>
       <p>{serviceLabel(active.row.service, locale)} · {modeLabel(active.row.mode, locale)} · {accountLabel(active.row, locale)}</p>
       <p className="mt-1">{t('usage.activity.relatedSessionNote')}</p>
     </>} />}
   </>;
 }
 
-function SessionList({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {
+function SessionList({ rows, usage }: { rows: SessionActivity[]; usage: SessionUsage }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  if (!rows.length) return <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>;
   return <>
-    <SessionRows rows={rows.slice(0, 6)} contribution={contribution} />
+    {rows.length ? <SessionRows rows={rows.slice(0, 6)} contribution={false} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
     <Button className="mt-2 h-7 text-xs" size="sm" variant="ghost" aria-haspopup="dialog" aria-expanded={open} onPress={() => setOpen(true)}>{t('usage.activity.viewAllSessions', { count: rows.length })}</Button>
-    <SessionBrowser rows={rows} contribution={contribution} open={open} onOpenChange={setOpen} />
+    <SessionBrowser rows={rows} usage={usage} open={open} onOpenChange={setOpen} />
   </>;
 }
 
-function SessionBrowser({ rows, contribution, open, onOpenChange, title, closeLabel, description }: { rows: SessionActivity[]; contribution: boolean; open: boolean; onOpenChange(open: boolean): void; title?: string; closeLabel?: string; description?: ReactNode }) {
+function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, description }: { rows: SessionActivity[]; usage?: SessionUsage; open: boolean; onOpenChange(open: boolean): void; title?: string; closeLabel?: string; description?: ReactNode }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState(''), [source, setSource] = useState('all'), [page, setPage] = useState(1);
-  const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>(contribution ? 'tokens' : 'recent');
+  const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>('recent');
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
   const facets = useMemo(() => sessionActivityFacets(rows, query, source, project), [rows, query, source, project]);
   const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, source, project), sort), [rows, query, source, project, sort]);
@@ -164,7 +157,8 @@ function SessionBrowser({ rows, contribution, open, onOpenChange, title, closeLa
         <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setQuery(''); setSource('all'); setProject(''); setPage(1); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
-      {filtered.length ? <SessionRows rows={result.rows} contribution={contribution} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
+      {filtered.length ? <SessionRows rows={result.rows} contribution={Boolean(usage)} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
+      {usage && <p className="text-[11px] text-muted">{t('usage.activity.contributionNote')}</p>}
     </Modal.Body>
     <Modal.Footer className="items-center justify-between gap-3"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => setPage(result.page - 1)}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => setPage(result.page + 1)}>{t('usage.activity.nextPage')}</Button></div></Modal.Footer>
   </Modal.Dialog></Modal.Container></Modal.Backdrop>;

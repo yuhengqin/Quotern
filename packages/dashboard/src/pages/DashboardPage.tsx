@@ -86,7 +86,7 @@ export function DashboardPage() {
   const { data, error, loading, refreshing, reload, source } =
     useDashboardData(rangeDays, selectedDate, queryRange);
   useDashboardReturnState(selectedDate, selectedTools, loading);
-  const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, queryRange, selectedTools, !loading && !refreshing);
+  const { metrics: sessionMetrics, loading: sessionMetricsLoading, error: sessionMetricsError } = useSessionMetrics(rangeDays, selectedDate, queryRange, selectedTools, !loading && !refreshing);
   const costExplanation = useCostExplanation(rangeDays, selectedDate, queryRange, selectedTools, !loading && !refreshing && range === dataRange && source === 'api', data);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
@@ -354,6 +354,8 @@ export function DashboardPage() {
             showLocalMetrics={isCliBackend()}
             summary={visibleSummary}
             sessionMetrics={sessionMetrics}
+            sessionMetricsLoading={sessionMetricsLoading}
+            sessionMetricsError={sessionMetricsError}
           />
           <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} />
 

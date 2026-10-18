@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appendDashboardRangeQuery, dashboardRangeKey, dateRangeDays, dateRangeLookback, isDashboardDateRange, previousRollingRange, rollingDayRange } from './dashboard-date-range.ts';
+import { appendDashboardRangeQuery, dashboardRangeCacheKey, dashboardRangeKey, dateRangeDays, dateRangeLookback, isDashboardDateRange, previousRollingRange, rollingDayRange } from './dashboard-date-range.ts';
 import { resolveDashboardFetchDays } from './dashboard-fetch-days.ts';
 
 const now = new Date('2026-10-14T01:00:00Z');
@@ -36,4 +36,14 @@ test('equally long historical ranges have distinct query identities and exact br
   assert.deepEqual(fetch.breakdownRange, first);
   assert.equal(fetch.hourlyRange?.start, '2026-10-05');
   assert.equal(fetch.dailyRange?.end, '2026-10-14');
+});
+
+test('display cache reuses moving 1D while keeping today and historical dates separate', () => {
+  const first = rollingDayRange(now);
+  const next = rollingDayRange(new Date('2026-10-14T01:01:00Z'));
+  assert.equal(dashboardRangeCacheKey(1, first, now), dashboardRangeCacheKey(1, next, now));
+  assert.notEqual(dashboardRangeCacheKey(1, first, now), dashboardRangeCacheKey(1, null, now));
+  assert.notEqual(dashboardRangeCacheKey(7, null, now), dashboardRangeCacheKey(30, null, now));
+  assert.notEqual(dashboardRangeCacheKey(1, { start: '2026-10-12', end: '2026-10-12' }, now), dashboardRangeCacheKey(1, { start: '2026-10-13', end: '2026-10-13' }, now));
+  assert.notEqual(dashboardRangeCacheKey(7, null, now), dashboardRangeCacheKey(7, null, new Date('2026-10-15T01:00:00Z')));
 });

@@ -1,5 +1,5 @@
 import { CircleHelp } from 'lucide-react';
-import { Card, Popover } from '@heroui/react';
+import { Card, Popover, Skeleton } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SessionMetrics } from 'quotern-core';
 import { formatSessionDuration, sessionMetricValue } from '@/lib/session-metric-format';
@@ -12,7 +12,7 @@ const cards = [
   { key: 'messageCount', labelKey: 'usage.session.messageCount', duration: false, helpKey: 'usage.session.messageHelp' },
 ] as const;
 
-export function DashboardSessionCards({ metrics }: { metrics: SessionMetrics | null }) {
+export function DashboardSessionCards({ metrics, loading = false, error = false }: { metrics: SessionMetrics | null; loading?: boolean; error?: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? 'zh-CN';
   const list = (sources?: string[]) => sources?.length
@@ -23,7 +23,7 @@ export function DashboardSessionCards({ metrics }: { metrics: SessionMetrics | n
   const estimatedSources = list(metrics?.estimatedTaskSources);
   const missingTaskSources = list(metrics?.missingTaskSources);
   return (
-    <section aria-label={t('usage.session.overview')} className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label={t('usage.session.overview')} aria-busy={loading && !metrics} className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => {
         const label = t(card.labelKey);
         const value = sessionMetricValue(metrics, card.key);
@@ -31,7 +31,7 @@ export function DashboardSessionCards({ metrics }: { metrics: SessionMetrics | n
         const task = card.key === 'taskSeconds';
         const estimated = task && value !== null && ['mixed', 'estimated'].includes(metrics?.taskTimingKind ?? '');
         const taskNote = value === null ? t('usage.session.noRecord') : metrics?.taskTimingKind === 'recorded' ? t('usage.session.recordedTime') : metrics?.taskTimingKind === 'mixed' ? t('usage.session.includesEstimate') : estimated ? t('usage.session.estimate') : t('usage.session.noTaskRecord');
-        const note = task ? value !== null && missingTaskSources ? t('usage.session.taskNotePartial', { note: taskNote }) : taskNote : partial ? t('usage.session.partialSources') : '\u00a0';
+        const note = !metrics && loading ? t('usage.activity.loading') : !metrics && error ? t('usage.activity.unavailable') : task ? value !== null && missingTaskSources ? t('usage.session.taskNotePartial', { note: taskNote }) : taskNote : partial ? t('usage.session.partialSources') : '\u00a0';
         return (
           <Card key={card.key} className="h-[6.25rem] min-h-[6.25rem] min-w-0 overflow-hidden rounded-2xl p-3">
             <Card.Content className="flex h-full flex-col justify-between p-0">
@@ -53,7 +53,11 @@ export function DashboardSessionCards({ metrics }: { metrics: SessionMetrics | n
                 </Popover>
               </div>
               <div>
-                <p aria-label={t(estimated ? 'usage.session.estimatedAria' : 'usage.session.valueAria', { label, value: formatted })} className="truncate text-xl font-semibold leading-7 tracking-tight text-foreground tabular-nums" title={formatted}>{formatted}</p>
+                {loading && !metrics ? (
+                  <div role="status" aria-label={t('usage.activity.loading')}><Skeleton aria-hidden="true" className="h-7 w-24 rounded-md" /></div>
+                ) : (
+                  <p aria-label={t(estimated ? 'usage.session.estimatedAria' : 'usage.session.valueAria', { label, value: formatted })} className="truncate text-xl font-semibold leading-7 tracking-tight text-foreground tabular-nums" title={formatted}>{formatted}</p>
+                )}
                 <p className="mt-0.5 h-4 truncate text-[10px] leading-4 text-muted">{note}</p>
               </div>
             </Card.Content>

@@ -1,4 +1,4 @@
-import { dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
+import { dashboardRangeCacheKey, dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ensureLocalRange,
@@ -19,6 +19,7 @@ import {
 } from '@/lib/dashboard-mock-data';
 import { isMockDataEnabled } from '@/lib/env';
 import { fingerprintUsageDataset } from '@/lib/usage-dataset-fingerprint';
+import { rememberRangeValue } from '@/lib/range-query-cache';
 
 export type DashboardDataSource = 'api' | 'sample';
 
@@ -29,6 +30,13 @@ interface DashboardDataState {
   refreshing: boolean;
   /** Local ensure+resync for an expanded today/7D/30D/90D window. */
   syncingRange: boolean;
+  error: string | null;
+}
+
+interface RangeCacheEntry {
+  fingerprint: string | null;
+  data: DashboardMockData;
+  source: DashboardDataSource;
   error: string | null;
 }
 
@@ -49,18 +57,22 @@ export function useDashboardData(
   dateRange?: DashboardDateRange | null,
 ) {
   const rangeKey = dashboardRangeKey(rangeDays, dateRange);
+  const cacheKey = dashboardRangeCacheKey(rangeDays, dateRange);
+  const scopeKey = `${cacheKey}|${rangeKey}`;
   const collectDays = dateRange ? Math.min(365, dateRangeLookback(dateRange) + rangeDays) : rangeDays;
   const mockEnabled = isMockDataEnabled();
   const cliBackend = isCliBackend();
   const [revision, setRevision] = useState(0);
   const ensuredMaxDaysRef = useRef(0);
   const lastFetchedRangeKeyRef = useRef<string | null>(null);
+  const lastRequestedScopeRef = useRef<string | null>(null);
   const lastRevisionRef = useRef<number | null>(null);
   const datasetCacheRef = useRef<UsageDataset | null>(null);
   const cachedDailyDaysRef = useRef(0);
   const cachedHourlyDaysRef = useRef(0);
   const rangeFetchInFlightRef = useRef(false);
   const lastFingerprintRef = useRef<string | null>(null);
+  const rangeCacheRef = useRef(new Map<string, RangeCacheEntry>());
   const dataRef = useRef<DashboardMockData>(
     mockEnabled ? withClippedTodayHourly(dashboardMockData) : emptyDashboardData,
   );
@@ -90,12 +102,14 @@ export function useDashboardData(
       lastFetchedRangeKeyRef.current !== rangeKey;
     const revisionChanged = lastRevisionRef.current !== revision;
     lastRevisionRef.current = revision;
+    const scopeChanged = lastRequestedScopeRef.current !== scopeKey;
+    lastRequestedScopeRef.current = scopeKey;
     const hourlyAlreadyCovered =
       datasetCacheRef.current != null &&
       lastFetchedRangeKeyRef.current === rangeKey &&
       cachedHourlyDaysRef.current >= fetchDays.hourlyDays &&
       !needsEnsure;
-    if (!revisionChanged && hourlyAlreadyCovered) {
+    if (!revisionChanged && hourlyAlreadyCovered && !scopeChanged) {
       return () => {
         cancelled = true;
       };
@@ -106,12 +120,15 @@ export function useDashboardData(
       cachedDailyDaysRef.current >= fetchDays.dailyDays &&
       cachedHourlyDaysRef.current < fetchDays.hourlyDays &&
       !needsEnsure;
+    const cachedEntry = rangeCacheRef.current.get(cacheKey);
 
-    if (isRangeDrivenRefresh || isHourlyExpansion) {
-      rangeFetchInFlightRef.current = true;
-    }
+    rangeFetchInFlightRef.current = true;
 
-    setState((current) => {
+    if (cachedEntry && (isRangeDrivenRefresh || scopeChanged)) {
+      lastFingerprintRef.current = cachedEntry.fingerprint;
+      dataRef.current = cachedEntry.data;
+      setState({ ...cachedEntry, loading: false, refreshing: false, syncingRange: false });
+    } else setState((current) => {
       if (isEmpty(current.data)) {
         return {
           ...current,
@@ -136,6 +153,9 @@ export function useDashboardData(
     const applyResult = (next: DashboardDataState) => {
       startTransition(() => {
         if (cancelled) return;
+        if (!next.error || next.error === '当前时间范围暂无用量记录') {
+          rememberRangeValue(rangeCacheRef.current, cacheKey, { fingerprint: lastFingerprintRef.current, data: next.data, source: next.source, error: next.error });
+        }
         lastFetchedRangeKeyRef.current = rangeKey;
         rangeFetchInFlightRef.current = false;
         dataRef.current = next.data;
@@ -189,6 +209,7 @@ export function useDashboardData(
             fingerprint === lastFingerprintRef.current &&
             prior !== emptyDashboardData
           ) {
+            rememberRangeValue(rangeCacheRef.current, cacheKey, { fingerprint, data: prior, source: 'api', error: null });
             startTransition(() => {
               if (cancelled) return;
               lastFetchedRangeKeyRef.current = rangeKey;
@@ -252,9 +273,13 @@ export function useDashboardData(
       } catch (error: unknown) {
         if (cancelled) return;
         rangeFetchInFlightRef.current = false;
-        lastFingerprintRef.current = null;
         const message =
           error instanceof Error ? error.message : '数据加载失败';
+        if (cachedEntry) {
+          applyResult({ ...cachedEntry, loading: false, refreshing: false, syncingRange: false, error: message });
+          return;
+        }
+        lastFingerprintRef.current = null;
         if (mockEnabled) {
           applyResult({
             data: withClippedTodayHourly(dashboardMockData),
@@ -282,8 +307,9 @@ export function useDashboardData(
 
     return () => {
       cancelled = true;
+      rangeFetchInFlightRef.current = false;
     };
-  }, [rangeKey, rangeDays, selectedDate, dateRange, collectDays, revision, mockEnabled, cliBackend]);
+  }, [rangeKey, cacheKey, scopeKey, rangeDays, selectedDate, dateRange, collectDays, revision, mockEnabled, cliBackend]);
 
   useEffect(() => {
     if (!isCliBackend()) return;
@@ -310,9 +336,12 @@ export function useDashboardData(
     };
   }, [reload]);
 
+  const rangeChanged = lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey;
+  const cachedView = rangeCacheRef.current.get(cacheKey);
   return {
     ...state,
-    refreshing: state.refreshing || (lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey),
+    ...(cachedView ? { data: cachedView.data, source: cachedView.source, error: lastRequestedScopeRef.current === scopeKey ? state.error : cachedView.error, loading: false } : {}),
+    refreshing: cachedView ? false : state.refreshing || rangeChanged,
     reload,
   };
 }

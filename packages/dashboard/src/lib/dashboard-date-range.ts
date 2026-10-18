@@ -50,3 +50,9 @@ export function formatDashboardDateRange(range: DashboardDateRange): string {
 export function dashboardRangeKey(days: number, range?: DashboardDateRange | null): string {
   return range?.fromTime ? `rolling:${range.fromTime}:${range.toTime}` : range ? `${range.start}:${range.end}` : `last:${days}`;
 }
+
+/** A moving 24-hour view can display its previous reading while fetching new bounds. */
+export function dashboardRangeCacheKey(days: number, range?: DashboardDateRange | null, now = new Date()): string {
+  const rollingDay = range?.fromTime && range.toTime && Date.parse(range.toTime) - Date.parse(range.fromTime) === 86_400_000;
+  return `${localDateNow(undefined, now)}|${rollingDay ? 'rolling:24h' : dashboardRangeKey(days, range)}`;
+}

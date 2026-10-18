@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CircleHelp } from 'lucide-react';
-import { Button, Card, Chip, Popover, Tooltip } from '@heroui/react';
+import { Button, Card, Chip, Popover, Skeleton, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
@@ -36,6 +36,8 @@ interface DashboardOverviewCardProps {
   metricTrends: DashboardMetricTrends;
   summary: DashboardUsageSummary;
   sessionMetrics?: SessionMetrics | null;
+  sessionMetricsLoading?: boolean;
+  sessionMetricsError?: boolean;
   selectedDate?: string | null;
   onSelectDate?: (date: string) => void;
   /** Local CLI/Desktop only: show request count + cache hit captions. */
@@ -55,6 +57,8 @@ export function DashboardOverviewCard({
   metricTrends,
   summary,
   sessionMetrics = null,
+  sessionMetricsLoading = false,
+  sessionMetricsError = false,
   selectedDate = null,
   onSelectDate,
   showLocalMetrics = false,
@@ -188,7 +192,7 @@ export function DashboardOverviewCard({
                 <div className="min-w-0">
                   {metric.id === 'cost' && showLocalMetrics && !costReport ? (
                     <div aria-label={t(costExplanationLoading ? 'usage.overview.costLoading' : 'usage.overview.costUnavailable')} className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-muted">
-                      —
+                      {costExplanationLoading ? <Skeleton aria-hidden="true" className="h-7 w-24 rounded-md" /> : '—'}
                     </div>
                   ) : metric.id === 'cost' && costReport && costReport.summary.tokens > 0 && costReport.summary.costExplanation.unpricedTokens >= costReport.summary.tokens ? (
                     <div aria-label={t('usage.overview.costUnknown')} className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums" title={t('usage.common.unknown')}>
@@ -219,7 +223,7 @@ export function DashboardOverviewCard({
         ))}
       </div>
 
-      <DashboardSessionCards metrics={sessionMetrics} />
+      <DashboardSessionCards metrics={sessionMetrics} loading={sessionMetricsLoading} error={sessionMetricsError} />
 
       {belowMetrics}
 

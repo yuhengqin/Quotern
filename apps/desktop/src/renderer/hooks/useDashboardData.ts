@@ -1,4 +1,4 @@
-import { dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
+import { dashboardRangeCacheKey, dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ensureLocalRange,
@@ -17,6 +17,7 @@ import {
   type DashboardMockData,
 } from '@/lib/dashboard-mock-data';
 import { fingerprintUsageDataset } from '@/lib/usage-dataset-fingerprint';
+import { rememberRangeValue } from '@/lib/range-query-cache';
 
 export type DashboardDataSource = 'api';
 
@@ -63,12 +64,14 @@ export function useDashboardData(
   dateRange?: DashboardDateRange | null,
 ) {
   const rangeKey = dashboardRangeKey(rangeDays, dateRange);
-  const cacheKey = dateRange?.fromTime ? 'rolling:24h' : rangeKey;
+  const cacheKey = dashboardRangeCacheKey(rangeDays, dateRange);
+  const scopeKey = `${cacheKey}|${rangeKey}`;
   const collectDays = dateRange ? Math.min(365, dateRangeLookback(dateRange) + rangeDays) : rangeDays;
   const [revision, setRevision] = useState(0);
   /** Largest range (days) already ensure'd this session — shrinking skips ensure. */
   const ensuredMaxDaysRef = useRef(0);
   const lastFetchedRangeKeyRef = useRef<string | null>(null);
+  const lastRequestedScopeRef = useRef<string | null>(null);
   const lastRevisionRef = useRef<number | null>(null);
   const datasetCacheRef = useRef<UsageDataset | null>(null);
   const cachedDailyDaysRef = useRef(0);
@@ -102,12 +105,14 @@ export function useDashboardData(
       lastFetchedRangeKeyRef.current !== rangeKey;
     const revisionChanged = lastRevisionRef.current !== revision;
     lastRevisionRef.current = revision;
+    const scopeChanged = lastRequestedScopeRef.current !== scopeKey;
+    lastRequestedScopeRef.current = scopeKey;
     const hourlyAlreadyCovered =
       datasetCacheRef.current != null &&
       lastFetchedRangeKeyRef.current === rangeKey &&
       cachedHourlyDaysRef.current >= fetchDays.hourlyDays &&
       !needsEnsure;
-    if (!revisionChanged && hourlyAlreadyCovered) {
+    if (!revisionChanged && hourlyAlreadyCovered && !scopeChanged) {
       return () => {
         cancelled = true;
       };
@@ -118,16 +123,11 @@ export function useDashboardData(
       cachedDailyDaysRef.current >= fetchDays.dailyDays &&
       cachedHourlyDaysRef.current < fetchDays.hourlyDays &&
       !needsEnsure;
-    const cachedEntry =
-      isRangeDrivenRefresh && !needsEnsure
-        ? rangeCacheRef.current.get(cacheKey)
-        : undefined;
+    const cachedEntry = rangeCacheRef.current.get(cacheKey);
 
-    if (isRangeDrivenRefresh || isHourlyExpansion) {
-      rangeFetchInFlightRef.current = true;
-    }
+    rangeFetchInFlightRef.current = true;
 
-    if (cachedEntry) {
+    if (cachedEntry && (isRangeDrivenRefresh || scopeChanged)) {
       // Tab switch back to a visited range: render the cached view now and
       // revalidate in the background without loading/refreshing overlays.
       lastFingerprintRef.current = cachedEntry.fingerprint;
@@ -187,7 +187,6 @@ export function useDashboardData(
           cachedDailyDaysRef.current = 0;
           cachedHourlyDaysRef.current = 0;
           lastFingerprintRef.current = null;
-          rangeCacheRef.current.clear();
         }
 
         const canReuseDaily =
@@ -224,7 +223,7 @@ export function useDashboardData(
             prior !== emptyDashboardData
           ) {
             // Same content: keep previous data reference; bail if already idle.
-            rangeCacheRef.current.set(cacheKey, {
+            rememberRangeValue(rangeCacheRef.current, cacheKey, {
               fingerprint,
               data: prior,
               error: null,
@@ -260,7 +259,7 @@ export function useDashboardData(
             dataRef.current,
             buildDashboardDataFromDataset(dataset, rangeDays, dateRange),
           );
-          rangeCacheRef.current.set(cacheKey, {
+          rememberRangeValue(rangeCacheRef.current, cacheKey, {
             fingerprint,
             data,
             error: null,
@@ -279,7 +278,7 @@ export function useDashboardData(
         const emptyFingerprint = `empty|${rangeKey}`;
         const emptyError = '当前时间范围暂无用量记录';
         lastFingerprintRef.current = emptyFingerprint;
-        rangeCacheRef.current.set(cacheKey, {
+        rememberRangeValue(rangeCacheRef.current, cacheKey, {
           fingerprint: emptyFingerprint,
           data: emptyDashboardData,
           error: emptyError,
@@ -328,8 +327,9 @@ export function useDashboardData(
 
     return () => {
       cancelled = true;
+      rangeFetchInFlightRef.current = false;
     };
-  }, [rangeKey, rangeDays, selectedDate, dateRange, collectDays, revision]);
+  }, [rangeKey, cacheKey, scopeKey, rangeDays, selectedDate, dateRange, collectDays, revision]);
 
   useEffect(() => {
     let probing = false;
@@ -366,9 +366,12 @@ export function useDashboardData(
     };
   }, [reload]);
 
+  const rangeChanged = lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey;
+  const cachedView = rangeCacheRef.current.get(cacheKey);
   return {
     ...state,
-    refreshing: state.refreshing || (lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey),
+    ...(cachedView ? { data: cachedView.data, error: lastRequestedScopeRef.current === scopeKey ? state.error : cachedView.error, loading: false } : {}),
+    refreshing: cachedView ? false : state.refreshing || rangeChanged,
     reload,
   };
 }

@@ -13,6 +13,7 @@ export function getTrendDateRange(days: number, selectedDate: string | null, dat
 
 /** Limit the overview to intervals that remain readable and have something to compare. */
 export function getTrendControls(range: DashboardDateRange, requested: TrendSelection) {
+  if (range.fromTime) return { options: ['hourly'] as TrendGranularity[], selection: requested === 'hourly' ? 'hourly' as const : 'auto' as const, autoGranularity: 'hourly' as const, granularity: 'hourly' as const };
   const start = dateStamp(range.start), end = dateStamp(range.end);
   const days = Math.round((end - start) / DAY_MS) + 1;
   const monday = (stamp: number) => stamp - ((new Date(stamp).getUTCDay() + 6) % 7) * DAY_MS;

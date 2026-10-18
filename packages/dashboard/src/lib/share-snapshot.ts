@@ -35,7 +35,9 @@ export const SHARE_RANGE_OPTIONS = [
   { days: 90, key: 'share.range.last90' },
 ] as const;
 
-export function shareRangeLabel(days: number, locale: SupportedLocale): string {
+export function shareRangeLabel(days: number, locale: SupportedLocale, range?: DashboardDateRange | null): string {
+  if (range?.fromTime) return translate(locale, 'usage.range.last24Hours');
+  if (range) return formatDashboardDateRange(range);
   const option = SHARE_RANGE_OPTIONS.find((item) => item.days === days);
   return option ? translate(locale, option.key) : '';
 }
@@ -56,9 +58,10 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
   const rows = filterTrendRowsBySources({
     dailyRows: view.rangeDailyUsage,
     hourlyRows: view.todayHourlyUsage,
-    hourlyApiRows: data.hourlyApiRows,
+    hourlyApiRows: !selectedDate && data.rollingRange ? data.rangeHourlyApiRows ?? [] : data.hourlyApiRows,
+    rollingRange: !selectedDate ? data.rollingRange : null,
     hourlyDate,
-    heatmapDays: data.heatmapDays,
+    heatmapDays: !selectedDate && data.rollingRange ? data.rangeDailyApiRows ?? [] : data.heatmapDays,
     modelRows: view.modelRows,
     toolRows: view.toolModelUsage,
     selectedSources,
@@ -69,14 +72,14 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
       ? [...selectedSources]
       : view.toolModelUsage.filter((tool) => tool.tokens > 0).map((tool) => tool.source),
     days: rows.dailyRows
-      .filter((row) => !hourly || row.date === hourlyDate)
-      .map((row) => ({ date: row.date, tokens: hourly ? summary.totalTokens : row.totalTokens })),
+      .filter((row) => !hourly || (!selectedDate && data.rollingRange) || row.date === hourlyDate)
+      .map((row) => ({ date: row.date, tokens: hourly && !data.rollingRange ? summary.totalTokens : row.totalTokens })),
     models: filterModelRowsBySources(view.modelRows, selectedSources),
   };
   return {
     summary,
     details,
-    rangeLabel: selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : shareRangeLabel(rangeDays, locale)),
+    rangeLabel: selectedDate ?? shareRangeLabel(rangeDays, locale, data.rollingRange ?? filters.dateRange),
     toolLabel: selectedSources.length > 0 ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedSources.map(sourceLabel)) : translate(locale, 'share.allAgents'),
     tools: view.toolModelUsage,
   };

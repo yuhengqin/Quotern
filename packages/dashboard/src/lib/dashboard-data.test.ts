@@ -14,7 +14,8 @@ import {
   projectDashboardForDate,
 } from './dashboard-data.ts';
 import { buildToolModelUsage } from './dashboard-mock-data.ts';
-import { buildVisibleMetricTrends } from './usage-filter.ts';
+import { buildVisibleMetricTrends, filterTrendRowsBySources, summarizeTrendRows } from './usage-filter.ts';
+import { buildShareSnapshot } from './share-snapshot.ts';
 
 function datasetWithDays(
   dailyRows: UsageDataset['dailyRows'],
@@ -37,6 +38,41 @@ function datasetWithDays(
     ...extras,
   };
 }
+
+test('rolling projection uses partial days, retains both midnight sides and filters Agent hourly totals', () => {
+  const range = { start: '2026-10-17', end: '2026-10-18', fromTime: '2026-10-17T06:30:00Z', toTime: '2026-10-18T06:30:00Z' };
+  const hour = (date: string, source: string, tokens: number) => ({ date, hour: 23, source, tokens, costUsd: tokens / 10, inputTokens: tokens, outputTokens: 0, cachedInputTokens: 0 });
+  const dataset = datasetWithDays([
+    { date: range.start, tokens: 100, costUsd: 10, models: {} },
+    { date: range.end, tokens: 200, costUsd: 20, models: {} },
+  ]);
+  const rollingDataset = { ...dataset, window: {
+    dailyRows: [{ date: range.start, tokens: 30, costUsd: 3, models: { [dailyModelKey('codex', 'gpt-5')]: 30 } }, { date: range.end, tokens: 40, costUsd: 4, models: { [dailyModelKey('claude', 'sonnet')]: 40 } }],
+    hourlyRows: [hour(range.start, 'codex', 30), { ...hour(range.end, 'claude', 40), hour: 10 }],
+    previousHourlyRows: [hour('2026-10-16', 'claude', 25), { ...hour(range.start, 'codex', 10), hour: 10 }],
+  }, modelRows: [
+    { source: 'codex', model: 'gpt-5', tokens: 30, costUsd: 3, pct: 30 / 70 * 100 },
+    { source: 'claude', model: 'sonnet', tokens: 40, costUsd: 4, pct: 40 / 70 * 100 },
+  ] };
+  const view = buildDashboardDataFromDataset(rollingDataset, 1, range);
+  assert.equal(view.summary.totalTokens, 70);
+  assert.equal(view.todayHourlyUsage.reduce((sum, row) => sum + row.totalTokens, 0), 70);
+  assert.equal(view.todayHourlyUsage.find(row => row.hourLabel.includes('10/17') && row.hour === 23)?.totalTokens, 30);
+  const filtered = filterTrendRowsBySources({
+    dailyRows: view.rangeDailyUsage, hourlyRows: view.todayHourlyUsage, hourlyApiRows: view.rangeHourlyApiRows!,
+    rollingRange: range, heatmapDays: view.rangeDailyApiRows!, modelRows: view.modelRows, toolRows: view.toolModelUsage, selectedSources: ['codex'],
+  });
+  assert.equal(summarizeTrendRows({ ...filtered, hourly: true }).totalTokens, 30);
+  const comparison = { currentDailyRows: filtered.dailyRows, currentHourlyRows: filtered.hourlyRows, heatmapDailyRows: view.heatmapDailyUsage,
+    heatmapDays: view.heatmapDays, hourlyApiRows: view.hourlyApiRows, modelRows: view.modelRows, toolRows: view.toolModelUsage,
+    selectedSources: ['codex'], rangeDays: 1, hourly: true, rollingRange: range, previousHourlyApiRows: view.previousHourlyApiRows,
+  };
+  assert.equal(buildVisibleMetricTrends(comparison).totalTokens?.changePct, 200);
+  assert.equal(buildVisibleMetricTrends({ ...comparison, availableFromTime: '2026-10-16T06:31:00Z' }).totalTokens, null);
+  const share = buildShareSnapshot(view, { rangeDays: 1, selectedDate: null, selectedSources: ['codex'], dateRange: range });
+  assert.equal(share.summary.totalTokens, 30);
+  assert.equal(share.details.days.reduce((sum, day) => sum + day.tokens, 0), 30);
+});
 
 test('custom historical range includes both endpoints and excludes later usage', () => {
   const dataset = datasetWithDays([

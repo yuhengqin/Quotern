@@ -1,4 +1,5 @@
 import type { QueueBucket } from './types.js';
+import { inTimeBounds } from './usage-window.js';
 import { buildUsageReport, type UsageReportContext, type UsageReportQuery, type UsageReport } from './usage-report.js';
 import { addLocalDays, localDateAndHour } from './timezone.js';
 import { normalizeProjectName } from './project-label.js';
@@ -45,6 +46,10 @@ export function aggregateUsageTrend(rows: readonly QueueBucket[], query: UsageRe
   for (let date = fromDate; date <= toDate; date = addLocalDays(date, 1)) {
     const lastHour = granularity === 'hourly' ? date === today.date ? today.hour : 23 : 0;
     for (let hour = 0; hour <= lastHour; hour++) {
+      if (granularity === 'hourly' && query.fromTime && query.toTime) {
+        const start = localDateAndHour(query.fromTime), end = localDateAndHour(new Date(Date.parse(query.toTime) - 1));
+        if (date === start.date && hour < start.hour || date === end.date && hour > end.hour) continue;
+      }
       const key = keyFor(date, hour, granularity);
       const previous = points.get(key);
       if (previous) previous.toDate = date;
@@ -55,7 +60,7 @@ export function aggregateUsageTrend(rows: readonly QueueBucket[], query: UsageRe
   for (const row of rows) {
     if (!row || !Number.isFinite(Date.parse(row.hour_start)) || ![row.input_tokens, row.output_tokens, row.cached_input_tokens, row.cache_creation_input_tokens, row.reasoning_output_tokens ?? 0].every(n => Number.isFinite(n) && n >= 0)) continue;
     const { date, hour } = localDateAndHour(row.hour_start);
-    if (date < fromDate || date > toDate || (report.filters.sources.length && !report.filters.sources.includes(row.source))
+    if (date < fromDate || date > toDate || !inTimeBounds(row.hour_start, query) || (report.filters.sources.length && !report.filters.sources.includes(row.source))
       || (report.filters.model && row.model !== report.filters.model) || (report.filters.project && normalizeProjectName(row.project) !== report.filters.project)) continue;
     const point = points.get(keyFor(date, hour, granularity));
     if (!point) continue;

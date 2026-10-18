@@ -14,6 +14,7 @@ import type {
   UsageSummary,
 } from './types.js';
 import { dailyModelKey } from './daily-model-key.js';
+import { inTimeBounds, type UsageBounds } from './usage-window.js';
 import { normalizeProjectName } from './project-label.js';
 import { computeRowCost, computeTokens, roundCostUsd } from './pricing/index.js';
 import { ingestBucketKey } from './queue/keys.js';
@@ -185,11 +186,11 @@ export function resolveAggregateWindow(
   days: number,
   statsSince: string,
   timeZone: string = DEFAULT_STATS_TIMEZONE,
-  options?: { fromDate?: string; toDate?: string },
+  options?: UsageBounds,
 ): { fromDate: string; toDate: string; statsSinceDate: string } {
   const today = localDateNow(timeZone);
-  const fromDate = options?.fromDate ?? localDateDaysAgo(days, timeZone);
-  const toDate = options?.toDate ?? today;
+  const fromDate = options?.fromTime ? localDateAndHour(options.fromTime, timeZone).date : options?.fromDate ?? localDateDaysAgo(days, timeZone);
+  const toDate = options?.toTime ? localDateAndHour(new Date(Date.parse(options.toTime) - 1), timeZone).date : options?.toDate ?? today;
   return {
     fromDate,
     toDate,
@@ -202,7 +203,7 @@ export function aggregateDaily(
   days: number,
   statsSince: string,
   timeZone: string = DEFAULT_STATS_TIMEZONE,
-  options?: { fromDate?: string; toDate?: string },
+  options?: UsageBounds,
 ): DailyUsageResponse {
   const { fromDate, toDate, statsSinceDate } = resolveAggregateWindow(
     days,
@@ -232,7 +233,7 @@ export function aggregateDaily(
 
   for (const row of rows) {
     const { date } = localDateAndHour(row.hour_start, timeZone);
-    if (date < fromDate || date > toDate || date < statsSinceDate) continue;
+    if (date < fromDate || date > toDate || date < statsSinceDate || !inTimeBounds(row.hour_start, options)) continue;
 
     // 总 Token = 五类 total_tokens（与 main / 入库一致）；输入/输出另字段真实下发。
     const tokens = computeTokens(row);
@@ -326,7 +327,7 @@ export function aggregateHourly(
   days: number,
   statsSince: string,
   timeZone: string = DEFAULT_STATS_TIMEZONE,
-  bounds?: { fromDate?: string; toDate?: string },
+  bounds?: UsageBounds,
 ): HourlyUsageResponse {
   const { fromDate, toDate, statsSinceDate } = resolveAggregateWindow(
     days,
@@ -352,7 +353,7 @@ export function aggregateHourly(
 
   for (const row of rows) {
     const { date, hour } = localDateAndHour(row.hour_start, timeZone);
-    if (date < fromDate || date > toDate || date < statsSinceDate) continue;
+    if (date < fromDate || date > toDate || date < statsSinceDate || !inTimeBounds(row.hour_start, bounds)) continue;
 
     const source = row.source || 'unknown';
     const key = `${date}T${String(hour).padStart(2, '0')}|${source}`;
@@ -401,7 +402,7 @@ export function aggregateModelBreakdown(
   days: number,
   statsSince: string,
   timeZone: string = DEFAULT_STATS_TIMEZONE,
-  bounds?: { fromDate?: string; toDate?: string },
+  bounds?: UsageBounds,
 ): ModelBreakdownResponse {
   const { fromDate, toDate, statsSinceDate } = resolveAggregateWindow(
     days,
@@ -443,7 +444,7 @@ export function aggregateModelBreakdown(
 
   for (const row of rows) {
     const { date } = localDateAndHour(row.hour_start, timeZone);
-    if (date < fromDate || date > toDate || date < statsSinceDate) continue;
+    if (date < fromDate || date > toDate || date < statsSinceDate || !inTimeBounds(row.hour_start, bounds)) continue;
 
     const tokens = computeTokens(row);
     const cost = computeRowCost(row);

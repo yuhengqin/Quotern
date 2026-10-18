@@ -1,4 +1,5 @@
 import { normalizeProjectName } from 'quotern-core/project-label';
+import type { DashboardDateRange } from './dashboard-date-range.js';
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
 import type { DailyUsageRow, HourlyUsageRow, ModelBreakdownRow } from './api.ts';
@@ -161,6 +162,11 @@ export interface DashboardToolUsageInput {
 }
 
 export interface DashboardMockData {
+  rollingRange?: DashboardDateRange;
+  rangeDailyApiRows?: DailyUsageRow[];
+  availableFromTime?: string;
+  rangeHourlyApiRows?: HourlyUsageRow[];
+  previousHourlyApiRows?: HourlyUsageRow[];
   /** Earliest calendar date covered by collection, for complete comparisons. */
   availableFromDate?: string;
   hourlyUsage: DashboardHourlyUsageRow[];

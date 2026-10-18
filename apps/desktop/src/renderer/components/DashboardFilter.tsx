@@ -23,6 +23,7 @@ export {
 
 const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
   { id: 'today', label: '' },
+  { id: 'last-24-hours', label: '1D' },
   { id: 'last-7-days', label: '7D' },
   { id: 'last-30-days', label: '30D' },
   { id: 'last-90-days', label: '90D' },
@@ -61,6 +62,7 @@ export function DashboardFilter({
         {RANGE_OPTIONS.map((option) => (
           <Button
             aria-pressed={!customRange && value === option.id}
+            render={(props) => <button {...props} title={option.id === 'last-24-hours' ? t('usage.range.last24HoursHint') : undefined} />}
             className={`!h-6 !min-h-6 !min-w-0 rounded-full px-3 text-xs font-normal transition-none! ${!customRange && value === option.id ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
             isDisabled={disabled}
             key={option.id}

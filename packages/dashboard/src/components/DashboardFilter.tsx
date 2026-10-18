@@ -15,10 +15,11 @@ import { sourceLabel } from '@/lib/tokens';
 import { DashboardDateRangePicker } from './DashboardDateRangePicker';
 import { formatDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
 
-export type DashboardRange = 'today' | 'last-7-days' | 'last-30-days' | 'last-90-days';
+export type DashboardRange = 'today' | 'last-24-hours' | 'last-7-days' | 'last-30-days' | 'last-90-days';
 
 export const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
   today: 1,
+  'last-24-hours': 1,
   'last-7-days': 7,
   'last-30-days': 30,
   'last-90-days': 90,
@@ -26,6 +27,7 @@ export const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
 
 const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
   { id: 'today', label: '' },
+  { id: 'last-24-hours', label: '1D' },
   { id: 'last-7-days', label: '7D' },
   { id: 'last-30-days', label: '30D' },
   { id: 'last-90-days', label: '90D' },
@@ -64,6 +66,7 @@ export function DashboardFilter({
         {RANGE_OPTIONS.map((option) => (
           <Button
             aria-pressed={!customRange && value === option.id}
+            render={(props) => <button {...props} title={option.id === 'last-24-hours' ? t('usage.range.last24HoursHint') : undefined} />}
             className={`!h-6 !min-h-6 !min-w-0 rounded-full px-3 text-xs font-normal transition-none! ${!customRange && value === option.id ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
             isDisabled={disabled}
             key={option.id}

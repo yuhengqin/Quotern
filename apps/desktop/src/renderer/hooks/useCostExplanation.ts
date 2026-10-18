@@ -7,8 +7,9 @@ import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 export function useCostExplanation(days: number, selectedDate: string | null, dateRange: DashboardDateRange | null, sources: readonly string[], enabled: boolean, snapshot: object) {
   const start = selectedDate ?? dateRange?.start;
   const end = selectedDate ?? dateRange?.end;
+  const fromTime = selectedDate ? undefined : dateRange?.fromTime, toTime = selectedDate ? undefined : dateRange?.toTime;
   const sourceKey = [...sources].sort().join(',');
-  const key = `${days}|${start ?? ''}|${end ?? ''}|${sourceKey}`;
+  const key = `${days}|${start ?? ''}|${end ?? ''}|${fromTime ?? ''}|${toTime ?? ''}|${sourceKey}`;
   const context = useMemo(() => ({ key }), [key]);
   const [state, setState] = useState<{ context: object | null; report: UsageReport | null; error: boolean }>({ context: null, report: null, error: false });
   useEffect(() => {
@@ -19,7 +20,7 @@ export function useCostExplanation(days: number, selectedDate: string | null, da
       pending = true;
       setState((current) => ({ context, report: current.context === context ? current.report : null, error: false }));
       try {
-        const report = await fetchUsageReport(days, start && end ? { start, end } : undefined, sourceKey ? sourceKey.split(',') : []);
+        const report = await fetchUsageReport(days, start && end ? { start, end, fromTime, toTime } : undefined, sourceKey ? sourceKey.split(',') : []);
         if (!cancelled) setState({ context, report, error: false });
       } catch {
         if (!cancelled) setState((current) => ({ context, report: current.context === context ? current.report : null, error: true }));
@@ -38,7 +39,7 @@ export function useCostExplanation(days: number, selectedDate: string | null, da
       window.removeEventListener('focus', onRefresh);
       document.removeEventListener('visibilitychange', onRefresh);
     };
-  }, [days, start, end, sourceKey, context, enabled, snapshot]);
+  }, [days, start, end, fromTime, toTime, sourceKey, context, enabled, snapshot]);
   const current = enabled && state.context === context;
   return { report: current ? state.report : null, error: current && state.error, loading: !current || (!state.report && !state.error) };
 }

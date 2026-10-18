@@ -26,6 +26,7 @@ import { DashboardRangeSyncOverlay } from './DashboardRangeSyncOverlay';
 import { DailyUsageTrendCard } from './DailyUsageTrendCard';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useRollingDayRange } from '@/hooks/useRollingDayRange';
 import { fetchSyncStatus } from '@/lib/api';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
 import { scheduleAfterPaint } from '@/lib/schedule-after-paint';
@@ -76,7 +77,8 @@ export function TrayPopoverView() {
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
-  const { data, error, loading, refreshing, reload } = useDashboardData(rangeDays);
+  const rollingRange = useRollingDayRange(dataRange === 'last-24-hours');
+  const { data, error, loading, refreshing, reload } = useDashboardData(rangeDays, null, rollingRange);
   const {
     distributions,
     rangeDailyUsage,
@@ -171,9 +173,10 @@ export function TrayPopoverView() {
       filterTrendRowsBySources({
         dailyRows: rangeDailyUsage,
         hourlyRows: todayHourlyUsage,
-        hourlyApiRows: data.hourlyApiRows,
+        hourlyApiRows: rollingRange ? data.rangeHourlyApiRows ?? [] : data.hourlyApiRows,
+        rollingRange,
         hourlyDate: range === 'today' ? localDateNow() : undefined,
-        heatmapDays: data.heatmapDays,
+        heatmapDays: rollingRange ? data.rangeDailyApiRows ?? [] : data.heatmapDays,
         modelRows: data.modelRows,
         toolRows: toolModelUsage,
         selectedSources: selectedTools,
@@ -181,6 +184,9 @@ export function TrayPopoverView() {
     [
       data.heatmapDays,
       data.hourlyApiRows,
+      data.rangeHourlyApiRows,
+      data.rangeDailyApiRows,
+      rollingRange,
       data.modelRows,
       range,
       rangeDailyUsage,
@@ -194,9 +200,9 @@ export function TrayPopoverView() {
       summarizeTrendRows({
         dailyRows: visibleTrendRows.dailyRows,
         hourlyRows: visibleTrendRows.hourlyRows,
-        hourly: range === 'today',
+        hourly: rangeDays === 1,
       }),
-    [range, visibleTrendRows],
+    [rangeDays, visibleTrendRows],
   );
   const visibleMetricTrends = useMemo(
     () =>
@@ -210,10 +216,18 @@ export function TrayPopoverView() {
         toolRows: toolModelUsage,
         selectedSources: selectedTools,
         rangeDays,
-        hourly: range === 'today',
+        hourly: rangeDays === 1,
+        rollingRange,
+        previousHourlyApiRows: data.previousHourlyApiRows,
+        availableFromDate: data.availableFromDate,
+        availableFromTime: data.availableFromTime,
       }),
     [
       data.heatmapDailyUsage,
+      data.previousHourlyApiRows,
+      data.availableFromDate,
+      data.availableFromTime,
+      rollingRange,
       data.heatmapDays,
       data.hourlyApiRows,
       data.modelRows,
@@ -404,6 +418,10 @@ export function TrayPopoverView() {
                   <span className="text-xs font-normal">{t('usage.range.today')}</span>
                   <Tabs.Indicator className="bg-accent transition-none!" />
                 </Tabs.Tab>
+                <Tabs.Tab className="transition-none!" id="last-24-hours">
+                  <span className="text-xs font-normal">1D</span>
+                  <Tabs.Indicator className="bg-accent transition-none!" />
+                </Tabs.Tab>
                 <Tabs.Tab className="transition-none!" id="last-7-days">
                   <span className="text-xs font-normal">7D</span>
                   <Tabs.Indicator className="bg-accent transition-none!" />
@@ -501,7 +519,8 @@ export function TrayPopoverView() {
               <DailyUsageTrendCard
                 className="tray-popover__trend"
                 compact
-                hourly={range === 'today'}
+                hourly={rangeDays === 1}
+                rangeLabel={rollingRange ? t('usage.range.last24Hours') : undefined}
                 hourlyRows={visibleTrendRows.hourlyRows}
                 rangeDays={rangeDays}
                 rows={visibleTrendRows.dailyRows}

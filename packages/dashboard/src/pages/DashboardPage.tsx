@@ -21,6 +21,7 @@ import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useRollingDayRange } from '@/hooks/useRollingDayRange';
 import { useCostExplanation } from '@/hooks/useCostExplanation';
 import { useSessionMetrics } from '@/hooks/useSessionMetrics';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -80,11 +81,13 @@ export function DashboardPage() {
   const { publishSnapshot } = useShareSnapshot();
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = customRange ? dateRangeDays(customRange) : DASHBOARD_RANGE_DAYS[dataRange];
+  const rollingRange = useRollingDayRange(!customRange && dataRange === 'last-24-hours');
+  const queryRange = rollingRange ?? customRange;
   const { data, error, loading, refreshing, reload, source } =
-    useDashboardData(rangeDays, selectedDate, customRange);
+    useDashboardData(rangeDays, selectedDate, queryRange);
   useDashboardReturnState(selectedDate, selectedTools, loading);
-  const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing);
-  const costExplanation = useCostExplanation(rangeDays, selectedDate, customRange, selectedTools, !loading && !refreshing && range === dataRange && source === 'api', data);
+  const sessionMetrics = useSessionMetrics(rangeDays, selectedDate, queryRange, selectedTools, !loading && !refreshing);
+  const costExplanation = useCostExplanation(rangeDays, selectedDate, queryRange, selectedTools, !loading && !refreshing && range === dataRange && source === 'api', data);
   const view = useMemo(
     () => (selectedDate ? projectDashboardForDate(data, selectedDate) : data),
     [data, selectedDate],
@@ -95,6 +98,7 @@ export function DashboardPage() {
     ? formatFilterDayLabel(selectedDate, locale)
     : customRange ? formatDashboardDateRange(customRange)
       : range === 'today' ? t('usage.range.today')
+        : range === 'last-24-hours' ? t('usage.range.last24Hours')
         : t('usage.range.lastDays', { count: DASHBOARD_RANGE_DAYS[range] });
   const shareToolLabel = selectedTools.length > 0
     ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedTools.map(sourceLabel))
@@ -142,9 +146,10 @@ export function DashboardPage() {
       filterTrendRowsBySources({
         dailyRows: view.rangeDailyUsage,
         hourlyRows: view.todayHourlyUsage,
-        hourlyApiRows: data.hourlyApiRows,
+        hourlyApiRows: rollingRange && !selectedDate ? data.rangeHourlyApiRows ?? [] : data.hourlyApiRows,
+        rollingRange: !selectedDate ? rollingRange : null,
         hourlyDate: selectedDate ?? (isHourly ? customRange?.end ?? localDateNow() : undefined),
-        heatmapDays: data.heatmapDays,
+        heatmapDays: rollingRange && !selectedDate ? data.rangeDailyApiRows ?? [] : data.heatmapDays,
         modelRows: view.modelRows,
         toolRows: view.toolModelUsage,
         selectedSources: selectedTools,
@@ -156,6 +161,9 @@ export function DashboardPage() {
       selectedDate,
       selectedTools,
       customRange,
+      rollingRange,
+      data.rangeHourlyApiRows,
+      data.rangeDailyApiRows,
       view.modelRows,
       view.rangeDailyUsage,
       view.todayHourlyUsage,
@@ -166,7 +174,7 @@ export function DashboardPage() {
     ? visibleTrendRows.hourlyRows
     : visibleTrendRows.dailyRows;
   const metricTrendPeriodLabel = isHourly
-    ? dayScoped
+    ? rollingRange && !selectedDate ? t('usage.range.last24Hours') : dayScoped
       ? t('usage.range.dayHours')
       : t('usage.range.todayHours')
     : customRange ? formatDashboardDateRange(customRange) : t('usage.range.lastDaysShort', { count: rangeDays });
@@ -198,10 +206,16 @@ export function DashboardPage() {
         hourly: isHourly,
         currentDate: selectedDate ?? customRange?.end,
         availableFromDate: data.availableFromDate,
+        rollingRange: !selectedDate ? rollingRange : null,
+        previousHourlyApiRows: data.previousHourlyApiRows,
+        availableFromTime: data.availableFromTime,
       }),
     [
       data.heatmapDailyUsage,
       data.availableFromDate,
+      data.previousHourlyApiRows,
+      data.availableFromTime,
+      rollingRange,
       data.heatmapDays,
       data.hourlyApiRows,
       data.modelRows,
@@ -232,7 +246,7 @@ export function DashboardPage() {
   useEffect(() => {
     publishSnapshot({
       data,
-      filters: { rangeDays, selectedDate, selectedSources: selectedTools, dateRange: customRange },
+      filters: { rangeDays, selectedDate, selectedSources: selectedTools, dateRange: queryRange },
       loading: loading || refreshing || range !== dataRange,
       error,
       details: {
@@ -240,8 +254,8 @@ export function DashboardPage() {
           ? selectedTools
           : view.toolModelUsage.filter((row) => row.tokens > 0).map((row) => row.source),
         days: visibleTrendRows.dailyRows
-          .filter((row) => !isHourly || row.date === (selectedDate ?? customRange?.end ?? localDateNow()))
-          .map((row) => ({ date: row.date, tokens: isHourly ? visibleSummary.totalTokens : row.totalTokens })),
+          .filter((row) => !isHourly || (!selectedDate && rollingRange) || row.date === (selectedDate ?? customRange?.end ?? localDateNow()))
+          .map((row) => ({ date: row.date, tokens: isHourly && !rollingRange ? visibleSummary.totalTokens : row.totalTokens })),
         models: filterModelRowsBySources(view.modelRows, selectedTools),
       },
       rangeLabel: shareRangeLabel,
@@ -254,6 +268,8 @@ export function DashboardPage() {
     range,
     rangeDays,
     customRange,
+    queryRange,
+    rollingRange,
     error,
     loading,
     publishSnapshot,
@@ -339,13 +355,13 @@ export function DashboardPage() {
             summary={visibleSummary}
             sessionMetrics={sessionMetrics}
           />
-          <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} />
+          <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section
             aria-label={t('usage.page.charts')}
             className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2"
           >
-            <UsageTrendExplorer days={rangeDays} selectedDate={selectedDate} dateRange={customRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined} />
+            <UsageTrendExplorer days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} dailyRows={visibleTrendRows.dailyRows} dayScoped={dayScoped} hourly={isHourly} hourlyRows={visibleTrendRows.hourlyRows} rangeLabel={customRange ? formatDashboardDateRange(customRange) : undefined} />
             {/* 分时活跃热力图：按天热力图已并入概览大卡片，此处注释便于以后恢复
             <HourlyActivityHeatmap rows={data.hourlyUsage} />
             */}

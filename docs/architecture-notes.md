@@ -44,6 +44,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | `GET /functions/tud-usage-model-breakdown` | 模型与项目分布，默认 30 天 |
 | `GET /functions/tud-usage-report` | 只读报表与费用依据；`period=summary\|overview\|daily\|weekly\|monthly\|models\|projects`，默认 `summary` / 7 天；支持 `days` 或成对 `fromDate/toDate`，可按 `sources`（逗号分隔）、`model`、`project` 筛选；拒绝未知、重复参数 |
 | 上述三个统计端点的日期参数 | 可同时传 `fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD`，按北京时间包含两端；无参数时保留 `days` 语义，缺一端、无效日期、倒序或未来日期返回 400 |
+| 滚动时间窗口 | 日、小时、模型/项目、report、trend、sessions 和 session-activity 支持成对 `fromTime/toTime`（含时区的 ISO 时间，`[fromTime,toTime)`），与日期参数互斥；report / trend 也与 `days` 互斥。Dashboard / Desktop 的 `1D` 共用最近 24 小时边界，环比取前一段 24 小时；“今天”保留自然日统计。Token 和费用按已有 30 分钟桶起点筛选，不能拆分边界桶；会话 Token 归属沿用桶时间，消息计数和任务时长按实际时间筛选/裁剪。时间窗口绕过整日封存缓存，热力图仍保留自然日历史。 |
 | `GET /functions/tud-sync-status` | 同步时间、来源和 Hook 状态 |
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
 | `POST /functions/tud-trigger-sync` | 可传 `{ source }`；省略或 `all` 为全量，未知来源返回 400 |

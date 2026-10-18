@@ -8,8 +8,9 @@ import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 export function useSessionMetrics(days: number, selectedDate: string | null, dateRange: DashboardDateRange | null, sources: readonly string[], enabled: boolean) {
   const start = selectedDate ?? dateRange?.start;
   const end = selectedDate ?? dateRange?.end;
+  const fromTime = selectedDate ? undefined : dateRange?.fromTime, toTime = selectedDate ? undefined : dateRange?.toTime;
   const sourceKey = [...sources].sort().join(',');
-  const key = `${days}|${start ?? ''}|${end ?? ''}|${sourceKey}`;
+  const key = `${days}|${start ?? ''}|${end ?? ''}|${fromTime ?? ''}|${toTime ?? ''}|${sourceKey}`;
   const [state, setState] = useState<{ key: string; metrics: SessionMetrics | null }>({ key: '', metrics: null });
   useEffect(() => {
     if (!enabled || !isCliBackend()) return;
@@ -18,7 +19,7 @@ export function useSessionMetrics(days: number, selectedDate: string | null, dat
       if (pending || cancelled || document.visibilityState === 'hidden') return;
       pending = true;
       try {
-        const metrics = await fetchSessionMetrics(days, start && end ? { start, end } : undefined, sourceKey ? sourceKey.split(',') : []);
+        const metrics = await fetchSessionMetrics(days, start && end ? { start, end, fromTime, toTime } : undefined, sourceKey ? sourceKey.split(',') : []);
         if (!cancelled) setState({ key, metrics });
       } catch {
         if (!cancelled) setState({ key, metrics: null });
@@ -37,6 +38,6 @@ export function useSessionMetrics(days: number, selectedDate: string | null, dat
       window.removeEventListener('focus', onRefresh);
       document.removeEventListener('visibilitychange', onRefresh);
     };
-  }, [days, start, end, sourceKey, key, enabled]);
+  }, [days, start, end, fromTime, toTime, sourceKey, key, enabled]);
   return state.key === key ? state.metrics : null;
 }

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { inTimeBounds, validTimeBounds, type UsageBounds } from './usage-window.js';
 import type { QueueBucket } from './types.js';
 import type { TokenQuality } from './token-quality.js';
 import { aggregateLocalMetrics, type LocalUsageMetrics } from './local-metrics.js';
@@ -14,7 +15,7 @@ import { addLocalDays, DEFAULT_STATS_TIMEZONE, localDateAndHour, localDateDaysAg
 
 export const USAGE_REPORT_PERIODS = ['summary', 'overview', 'daily', 'weekly', 'monthly', 'models', 'projects'] as const;
 export type UsageReportPeriod = typeof USAGE_REPORT_PERIODS[number];
-export interface UsageReportQuery {
+export interface UsageReportQuery extends UsageBounds {
   period?: UsageReportPeriod;
   days?: number;
   fromDate?: string;
@@ -70,6 +71,8 @@ export interface UsageReport {
   timeZone: string;
   fromDate: string;
   toDate: string;
+  fromTime?: string;
+  toTime?: string;
   filters: { sources: string[]; model: string | null; project: string | null };
   coverage: {
     collectSince: string;
@@ -168,11 +171,13 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
   if (!Number.isFinite(Date.parse(context.collectSince))) throw new Error('本地配置的采集起点无效');
   if (query.days !== undefined && (!Number.isInteger(query.days) || query.days < 1 || query.days > 3660)) throw new Error('days 必须是 1 到 3660 的整数');
   const explicitRange = query.fromDate !== undefined || query.toDate !== undefined;
+  const timeRange = query.fromTime !== undefined || query.toTime !== undefined;
+  if (timeRange && (explicitRange || query.days !== undefined || !validTimeBounds(query))) throw new Error('时间须同时提供有效的 fromTime/toTime，且不能同时指定日期或 days');
   if (explicitRange && (query.days !== undefined || !isUsageReportDate(query.fromDate) || !isUsageReportDate(query.toDate))) {
     throw new Error('日期须同时提供有效的 fromDate/toDate，且不能同时指定 days');
   }
-  const fromDate = query.fromDate ?? localDateDaysAgo(query.days ?? 7, DEFAULT_STATS_TIMEZONE, now);
-  const toDate = query.toDate ?? localDateNow(DEFAULT_STATS_TIMEZONE, now);
+  const fromDate = query.fromTime ? localDateAndHour(query.fromTime).date : query.fromDate ?? localDateDaysAgo(query.days ?? 7, DEFAULT_STATS_TIMEZONE, now);
+  const toDate = query.toTime ? localDateAndHour(new Date(Date.parse(query.toTime) - 1)).date : query.toDate ?? localDateNow(DEFAULT_STATS_TIMEZONE, now);
   if (fromDate > toDate || toDate > localDateNow(DEFAULT_STATS_TIMEZONE, now)) throw new Error('日期范围无效或晚于今天');
   const sources = [...new Set((query.sources ?? []).map((source) => {
     const normalized = normalizeSyncSource(source);
@@ -190,7 +195,7 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
   const selected = rows.filter((row) => {
     if (!validBucket(row)) { invalidRows++; return false; }
     const date = localDateAndHour(row.hour_start).date;
-    return date >= effectiveFrom && date <= toDate
+    return date >= effectiveFrom && date <= toDate && inTimeBounds(row.hour_start, query)
       && (!selectedSources.length || selectedSources.includes(row.source))
       && (!model || row.model === model)
       && (!project || normalizeProjectName(row.project || 'unknown') === project);
@@ -230,10 +235,11 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
     ? { daily: groupRows('daily'), models: groupRows('models'), projects: groupRows('projects') } : undefined;
   return {
     schemaVersion: 1, period, timeZone: DEFAULT_STATS_TIMEZONE, fromDate, toDate,
+    ...(timeRange ? { fromTime: query.fromTime, toTime: query.toTime } : {}),
     filters: { sources: selectedSources, model, project },
     coverage: {
       collectSince: context.collectSince, fromDate: effectiveFrom, toDate,
-      limited: Date.parse(context.collectSince) > Date.parse(`${fromDate}T00:00:00+08:00`),
+      limited: Date.parse(context.collectSince) > Date.parse(query.fromTime ?? `${fromDate}T00:00:00+08:00`),
       snapshot: context.snapshot ?? 'runtime', lastSyncAt: context.lastSyncAt ?? null, readAt: now.toISOString(), invalidRows,
     }, summary, rows: reportRows, ...(breakdowns ? { breakdowns } : {}),
   };

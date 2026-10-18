@@ -9,7 +9,6 @@ import { OPEN_SHARE_EVENT } from '@/lib/shell-events';
 import { buildShareSnapshot, SHARE_RANGE_OPTIONS, shareRangeLabel, type ShareFilters } from '../lib/share-snapshot';
 import { normalizeSourceId } from '../lib/usage-filter';
 import { MAX_SHARE_BACKGROUNDS } from '../lib/share-backgrounds';
-import { formatDashboardDateRange } from '@/lib/dashboard-date-range';
 import { ToolChannelSelect } from './DashboardFilter';
 import { getShareCardVariant, SHARE_CARD_VARIANTS, ShareCardCarousel, type ShareCardVariant } from './ShareCardCarousel';
 import { ShareCardActions } from './ShareCardActions';
@@ -80,7 +79,8 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   const inheritedDate = initial?.filters.selectedDate;
   const inheritedRange = initial?.filters.dateRange;
   const rangeValue = filters.selectedDate ? `date:${filters.selectedDate}` : filters.dateRange ? 'custom' : String(filters.rangeDays);
-  const rangeLabel = filters.selectedDate ?? (filters.dateRange ? formatDashboardDateRange(filters.dateRange) : shareRangeLabel(filters.rangeDays, locale));
+  const rangeLabel = filters.selectedDate ?? shareRangeLabel(filters.rangeDays, locale, filters.dateRange);
+  const inheritedRangeLabel = shareRangeLabel(initial?.filters.rangeDays ?? 1, locale, inheritedRange);
   const disabled = loading || error !== null || !preview;
 
   return (
@@ -112,8 +112,8 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
                     {shareRangeLabel(option.days, locale)}<ListBox.ItemIndicator />
                   </ListBox.Item>
                 ))}
-                {inheritedRange && <ListBox.Item id="custom" textValue={formatDashboardDateRange(inheritedRange)}>
-                  {formatDashboardDateRange(inheritedRange)}<ListBox.ItemIndicator />
+                {inheritedRange && <ListBox.Item id="custom" textValue={inheritedRangeLabel}>
+                  {inheritedRangeLabel}<ListBox.ItemIndicator />
                 </ListBox.Item>}
                 {inheritedDate && (
                   <ListBox.Item id={`date:${inheritedDate}`} textValue={inheritedDate}>

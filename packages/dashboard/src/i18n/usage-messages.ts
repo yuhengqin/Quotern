@@ -84,6 +84,8 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.common.days_one': ['{{count}} 天', '{{count}} day', '{{count}}日', '{{count}}일'],
   'usage.common.days_other': ['{{count}} 天', '{{count}} days', '{{count}}日', '{{count}}일'],
   'usage.range.today': ['今天', 'Today', '今日', '오늘'],
+  'usage.range.last24Hours': ['最近 24 小时', 'Last 24 hours', '過去24時間', '최근 24시간'],
+  'usage.range.last24HoursHint': ['滚动最近 24 小时；Token 按 30 分钟桶的起始时间统计', 'Rolling last 24 hours; tokens are selected by 30-minute bucket start times', '過去24時間のローリング集計。トークンは30分バケットの開始時刻で集計', '최근 24시간 이동 집계. 토큰은 30분 버킷 시작 시각 기준'],
   'usage.range.day': ['当日', 'Selected day', '選択日', '선택한 날'],
   'usage.range.lastDays': ['近 {{count}} 天', 'Last {{count}} days', '過去{{count}}日間', '최근 {{count}}일'],
   'usage.range.lastDays_one': ['近 {{count}} 天', 'Last {{count}} day', '過去{{count}}日間', '최근 {{count}}일'],

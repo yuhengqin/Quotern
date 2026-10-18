@@ -24,7 +24,7 @@ interface Props {
 
 const TOKEN_BREAKDOWN_KEYS = ['inputTokens', 'cacheReadTokens', 'outputTokens', 'otherTokens'] as const;
 const TOKEN_SERIES = {
-  tokens: { label: 'usage.common.totalTokens', color: chartColor(0) },
+  tokens: { label: 'usage.common.totalTokens', color: '#8B5CF6' },
   inputTokens: { label: 'usage.common.input', color: chartColor(0) },
   cacheReadTokens: { label: 'usage.distribution.cacheRead', color: chartColor(2) },
   outputTokens: { label: 'usage.common.output', color: chartColor(1) },

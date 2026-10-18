@@ -36,7 +36,7 @@ type SeriesKey = (typeof SERIES_KEYS)[number];
 type TokenTrendView = 'all' | 'detail';
 
 const CHART_CONFIG = {
-  totalTokens: { label: 'usage.common.totalTokens', color: '#1F6FE5' },
+  totalTokens: { label: 'usage.common.totalTokens', color: '#8B5CF6' },
   inputTokens: { label: 'usage.common.input', color: '#71BD99' },
   outputTokens: { label: 'usage.common.output', color: '#397FEC' },
   cachedInputTokens: { label: 'usage.common.cache', color: '#E9A846' },

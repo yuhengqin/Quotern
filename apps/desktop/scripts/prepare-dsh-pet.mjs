@@ -4,6 +4,7 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { patchDshPetChat } from './patch-dsh-pet-chat.mjs';
+import { patchDshPetPointer } from './patch-dsh-pet-pointer.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const hostModules = ['config', 'state', 'work-status', 'notify-events', 'memes', 'anim', 'broadcast', 'time-context', 'model-selection'];
@@ -77,16 +78,17 @@ async function handleBridgeRequest(request) {
   const openStart = helper.indexOf('  const openSite = (url) => {'), openEnd = helper.indexOf('  // 显示器热更新', openStart);
   if (openStart < 0 || openEnd < openStart) throw new Error('unsupported upstream open-host');
   helper = helper.slice(0, openStart) + "  ipcMain.on('pet:open-host', () => { void hostBridge.request('POST', '/dsh-pet-7340/open-host').catch(() => {}); });\n\n" + helper.slice(openEnd);
-  await writeFile(runtimeFile, helper);
   const preloadFile = path.join(output, 'runtime/preload.js');
   let preload = await readFile(preloadFile, 'utf8');
   preload = replaceRequired(preload, 'openDshSite(url)', 'openHost()');
   preload = replaceRequired(preload, "ipcRenderer.send('pet:open-site', { url });", "ipcRenderer.send('pet:open-host');");
-  await writeFile(preloadFile, preload);
   const spriteFile = path.join(output, 'runtime/sprite.js');
   let sprite = await readFile(spriteFile, 'utf8');
   sprite = replaceRequired(sprite, "OPEN_TARGET === 'desktop' ? '打开 DeepSeek Harness' : '打开网站'", "'打开 Quotern'");
   sprite = replaceRequired(sprite, 'window.petBridge.openDshSite(ORIGIN)', 'window.petBridge.openHost()');
+  ({ helper, preload, sprite } = patchDshPetPointer({ helper, preload, sprite }));
+  await writeFile(runtimeFile, helper);
+  await writeFile(preloadFile, preload);
   await writeFile(spriteFile, sprite);
   await build({ entryPoints: [path.join(desktopRoot, 'src/main/dsh-pet/helper-adapter.ts')], outfile: path.join(output, 'runtime/quotern-adapter.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',

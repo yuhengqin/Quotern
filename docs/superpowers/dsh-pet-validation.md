@@ -99,3 +99,21 @@ corepack pnpm exec node .superpowers/sdd/helper-interactions.cjs apps/desktop/re
 原始失败和修复后日志/截图/结果均在本 worktree `.superpowers/sdd/2026-10-19-dsh-pet-desktop/`：`interactions-settings-initial-3*`、`interactions-helper-initial*`、`interactions-service-red.log`、`interactions-settings-fixed-2*`、`interactions-helper-fixed-2*`、`interactions-{build,package,typecheck-final,workspace-tests,packaged-final,native-final}.log`。首次扩大脚本时的键盘 Enter 事件和隐藏菜单定位也已修正，未将这些驱动错误算成产品缺陷。
 
 本轮未使用付费外部模型、未添加真实额度账号、未安装/发布。真实 Windows 输入法、鼠标手感、下层应用点击穿透、多屏/DPI/热插拔及系统通知仍保留前文的人工验收边界。原始 vendor 快照不变，聊天修复通过有守卫的生成补丁应用。
+
+## Windows 全桌面鼠标卡顿调查（2026-10-19）
+
+用户补充：开启独立宠物后，鼠标在整个桌面移动时均有卡顿。继续使用独立 worktree，分支 `codex/fix-dsh-pet-pointer-jank`，基于 main `6fba8d0`；没有关闭用户正在使用的 main 开发实例。
+
+原 helper 唯一的 `setWindowIgnore` 出口始终使用 `{ forward: true }`。Electron 35.4.0 在 Windows 首次启用 forwarding 时注册进程共享的 `WH_MOUSE_LL` 全局低级鼠标钩子；每条全局 `WM_MOUSEMOVE` 都经过此回调，即使鼠标不在宠物窗口内。只有最后一个转发窗口退出集合才卸载 hook。源码见 [native_window_views_win.cc](https://github.com/electron/electron/blob/v35.4.0/shell/browser/native_window_views_win.cc#L512-L590)。微软说明，低级 hook 在鼠标事件分发到输入队列前、回到安装线程执行，因此辅助进程 UI 线程的停顿可能拖延其他应用的输入，见 [LowLevelMouseProc](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelmouseproc)。该回调内部向 renderer 使用的是异步 `PostMessage`，不能解释成“同步等待 renderer 回复”。
+
+这是与用户描述吻合且已确认存在的全局输入阻塞风险。宿主还有每秒配置读取和日志扫描成本，但指定调用链未发现鼠标移动直接触发这些操作或主窗口全量 React 更新；没有据此顺带重写采集或活动监听。由于本轮两次 Windows Graphics Capture 分别返回 `FrameArrived timed out` 和 `window capture timed out`，未完成真实物理鼠标的关闭／开启钩子 A/B 测量，**不能声称已确认本次卡顿的唯一原因或已测得改善幅度**。
+
+修复在生成层关闭所有 Windows helper 窗口的 forwarding，并将已有全局光标轮询由 60ms 改为 16ms。命中、穿透、拖拽租约和菜单／聊天控件矩形继续使用原判定；hover 通过去重局部坐标样本维护，只在身体内位置变化、离体或 busy 结束时发送。远处桌面移动不持续发 renderer IPC，采样不参与真实拖拽或浮层输入，非 Windows 的 forwarding 与 60ms 行为保留。16ms 轮询恢复交互存在至多一个采样周期加调度时间的响应延迟，真实快速点击手感仍需人工验收。原始 vendor 快照不变。
+
+生成产物的 Windows hook 禁用断言先失败（`true !== false`），修复后通过；审查发现 busy 结束可能漏掉一次离体同步，又以单测先复现 `null` 与退出坐标不符，再修正并增加松手后 tooltip 隐藏断言。adapter 用例覆盖静止去重、窗口移动、同坐标命中区变化、离体一次、远处大量更新和 busy→idle。
+
+扩展 `dsh-pet-helper-interactions.ts`：在专属 helper 中仅替换 `screen.getCursorScreenPoint()` 输入，运行真正的原生轮询 timer，并记录 `BrowserWindow.setIgnoreMouseEvents` 调用及 renderer 接收结果。验证无 forwarded DOM mousemove 仍可恢复 hover、所有观测的 Windows ignore 调用均关闭 forwarding、离体恢复穿透、远处移动不刷 IPC、菜单／聊天局部输入与窗外拖拽捕获。此测试证明实际 timer、桥接和输入状态契约，不等同于向 Windows 注入真实鼠标输入；随后继续执行原 19 项 helper 交互检查。
+
+最终 25/25 项 helper 检查通过，Desktop 类型检查、完整 Desktop 构建、本地未签名 win-unpacked 打包均退出 0。完整 `corepack pnpm test`（含全仓构建）退出 0：14 个 runner 合计 **1744 tests，1709 pass、35 skip、0 fail**；Desktop 合计 **731 tests，711 pass、20 skip、0 fail**。原生 helper smoke 和打包主应用 smoke 再次通过，包括两只宠物、106 个素材解析、输入状态、开关、聊天记忆、加密脱敏、旧宠物并存和正常退出。未安装、未发布；真实 Windows 全桌面卡顿改善须在重启开发实例加载新生成资源后由用户确认。
+
+本地调查及回归证据在实现 worktree 的 `.superpowers/sdd/2026-10-19-dsh-pet-desktop/`：`pointer-build-{red,green}.log`、`pointer-busy-red.log`、`pointer-{build-final,package-final,helper-final,workspace-tests,typecheck,native,packaged}.log` 与对应结果目录。`pointer-profile-*` 是隔离调查 fixture，未改动用户 profile；Windows 截图失败后停止 OS 自动化，没有将其当作物理鼠标性能验证成功。

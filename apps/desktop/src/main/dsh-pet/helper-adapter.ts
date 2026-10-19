@@ -4,6 +4,20 @@ import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import type { RpcResponse } from '../../shared/dsh-pet.js';
 
+/** Sample local hover coordinates without a Windows low-level mouse hook. */
+export function createPointerSampler() {
+  let last: { x: number; y: number } | null = null, wasInBody = false, refreshAfterBusy = false;
+  return (bounds: { x: number; y: number }, point: { x: number; y: number }, inBody: boolean, busy: boolean): { x: number; y: number } | null => {
+    // Real pointer capture owns drag/menu/chat input; samples must never release it.
+    if (busy) { last = null; wasInBody = false; refreshAfterBusy = true; return null; }
+    const next = { x: point.x - bounds.x, y: point.y - bounds.y };
+    const changed = !last || last.x !== next.x || last.y !== next.y || inBody !== wasInBody;
+    const publish = refreshAfterBusy || changed && (inBody || wasInBody);
+    last = next; wasInBody = inBody; refreshAfterBusy = false;
+    return publish ? next : null;
+  };
+}
+
 export function connectHost(endpoint: string, token: string, onDisconnect: () => void) {
   const socket = connect(endpoint);
   let sequence = 0, pending = Buffer.alloc(0), closed = false;

@@ -32,6 +32,15 @@ test('builds the full offline pet runtime without document previews or an unlice
     assert.equal(typeof vendor.PollStateStore, 'function');
     const config = vendor.readAllConfig({ defaultFile: path.join(outputRoot, 'assets/config.jsonc'), userFile: path.join(root, 'none'), petDir: path.join(root, 'pets') });
     assert.equal(config.main.font.family, 'system');
+    const helper = await readFile(path.join(outputRoot, 'runtime/main.js'), 'utf8');
+    const ignoreFunction = helper.match(/function setWindowIgnore\(win, ignore\) \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(ignoreFunction, 'native mouse policy remains testable in the generated helper');
+    for (const platform of ['win32', 'darwin', 'linux']) {
+      const calls = [], inputContext = vm.createContext({ process: { platform }, windowIgnore: new Map(), win: { id: 1, setIgnoreMouseEvents: (...args) => calls.push(args) } });
+      vm.runInContext(ignoreFunction + '\nsetWindowIgnore(win, true);', inputContext);
+      assert.equal(calls[0][0], true);
+      assert.equal(calls[0][1].forward, platform !== 'win32', 'Windows must not register Electron\'s global mouse hook');
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

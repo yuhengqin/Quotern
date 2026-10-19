@@ -24,12 +24,13 @@ async function main() {
   });
   await new Promise<void>(resolve=>api.listen(0,'127.0.0.1',resolve));
   const port=await unusedPort();
+  const inspectorPort=await unusedPort();
   const controller=new DshPetController({root:path.join(directory,'host'),runtimeRoot:path.resolve(runtimeRoot),executable:path.resolve(executable),appPath:path.join(path.dirname(path.resolve(executable)),'resources/app.asar'),packaged:true,
     secrets:{isEncryptionAvailable:()=>false,encryptString:()=>{throw Error('not used');},decryptString:()=>{throw Error('not used');}},
     getQuota:()=>null,showMainWindow:()=>{openedHost++;},openDirectory:async()=>{},roots:[],
-    spawn:(exe,args,options)=>{child=spawn(exe,[...args,`--remote-debugging-port=${port}`],options);child.stdout?.on('data',c=>{stdout+=String(c);});child.stderr?.on('data',c=>{stderr+=String(c);});return child;},
+    spawn:(exe,args,options)=>{child=spawn(exe,[...args,`--remote-debugging-port=${port}`,`--inspect=127.0.0.1:${inspectorPort}`],options);child.stdout?.on('data',c=>{stdout+=String(c);});child.stderr?.on('data',c=>{stderr+=String(c);});return child;},
   });
-  let page: any, second: any;
+  let page: any, second: any, native: any;
   const pages=async()=>((await(await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).filter(p=>p.type==='page');
   const connect=async()=>{
     let targets:any[]=[];
@@ -38,8 +39,10 @@ async function main() {
     const target=targets.find(p=>new URL(p.url).searchParams.get('petIndex')==='0')??targets[0];
     page=await connectPage(target); clients.push(page);
     if(targets.length>1){second=await connectPage(targets.find(p=>p!==target));clients.push(second);}
-    for(let i=0;i<100;i++){if(await page.evaluate('Boolean(window.__dshPetDebug?.configOk && document.querySelector(".pet-hit"))'))return;await wait(100);}
-    throw Error('helper did not load configuration');
+    let ready=false;
+    for(let i=0;i<100;i++){if(await page.evaluate('Boolean(window.__dshPetDebug?.configOk && document.querySelector(".pet-hit"))')){ready=true;break;}await wait(100);}
+    assert.ok(ready,'helper did not load configuration');
+    native=await connectPage((await(await fetch(`http://127.0.0.1:${inspectorPort}/json/list`)).json())[0]);clients.push(native);
   };
   const check=async(name:string,fn:()=>Promise<void>)=>{try{await fn();results.push({name,ok:true});}catch(error){results.push({name,ok:false,error:String((error as Error).stack??error)});await page?.screenshot(path.join(directory,`failure-${results.length}.png`)).catch(()=>{});}console.log(JSON.stringify(results.at(-1)));};
   const ev=(code:string)=>page.evaluate(code);
@@ -62,6 +65,31 @@ async function main() {
     await controller.dispatch({type:'set-default-model',model:{provider:'local',model:'audit'}});
     await controller.dispatch({type:'set-enabled',enabled:true}); await connect();await wait(1000);
     await check('two-real-helper-pages',async()=>{assert.equal((await pages()).length,2);assert.equal(await ev('window.__dshPetDebug.spriteCount'),1);assert.equal(await second.evaluate('window.__dshPetDebug.spriteCount'),1);});
+    // Controlled cursor input exercises the real native polling timer, without
+    // moving the user's physical pointer or relying on injected DOM mousemove.
+    await native.evaluate(`(()=>{
+      const electron=process.getBuiltinModule('module').createRequire(process.execPath)('electron');
+      const screen=electron.screen, prototype=electron.BrowserWindow.prototype, originalIgnore=prototype.setIgnoreMouseEvents, originalCursor=screen.getCursorScreenPoint;
+      const win=electron.BrowserWindow.getAllWindows().find(w=>new URL(w.webContents.getURL()).searchParams.get('petIndex')==='0'), originalSend=win.webContents.send;
+      globalThis.__pointerAudit={point:{x:-10000,y:-10000},calls:[],samples:0,win};
+      prototype.setIgnoreMouseEvents=function(ignore,options){__pointerAudit.calls.push({id:this.id,ignore,forward:options?.forward});return originalIgnore.call(this,ignore,options);};
+      screen.getCursorScreenPoint=()=>__pointerAudit.point;
+      win.webContents.send=function(channel,...args){if(channel==='pet:cursor-position')__pointerAudit.samples++;return originalSend.call(this,channel,...args);};
+      globalThis.__restorePointerAudit=()=>{screen.getCursorScreenPoint=originalCursor;prototype.setIgnoreMouseEvents=originalIgnore;win.webContents.send=originalSend;};return true;
+    })()`);
+    const nativePoint=async(expression:string)=>{
+      const point=await ev(`(()=>{const r=(${expression}).getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+      await native.evaluate(`(()=>{const w=__pointerAudit.win,b=w.getBounds(),z=w.webContents.getZoomFactor();__pointerAudit.point={x:b.x+${point.x}*z,y:b.y+${point.y}*z};return true;})()`);await wait(100);
+    };
+    const outside=async()=>{await native.evaluate('__pointerAudit.point={x:-10000,y:-10000};true;');await wait(100);};
+    try {
+      await check('native-poll-restores-hover-without-forwarded-mousemove',async()=>{await outside();await nativePoint('document.querySelector(".pet-hit")');assert.equal(await ev('window.__dshPetDebug.tooltipOn'),true);const calls=await native.evaluate('__pointerAudit.calls');assert.equal(calls.at(-1).ignore,false);assert.ok(calls.every((call:any)=>call.forward===false),'no Windows native call may enable the global mouse hook');});
+      await check('native-poll-clears-hover-and-restores-passthrough',async()=>{await outside();assert.equal(await ev('window.__dshPetDebug.tooltipOn'),false);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);});
+      await check('native-poll-does-not-stream-far-away-desktop-movement',async()=>{await native.evaluate('__pointerAudit.samples=0;__pointerAudit.calls=[];true;');await native.evaluate('new Promise(resolve=>{let n=0;const timer=setInterval(()=>{__pointerAudit.point={x:-10000+n++,y:-10000};if(n>=100){clearInterval(timer);resolve(true);}},1);})');await wait(80);assert.equal(await native.evaluate('__pointerAudit.samples'),0);assert.equal((await native.evaluate('__pointerAudit.calls')).length,0);});
+      await check('native-poll-preserves-menu-input-regions',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openMenu();await nativePoint(menuItem('对话'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await outside();assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);await nativePoint(menuItem('对话'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await clean();});
+      await check('native-poll-preserves-chat-input-regions',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openChat();await nativePoint(`document.querySelector('${chat} textarea')`);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await outside();assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);await nativePoint(`document.querySelector('${chat} textarea')`);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);assert.equal(await ev('window.__dshPetDebug.chatOpen'),true);await clean();});
+      await check('native-poll-preserves-drag-capture-outside-window',async()=>{await nativePoint('document.querySelector(".pet-hit")');const point=await ev(`(()=>{const r=document.querySelector('.pet-hit').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1});await wait(100);await outside();assert.equal(await ev('window.__dshPetDebug.inputBusy'),true);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});await wait(100);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);assert.equal(await ev('window.__dshPetDebug.tooltipOn'),false);});
+    }finally{await native.evaluate('globalThis.__restorePointerAudit?.();true;');await clean();}
     await check('ordinary-left-click-animates',async()=>{await page.click('document.querySelector(".pet-hit")');await wait(180);assert.ok(await ev(`document.querySelector('.pet-video.is-front')?.src`));assert.equal(await ev('window.__dshPetDebug.errors.length'),0);});
     await check('context-menu-escape',async()=>{await openMenu();assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await page.key('Escape');assert.equal(await ev(`!!document.querySelector('${menu}')`),false);});
     await check('three-level-animation-menu',async()=>{

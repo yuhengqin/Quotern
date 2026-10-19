@@ -11,7 +11,15 @@ export interface LocaleControllerOptions {
 
 /** Persist first, then make the new locale visible to every native surface. */
 export function createLocaleController(options: LocaleControllerOptions) {
-  let state: DesktopLocaleState = { preference: 'system', resolved: 'zh-CN' };
+  const resolveState = (preference: LocalePreference): DesktopLocaleState => {
+    const languages = options.preferredLanguages();
+    return {
+      preference,
+      resolved: options.resolve(preference, languages),
+      systemLocale: options.resolve('system', languages),
+    };
+  };
+  let state: DesktopLocaleState = { preference: 'system', resolved: 'zh-CN', systemLocale: 'zh-CN' };
   let pending: Promise<unknown> = Promise.resolve();
 
   const broadcast = () => options.broadcast({ ...state });
@@ -19,10 +27,7 @@ export function createLocaleController(options: LocaleControllerOptions) {
   return {
     async initialize(): Promise<void> {
       const preference = await options.readPreference();
-      state = {
-        preference,
-        resolved: options.resolve(preference, options.preferredLanguages()),
-      };
+      state = resolveState(preference);
     },
     getState(): DesktopLocaleState {
       return { ...state };
@@ -31,20 +36,16 @@ export function createLocaleController(options: LocaleControllerOptions) {
       const run = pending.then(async () => {
         if (preference === state.preference) return;
         await options.writePreference(preference);
-        state = {
-          preference,
-          resolved: options.resolve(preference, options.preferredLanguages()),
-        };
+        state = resolveState(preference);
         broadcast();
       });
       pending = run.then(() => undefined, () => undefined);
       return run;
     },
     refreshSystem(): void {
-      if (state.preference !== 'system') return;
-      const resolved = options.resolve('system', options.preferredLanguages());
-      if (resolved === state.resolved) return;
-      state = { preference: 'system', resolved };
+      const next = resolveState(state.preference);
+      if (next.resolved === state.resolved && next.systemLocale === state.systemLocale) return;
+      state = next;
       broadcast();
     },
   };

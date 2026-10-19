@@ -86,7 +86,7 @@ export function SettingsPanel({
 
 function AppSettingsPanel() {
   const { t } = useTranslation();
-  const { preference, locale, setPreference } = useLocalePreference();
+  const { preference, locale, systemLocale, setPreference } = useLocalePreference();
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +117,7 @@ function AppSettingsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
-        <LanguagePreferenceControl value={preference} onChange={setPreference} />
+        <LanguagePreferenceControl value={preference} systemLocale={systemLocale} onChange={setPreference} />
       </Surface>
       <Surface className="rounded-xl p-4" variant="secondary">
         <RadioGroup

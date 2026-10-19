@@ -22,17 +22,20 @@ test('system choice resolves the preferred languages and a saved choice broadcas
   });
 
   await controller.initialize();
-  assert.deepEqual(controller.getState(), { preference: 'system', resolved: 'ko' });
+  assert.deepEqual(controller.getState(), { preference: 'system', resolved: 'ko', systemLocale: 'ko' });
   assert.deepEqual(events, []);
 
   await controller.setPreference('ja');
   assert.equal(saved, 'ja');
-  assert.deepEqual(controller.getState(), { preference: 'ja', resolved: 'ja' });
-  assert.deepEqual(events, [{ preference: 'ja', resolved: 'ja' }]);
+  assert.deepEqual(controller.getState(), { preference: 'ja', resolved: 'ja', systemLocale: 'ko' });
+  assert.deepEqual(events, [{ preference: 'ja', resolved: 'ja', systemLocale: 'ko' }]);
 
   languages = ['en-US'];
   controller.refreshSystem();
-  assert.equal(events.length, 1, 'a manual choice ignores system-language changes');
+  assert.deepEqual(controller.getState(), { preference: 'ja', resolved: 'ja', systemLocale: 'zh-CN' });
+  assert.deepEqual(events[1], { preference: 'ja', resolved: 'ja', systemLocale: 'zh-CN' });
+  controller.refreshSystem();
+  assert.equal(events.length, 2, 'an unchanged system language sends no extra event');
 });
 
 test('failed persistence leaves the old state visible and sends no locale event', async () => {
@@ -47,7 +50,7 @@ test('failed persistence leaves the old state visible and sends no locale event'
   await controller.initialize();
 
   await assert.rejects(controller.setPreference('ko'), /disk full/);
-  assert.deepEqual(controller.getState(), { preference: 'system', resolved: 'en' });
+  assert.deepEqual(controller.getState(), { preference: 'system', resolved: 'en', systemLocale: 'en' });
   assert.deepEqual(events, []);
 });
 
@@ -64,6 +67,6 @@ test('system choice broadcasts when the preferred OS language changes', async ()
   await controller.initialize();
   languages = ['en-US'];
   controller.refreshSystem();
-  assert.deepEqual(controller.getState(), { preference: 'system', resolved: 'en' });
-  assert.deepEqual(events, [{ preference: 'system', resolved: 'en' }]);
+  assert.deepEqual(controller.getState(), { preference: 'system', resolved: 'en', systemLocale: 'en' });
+  assert.deepEqual(events, [{ preference: 'system', resolved: 'en', systemLocale: 'en' }]);
 });

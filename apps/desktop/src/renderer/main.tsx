@@ -28,7 +28,7 @@ async function startRenderer() {
   registerMessages(desktopShellMessages);
   registerMessages(desktopSubscriptionMessages);
   const initialState: DesktopLocaleState = await window.tud.getLocalePreference()
-    .catch(() => ({ preference: 'system', resolved: 'zh-CN' }));
+    .catch(() => ({ preference: 'system', resolved: 'zh-CN', systemLocale: 'zh-CN' }));
   await setActiveLocale(initialState.resolved);
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

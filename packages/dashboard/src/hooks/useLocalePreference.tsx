@@ -22,6 +22,7 @@ const STORAGE_KEY = 'quotern.locale.preference';
 interface LocaleContextValue {
   preference: LocalePreference;
   locale: SupportedLocale;
+  systemLocale: SupportedLocale;
   setPreference: (preference: LocalePreference) => void;
 }
 
@@ -47,6 +48,7 @@ export function browserInitialLocale(): SupportedLocale {
 export function BrowserLocaleProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<LocalePreference>(readBrowserLocalePreference);
   const [languages, setLanguages] = useState(browserLanguages);
+  const systemLocale = useMemo(() => resolveLocale('system', languages), [languages]);
   const locale = useMemo(() => resolveLocale(preference, languages), [preference, languages]);
 
   useEffect(() => {
@@ -79,8 +81,8 @@ export function BrowserLocaleProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ preference, locale, setPreference }),
-    [preference, locale, setPreference],
+    () => ({ preference, locale, systemLocale, setPreference }),
+    [preference, locale, systemLocale, setPreference],
   );
 
   return (

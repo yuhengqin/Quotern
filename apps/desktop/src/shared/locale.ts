@@ -7,4 +7,5 @@ export const LOCALE_CHANGED_CHANNEL = 'locale:changed';
 export interface DesktopLocaleState {
   preference: LocalePreference;
   resolved: SupportedLocale;
+  systemLocale: SupportedLocale;
 }

@@ -117,7 +117,7 @@ function SubscriptionChannelSettings() {
 /** 自动更新 + 开机自启 + 设备信息。 */
 function AppSettingsPanel() {
   const { t } = useTranslation();
-  const { preference, locale, setPreference } = useLocalePreference();
+  const { preference, locale, systemLocale, setPreference } = useLocalePreference();
   const [localeError, setLocaleError] = useState(false);
   const cliMode = true;
   const isMac = window.tud?.platform === 'darwin';
@@ -277,6 +277,7 @@ function AppSettingsPanel() {
         <Card.Content>
           <LanguagePreferenceControl
             value={preference}
+            systemLocale={systemLocale}
             onChange={(next) => {
               setLocaleError(false);
               void setPreference(next).catch((reason) => {

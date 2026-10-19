@@ -27,6 +27,7 @@
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
 | 订阅品牌图标 | [SubscriptionBrandIcon](../packages/dashboard/src/components/SubscriptionBrandIcon.tsx)，QuotaUsageCard 使用 | 订阅品牌；与 Agent/模型厂商有不同语义与资源集合 | 独立实现，Desktop 支持的品牌/资源更多 |
 | 主题切换 | [ThemeToggle](../packages/dashboard/src/components/ThemeToggle.tsx)，FilterChromeActions 使用 | 跟随系统、浅色、深色循环与可访问标签 | 独立组件及主题 hook |
+| 语言偏好 | [LanguagePreferenceControl](../packages/dashboard/src/components/LanguagePreferenceControl.tsx)，SettingsPanel 使用 | 四种语言单选，系统语言对应项标记“自动”并保存 `system`；`systemLocale` 独立于当前界面语言 | Desktop SettingsPanel 直接引用，系统语言由主进程提供 |
 
 ### 业务内复用入口
 

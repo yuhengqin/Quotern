@@ -14,15 +14,14 @@ import {
   type SupportedLocale,
 } from 'quotern-i18n';
 import { ProductI18nProvider } from 'quotern-i18n/react';
+import type { DesktopLocaleState } from '../../shared/locale';
 
-export interface DesktopLocaleState {
-  preference: LocalePreference;
-  resolved: SupportedLocale;
-}
+export type { DesktopLocaleState } from '../../shared/locale';
 
 interface LocaleContextValue {
   preference: LocalePreference;
   locale: SupportedLocale;
+  systemLocale: SupportedLocale;
   setPreference: (preference: LocalePreference) => Promise<void>;
 }
 
@@ -66,7 +65,7 @@ export function DesktopLocaleProvider({
   }, []);
 
   const value = useMemo(
-    () => ({ preference: state.preference, locale: state.resolved, setPreference }),
+    () => ({ preference: state.preference, locale: state.resolved, systemLocale: state.systemLocale, setPreference }),
     [state, setPreference],
   );
 

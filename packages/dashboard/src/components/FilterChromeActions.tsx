@@ -1,6 +1,6 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircleDollarSign, RefreshCw, Settings, Share2 } from 'lucide-react';
+import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
 import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
@@ -15,6 +15,7 @@ import {
   shareCurrentPage,
 } from '@/lib/shell-events';
 import { cn } from '@/lib/utils';
+import { createSessionPageSearch, type SessionScope } from '../lib/session-page';
 
 function openGithubRepository(): void {
   const opened = window.open(GITHUB_REPO_URL, '_blank');
@@ -29,7 +30,7 @@ function openGithubRepository(): void {
  * Filter-bar chrome: share / refresh / settings + theme toggle.
  * Public web shows share + theme; CLI also shows refresh / settings.
  */
-export function FilterChromeActions() {
+export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionScope }) {
   const { t } = useTranslation();
   const toastQueue = useAppToastQueue();
   const cliBackend = isCliBackend();
@@ -70,6 +71,12 @@ export function FilterChromeActions() {
 
   return (
     <div className="flex items-center gap-1">
+      {cliBackend && sessionScope && <Tooltip closeDelay={80} delay={100}>
+        <Tooltip.Trigger aria-label={t('usage.activity.pageTitle')} className="button button--sm button--tertiary button--icon-only inline-flex size-8 min-h-8 min-w-8 shrink-0 p-0" render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/sessions" search={createSessionPageSearch(sessionScope)} />}>
+          <RotateCcwClock className="size-4" aria-hidden />
+        </Tooltip.Trigger>
+        <Tooltip.Content placement="bottom"><p>{t('usage.activity.pageTitle')}</p></Tooltip.Content>
+      </Tooltip>}
       <Tooltip closeDelay={80} delay={100}>
         <Tooltip.Trigger
           aria-label={t('shell.pricing')}

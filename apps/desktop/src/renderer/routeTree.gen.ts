@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AchievementsRouteImport } from './routes/achievements'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SessionsRoute = SessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/achievements': typeof AchievementsRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/achievements': typeof AchievementsRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
@@ -61,15 +69,34 @@ export interface FileRoutesById {
   '/achievements': typeof AchievementsRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/achievements' | '/dashboard' | '/pricing' | '/settings'
+  fullPaths:
+    | '/'
+    | '/achievements'
+    | '/dashboard'
+    | '/pricing'
+    | '/sessions'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/achievements' | '/dashboard' | '/pricing' | '/settings'
+  to:
+    | '/'
+    | '/achievements'
+    | '/dashboard'
+    | '/pricing'
+    | '/sessions'
+    | '/settings'
   id:
-    '__root__' | '/' | '/achievements' | '/dashboard' | '/pricing' | '/settings'
+    | '__root__'
+    | '/'
+    | '/achievements'
+    | '/dashboard'
+    | '/pricing'
+    | '/sessions'
+    | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +104,7 @@ export interface RootRouteChildren {
   AchievementsRoute: typeof AchievementsRoute
   DashboardRoute: typeof DashboardRoute
   PricingRoute: typeof PricingRoute
+  SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
 }
 
@@ -87,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sessions': {
+      id: '/sessions'
+      path: '/sessions'
+      fullPath: '/sessions'
+      preLoaderRoute: typeof SessionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -125,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   AchievementsRoute: AchievementsRoute,
   DashboardRoute: DashboardRoute,
   PricingRoute: PricingRoute,
+  SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { Button, Card, Label, ListBox, Modal, SearchField, Select, Tabs, Tooltip } from '@heroui/react';
+import { useMemo, useRef } from 'react';
+import { Link } from '@tanstack/react-router';
+import { Button, Card, Label, ListBox, SearchField, Select, Tabs, Tooltip } from '@heroui/react';
 import { ArrowDownUp, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
@@ -11,6 +12,8 @@ import type { DashboardDateRange } from '@/lib/dashboard-date-range';
 import { ProviderIcon } from './ProviderIcon';
 import { filterSessionActivity, relatedSessionActivity, sessionActivityFacets, sessionActivityPage, sortSessionActivity, type SessionSort } from '../lib/session-activity';
 import { FilterSelectPopover } from './FilterMenu';
+import { createSessionPageSearch, sessionAttributionKey, type SessionPageSearch, type SessionScope } from '../lib/session-page';
+import { getDashboardReturnState, rememberDashboardSessionView } from '../lib/dashboard-return-state';
 
 const number = (value: number, locale: SupportedLocale) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 const serviceLabel = (value: string, locale: SupportedLocale) => {
@@ -34,7 +37,6 @@ function money(row: Pick<SessionActivity, 'costUsd' | 'costKind'>, locale: Suppo
   return row.costUsd === null ? translate(locale, 'usage.activity.amountUnknown')
     : `$${row.costUsd.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} · ${costLabel(row.costKind, locale)}`;
 }
-const attributionKey = (row: SessionActivitySnapshot['billing'][number]) => JSON.stringify([row.service, row.mode, row.accountRef]);
 type SessionUsage = Pick<SessionActivitySnapshot, 'totalTokens' | 'otherTokens' | 'tokenTotalMismatch'>;
 function accountLabel(row: Pick<SessionActivity['billing'], 'accountRef' | 'accountLabel'>, locale: SupportedLocale, unknownKey = 'usage.activity.accountUnknown') {
   return row.accountRef ? [row.accountLabel, translate(locale, 'usage.activity.accountRef', { ref: row.accountRef.slice(0, 8) })].filter(Boolean).join(' · ')
@@ -49,90 +51,89 @@ export function SessionActivityPanel(props: { days: number; selectedDate: string
     <Card.Header className="pb-0"><Card.Title>{t('usage.activity.heading')}</Card.Title></Card.Header>
     <Card.Content>
       {error && <p role="status" className="mb-3 text-xs text-warning">{t('usage.activity.readError')} {data ? t('usage.activity.staleReading') : ''}</p>}
-      {!data ? <p role="status" className="py-4 text-sm text-muted">{error ? t('usage.activity.unavailable') : t('usage.activity.loading')}</p> : <SessionActivityViews key={scopeKey} snapshot={data} />}
+    {!data ? <p role="status" className="py-4 text-sm text-muted">{error ? t('usage.activity.unavailable') : t('usage.activity.loading')}</p> : <SessionActivityViews key={scopeKey} snapshot={data} scope={props} />}
     </Card.Content>
   </Card>;
 }
 
-export function SessionActivityViews({ snapshot }: { snapshot: SessionActivitySnapshot }) {
-  const { t, i18n } = useTranslation();
-  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+export function SessionActivityViews({ snapshot, scope }: { snapshot: SessionActivitySnapshot; scope: SessionScope }) {
+  const { t } = useTranslation();
   const recent = useMemo(() => [...snapshot.sessions].sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt)), [snapshot.sessions]);
-  return <Tabs defaultSelectedKey="sessions" variant="secondary" className="min-w-0">
+  return <Tabs defaultSelectedKey={getDashboardReturnState()?.sessionView ?? 'sessions'} onSelectionChange={key => { if (key === 'sessions' || key === 'billing') rememberDashboardSessionView(key); }} variant="secondary" className="min-w-0">
     <Tabs.ListContainer><Tabs.List aria-label={t('usage.activity.views')}>
       <Tabs.Tab id="sessions">{t('usage.activity.sessions')}<Tabs.Indicator /></Tabs.Tab>
       <Tabs.Tab id="billing">{t('usage.activity.billing')}<Tabs.Indicator /></Tabs.Tab>
     </Tabs.List></Tabs.ListContainer>
-    <Tabs.Panel id="sessions" className="pt-3"><SessionList rows={recent} usage={snapshot} /></Tabs.Panel>
+    <Tabs.Panel id="sessions" className="pt-3"><SessionList rows={recent} scope={scope} /></Tabs.Panel>
     <Tabs.Panel id="billing" className="pt-3">
-      <UsageAttribution snapshot={snapshot} />
+      <UsageAttribution snapshot={snapshot} scope={scope} />
       <p className="mt-3 text-[11px] text-muted">{t('usage.activity.billingNote')}</p>
     </Tabs.Panel>
-    {(snapshot.missingSources.length > 0 || snapshot.tokenTotalMismatch) && <p className="mt-3 text-[11px] text-muted">{snapshot.missingSources.length ? t('usage.activity.missingCoverage', { sources: new Intl.ListFormat(locale).format(snapshot.missingSources.map(sourceLabel)) }) : ''} {snapshot.tokenTotalMismatch ? t('usage.activity.totalMismatch') : ''}</p>}
+    <SessionCoverageNote snapshot={snapshot} />
   </Tabs>;
 }
 
-function UsageAttribution({ snapshot }: { snapshot: SessionActivitySnapshot }) {
+export function SessionCoverageNote({ snapshot }: { snapshot: SessionActivitySnapshot }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  const [selected, setSelected] = useState<SessionActivitySnapshot['billing'][number] | null>(null);
-  const selectedKey = selected ? attributionKey(selected) : null;
+  return (snapshot.missingSources.length > 0 || snapshot.tokenTotalMismatch) && <p className="mt-3 text-[11px] text-muted">{snapshot.missingSources.length ? t('usage.activity.missingCoverage', { sources: new Intl.ListFormat(locale).format(snapshot.missingSources.map(sourceLabel)) }) : ''} {snapshot.tokenTotalMismatch ? t('usage.activity.totalMismatch') : ''}</p>;
+}
+
+export function SessionAttributionSummary({ row }: { row: SessionActivitySnapshot['billing'][number] }) {
+  const { i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+  return <span>{serviceLabel(row.service, locale)} · {modeLabel(row.mode, locale)} · {accountLabel(row, locale)}</span>;
+}
+
+function UsageAttribution({ snapshot, scope }: { snapshot: SessionActivitySnapshot; scope: SessionScope }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const groups = useMemo(() => snapshot.billing.map(row => ({ row, sessions: relatedSessionActivity(snapshot.sessions, row) })), [snapshot]);
-  // A refreshed range may no longer contain this group; keep its browser open with empty results.
-  const active = selected ? groups.find(({ row }) => attributionKey(row) === selectedKey) ?? { row: selected, sessions: [] } : null;
   return <>
     <p className="mb-1 text-xs text-muted">{t('usage.activity.attributionSummary')}</p>
     {groups.some(({ row }) => !row.sessionRefs) && <p role="status" className="mt-2 text-xs text-muted">{t('usage.activity.sessionLinksUnavailable')}</p>}
     <div className="flex flex-col divide-y divide-separator">
-      {groups.map(({ row, sessions }) => <div key={attributionKey(row)} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+      {groups.map(({ row, sessions }) => <div key={sessionAttributionKey(row)} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
         <div className="min-w-0 flex-1 basis-48">
           <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{serviceLabel(row.service, locale)}</p><span className={`rounded-md px-2 py-0.5 text-[11px] ${row.mode === 'unknown' ? 'bg-warning/10 text-warning' : 'bg-surface-secondary text-muted'}`}>{modeLabel(row.mode, locale)}</span></div>
           <p className="mt-1 break-words text-xs text-muted" title={row.accountRef ? t('usage.activity.accountRef', { ref: row.accountRef }) : undefined}>{accountLabel(row, locale)}</p>
           {row.service === 'unknown' && row.mode === 'unknown' && !row.accountRef && snapshot.otherTokens > 0 && <p className="mt-1 text-[11px] text-muted">{t('usage.activity.unlinkedTokens', { tokens: number(snapshot.otherTokens, locale) })}</p>}
         </div>
         <div className="shrink-0 text-right text-xs tabular-nums"><p>{number(row.tokens, locale)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
-        <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled={!sessions.length} aria-haspopup="dialog" aria-expanded={selectedKey === attributionKey(row)} aria-label={`${row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`} onPress={() => setSelected(row)}>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')}</Button>
+        {sessions.length ? <Link to="/sessions" search={{ ...createSessionPageSearch(scope), group: sessionAttributionKey(row) }} className="button button--sm button--secondary !h-7 !min-h-7 text-xs" aria-label={`${t('usage.activity.viewRelatedSessions', { count: sessions.length })} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`}>{t('usage.activity.viewRelatedSessions', { count: sessions.length })}</Link>
+          : <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: 0 }) : t('usage.activity.viewRelatedSessionsAction')}</Button>}
       </div>)}
       {!groups.length && <p className="py-4 text-sm text-muted">{t('usage.activity.noBilling')}</p>}
     </div>
-    {active && <SessionBrowser key={selectedKey} rows={active.sessions} open onOpenChange={open => { if (!open) setSelected(null); }} title={t('usage.activity.relatedSessions')} closeLabel={t('usage.activity.closeRelatedSessions')} description={<>
-      <p>{serviceLabel(active.row.service, locale)} · {modeLabel(active.row.mode, locale)} · {accountLabel(active.row, locale)}</p>
-      <p className="mt-1">{t('usage.activity.relatedSessionNote')}</p>
-    </>} />}
   </>;
 }
 
-function SessionList({ rows, usage }: { rows: SessionActivity[]; usage: SessionUsage }) {
+function SessionList({ rows, scope }: { rows: SessionActivity[]; scope: SessionScope }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   return <>
     {rows.length ? <SessionRows rows={rows.slice(0, 6)} contribution={false} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
-    <Button className="mt-2 h-7 text-xs" size="sm" variant="ghost" aria-haspopup="dialog" aria-expanded={open} onPress={() => setOpen(true)}>{t('usage.activity.viewAllSessions', { count: rows.length })}</Button>
-    <SessionBrowser rows={rows} usage={usage} open={open} onOpenChange={setOpen} />
+    <Link to="/sessions" search={createSessionPageSearch(scope)} className="button button--sm button--ghost mt-2 h-7 text-xs">{t('usage.activity.viewAllSessions', { count: rows.length })}</Link>
   </>;
 }
 
-function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, description }: { rows: SessionActivity[]; usage?: SessionUsage; open: boolean; onOpenChange(open: boolean): void; title?: string; closeLabel?: string; description?: ReactNode }) {
+export function SessionBrowser({ rows, usage, value, onChange }: { rows: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void }) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState(''), [sources, setSources] = useState<string[]>([]), [page, setPage] = useState(1);
-  const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>('recent');
+  const { q: query, sources, page, project, sort } = value;
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
   const facets = useMemo(() => sessionActivityFacets(rows, query, sources, project), [rows, query, sources, project]);
   const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, sources, project), sort), [rows, query, sources, project, sort]);
   const result = sessionActivityPage(filtered, page);
   const hasFilters = Boolean(query.trim() || sources.length || project);
-  return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={title ?? t('usage.activity.allSessions')} className="w-full max-w-4xl">
-    <Modal.CloseTrigger aria-label={closeLabel ?? t('usage.activity.closeAllSessions')} /><Modal.Header><Modal.Heading>{title ?? t('usage.activity.allSessions')}</Modal.Heading><div className="text-xs text-muted">{description ?? t('usage.explorer.windowNote')}</div></Modal.Header>
-    <Modal.Body className="flex flex-col gap-3">
+  return <section aria-label={t('usage.activity.allSessions')} className="min-w-0 rounded-2xl border border-separator bg-surface p-4 sm:p-5">
+    <div className="flex flex-col gap-3">
       <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 flex-wrap items-center gap-2">
-        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto" value={query} onChange={value => { setQuery(value); setPage(1); }}>
+        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto" value={query} onChange={q => onChange({ q })}>
           <Label className="sr-only">{t('usage.activity.search')}</Label>
           <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
         </SearchField>
         <Select aria-label="Agent" selectionMode="multiple" value={sources.length ? sources : ['all']} onChange={keys => {
           const next = Array.isArray(keys) ? keys.map(String) : keys == null ? [] : [String(keys)];
-          setSources(next.includes('all') && sources.length ? [] : next.filter(value => value !== 'all'));
-          setPage(1);
+          onChange({ sources: next.includes('all') && sources.length ? [] : next.filter(value => value !== 'all') });
         }} variant="secondary" className="min-w-0 max-w-52">
           <Label className="sr-only">Agent</Label>
           <Select.Trigger ref={sourceTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="min-w-0 truncate">{sources.length === 0 ? t('usage.filter.allAgents') : sources.length > 1 ? t('usage.filter.selectedAgents', { count: sources.length }) : <span className="flex min-w-0 items-center gap-1.5"><ProviderIcon provider={sources[0]} size={18} /><span className="truncate">{sourceLabel(sources[0])}</span></span>}</Select.Value><Select.Indicator /></Select.Trigger>
@@ -141,7 +142,7 @@ function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, de
             {facets.sources.map(({ value, count }) => <ListBox.Item id={value} key={value} textValue={sourceLabel(value)} className="gap-2 pe-8! text-xs"><span className="flex size-6 shrink-0 items-center justify-center"><ProviderIcon provider={value} size={18} /></span><span className="min-w-0 flex-1 truncate" title={sourceLabel(value)}>{sourceLabel(value)}</span><span className="shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></FilterSelectPopover>
         </Select>
-        <Select aria-label={t('usage.explorer.project')} value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') { setProject(key === 'all' ? '' : key.slice('project:'.length)); setPage(1); } }} variant="secondary" className="min-w-0 max-w-56">
+        <Select aria-label={t('usage.explorer.project')} value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') onChange({ project: key === 'all' ? '' : key.slice('project:'.length) }); }} variant="secondary" className="min-w-0 max-w-56">
           <Label className="sr-only">{t('usage.explorer.project')}</Label>
           <Select.Trigger ref={projectTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="truncate">{project || t('usage.explorer.allProjects')}</Select.Value><Select.Indicator /></Select.Trigger>
           <FilterSelectPopover className="w-64 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.project')}>
@@ -149,7 +150,7 @@ function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, de
             {facets.projects.map(({ value, count }) => <ListBox.Item id={`project:${value}`} key={value} textValue={value} className="text-xs"><span className="min-w-0 truncate" title={value}>{value}</span><span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></FilterSelectPopover>
         </Select>
-        <Select aria-label={t('usage.explorer.sort')} value={sort} onChange={key => { if (typeof key === 'string') { setSort(key as SessionSort); setPage(1); } }} variant="secondary" className="min-w-0 max-w-52">
+        <Select aria-label={t('usage.explorer.sort')} value={sort} onChange={key => { if (typeof key === 'string') onChange({ sort: key as SessionSort }); }} variant="secondary" className="min-w-0 max-w-52">
           <Label className="sr-only">{t('usage.explorer.sort')}</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate" /><Select.Indicator /></Select.Trigger>
           <FilterSelectPopover className="w-52 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.sort')}>
@@ -158,17 +159,17 @@ function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, de
         </Select>
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
-        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { setQuery(''); setPage(1); searchInput.current?.focus(); }} />}
-        {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { setSources(previous => previous.filter(value => value !== source)); setPage(1); sourceTrigger.current?.focus(); }} />)}
-        {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { setProject(''); setPage(1); projectTrigger.current?.focus(); }} />}
-        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setQuery(''); setSources([]); setProject(''); setPage(1); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
+        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
+        {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { onChange({ sources: sources.filter(value => value !== source) }); sourceTrigger.current?.focus(); }} />)}
+        {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { onChange({ project: '' }); projectTrigger.current?.focus(); }} />}
+        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '' }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
       {filtered.length ? <SessionRows rows={result.rows} contribution={Boolean(usage)} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
       {usage && <p className="text-[11px] text-muted">{t('usage.activity.contributionNote')}</p>}
-    </Modal.Body>
-    <Modal.Footer className="items-center justify-between gap-3"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => setPage(result.page - 1)}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => setPage(result.page + 1)}>{t('usage.activity.nextPage')}</Button></div></Modal.Footer>
-  </Modal.Dialog></Modal.Container></Modal.Backdrop>;
+    </div>
+    <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => onChange({ page: result.page - 1 })}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => onChange({ page: result.page + 1 })}>{t('usage.activity.nextPage')}</Button></div></footer>
+  </section>;
 }
 
 function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): void }) {
@@ -203,11 +204,18 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
           </Tooltip></div></div>
         </summary>
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
-          <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>
-          {row.billing.mode === 'unknown' && <p>{t('usage.activity.insufficientBillingEvidence')}</p>}
-          {!row.models?.length && <p>{row.model === 'unknown' ? t('usage.activity.modelNotRecorded') : row.model}</p>}
+          {(row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || row.billing.accountRef) && <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>}
+          {!row.models?.length && row.model !== 'unknown' && <p>{row.model}</p>}
           {!row.models?.length && row.taskSeconds != null && <p><TaskTime row={row} /></p>}
-          {!row.detailsComplete && <p>{t('usage.explorer.missingDetails')}</p>}
+          {(row.billing.mode === 'unknown' || !row.detailsComplete || !row.models?.length && row.model === 'unknown') && <details className="rounded-lg bg-surface-secondary px-3 py-2">
+            <summary className="cursor-pointer text-[11px] outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">{t('usage.activity.dataNotes')}</summary>
+            <div className="mt-2 flex flex-col gap-1.5 text-[11px]">
+              {row.billing.service === 'unknown' && row.billing.mode === 'unknown' && !row.billing.accountRef && <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>}
+              {row.billing.mode === 'unknown' && <p>{t('usage.activity.insufficientBillingEvidence')}</p>}
+              {!row.models?.length && row.model === 'unknown' && <p>{t('usage.activity.modelNotRecorded')}</p>}
+              {!row.detailsComplete && <p>{t('usage.explorer.missingDetails')}</p>}
+            </div>
+          </details>}
           {!!row.models?.length && <div className="min-w-0 max-w-full rounded-lg border border-separator">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2 py-1 text-[11px]">
               <span className="font-medium">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</span>

@@ -4,6 +4,7 @@ type DashboardReturnState = {
   selectedDate: string | null;
   selectedTools: string[];
   scrollTop: number;
+  sessionView?: 'sessions' | 'billing';
 };
 
 let returnState: DashboardReturnState | null = null;
@@ -15,9 +16,18 @@ export function getDashboardReturnState(): DashboardReturnState | null {
 
 export function saveDashboardFilters(selectedDate: string | null, selectedTools: string[]): void {
   returnState = {
+    ...returnState,
     selectedDate,
     selectedTools: [...selectedTools],
     scrollTop: returnState?.scrollTop ?? 0,
+  };
+}
+
+export function rememberDashboardSessionView(sessionView: 'sessions' | 'billing'): void {
+  returnState = {
+    selectedDate: null, selectedTools: [], scrollTop: 0,
+    ...returnState,
+    sessionView,
   };
 }
 

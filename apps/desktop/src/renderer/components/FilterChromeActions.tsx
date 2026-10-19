@@ -1,6 +1,6 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircleDollarSign, RefreshCw, Settings, Share2 } from 'lucide-react';
+import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
 import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
@@ -15,6 +15,7 @@ import {
   shareCurrentPage,
 } from '@/lib/shell-events';
 import { cn } from '@/lib/utils';
+import { createSessionPageSearch, type SessionScope } from '../../../../../packages/dashboard/src/lib/session-page';
 
 const primaryChromeBtn =
   'inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[#1e80ff] px-2.5 text-[12px] font-medium text-white outline-none transition-colors hover:bg-[#1171ee] focus-visible:ring-2 focus-visible:ring-[#1e80ff]/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-[#4b9cff] dark:hover:bg-[#3a8ff0]';
@@ -23,7 +24,7 @@ function openGithubRepository(): void {
 }
 
 /** Filter-bar chrome: share / refresh / settings + theme toggle. */
-export function FilterChromeActions() {
+export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionScope }) {
   const { t } = useTranslation();
   const cliBackend = isCliBackend();
   const toastQueue = useAppToastQueue();
@@ -63,6 +64,12 @@ export function FilterChromeActions() {
   return (
     <div className="flex items-center gap-1">
       <AutoUpdateAction className={primaryChromeBtn} />
+      {cliBackend && sessionScope && <Tooltip closeDelay={80} delay={100}>
+        <Tooltip.Trigger aria-label={t('usage.activity.pageTitle')} className="button button--sm button--tertiary button--icon-only inline-flex size-8 min-h-8 min-w-8 shrink-0 p-0" render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/sessions" search={createSessionPageSearch(sessionScope)} />}>
+          <RotateCcwClock className="size-4" aria-hidden />
+        </Tooltip.Trigger>
+        <Tooltip.Content placement="bottom"><p>{t('usage.activity.pageTitle')}</p></Tooltip.Content>
+      </Tooltip>}
       <Tooltip closeDelay={80} delay={100}>
         <Tooltip.Trigger
           aria-label={t('shell.pricing')}

@@ -3,6 +3,11 @@ import type { SupportedLocale } from 'quotern-i18n';
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  'usage.activity.pageTitle': ['会话', 'Sessions', 'セッション', '세션'],
+  'usage.activity.refresh': ['刷新会话', 'Refresh sessions', 'セッションを更新', '세션 새로 고침'],
+  'usage.activity.overviewScope': ['总览 Agent 范围：{{sources}}', 'Overview agent scope: {{sources}}', '概要の Agent 範囲：{{sources}}', '개요 Agent 범위: {{sources}}'],
+  'usage.activity.localOnly': ['请连接本地 Quotern 服务以查看会话。', 'Connect to a local Quotern service to browse sessions.', 'セッションを表示するにはローカルの Quotern サービスに接続してください。', '세션을 보려면 로컬 Quotern 서비스에 연결하세요.'],
+  'usage.activity.dataNotes': ['部分信息未记录 · 查看数据说明', 'Some information is missing · View data notes', '一部の情報が未記録 · データの説明を表示', '일부 정보가 기록되지 않음 · 데이터 설명 보기'],
   'usage.activity.filters': ['会话筛选', 'Session filters', 'セッションの絞り込み', '세션 필터'],
   'usage.activity.selectedFilters': ['已选会话筛选', 'Selected session filters', '選択中のセッション条件', '선택한 세션 필터'],
   'usage.activity.searchFilter': ['搜索：{{query}}', 'Search: {{query}}', '検索：{{query}}', '검색: {{query}}'],

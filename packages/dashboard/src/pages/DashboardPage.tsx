@@ -294,7 +294,7 @@ export function DashboardPage() {
       className="dashboard-page flex w-full min-w-0 flex-col"
       onClickCapture={(event) => {
         const href = (event.target as Element).closest('a[href]')?.getAttribute('href');
-        if (href && /\/(pricing|achievements)(?:[?#]|$)/.test(href)) rememberDashboardScroll(selectedDate, selectedTools);
+        if (href && /\/(pricing|achievements|sessions)(?:[?#]|$)/.test(href)) rememberDashboardScroll(selectedDate, selectedTools);
       }}
     >
       <DashboardFilter
@@ -305,6 +305,7 @@ export function DashboardPage() {
         value={range}
         onChange={handleRangeChange}
         onToolsChange={setSelectedTools}
+        sessionScope={{ days: rangeDays, selectedDate, dateRange: queryRange, sources: selectedTools }}
       />
 
       {selectedDate && (

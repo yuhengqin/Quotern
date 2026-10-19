@@ -2,6 +2,11 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
+@source "../../../../packages/dashboard/src/components/SessionActivityPanel.tsx";
+@source "../../../../packages/dashboard/src/components/DashboardTimeRangeControl.tsx";
+@source "../../../../packages/dashboard/src/components/DashboardDateRangePicker.tsx";
+@source "../../../../packages/dashboard/src/components/BackToUsageLink.tsx";
+@source "../../../../packages/dashboard/src/pages/SessionsPage.tsx";
 @source "../../../../packages/dashboard/src/components/ShareCardActions.tsx";
 @source "../../../../packages/dashboard/src/components/ShareCardCarousel.tsx";
 @source "../../../../packages/dashboard/src/components/ShareBackgroundPicker.tsx";

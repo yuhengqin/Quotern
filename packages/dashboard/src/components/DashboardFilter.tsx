@@ -11,28 +11,14 @@ import {
 import { FilterChromeActions } from '@/components/FilterChromeActions';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DashboardToolUsageRow } from '@/lib/dashboard-mock-data';
+import type { SessionScope } from '../lib/session-page';
 import { sourceLabel } from '@/lib/tokens';
-import { DashboardDateRangePicker } from './DashboardDateRangePicker';
-import { formatDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
+import { DashboardTimeRangeControl } from './DashboardTimeRangeControl';
+import type { DashboardDateRange } from '@/lib/dashboard-date-range';
+import type { DashboardRange } from '../lib/dashboard-range';
 import { FilterSelectPopover } from './FilterMenu';
 
-export type DashboardRange = 'today' | 'last-24-hours' | 'last-7-days' | 'last-30-days' | 'last-90-days';
-
-export const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
-  today: 1,
-  'last-24-hours': 1,
-  'last-7-days': 7,
-  'last-30-days': 30,
-  'last-90-days': 90,
-};
-
-const RANGE_OPTIONS: readonly { id: DashboardRange; label: string }[] = [
-  { id: 'today', label: '' },
-  { id: 'last-24-hours', label: '1D' },
-  { id: 'last-7-days', label: '7D' },
-  { id: 'last-30-days', label: '30D' },
-  { id: 'last-90-days', label: '90D' },
-];
+export { DASHBOARD_RANGE_DAYS, type DashboardRange } from '../lib/dashboard-range';
 
 export function DashboardFilter({
   value,
@@ -43,6 +29,7 @@ export function DashboardFilter({
   customRange = null,
   onCustomRangeChange,
   disabled = false,
+  sessionScope,
 }: {
   value: DashboardRange;
   onChange: (value: DashboardRange) => void;
@@ -54,6 +41,7 @@ export function DashboardFilter({
   onCustomRangeChange: (range: DashboardDateRange) => void;
   /** When true, ignore range/tool changes (e.g. while local range sync runs). */
   disabled?: boolean;
+  sessionScope?: SessionScope;
 }) {
   const { t } = useTranslation();
   const availableTools = useMemo(
@@ -63,22 +51,7 @@ export function DashboardFilter({
 
   return (
     <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2" aria-label={t('usage.filter.conditions')}>
-      <div className="flex shrink-0 items-center rounded-full bg-surface-secondary p-0.5" role="group" aria-label={t('usage.filter.timeRange')}>
-        {RANGE_OPTIONS.map((option) => (
-          <Button
-            aria-pressed={!customRange && value === option.id}
-            render={(props) => <button {...props} title={option.id === 'last-24-hours' ? t('usage.range.last24HoursHint') : undefined} />}
-            className={`!h-6 !min-h-6 !min-w-0 rounded-full px-3 text-xs font-normal transition-none! ${!customRange && value === option.id ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
-            isDisabled={disabled}
-            key={option.id}
-            size="sm"
-            variant="ghost"
-            onPress={() => onChange(option.id)}
-          >{option.id === 'today' ? t('usage.range.today') : option.label}</Button>
-        ))}
-        <DashboardDateRangePicker value={customRange} initialDays={DASHBOARD_RANGE_DAYS[value]} disabled={disabled} onChange={onCustomRangeChange} />
-      </div>
-      {customRange && <span className="text-xs text-muted">{formatDashboardDateRange(customRange)}</span>}
+      <DashboardTimeRangeControl value={value} customRange={customRange} onChange={onChange} onCustomRangeChange={onCustomRangeChange} disabled={disabled} />
 
       {/* Reserve the Agent slot so time controls stay stable as data changes. */}
       <div className="flex min-h-8 min-w-0 shrink-0 items-center">
@@ -95,7 +68,7 @@ export function DashboardFilter({
       </div>
 
       <div className="ml-auto shrink-0">
-        <FilterChromeActions />
+        <FilterChromeActions sessionScope={sessionScope} />
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import type { SupportedLocale } from 'quotern-i18n';
+import { dshPetRows } from './dsh-pet-messages.ts';
 
 // Keep all four offline translations together. The renderer entry registers this catalog.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  ...dshPetRows,
   'desktop.pet.preview.calm': ['平静', 'Calm', '落ち着き', '차분함'],
   'desktop.pet.preview.thinking': ['思考', 'Thinking', '思考中', '생각 중'],
   'desktop.pet.preview.multitask': ['多任务', 'Multitasking', 'マルチタスク', '멀티태스킹'],

@@ -31,6 +31,10 @@ asarUnpack:
   - out/main/sync-worker*.js
   - out/native-runtime/**
 extraResources:
+  - from: out/dsh-pet
+    to: dsh-pet
+    filter:
+      - "**/*"
   - from: resources
     filter:
       - quoternTemplate.png

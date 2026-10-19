@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' http: https: data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' http: https: data:; media-src 'self' http: https: blob:; font-src 'self' http: https: data:"
+    />
+    <title>dsh-pet 桌宠（桌面模式）</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+        user-select: none;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      /* 宠物 sprite：绝对定位在画布内，由 renderer 按角落/边距或拖拽位置计算 left/top */
+      .pet-sprite {
+        position: absolute;
+        left: 0;
+        top: 0;
+        pointer-events: none;
+      }
+      .pet-stage {
+        position: relative;
+        width: var(--pet-size, 462px);
+        height: calc(var(--pet-size, 462px) * 9 / 16);
+        pointer-events: none;
+      }
+      video.pet-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+      }
+      video.pet-video.is-front {
+        opacity: 1;
+      }
+      .pet-hit {
+        position: absolute;
+        pointer-events: auto;
+        cursor: grab;
+        z-index: 1;
+      }
+      .pet-hit.dragging {
+        cursor: grabbing;
+      }
+      /* 余额气泡：与浏览器 overlay 同一套视觉（白色圆润泡 + 峰/谷/错误着色）。
+         尺寸分两类锚点：盒子（宽度/内边距/圆角/尾巴/阴影/行间距）锚在字号 --f 上——字号调大盒子同步变大，
+         文字不会顶出白底；位置（bottom 偏移）仍锚在宠物宽度 var(--pet-size)，气泡始终贴着宠物头顶。
+         宽度必须写 width:max-content：气泡是 left:50% 的绝对定位盒，可用宽度只有包含块一半，
+         shrink-to-fit 会先被这道墙卡死（max-width 调多大都不生效）；写 max-content 后按内容取宽，
+         再由 max-width 收口，上限同时不超过宠物宽度（桌面窗口只比宠物大一圈，超了会被裁）。
+         字体经 renderer 注入上首软糖体 @font-face */
+      .pet-bubble {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: calc(100% - var(--pet-size, 462px) * 0.108);
+        width: max-content;
+        /* 钉死 content-box：本文件全局设了 border-box，那会让 min/max-width 把内边距也算进去，
+           内容可用宽度被悄悄缩掉一圈（表现为「明明还有空位却折行」）。与浏览器 bubble.ts 同一口径 */
+        box-sizing: content-box;
+        min-width: calc(var(--f) * 5.7143);
+        max-width: min(calc(var(--f) * 10.989), 100%);
+        padding: calc(var(--f) * 0.4835) calc(var(--f) * 0.6593);
+        border-radius: calc(var(--f) * 0.7692);
+        background: rgba(255, 255, 255, 0.92);
+        color: #2b2b2b;
+        /* 字体族走全局配置变量（renderer.js 注入到 documentElement）：对话窗/得分弹窗挂在 body 下、
+           继承不到宠物根容器，气泡也统一从这里取；回退参数 = 改造前的原栈 */
+        font-family: var(
+          --dsh-pet-font-family,
+          'ShangshouSoftCandy',
+          'Yuanti SC',
+          'YouYuan',
+          '幼圆',
+          'Comic Sans MS',
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif
+        );
+        /* 字号：正文取 --dsh-pet-font-bubble（sprite.js 按本宠物尺寸算好注入）；局部变量 --f = 正文
+           最终字号，气泡内其余层级按改造前的比例从它派生（与浏览器 bundle 的 bubble.ts 同一套口径） */
+        --f: var(--dsh-pet-font-bubble, calc(var(--pet-size, 462px) * 0.0455));
+        font-size: var(--f);
+        line-height: 1.6;
+        z-index: 3;
+        pointer-events: none;
+        box-shadow:
+          0 calc(var(--f) * 0.1978) calc(var(--f) * 0.7692) rgba(0, 0, 0, 0.14),
+          0 1px 3px rgba(0, 0, 0, 0.08);
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        /* 不锁 nowrap：折行只在内容真超过宽度上限时才发生；break-word 只在整词放不下时断，
+           不会把 85% / ¥12.34 这类数字拆到两行 */
+        white-space: normal;
+        overflow-wrap: break-word;
+      }
+      .pet-bubble::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: calc(var(--f) * -0.3736);
+        transform: translateX(-50%);
+        border: calc(var(--f) * 0.3736) solid transparent;
+        border-top-color: rgba(255, 255, 255, 0.92);
+        border-bottom: none;
+      }
+      .pet-bubble.is-on {
+        opacity: 1;
+      }
+      /* 碎碎念变体：与浏览器 overlay 一致 —— 字号缩到余额气泡的 0.75、宽度下限更窄（0.10 → 2.1978），
+         上限与余额气泡相同；宽度取宽/折行规则继承 .pet-bubble，高度随行数自然增长 */
+      .pet-bubble.is-whisper {
+        font-size: calc(var(--f) * 0.7473);
+        min-width: calc(var(--f) * 2.1978);
+        max-width: min(calc(var(--f) * 10.989), 100%);
+      }
+      .pet-bub-row {
+        display: flex;
+        justify-content: space-between;
+        gap: calc(var(--f) * 0.6593);
+      }
+      .pet-bub-sub {
+        font-size: calc(var(--f) * 0.7692);
+        color: rgba(43, 43, 43, 0.6);
+      }
+      .pet-bub-err {
+        color: #d94f3d;
+        font-size: calc(var(--f) * 0.7692);
+      }
+      .pet-bub-tier {
+        font-weight: 700;
+      }
+      .pet-bub-tier-peak {
+        color: #e53935;
+      }
+      .pet-bub-tier-idle {
+        color: #2e9e4f;
+      }
+      /* 配置错误提示（大声报错，不做静默兜底）：配置缺失/非法时显示，每 5s 自动重试 */
+      .pet-error {
+        position: fixed;
+        left: 50%;
+        top: 24px;
+        transform: translateX(-50%);
+        max-width: 80vw;
+        background: rgba(217, 79, 61, 0.95);
+        color: #fff;
+        border-radius: 12px;
+        padding: 10px 16px;
+        font-size: 13px;
+        line-height: 1.5;
+        display: none;
+        z-index: 999;
+        pointer-events: none;
+        word-break: break-all;
+      }
+      .pet-error.visible {
+        display: block;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        video.pet-video {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="pet-error" class="pet-error"></div>
+    <!-- 共享纯逻辑（src/shared 的 iife 构建产物，window.PetShared）——经经典 script，避开 file:// ESM 的 CORS 限制。
+         桌面端同模式拆分：constants（基础设施）→ sprite（宠物本体）→ events（事件联动）→ renderer（启动入口） -->
+    <script src="./shared-core.js"></script>
+    <script src="./constants.js"></script>
+    <script src="./sprite.js"></script>
+    <script src="./events.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

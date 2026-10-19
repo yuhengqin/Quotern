@@ -37,7 +37,9 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 ## 开发指南
 
-发布产物需要 Node.js >= 20.10；仓库开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `pnpm install`，pnpm 版本以根 `package.json` 为准。
+发布产物需要 Node.js >= 20.10；仓库开发和测试使用 Node.js 22.13+。安装依赖与执行仓库脚本统一使用 `corepack pnpm`，版本以根 `package.json` 的 `packageManager` 为准。
+
+克隆或新建 worktree 后，需要安装依赖时在仓库根执行 `corepack pnpm install --frozen-lockfile --prefer-offline`。依赖共享由 `pnpm-workspace.yaml` 的全局虚拟存储配置管理，禁止手动复制或链接其他 worktree 的 `node_modules`；依赖变更、已有安装迁移和共享存储清理必须遵守 [依赖初始化与共享](docs/worktree-development.md#依赖初始化与共享)。
 
 如 `pnpm install` 卡在 electron postinstall
 
@@ -49,14 +51,14 @@ Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
 # Git Bash / macOS / Linux
 export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-pnpm install
+corepack pnpm install --frozen-lockfile --prefer-offline
 ```
 
 ```powershell
 # PowerShell
 $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 $env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-pnpm install
+corepack pnpm install --frozen-lockfile --prefer-offline
 ```
 
 ## 契约

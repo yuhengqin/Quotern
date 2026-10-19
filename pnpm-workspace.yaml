@@ -1,6 +1,12 @@
 packages:
   - 'packages/*'
   - 'apps/*'
+enableGlobalVirtualStore: true
+packageExtensions:
+  # HeroUI imports this package without declaring it; GVS cannot rely on hoisting.
+  '@heroui/react@3.2.4':
+    dependencies:
+      '@internationalized/date': 3.12.3
 supportedArchitectures:
   os:
     - current

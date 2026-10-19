@@ -42,13 +42,13 @@ function accountLabel(row: Pick<SessionActivity['billing'], 'accountRef' | 'acco
 
 export function SessionActivityPanel(props: { days: number; selectedDate: string | null; dateRange: DashboardDateRange | null; sources: readonly string[]; enabled: boolean }) {
   const { t } = useTranslation();
-  const { data, error } = useSessionActivity(props.days, props.selectedDate, props.dateRange, props.sources, props.enabled);
+  const { data, error, scopeKey } = useSessionActivity(props.days, props.selectedDate, props.dateRange, props.sources, props.enabled);
   if (!isCliBackend()) return null;
   return <Card className="mt-4 min-w-0 overflow-hidden" aria-label={t('usage.activity.aria')}>
     <Card.Header className="pb-0"><Card.Title>{t('usage.activity.heading')}</Card.Title></Card.Header>
     <Card.Content>
       {error && <p role="status" className="mb-3 text-xs text-warning">{t('usage.activity.readError')} {data ? t('usage.activity.staleReading') : ''}</p>}
-      {!data ? <p role="status" className="py-4 text-sm text-muted">{error ? t('usage.activity.unavailable') : t('usage.activity.loading')}</p> : <SessionActivityViews snapshot={data} />}
+      {!data ? <p role="status" className="py-4 text-sm text-muted">{error ? t('usage.activity.unavailable') : t('usage.activity.loading')}</p> : <SessionActivityViews key={scopeKey} snapshot={data} />}
     </Card.Content>
   </Card>;
 }
@@ -74,9 +74,11 @@ export function SessionActivityViews({ snapshot }: { snapshot: SessionActivitySn
 function UsageAttribution({ snapshot }: { snapshot: SessionActivitySnapshot }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SessionActivitySnapshot['billing'][number] | null>(null);
+  const selectedKey = selected ? attributionKey(selected) : null;
   const groups = useMemo(() => snapshot.billing.map(row => ({ row, sessions: relatedSessionActivity(snapshot.sessions, row) })), [snapshot]);
-  const active = groups.find(({ row }) => attributionKey(row) === selected);
+  // A refreshed range may no longer contain this group; keep its browser open with empty results.
+  const active = selected ? groups.find(({ row }) => attributionKey(row) === selectedKey) ?? { row: selected, sessions: [] } : null;
   return <>
     <p className="mb-1 text-xs text-muted">{t('usage.activity.attributionSummary')}</p>
     {groups.some(({ row }) => !row.sessionRefs) && <p role="status" className="mt-2 text-xs text-muted">{t('usage.activity.sessionLinksUnavailable')}</p>}
@@ -88,11 +90,11 @@ function UsageAttribution({ snapshot }: { snapshot: SessionActivitySnapshot }) {
           {row.service === 'unknown' && row.mode === 'unknown' && !row.accountRef && snapshot.otherTokens > 0 && <p className="mt-1 text-[11px] text-muted">{t('usage.activity.unlinkedTokens', { tokens: number(snapshot.otherTokens, locale) })}</p>}
         </div>
         <div className="shrink-0 text-right text-xs tabular-nums"><p>{number(row.tokens, locale)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
-        <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled={!sessions.length} aria-haspopup="dialog" aria-expanded={selected === attributionKey(row)} aria-label={`${row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`} onPress={() => setSelected(attributionKey(row))}>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')}</Button>
+        <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled={!sessions.length} aria-haspopup="dialog" aria-expanded={selectedKey === attributionKey(row)} aria-label={`${row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`} onPress={() => setSelected(row)}>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: sessions.length }) : t('usage.activity.viewRelatedSessionsAction')}</Button>
       </div>)}
       {!groups.length && <p className="py-4 text-sm text-muted">{t('usage.activity.noBilling')}</p>}
     </div>
-    {active && <SessionBrowser key={selected} rows={active.sessions} open onOpenChange={open => { if (!open) setSelected(null); }} title={t('usage.activity.relatedSessions')} closeLabel={t('usage.activity.closeRelatedSessions')} description={<>
+    {active && <SessionBrowser key={selectedKey} rows={active.sessions} open onOpenChange={open => { if (!open) setSelected(null); }} title={t('usage.activity.relatedSessions')} closeLabel={t('usage.activity.closeRelatedSessions')} description={<>
       <p>{serviceLabel(active.row.service, locale)} · {modeLabel(active.row.mode, locale)} · {accountLabel(active.row, locale)}</p>
       <p className="mt-1">{t('usage.activity.relatedSessionNote')}</p>
     </>} />}

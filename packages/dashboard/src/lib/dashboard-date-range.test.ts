@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { appendDashboardRangeQuery, dashboardRangeCacheKey, dashboardRangeKey, dateRangeDays, dateRangeLookback, isDashboardDateRange, previousRollingRange, rollingDayRange } from './dashboard-date-range.ts';
 import { resolveDashboardFetchDays } from './dashboard-fetch-days.ts';
+import { RangeQueryCache } from './range-query-cache.ts';
 
 const now = new Date('2026-10-14T01:00:00Z');
 test('1D is a moving 24-hour interval, separate from today and serialized as instants', () => {
@@ -46,4 +47,29 @@ test('display cache reuses moving 1D while keeping today and historical dates se
   assert.notEqual(dashboardRangeCacheKey(7, null, now), dashboardRangeCacheKey(30, null, now));
   assert.notEqual(dashboardRangeCacheKey(1, { start: '2026-10-12', end: '2026-10-12' }, now), dashboardRangeCacheKey(1, { start: '2026-10-13', end: '2026-10-13' }, now));
   assert.notEqual(dashboardRangeCacheKey(7, null, now), dashboardRangeCacheKey(7, null, new Date('2026-10-15T01:00:00Z')));
+});
+
+test('a rolling window keeps its reading while revalidating across local midnight', async () => {
+  const beforeMidnight = new Date('2026-10-14T15:59:30Z');
+  const afterMidnight = new Date('2026-10-14T16:00:30Z');
+  const firstRange = rollingDayRange(beforeMidnight);
+  const nextRange = rollingDayRange(afterMidnight);
+  const cache = new RangeQueryCache<number>();
+  await cache.refresh(dashboardRangeCacheKey(1, firstRange, beforeMidnight), 'first', async () => 42);
+  const nextKey = dashboardRangeCacheKey(1, nextRange, afterMidnight);
+  let finish!: (value: number) => void;
+  const pending = cache.refresh(nextKey, 'next', () => new Promise<number>(resolve => { finish = resolve; }));
+  await Promise.resolve();
+  assert.deepEqual(cache.getSnapshot(nextKey), { data: 42, loading: false, error: false });
+  finish(43);
+  await pending;
+  assert.equal(cache.getSnapshot(nextKey).data, 43);
+  assert.notEqual(dashboardRangeKey(1, firstRange), dashboardRangeKey(1, nextRange));
+});
+
+test('fixed historical dates keep their cached reading across local midnight', async () => {
+  const range = { start: '2026-10-10', end: '2026-10-11' };
+  const cache = new RangeQueryCache<number>();
+  await cache.refresh(dashboardRangeCacheKey(2, range, new Date('2026-10-14T15:59:30Z')), 1, async () => 7);
+  assert.equal(cache.getSnapshot(dashboardRangeCacheKey(2, range, new Date('2026-10-14T16:00:30Z'))).data, 7);
 });

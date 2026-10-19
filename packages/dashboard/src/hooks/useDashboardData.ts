@@ -20,6 +20,7 @@ import {
 import { isMockDataEnabled } from '@/lib/env';
 import { fingerprintUsageDataset } from '@/lib/usage-dataset-fingerprint';
 import { rememberRangeValue } from '@/lib/range-query-cache';
+import { DASHBOARD_POLL_MS } from '@/lib/dashboard-refresh';
 
 export type DashboardDataSource = 'api' | 'sample';
 
@@ -41,9 +42,6 @@ interface RangeCacheEntry {
 }
 
 export { resolveDashboardFetchDays } from '@/lib/dashboard-fetch-days';
-
-/** Foreground poll interval; use setInterval (not rAF) to avoid 60Hz wakeups. */
-const POLL_MS = 10_000;
 
 /**
  * Load the same usage snapshot as the root page.
@@ -319,7 +317,7 @@ export function useDashboardData(
       if (rangeFetchInFlightRef.current) return;
       reload();
     };
-    const timer = window.setInterval(poll, POLL_MS);
+    const timer = window.setInterval(poll, DASHBOARD_POLL_MS);
 
     const onFocus = () => {
       if (document.visibilityState === 'hidden') return;

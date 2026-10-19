@@ -18,6 +18,7 @@ import {
 } from '@/lib/dashboard-mock-data';
 import { fingerprintUsageDataset } from '@/lib/usage-dataset-fingerprint';
 import { rememberRangeValue } from '@/lib/range-query-cache';
+import { DASHBOARD_POLL_MS } from '@/lib/dashboard-refresh';
 
 export type DashboardDataSource = 'api';
 
@@ -39,9 +40,6 @@ interface RangeCacheEntry {
 }
 
 export { resolveDashboardFetchDays } from '@/lib/dashboard-fetch-days';
-
-/** Foreground poll interval. */
-const POLL_MS = 10_000;
 
 /**
  * Load the same usage snapshot as the root page.
@@ -355,7 +353,7 @@ export function useDashboardData(
       })();
     };
 
-    const timer = window.setInterval(maybeReload, POLL_MS);
+    const timer = window.setInterval(maybeReload, DASHBOARD_POLL_MS);
     window.addEventListener('focus', maybeReload);
     document.addEventListener('visibilitychange', maybeReload);
 

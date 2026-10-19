@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { RangeQueryCache } from '@/lib/range-query-cache';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { DASHBOARD_POLL_MS } from '@/lib/dashboard-refresh';
 
 /** Cache display scopes separately from exact request identities (e.g. rolling 1D). */
 export function useCachedRangeQuery<T>(cacheKey: string, requestKey: string, load: () => Promise<T>, enabled: boolean, snapshot?: object) {
@@ -14,16 +15,19 @@ export function useCachedRangeQuery<T>(cacheKey: string, requestKey: string, loa
     const refresh = () => {
       if (!document.hidden) void cache.refresh(cacheKey, token, load);
     };
+    const revalidate = () => {
+      if (!document.hidden) void cache.refresh(cacheKey, token, load, true);
+    };
     refresh();
-    const timer = window.setInterval(refresh, 10_000);
-    window.addEventListener(DATA_SYNCED_EVENT, refresh);
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refresh);
+    const timer = window.setInterval(refresh, DASHBOARD_POLL_MS);
+    window.addEventListener(DATA_SYNCED_EVENT, revalidate);
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener(DATA_SYNCED_EVENT, refresh);
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener(DATA_SYNCED_EVENT, revalidate);
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
     };
   }, [cache, cacheKey, token, load, enabled]);
 

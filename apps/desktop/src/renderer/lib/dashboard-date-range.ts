@@ -1,4 +1,6 @@
 import { localDateDaysAgo, localDateNow } from './stats-timezone.js';
+import { dashboardRangeScopeKey } from './dashboard-range-scope.js';
+export { dashboardRangeKey } from './dashboard-range-scope.js';
 
 export interface DashboardDateRange { start: string; end: string; fromTime?: string; toTime?: string }
 export const CUSTOM_RANGE_LOOKBACK_DAYS = 365;
@@ -47,12 +49,8 @@ export function formatDashboardDateRange(range: DashboardDateRange): string {
   return range.start === range.end ? range.start : `${range.start} – ${range.end}`;
 }
 
-export function dashboardRangeKey(days: number, range?: DashboardDateRange | null): string {
-  return range?.fromTime ? `rolling:${range.fromTime}:${range.toTime}` : range ? `${range.start}:${range.end}` : `last:${days}`;
-}
-
 /** A moving 24-hour view can display its previous reading while fetching new bounds. */
 export function dashboardRangeCacheKey(days: number, range?: DashboardDateRange | null, now = new Date()): string {
-  const rollingDay = range?.fromTime && range.toTime && Date.parse(range.toTime) - Date.parse(range.fromTime) === 86_400_000;
-  return `${localDateNow(undefined, now)}|${rollingDay ? 'rolling:24h' : dashboardRangeKey(days, range)}`;
+  const scope = dashboardRangeScopeKey(days, range);
+  return range ? scope : `${localDateNow(undefined, now)}|${scope}`;
 }

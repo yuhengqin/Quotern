@@ -1,39 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import type { SessionActivitySnapshot } from 'quotern-core';
 import { isCliBackend, request } from '@/lib/api';
 import { appendDashboardRangeQuery, type DashboardDateRange } from '@/lib/dashboard-date-range';
-import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { dashboardRangeScopeKey } from '@/lib/dashboard-range-scope';
+import { useCachedRangeQuery } from './useCachedRangeQuery';
 
 export function useSessionActivity(days: number, selectedDate: string | null, dateRange: DashboardDateRange | null, sources: readonly string[], enabled: boolean) {
   const start = selectedDate ?? dateRange?.start, end = selectedDate ?? dateRange?.end;
   const fromTime = selectedDate ? undefined : dateRange?.fromTime, toTime = selectedDate ? undefined : dateRange?.toTime;
   const sourceKey = [...sources].sort().join(',');
   const key = `${days}|${start ?? ''}|${end ?? ''}|${fromTime ?? ''}|${toTime ?? ''}|${sourceKey}`;
-  const [state, setState] = useState<{ key: string; data: SessionActivitySnapshot | null; error: string | null }>({ key: '', data: null, error: null });
-  useEffect(() => {
-    if (!enabled || !isCliBackend()) return;
-    let cancelled = false, pending = false;
-    const controller = new AbortController();
-    const load = async () => {
-      if (cancelled || pending || document.hidden) return;
-      pending = true;
-      const query = new URLSearchParams({ days: String(days) });
-      if (start && end) appendDashboardRangeQuery(query, { start, end, fromTime, toTime });
-      if (sourceKey) query.set('sources', sourceKey);
-      try {
-        const data = await request<SessionActivitySnapshot>(`/functions/tud-session-activity?${query}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) });
-        if (!cancelled) setState({ key, data, error: null });
-      } catch {
-        if (!cancelled) setState(previous => ({ key, data: previous.key === key ? previous.data : null, error: '会话读数暂未更新，请确认本地服务正在运行' }));
-      } finally { pending = false; }
-    };
-    const refresh = () => { void load(); };
-    refresh();
-    const timer = window.setInterval(refresh, 15000);
-    window.addEventListener(DATA_SYNCED_EVENT, refresh);
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refresh);
-    return () => { cancelled = true; controller.abort(); window.clearInterval(timer); window.removeEventListener(DATA_SYNCED_EVENT, refresh); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
-  }, [days, start, end, fromTime, toTime, sourceKey, key, enabled]);
-  return state.key === key ? state : { data: null, error: null };
+  const scopeKey = `${dashboardRangeScopeKey(days, start && end ? { start, end, fromTime, toTime } : null)}|${sourceKey}`;
+  const load = useCallback(() => {
+    const query = new URLSearchParams({ days: String(days) });
+    if (start && end) appendDashboardRangeQuery(query, { start, end, fromTime, toTime });
+    if (sourceKey) query.set('sources', sourceKey);
+    return request<SessionActivitySnapshot>(`/functions/tud-session-activity?${query}`, { signal: AbortSignal.timeout(30_000) });
+  }, [days, start, end, fromTime, toTime, sourceKey]);
+  const state = useCachedRangeQuery(scopeKey, key, load, enabled && isCliBackend());
+  return { ...state, scopeKey };
 }

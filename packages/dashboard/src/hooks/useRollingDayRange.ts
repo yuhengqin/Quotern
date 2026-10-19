@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { rollingDayRange } from '@/lib/dashboard-date-range';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { ROLLING_DAY_TICK_MS } from '@/lib/dashboard-refresh';
 
 /** All cards and requests share one clock boundary; resume advances it too. */
 export function useRollingDayRange(active: boolean) {
@@ -9,7 +10,7 @@ export function useRollingDayRange(active: boolean) {
     if (!active) return;
     const refresh = () => { if (!document.hidden) setRange(rollingDayRange()); };
     refresh();
-    const timer = window.setInterval(refresh, 30_000);
+    const timer = window.setInterval(refresh, ROLLING_DAY_TICK_MS);
     window.addEventListener('focus', refresh);
     window.addEventListener(DATA_SYNCED_EVENT, refresh);
     document.addEventListener('visibilitychange', refresh);

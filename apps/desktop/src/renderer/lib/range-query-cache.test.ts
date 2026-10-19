@@ -78,3 +78,16 @@ test('an omitted freshness token can still start the first request', async () =>
   await cache.refresh('7D', undefined, async () => 7);
   assert.equal(cache.getSnapshot('7D').data, 7);
 });
+
+test('a sync event during a pending read queues one fresh reading after it completes', async () => {
+  const cache = new RangeQueryCache<number>();
+  await cache.refresh('7D', 'same', async () => 1);
+  const oldReading = deferred<number>();
+  const pending = cache.refresh('7D', 'same', () => oldReading.promise);
+  const sync = cache.refresh('7D', 'same', async () => 3, true);
+  const nextSync = cache.refresh('7D', 'same', async () => 4, true);
+  assert.equal(cache.getSnapshot('7D').data, 1);
+  oldReading.resolve(2);
+  await Promise.all([pending, sync, nextSync]);
+  assert.deepEqual(cache.getSnapshot('7D'), { data: 4, loading: false, error: false });
+});

@@ -7,6 +7,9 @@ packageExtensions:
   '@heroui/react@3.2.4':
     dependencies:
       '@internationalized/date': 3.12.3
+  'electron-vite@5.0.0':
+    dependencies:
+      electron: 35.4.0
 supportedArchitectures:
   os:
     - current

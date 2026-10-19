@@ -9,7 +9,7 @@ overrides:
   '@heroui/styles': 3.2.4
   tailwind-variants: 3.3.1
 
-packageExtensionsChecksum: sha256-PLIfhYr0nLUCHDXn7J0aIR9iveBsBRtKHQTv4hIh3Bs=
+packageExtensionsChecksum: sha256-npX+zxzVp63pTei6TKsg/VU9HOWencf4MRB19CO6wb4=
 
 importers:
 
@@ -8992,6 +8992,7 @@ snapshots:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-arrow-functions': 7.29.7(@babel/core@7.29.7)
       cac: 6.7.14
+      electron: 35.4.0
       esbuild: 0.25.12
       magic-string: 0.30.21
       picocolors: 1.1.1

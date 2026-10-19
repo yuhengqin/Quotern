@@ -40,7 +40,7 @@ const cfg = {
   main: {
     animations: ANIMATIONS,
     pets: [
-      { id: 'main', name: '蓝毛小女仆' },
+      { id: 'main', name: '大肥鱼' },
       { id: 'test1', name: '测试宠' },
     ],
   },

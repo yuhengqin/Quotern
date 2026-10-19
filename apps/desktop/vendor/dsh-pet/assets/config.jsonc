@@ -165,7 +165,7 @@
   // position（corner: 四角之一；marginX/marginY: 距所属角落偏移 px）
   "pets": [
     {
-      "name": "蓝毛小女仆",
+      "name": "大肥鱼",
       "id": "main",
       "size": 462,
       "balanceEnabled": true,

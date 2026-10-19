@@ -50,7 +50,7 @@ before(() => {
     main: {
       memes: { [IN_POOL]: '卖萌', [IN_POOL2]: '预警', [NO_FILE]: '文件缺失的那张' },
       pets: [
-        { id: 'main', name: '蓝毛小女仆' },
+        { id: 'main', name: '大肥鱼' },
         { id: 'test1', name: '测试宠' },
       ],
     },

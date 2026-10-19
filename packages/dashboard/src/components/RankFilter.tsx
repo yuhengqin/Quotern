@@ -14,12 +14,12 @@ import type {
   LeaderboardUserProfile,
 } from '@/lib/api';
 import type { RankRange } from '@/lib/leaderboard';
+import { FilterSelectPopover } from './FilterMenu';
 
 const RANGE_OPTIONS: readonly RankRange[] = ['today', 'week', 'month', 'all'];
 
 const FILTER_CONTROL_HEIGHT = '!h-8 !min-h-8';
-const FILTER_POPOVER = 'w-50 !max-h-64 overflow-hidden rounded-xl bg-surface shadow-md';
-const FILTER_POPOVER_LIST = '!max-h-64 overflow-y-auto!';
+const FILTER_POPOVER = 'w-50 rounded-xl bg-surface shadow-md';
 
 function openGithubRepository(): void {
   const opened = window.open(GITHUB_REPO_URL, '_blank');
@@ -199,8 +199,8 @@ function ToolSelect({
         </Select.Value>
         <Select.Indicator className="size-3.5 text-muted" />
       </Select.Trigger>
-      <Select.Popover className={FILTER_POPOVER} placement="bottom start">
-        <ListBox aria-label={t('rank.filter.agentAria')} className={FILTER_POPOVER_LIST}>
+      <FilterSelectPopover className={FILTER_POPOVER} placement="bottom start">
+        <ListBox aria-label={t('rank.filter.agentAria')}>
           <ListBox.Item id="all" textValue={t('rank.filter.allAgents')}>
             {t('rank.filter.allAgents')}
             <ListBox.ItemIndicator />
@@ -220,7 +220,7 @@ function ToolSelect({
             </ListBox.Item>
           ))}
         </ListBox>
-      </Select.Popover>
+      </FilterSelectPopover>
     </Select>
   );
 }
@@ -262,8 +262,8 @@ function RankSelect({
         <Select.Value className="min-w-0 max-w-20 !text-xs sm:max-w-40" />
         <Select.Indicator className="size-3.5 text-muted" />
       </Select.Trigger>
-      <Select.Popover className={FILTER_POPOVER} placement="bottom start">
-        <ListBox aria-label={ariaLabel} className={FILTER_POPOVER_LIST}>
+      <FilterSelectPopover className={FILTER_POPOVER} placement="bottom start">
+        <ListBox aria-label={ariaLabel}>
           {allowEmpty ? (
             <ListBox.Item id="all" textValue={placeholder}>
               {placeholder}
@@ -277,7 +277,7 @@ function RankSelect({
             </ListBox.Item>
           ))}
         </ListBox>
-      </Select.Popover>
+      </FilterSelectPopover>
     </Select>
   );
 }

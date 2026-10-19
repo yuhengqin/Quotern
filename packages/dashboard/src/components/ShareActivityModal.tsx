@@ -13,6 +13,7 @@ import { ToolChannelSelect } from './DashboardFilter';
 import { getShareCardVariant, SHARE_CARD_VARIANTS, ShareCardCarousel, type ShareCardVariant } from './ShareCardCarousel';
 import { ShareCardActions } from './ShareCardActions';
 import { ShareBackgroundPicker } from './ShareBackgroundPicker';
+import { FilterSelectPopover } from './FilterMenu';
 
 /** Each opening captures the dashboard scope, then owns an independent share session. */
 export function ShareActivityModal() {
@@ -105,7 +106,7 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
               <Select.Value />
               <Select.Indicator />
             </Select.Trigger>
-            <Select.Popover className="w-44" placement="bottom start">
+            <FilterSelectPopover className="w-44" placement="bottom start">
               <ListBox aria-label={t('share.dateRangeOptions')}>
                 {SHARE_RANGE_OPTIONS.map((option) => (
                   <ListBox.Item id={String(option.days)} key={option.days} textValue={shareRangeLabel(option.days, locale)}>
@@ -121,7 +122,7 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
                   </ListBox.Item>
                 )}
               </ListBox>
-            </Select.Popover>
+            </FilterSelectPopover>
           </Select>
           <ToolChannelSelect
             ariaLabel={t('share.agentFilter')}

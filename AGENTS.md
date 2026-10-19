@@ -17,6 +17,12 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 维护注意事项：[架构](docs/architecture-notes.md)、[数据采集与统计](docs/data-notes.md)、[运行维护](docs/runtime-notes.md)、[开发协作](docs/development-notes.md)。
 
+## UI 开发
+
+- 新增或修改 Dashboard / Desktop UI 前，必须阅读并遵守 [UI 组件与交互规范](docs/ui-guidelines.md) 的总则及相关组件章节。
+- 优先复用已登记的公共组件；能力不足先评估扩展。筛选菜单使用 `components/FilterMenu`，独立实现或例外须在变更说明中记录原因与验收结果。
+- 新增、调整或弃用公共 UI 入口时，同步更新规范中的路径、适用边界、使用点和跨端共享方式。
+
 ## 功能保留与验收
 
 功能改进、升级或重构，默认保留原有展示信息、交互和功能。完成前必须对照改动前的行为，确认没有意外缺失；验收同时检查新能力是否实现、旧能力是否保留。

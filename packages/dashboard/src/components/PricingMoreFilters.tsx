@@ -10,6 +10,7 @@ import { getRecentReleaseRange, type PricingFilters } from '../lib/pricing-filte
 import { localDateNow } from '../lib/stats-timezone';
 import { formatPricingReleaseDate } from '../lib/pricing-display';
 import { formatPricingExchangeRate } from '../lib/pricing-currency';
+import { FilterSelectPopover } from './FilterMenu';
 
 export type PricingAdvancedFilters = Required<Pick<PricingFilters, 'minContext' | 'releasedAfter' | 'releasedBefore'>>;
 export const EMPTY_PRICING_FILTERS: PricingAdvancedFilters = { minContext: 0, releasedAfter: '', releasedBefore: '' };
@@ -141,11 +142,11 @@ export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, 
           }} variant="secondary">
             <Label className="text-xs">{t('pricing.filters.minContext')}</Label>
             <Select.Trigger className="!h-9 !min-h-9 !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
-            <Select.Popover maxHeight={320}><ListBox aria-label={t('pricing.filters.minContextOptions')}>
+            <FilterSelectPopover><ListBox aria-label={t('pricing.filters.minContextOptions')}>
               {[[0, t('pricing.filters.unlimited')], [8000, '8K'], [128000, '128K'], [1000000, '1M']].map(([value, label]) => (
                 <ListBox.Item id={String(value)} key={String(value)} textValue={String(label)}>{label}<ListBox.ItemIndicator /></ListBox.Item>
               ))}
-            </ListBox></Select.Popover>
+            </ListBox></FilterSelectPopover>
           </Select>
           <div className="space-y-2">
             <p className="text-xs font-medium">{t('pricing.filters.release')}</p>

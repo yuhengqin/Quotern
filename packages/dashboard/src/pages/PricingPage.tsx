@@ -8,6 +8,7 @@ import { PricingList } from '../components/PricingList';
 import { BackToUsageLink } from '../components/BackToUsageLink';
 import { PricingCalculator, PricingProviderFilter, PricingSortSelect, PricingScenarioSummary } from '../components/PricingTools';
 import { PricingComparison } from '../components/PricingComparison';
+import { FilterSelectPopover } from '../components/FilterMenu';
 import { PricingMoreFilters, EMPTY_PRICING_FILTERS, type PricingAdvancedFilters } from '../components/PricingMoreFilters';
 import { StatusBanner } from '../components/StatusBanner';
 import { usePricingCurrency } from '../hooks/usePricingCurrency';
@@ -144,7 +145,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
         <Select aria-label={t('pricing.filters.currency')} value={currency} variant="secondary" onChange={key => { if (key === 'USD' || key === 'CNY') setCurrency(key); }} className="min-w-0 text-xs">
           <Label className="sr-only">{t('pricing.filters.currency')}</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover maxHeight={320}><ListBox aria-label={t('pricing.filters.currencyOptions')}><ListBox.Item id="USD" textValue="USD">{t('pricing.filters.usd')}<ListBox.ItemIndicator /></ListBox.Item><ListBox.Item id="CNY" textValue="CNY">{t('pricing.filters.cny')}<ListBox.ItemIndicator /></ListBox.Item></ListBox></Select.Popover>
+          <FilterSelectPopover><ListBox aria-label={t('pricing.filters.currencyOptions')}><ListBox.Item id="USD" textValue="USD">{t('pricing.filters.usd')}<ListBox.ItemIndicator /></ListBox.Item><ListBox.Item id="CNY" textValue="CNY">{t('pricing.filters.cny')}<ListBox.ItemIndicator /></ListBox.Item></ListBox></FilterSelectPopover>
         </Select>
         <PricingSortSelect value={sort} onChange={setSort} />
         <Button aria-pressed={usedOnly} isDisabled={usageStatus !== 'ready'} onPress={() => setUsedOnly(value => !value)} size="sm" variant={usedOnly ? 'secondary' : 'tertiary'} className={`!h-8 !min-h-8 shrink-0 !gap-1 !px-3 !text-xs ${usedOnly ? 'text-accent' : ''}`}>

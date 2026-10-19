@@ -9,6 +9,7 @@ import { getPricingModelName, getPricingProvider } from '../lib/pricing-catalog'
 import { formatPricingContext, getPrimaryPricingVariant, type PricingModelGroup, type PricingVariant } from '../lib/pricing-groups';
 import { comparePricingCosts, estimatePricingCost, getCacheReadSavings, type PricingScenario } from '../lib/pricing-workbench';
 import { formatPricingDisplayRate, formatPricingReleaseDate, formatPricingTokens } from '../lib/pricing-display';
+import { FilterSelectPopover } from './FilterMenu';
 
 export function PricingComparison({ groups, initialChannels, onClose, scenario, onScenarioChange, currency, exchangeRate, usageStatus }: {
   groups: PricingModelGroup[]; onClose: () => void; scenario: PricingScenario;
@@ -81,9 +82,9 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
                       {variants.length > 1 ? <Select aria-label={t('pricing.compare.channelSelect', { name })} value={variant.id} onChange={key => { if (typeof key === 'string') setChannels(current => ({ ...current, [group.id]: key })); }} variant="secondary" className="w-full min-w-0">
                         <Label className="sr-only">{t('pricing.compare.channelSelect', { name })}</Label>
                         <Select.Trigger className="!h-auto !min-h-8 max-w-full !rounded-lg !text-[11px]"><Select.Value className="min-w-0 max-w-48 truncate" /><Select.Indicator /></Select.Trigger>
-                        <Select.Popover className="w-80 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('pricing.compare.channelOptions', { name })}>
+                        <FilterSelectPopover className="w-80 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('pricing.compare.channelOptions', { name })}>
                           {variants.map(item => <ListBox.Item id={item.id} key={item.id} textValue={channelLabel(item)} className="text-xs"><span className="min-w-0 break-all">{channelLabel(item)}</span><ListBox.ItemIndicator /></ListBox.Item>)}
-                        </ListBox></Select.Popover>
+                        </ListBox></FilterSelectPopover>
                       </Select> : <p className="max-w-64 break-all text-[11px] font-normal text-muted">{channelLabel(variant)}</p>}
                     </th>;
                   })}

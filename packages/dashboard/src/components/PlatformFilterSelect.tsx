@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Check, ChevronDown } from '@gravity-ui/icons';
 import { Button, Popover } from '@heroui/react';
+import { FilterMenuPopover } from './FilterMenu';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { sourceLabel } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
@@ -64,12 +65,10 @@ export function PlatformFilterSelect({
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
 
-      <Popover.Content
+      <FilterMenuPopover
         className="min-w-56 overflow-hidden rounded-[10px] border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
         placement="bottom end"
-      >
-        <Popover.Dialog className="p-0 outline-none">
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
+        header={<div className="flex items-center justify-between gap-2 px-3 py-2">
             <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
               {t('usage.filter.selectAgents')}
             </Popover.Heading>
@@ -89,11 +88,11 @@ export function PlatformFilterSelect({
                 {t('usage.filter.clear')}
               </button>
             </div>
-          </div>
-
+          </div>}
+      >
           <ul
             aria-multiselectable="true"
-            className="max-h-64 overflow-y-auto p-1.5"
+            className="p-1.5"
             role="listbox"
           >
             {allSources.map((source) => {
@@ -135,8 +134,7 @@ export function PlatformFilterSelect({
               );
             })}
           </ul>
-        </Popover.Dialog>
-      </Popover.Content>
+      </FilterMenuPopover>
     </Popover>
   );
 }
@@ -221,12 +219,10 @@ export function KeyFilterSelect({
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
 
-      <Popover.Content
+      <FilterMenuPopover
         className="min-w-56 overflow-hidden rounded-[10px] border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
         placement="bottom end"
-      >
-        <Popover.Dialog className="p-0 outline-none">
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
+        header={<div className="flex items-center justify-between gap-2 px-3 py-2">
             <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
               {heading}
             </Popover.Heading>
@@ -246,11 +242,11 @@ export function KeyFilterSelect({
                 {t('usage.filter.clear')}
               </button>
             </div>
-          </div>
-
+          </div>}
+      >
           <ul
             aria-multiselectable="true"
-            className="max-h-64 overflow-y-auto p-1.5"
+            className="p-1.5"
             role="listbox"
           >
             {allKeys.map((key) => {
@@ -283,8 +279,7 @@ export function KeyFilterSelect({
               );
             })}
           </ul>
-        </Popover.Dialog>
-      </Popover.Content>
+      </FilterMenuPopover>
     </Popover>
   );
 }

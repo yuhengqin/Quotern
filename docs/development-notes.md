@@ -19,6 +19,7 @@ pnpm dev:cli
 ## 修改范围
 
 1. 修改 `packages/dashboard/src` 的共享 UI 或数据层时，检查 `apps/desktop/src/renderer` 的同名副本；需要同步时在同一变更中处理。
+   UI 组件选择、复用边界、筛选菜单及界面验收遵守 [UI 组件与交互规范](./ui-guidelines.md)。
 2. Core 类型或计算规则变更需要核对 CLI 和 Desktop 消费方。浏览器共享模块必须保持 browser-safe，不能引入 Node 文件系统依赖。
 3. 新增数据源时同时检查 parser、来源规范化、sync 调度、状态展示、图标映射与相应测试，不直接复用其他来源的累计量假设。
 4. 新测试使用临时目录、虚构凭据、受控环境变量和模拟网络；避免扫描开发者真实主目录、读取实际账号或影响已运行服务。

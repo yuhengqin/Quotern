@@ -15,6 +15,7 @@ import { TokenUsageTrendCard } from '@/components/TokenUsageTrendCard';
 import { DailyUsageTrendCard } from '@/components/DailyUsageTrendCard';
 import { localDateNow } from '@/lib/stats-timezone';
 import { formatTrendDateRange, formatTrendPointLabels, getTrendAxisTicks, getTrendControls, getTrendDateRange, type TrendSelection } from '../lib/usage-trend-controls';
+import { FilterSelectPopover } from './FilterMenu';
 
 interface Props {
   days: number; selectedDate: string | null; dateRange: DashboardDateRange | null;
@@ -92,11 +93,11 @@ function TrendSelect({ label, value, options, onChange }: {
     <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !rounded-full ps-3 pe-8 !text-xs font-normal">
       <Select.Value className="min-w-0 truncate" /><Select.Indicator className="size-3.5 text-muted" />
     </Select.Trigger>
-    <Select.Popover className="min-w-36 rounded-xl bg-surface shadow-md" placement="bottom end">
+    <FilterSelectPopover className="min-w-36 rounded-xl bg-surface shadow-md" placement="bottom end">
       <ListBox aria-label={label}>{options.map(option => <ListBox.Item id={option.value} key={option.value} textValue={option.label} className="rounded-lg px-2 py-1.5 text-xs">
         {option.label}<ListBox.ItemIndicator />
       </ListBox.Item>)}</ListBox>
-    </Select.Popover>
+    </FilterSelectPopover>
   </Select>;
 }
 

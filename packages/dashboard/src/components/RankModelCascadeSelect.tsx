@@ -5,6 +5,7 @@ import { Button, Label, Popover, SearchField } from '@heroui/react';
 import { normalizeLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import { ModelProviderIcon } from '@/components/ModelProviderIcon';
+import { FilterMenuPopover } from './FilterMenu';
 import {
   groupRankModelsByVendor,
   type RankModelVendorKey,
@@ -82,11 +83,11 @@ export function RankModelCascadeSelect({
         <ChevronDown className="size-3.5 shrink-0 text-muted" />
       </Button>
 
-      <Popover.Content
+      <FilterMenuPopover
         className="w-[min(34rem,calc(100vw-1rem))] overflow-hidden rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
         placement="bottom start"
-      >
-        <Popover.Dialog className="p-0 outline-none">
+        bodyClassName="grid overflow-hidden"
+        header={<>
           <Popover.Heading className="sr-only">{t('rank.model.filter')}</Popover.Heading>
           <SearchField
             className="border-b border-border p-2"
@@ -104,12 +105,13 @@ export function RankModelCascadeSelect({
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-
+        </>}
+      >
           {groups.length > 0 ? (
-            <div className="grid min-h-56 grid-cols-[minmax(7.5rem,0.8fr)_minmax(0,1.4fr)] divide-x divide-border">
+            <div className="grid min-h-0 grid-cols-[minmax(7.5rem,0.8fr)_minmax(0,1.4fr)] divide-x divide-border">
               <div
                 aria-label={t('rank.model.vendors')}
-                className="max-h-72 overscroll-contain overflow-y-auto p-1.5"
+                className="min-h-0 overscroll-contain overflow-y-auto p-1.5"
                 role="listbox"
               >
                 {!query ? (
@@ -170,7 +172,7 @@ export function RankModelCascadeSelect({
 
               <div
                 aria-label={t(visibleVendor === 'all' ? 'rank.filter.allModels' : 'rank.model.specificModels')}
-                className="max-h-72 overscroll-contain overflow-y-auto p-1.5"
+                className="min-h-0 overscroll-contain overflow-y-auto p-1.5"
                 role="listbox"
               >
                 {visibleModels.map((model) => {
@@ -199,8 +201,7 @@ export function RankModelCascadeSelect({
               {t('rank.model.noMatches')}
             </div>
           )}
-        </Popover.Dialog>
-      </Popover.Content>
+      </FilterMenuPopover>
     </Popover>
   );
 }

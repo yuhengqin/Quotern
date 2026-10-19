@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Check, ChevronDown } from '@gravity-ui/icons';
 import { Button, Label, ListBox, Popover } from '@heroui/react';
+import { FilterMenuPopover } from './FilterMenu';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { sourceLabel, TOOLTIP_SHADOW } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
@@ -59,14 +60,13 @@ export function PlatformFilterSelect({
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
 
-      <Popover.Content
+      <FilterMenuPopover
         className="rounded-lg"
         placement="bottom end"
       >
-        <Popover.Dialog className="p-0">
           <ListBox
             aria-label={t('usage.filter.agentList')}
-            className="flex max-h-64 min-w-48 flex-col gap-1 overflow-y-auto p-2"
+            className="flex min-w-48 flex-col gap-1 p-2"
             selectedKeys={new Set(value)}
             selectionMode="multiple"
             onSelectionChange={(keys) => onChange([...keys].map(String))}
@@ -94,8 +94,7 @@ export function PlatformFilterSelect({
               </ListBox.Item>
             ))}
           </ListBox>
-        </Popover.Dialog>
-      </Popover.Content>
+      </FilterMenuPopover>
     </Popover>
   );
 }
@@ -180,13 +179,11 @@ export function KeyFilterSelect({
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
 
-      <Popover.Content
+      <FilterMenuPopover
         className="min-w-56 overflow-hidden rounded-[10px] border border-border bg-overlay p-0 text-overlay-foreground"
         placement="bottom end"
         style={{ boxShadow: TOOLTIP_SHADOW }}
-      >
-        <Popover.Dialog className="p-0 outline-none">
-          <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
+        header={<div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2">
             <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
               {heading}
             </Popover.Heading>
@@ -209,11 +206,11 @@ export function KeyFilterSelect({
                 {t('usage.filter.clear')}
               </button>
             </div>
-          </div>
-
+          </div>}
+      >
           <ul
             aria-multiselectable="true"
-            className="max-h-64 overflow-y-auto p-1.5"
+            className="p-1.5"
             role="listbox"
           >
             {allKeys.map((key) => {
@@ -246,8 +243,7 @@ export function KeyFilterSelect({
               );
             })}
           </ul>
-        </Popover.Dialog>
-      </Popover.Content>
+      </FilterMenuPopover>
     </Popover>
   );
 }

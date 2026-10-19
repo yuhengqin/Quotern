@@ -14,6 +14,7 @@ import type { DashboardToolUsageRow } from '@/lib/dashboard-mock-data';
 import { sourceLabel } from '@/lib/tokens';
 import { DashboardDateRangePicker } from './DashboardDateRangePicker';
 import { formatDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
+import { FilterSelectPopover } from './FilterMenu';
 import { DASHBOARD_RANGE_DAYS, type DashboardRange } from '../../shared/dashboard-range';
 
 export {
@@ -160,7 +161,7 @@ export function ToolChannelSelect({
           </Select.Value>
           <Select.Indicator className="size-3.5 text-muted" />
         </Select.Trigger>
-        <Select.Popover
+        <FilterSelectPopover
           className="w-50 rounded-xl bg-surface shadow-md"
           placement="bottom start"
         >
@@ -182,7 +183,7 @@ export function ToolChannelSelect({
               </ListBox.Item>
             ))}
           </ListBox>
-        </Select.Popover>
+        </FilterSelectPopover>
       </Select>
       {hasSelection ? (
         <Button

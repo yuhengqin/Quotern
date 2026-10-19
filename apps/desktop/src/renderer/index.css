@@ -1,6 +1,7 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 @import "@heroui/styles";
+@source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
 @source "../../../../packages/dashboard/src/components/ShareCardActions.tsx";
 @source "../../../../packages/dashboard/src/components/ShareCardCarousel.tsx";
 @source "../../../../packages/dashboard/src/components/ShareBackgroundPicker.tsx";

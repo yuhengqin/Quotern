@@ -7,6 +7,7 @@ import type { ModelProvider } from '../lib/model-provider';
 import type { PricingSortDescriptor, PricingSortKey } from '../lib/pricing-catalog';
 import { DEFAULT_PRICING_SCENARIO, PRICING_TOKEN_FIELDS, type PricingScenario, type PricingTokenKind } from '../lib/pricing-workbench';
 import { formatPricingTokens } from '../lib/pricing-display';
+import { FilterAutocompletePopover, FilterSelectPopover } from './FilterMenu';
 
 const FIELD_KEYS: Record<PricingTokenKind, string> = {
   input: 'pricing.calculator.fieldInput', output: 'pricing.calculator.fieldOutput',
@@ -29,7 +30,7 @@ export function PricingProviderFilter({ providers, value, onChange }: {
       <Autocomplete.Trigger ref={trigger} className={`!h-8 !min-h-8 !w-fit max-w-48 !text-xs [&>button]:absolute [&>button]:inset-0 [&>button]:w-full [&>button]:rounded-[inherit] ${value.length ? '!rounded-r-none' : '!rounded-full'}`}>
         <Autocomplete.Value className="truncate">{() => label}</Autocomplete.Value><Autocomplete.Indicator />
       </Autocomplete.Trigger>
-      <Autocomplete.Popover maxHeight={320} className="w-64 max-w-[calc(100vw-2rem)]" placement="bottom start">
+      <FilterAutocompletePopover className="w-64 max-w-[calc(100vw-2rem)]" placement="bottom start">
         <Autocomplete.Filter filter={contains}>
           <SearchField aria-label={t('pricing.filters.searchProvider')} autoFocus variant="secondary">
             <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder={t('pricing.filters.searchProviderPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
@@ -41,7 +42,7 @@ export function PricingProviderFilter({ providers, value, onChange }: {
           </ListBox>
         </Autocomplete.Filter>
         {value.length > 0 && <Button slot={null} className="mt-1 !h-7 !min-h-7 w-full shrink-0 !text-xs" variant="tertiary" onPress={() => onChange([])}>{t('pricing.filters.clearProvider')}</Button>}
-      </Autocomplete.Popover>
+      </FilterAutocompletePopover>
     </Autocomplete>
     {value.length > 0 && <Button aria-label={t('pricing.filters.clearProvider')} className="!h-8 !min-h-8 !w-8 !min-w-8 !rounded-l-none !rounded-r-full !p-0" size="sm" isIconOnly variant="tertiary" onPress={() => { onChange([]); trigger.current?.querySelector<HTMLButtonElement>('button')?.focus(); }}><ButtonGroup.Separator /><X className="size-3.5" /></Button>}
   </ButtonGroup>;
@@ -70,9 +71,9 @@ export function PricingSortSelect({ value, onChange }: { value: PricingSortDescr
   }} variant="secondary" className="min-w-0 max-w-52">
     <Label className="sr-only">{t('pricing.filters.sort')}</Label>
     <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate" /><Select.Indicator /></Select.Trigger>
-    <Select.Popover maxHeight={320} className="w-52"><ListBox aria-label={t('pricing.filters.sortOptions')}>
+    <FilterSelectPopover className="w-52"><ListBox aria-label={t('pricing.filters.sortOptions')}>
       {SORT_OPTIONS.map(option => <ListBox.Item id={option.id} key={option.id} textValue={t(option.labelKey)} className="text-xs">{t(option.labelKey)}<ListBox.ItemIndicator /></ListBox.Item>)}
-    </ListBox></Select.Popover>
+    </ListBox></FilterSelectPopover>
   </Select>;
 }
 

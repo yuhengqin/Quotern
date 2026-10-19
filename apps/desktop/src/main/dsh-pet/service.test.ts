@@ -84,6 +84,22 @@ test('manual whisper works with automatic whispers off; an incoming chat cancels
   } finally { await f.close(); }
 });
 
+test('model replies clear their own work bubble while retaining external agent status', async () => {
+  const f = await fixture();
+  try {
+    assert.equal((await f.call('POST', 'chat?pet=main', { text: 'Visible reply' })).body.ok, true);
+    let state = (await f.call('GET', 'state')).body;
+    assert.equal(state.sections.workStatus.data.state, null, 'a synthetic completion must not cover the chat reply');
+    assert.match(state.pets.main.say.data.text, /reply-/);
+    assert.equal((await f.call('POST', 'whisper?pet=main')).body.ok, true);
+    state = (await f.call('GET', 'state')).body;
+    assert.equal(state.sections.workStatus.data.state, null);
+    f.service.onActivity({ id: 'external-success', source: 'dsh', sessionId: 'external', state: 'success', timestamp: new Date().toISOString(), evidence: 'real-event', terminal: true });
+    assert.equal((await f.call('POST', 'chat?pet=main', { text: 'Another reply' })).body.ok, true);
+    assert.equal((await f.call('GET', 'state')).body.sections.workStatus.data.state, 'success');
+  } finally { await f.close(); }
+});
+
 test('serializes the whole conversation, publishes after memory commits, and cancels without stale writes', async () => {
   const f = await fixture();
   try {

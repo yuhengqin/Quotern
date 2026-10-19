@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { patchDshPetChat } from './patch-dsh-pet-chat.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const hostModules = ['config', 'state', 'work-status', 'notify-events', 'memes', 'anim', 'broadcast', 'time-context', 'model-selection'];
@@ -90,6 +91,7 @@ async function handleBridgeRequest(request) {
   await build({ entryPoints: [path.join(desktopRoot, 'src/main/dsh-pet/helper-adapter.ts')], outfile: path.join(output, 'runtime/quotern-adapter.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',
     plugins: [{ name: 'quotern-window-label', setup(bundle) {
+      bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]chat\.ts$/ }, async args => ({ loader: 'ts', contents: patchDshPetChat(await readFile(args.path, 'utf8')) }));
       bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]balance\.ts$/ }, async args => {
         let contents = await readFile(args.path, 'utf8');
         for (const [from, to] of [

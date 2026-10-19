@@ -63,3 +63,39 @@ corepack pnpm --filter quotern-desktop exec electron-builder --win '--config.win
 两项回归均先复现失败：旧 Windows 包缺少可交互 switch input；新首启用例捕获误告警。修复后 Desktop 类型检查、依赖及 Desktop 构建通过，Desktop 测试 **727 tests，707 pass、20 skip、0 fail**。重新构建本地未签名 win-unpacked 后，增强的 `packaged-dsh-pet-smoke.mjs` 经真实渲染 DOM、Electron CDP 鼠标/Space 输入、preload IPC 验证鼠标启用、键盘停用、鼠标再次启用及 helper 运行，同时保留 mock 聊天、密钥加密脱敏、两实例与旧宠物并存和正常退出检查。人工鼠标/DPI 验收边界不变。
 
 本地证据为实现 worktree 的 `.superpowers/sdd/2026-10-19-dsh-pet-desktop/enable-{config-red,config-green,ui-red,typecheck-after-build,build,tests,package,ui-green}.log` 与 `enable-ui-green/{result.json,main.png,stdout.log,stderr.log}`。将工作区从旧实现分支更新到 main 后，第一次类型检查读取了尚未重建的 Core dist；重建本工作区依赖后再次类型检查通过，未更改相关类型或断言来规避错误。
+
+## 按钮与交互实测复查（2026-10-19）
+
+在原 worktree 的 `codex/audit-dsh-pet-interactions` 分支继续修复。使用重新构建的本地未签名 `win-unpacked/Quotern.exe`，每轮创建独立 profile/data 和随机本地调试端口，经 Electron CDP 发送实际鼠标/键盘输入。模型请求仅访问本地 mock，未使用真实密钥；没有操作用户正在使用的 main 开发实例。
+
+旧包实测发现并修复以下七类问题：
+
+| 问题 | 修复及回归证据 |
+| --- | --- |
+| 编辑后立即点按钮，首击被失焦保存期间的 disabled 吞掉 | 失焦保存进入后台串行队列，前台操作排在其后；首次点击即新增实例，之前的编辑保留。配置合并读取队列执行时的最新值。 |
+| JSONC 保存或重置后，已编辑输入框仍显示旧值 | 保存成功后同步字段；保存中的后续草稿按编辑代次保留，避免旧回执覆盖输入。测试为本轮独立 app 的单笔 IPC 注入可释放延迟，实际执行 B → C → B 编辑，验证焦点、节点、两次旧回执和最终失焦保存。 |
+| 重置失败也清空 JSONC 草稿 | 仅成功后清空；在专属 profile 中制造写入失败，验证错误可见、草稿原样保留，之后恢复测试文件。 |
+| 删除服务商的模型后，默认模型仍引用已删除项 | 同时清理并持久化失效默认模型；独立测试检查立即状态、磁盘及重新读取，UI 验证下拉框一致。 |
+| 输入法确认 Enter 被当作发送 | 组合输入期间忽略 Enter；DOM composition/keyCode=229 回归事件不产生模型请求，正常 Enter 仍发送。此项没有替代真实 Windows 输入法人工验收。 |
+| 长聊天输入越过 helper 可见区域 | 输入增长、错误提示及 resize 时重新限制尺寸与位置，内容可滚动；验证普通长输入及保留错误提示后继续输入的边界矩形。 |
+| 聊天和碎碎念成功回复被自身通用“完成”气泡遮住 | 清除该模型操作自己的活动记录，展示实际模型回复；测试同时确认真实外部 Agent 完成状态继续保留。 |
+
+设置脚本 **75/75** 项通过：六个折叠组鼠标/Enter/Space、实例增删与最后实例保护、连续编辑、四类实例开关、四种显示位置与角落、偏移、物理/字体、模型服务商/密钥保留/模型选择/人设、主开关、辅助进程退出后的重试、手动额度/动作/聊天/错误反馈/碎碎念/清记忆、被删除实例的目标回退、JSONC 读写/失败/重置及打开目录。崩溃测试仅终止 CIM 核实为本轮私有 app 直接子进程的 helper，重试确实启动新 PID。
+
+helper 脚本 **19/19** 项通过：两只真实宠物窗口、左击、右键/Esc/外部点击关闭、真正三级动作菜单及所选视频、聊天焦点/Esc/组合键/错误恢复/长输入/实际回复、碎碎念与缺额度提示、打开 Quotern 回调、拖拽归位、重载更换 helper PID、四种显示位置对应持久化配置和窗口数量。菜单隐藏自身后，下一用例通过宿主恢复独立测试 fixture，不将其计为用户菜单操作。
+
+Desktop 类型检查及构建、本地未签名打包均退出 0。完整 `corepack pnpm test`（包含全仓库构建）退出 0：14 个 runner 合计 **1742 tests，1707 pass、35 skip、0 fail**，Desktop 合计 **729 tests，709 pass、20 skip、0 fail**。原有打包主应用 smoke 再次通过，覆盖旧宠物并存、鼠标/键盘主开关、mock 聊天记忆、密钥加密脱敏、两实例重载及正常退出；原生 helper 自检再次通过，保留输入区域/穿透标记/慢放位置等原检查。
+
+实际操作脚本为 `apps/desktop/scripts/dsh-pet-settings-interactions.mjs`、`dsh-pet-helper-interactions.ts`，共用 `desktop-cdp.mjs`。从仓库根复跑（输出目录必须全新）：
+
+```powershell
+corepack pnpm build:desktop
+corepack pnpm --filter quotern-desktop exec electron-builder --win --dir '--config.win.signAndEditExecutable=false' --publish never
+corepack pnpm exec node apps/desktop/scripts/dsh-pet-settings-interactions.mjs apps/desktop/release/0.1.13/win-unpacked/Quotern.exe .superpowers/sdd/settings-new-run
+corepack pnpm --filter quotern-desktop exec esbuild scripts/dsh-pet-helper-interactions.ts --bundle --platform=node --format=cjs --outfile=../../.superpowers/sdd/helper-interactions.cjs
+corepack pnpm exec node .superpowers/sdd/helper-interactions.cjs apps/desktop/release/0.1.13/win-unpacked/Quotern.exe apps/desktop/release/0.1.13/win-unpacked/resources/dsh-pet .superpowers/sdd/helper-new-run
+```
+
+原始失败和修复后日志/截图/结果均在本 worktree `.superpowers/sdd/2026-10-19-dsh-pet-desktop/`：`interactions-settings-initial-3*`、`interactions-helper-initial*`、`interactions-service-red.log`、`interactions-settings-fixed-2*`、`interactions-helper-fixed-2*`、`interactions-{build,package,typecheck-final,workspace-tests,packaged-final,native-final}.log`。首次扩大脚本时的键盘 Enter 事件和隐藏菜单定位也已修正，未将这些驱动错误算成产品缺陷。
+
+本轮未使用付费外部模型、未添加真实额度账号、未安装/发布。真实 Windows 输入法、鼠标手感、下层应用点击穿透、多屏/DPI/热插拔及系统通知仍保留前文的人工验收边界。原始 vendor 快照不变，聊天修复通过有守卫的生成补丁应用。

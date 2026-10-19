@@ -52,6 +52,23 @@ test('never persists plaintext when system encryption is unavailable', async () 
   } finally { service.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
+test('editing provider models clears a removed default immediately and on reload', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-model-edit-'));
+  const secrets = secretStorage(), service = new DshPetModelService(root, secrets);
+  try {
+    await service.setProviders({ id: 'local', name: 'Local', baseUrl: 'http://127.0.0.1:1/v1', models: ['old', 'kept'] });
+    await service.setDefaultModel({ provider: 'local', model: 'old' });
+    await service.setProviders({ id: 'local', name: 'Local edited', baseUrl: 'http://127.0.0.1:1/v1', models: ['kept'] });
+    assert.equal(service.publicState().defaultModel, null);
+    assert.equal(JSON.parse(await readFile(path.join(root, 'models.json'), 'utf8')).defaultModel, null);
+    const reloaded = new DshPetModelService(root, secrets);
+    assert.equal(reloaded.publicState().defaultModel, null); reloaded.dispose();
+    await service.setDefaultModel({ provider: 'local', model: 'kept' });
+    await service.setProviders({ id: 'other', name: 'Other', baseUrl: 'http://127.0.0.1:1/v1', models: ['other'] });
+    assert.deepEqual(service.publicState().defaultModel, { provider: 'local', model: 'kept' });
+  } finally { service.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
 test('serializes chats per pet, keeps whispers from interrupting them, and never falls back on cancellation', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-model-'));
   let active = 0, peak = 0;

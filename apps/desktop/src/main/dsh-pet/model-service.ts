@@ -44,7 +44,7 @@ export class DshPetModelService {
       }
       const providers = new Map(this.providers);
       providers.set(patch.id, { id: patch.id, name: patch.name.trim(), baseUrl: patch.baseUrl.replace(/\/+$/, ''), models: [...new Set(patch.models.map(value => value.trim()))], ...(encryptedKey ? { encryptedKey } : {}) });
-      await this.persist(providers, this.defaultModel);
+      await this.persist(providers, this.defaultModel && this.hasModel(this.defaultModel, providers) ? this.defaultModel : null);
     });
   }
   removeProvider(id: string): Promise<void> { return this.update(async () => { const providers = new Map(this.providers); providers.delete(id); await this.persist(providers, this.defaultModel?.provider === id ? null : this.defaultModel); }); }
@@ -56,8 +56,8 @@ export class DshPetModelService {
     await atomicPrivateFile(this.file, JSON.stringify({ providers: [...providers.values()], defaultModel }));
     this.providers = providers; this.defaultModel = defaultModel;
   }
-  private hasModel(model: ModelRef): boolean {
-    const provider = this.providers.get(model.provider);
+  private hasModel(model: ModelRef, providers = this.providers): boolean {
+    const provider = providers.get(model.provider);
     return Boolean(provider && typeof model.model === 'string' && model.model.trim() && (!provider.models.length || provider.models.includes(model.model)));
   }
   private validateProvider(provider: Omit<ProviderPatch, 'apiKey'>): void {

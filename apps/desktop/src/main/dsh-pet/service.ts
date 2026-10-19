@@ -110,7 +110,7 @@ export class DshPetService {
       try { await this.options.memory.append(instance.entry, id, [{ role: 'user', content: text, ts: this.now() }, { role: 'assistant', content: say.text, ts: this.now() }], signal); }
       catch (error) { if (signal.aborted) { this.ownActivity(id, null); return failure('cancelled'); } throw error; }
       if (signal.aborted) { this.ownActivity(id, null); return failure('cancelled'); }
-      this.poll.writePet(id, 'say', say); this.ownActivity(id, 'success'); this.notification('宠物回复完成', String(instance.pet.name ?? id));
+      this.poll.writePet(id, 'say', say); this.ownActivity(id, null); this.notification('宠物回复完成', String(instance.pet.name ?? id));
       const { text: _text, ...action } = result; return action;
     });
     this.conversations.set(id, run);
@@ -127,7 +127,7 @@ export class DshPetService {
       this.ownActivity(session, 'thinking');
       const result = await this.options.models.generate({ petId: id, kind: 'whisper', preferred: modelRef(instance.conf.whisperModel), messages: [{ role: 'system', content: this.prompt(instance) }, { role: 'user', content: `随口说一句20字以内的话。${image ? `配合这张表情包：${image.desc}` : ''}` }], signal });
       if (signal.aborted) { this.ownActivity(session, null); return failure('cancelled'); }
-      this.ownActivity(session, result.ok ? 'success' : 'error');
+      this.ownActivity(session, result.ok ? null : 'error');
       if (result.ok) this.poll.writePet(id, 'say', { text: result.text, ...(image ? { image: image.name } : {}) });
       const { text: _text, ...action } = result; return action;
     } finally { this.whispers.delete(id); }

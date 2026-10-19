@@ -112,8 +112,10 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 
 ## 窗口外观
 
-- macOS：隐藏标题栏，保留红绿灯
-- Windows / Linux：无边框
+- macOS：`titleBarStyle: 'hidden'`，保留原生红绿灯并垂直居中于 32px 标题条
+- Windows：`titleBarStyle: 'hidden'` + 原生 Window Controls Overlay；三键由系统绘制，保留 Snap Layouts、双击最大化与标题栏系统菜单，overlay 颜色随主题同步
+- Linux：无边框，渲染层自绘窗控（46×32，Win11 关闭色 `#C42B1C` / `#B22A1E`，最大化后显示双叠方框还原图标，键盘焦点可见）
+- 标题条高度由 `shared/window-chrome.ts` 的 `TITLEBAR_HEIGHT` 统一驱动：主进程 overlay 高度与渲染层 CSS 变量同源
 - `window.tud`：最小化 / 最大化 / 关闭 + `api.request` / `onDataSynced`
 
 ## Windows 桌面宠物

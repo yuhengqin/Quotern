@@ -1,6 +1,11 @@
 import { BrowserWindow, Menu, app, ipcMain, shell } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import {
+  WINDOW_BACKGROUND_COLORS,
+  titleBarOverlayFor,
+  windowChromeFor,
+} from './window-chrome.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -14,10 +19,9 @@ export interface DesktopWindowOptions {
 
 export type DesktopWindowTheme = 'dark' | 'light';
 
-export const WINDOW_BACKGROUND_COLORS: Record<DesktopWindowTheme, string> = {
-  dark: '#050607',
-  light: '#f5f5f5',
-};
+// Owned by `window-chrome.ts` (shared with the Window Controls Overlay colors);
+// re-exported here for existing callers.
+export { WINDOW_BACKGROUND_COLORS } from './window-chrome.js';
 
 const isMac = process.platform === 'darwin';
 const MAIN_WINDOW_WIDTH = 1024;
@@ -52,14 +56,19 @@ export function resolveAppIconPath(): string {
  *
  * Single window host for quotern-desktop.
  *
- * Window customization:
- *  1. macOS uses `titleBarStyle: hidden` to remove the title bar while keeping
- *     the native traffic lights over the renderer-owned window surface.
- *  2. Windows / Linux use `frame: false` to remove all native chrome.
- *  3. 应用菜单 `null`，单窗 `autoHideMenuBar: true` — 不占用渲染区域。
- *  4. 注册 `window:minimize / toggle-maximize / close` IPC 监听；
+ * Window customization (see `window-chrome.ts`):
+ *  1. macOS keeps the native traffic lights and uses `titleBarStyle: hidden`,
+ *     with the lights centered in the 32 px renderer-owned title strip.
+ *  2. Windows uses Electron's official Window Controls Overlay: the frame stays
+ *     enabled (no `frame: false`) so Snap Layouts, native double-click maximize
+ *     and the system menu keep working; the native caption buttons are painted
+ *     over the renderer title bar.
+ *  3. Linux stays frameless (`frame: false`); only there the renderer draws its
+ *     own minimize / maximize / close controls.
+ *  4. 应用菜单 `null`，单窗 `autoHideMenuBar: true` — 不占用渲染区域。
+ *  5. 注册 `window:minimize / toggle-maximize / close` IPC 监听；
  *     转发 maximize / unmaximize 事件到渲染层，更新图标状态。
- *  5. 点关闭按钮销毁窗口（托盘保活），真正退出由托盘菜单触发。
+ *  6. 点关闭按钮销毁窗口（托盘保活），真正退出由托盘菜单触发。
  *
  * `main/index.ts` 仅负责 app 生命周期。
  */
@@ -78,16 +87,16 @@ export class DesktopWindow {
       height: MAIN_WINDOW_HEIGHT,
       minWidth: MAIN_WINDOW_MIN_WIDTH,
       minHeight: MAIN_WINDOW_MIN_HEIGHT,
-      // Windows/Linux are frameless, so the renderer supplies the native-like
-      // title controls. Keep the window resizable and maximizable so the
-      // maximize control is functional instead of decorative.
+      // Platform chrome (frame style / Windows Window Controls Overlay /
+      // macOS traffic-light position). On Windows this deliberately leaves the
+      // frame enabled; only Linux is frameless with renderer-drawn controls.
+      ...windowChromeFor(process.platform, options.theme ?? 'light'),
+      // Keep the window resizable and maximizable so the maximize control is
+      // functional instead of decorative.
       resizable: true,
       maximizable: true,
       fullscreenable: true,
       show: false,
-      frame: isMac,
-      titleBarStyle: isMac ? 'hidden' : 'default',
-      trafficLightPosition: isMac ? { x: 12, y: 12 } : undefined,
       autoHideMenuBar: true,
       backgroundColor: WINDOW_BACKGROUND_COLORS[options.theme ?? 'light'],
       title: options.title ?? 'Quotern',
@@ -196,6 +205,11 @@ export class DesktopWindow {
 
   setThemeBackground(theme: DesktopWindowTheme): void {
     this.browserWindow.setBackgroundColor(WINDOW_BACKGROUND_COLORS[theme]);
+    // Keep the native Window Controls Overlay strip in sync with the theme
+    // while the window is alive (setTitleBarOverlay throws after destroy).
+    if (process.platform === 'win32' && !this.browserWindow.isDestroyed()) {
+      this.browserWindow.setTitleBarOverlay(titleBarOverlayFor(theme));
+    }
   }
 }
 

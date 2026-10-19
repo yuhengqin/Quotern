@@ -163,9 +163,12 @@
 }
 
 @layer base {
-  /* Dedicated title-bar space for dragging the frameless desktop window. */
+  /* Dedicated title-bar space for dragging the frameless desktop window.
+     The height tracks the shared TITLEBAR_HEIGHT constant, published by
+     AppShell as `--desktop-titlebar-height`; the fallback keeps the strip
+     usable in any context that does not render the shell. */
   .desktop-window-drag-region {
-    height: 32px;
+    height: var(--desktop-titlebar-height, 32px);
     user-select: none;
     app-region: drag;
     -webkit-app-region: drag;

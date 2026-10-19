@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { ToastQueue } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
@@ -27,6 +27,16 @@ import { ShareSnapshotProvider } from '../../../../../packages/dashboard/src/hoo
 import { AchievementProvider } from '../../../../../packages/dashboard/src/achievements/AchievementProvider';
 import { AchievementOverlays } from '../../../../../packages/dashboard/src/achievements/AchievementOverlays';
 import { updateAchievements } from '@/lib/api';
+import { TITLEBAR_HEIGHT } from '../../shared/window-chrome';
+
+/**
+ * Publish the shared title-bar height to CSS so `.desktop-window-drag-region`
+ * and the native Window Controls Overlay (which the main process sizes from the
+ * same constant) cannot drift apart.
+ */
+const TITLEBAR_STYLE = {
+  '--desktop-titlebar-height': `${TITLEBAR_HEIGHT}px`,
+} as CSSProperties;
 
 /** Root shell: filter chrome actions + nested route outlet. */
 export function AppShell() {
@@ -91,7 +101,10 @@ export function AppShell() {
     <AppToastQueueProvider queue={toastQueue}>
       <ShareSnapshotProvider>
         <AchievementProvider request={updateAchievements}>
-        <div className="flex min-h-svh flex-col bg-background text-foreground">
+        <div
+          className="flex min-h-svh flex-col bg-background text-foreground"
+          style={TITLEBAR_STYLE}
+        >
         <AppToastProvider queue={toastQueue} />
         <AutoUpdateNotice toastQueue={toastQueue} />
       {/* Fixed title chrome: transparent until scrolled, then frosted; always draggable. */}
@@ -105,8 +118,8 @@ export function AppShell() {
         <div className="min-w-0 flex-1" />
         <WindowTitleControls />
       </div>
-      {/* Reserve layout space matching the fixed 32px drag region. */}
-      <div className="h-8 shrink-0" aria-hidden="true" />
+      {/* Reserve layout space matching the fixed title strip. */}
+      <div className="shrink-0" style={{ height: TITLEBAR_HEIGHT }} aria-hidden="true" />
       <div className="relative flex-1">
         {/* <aside
           className="fixed top-1/2 z-30 hidden -translate-x-full -translate-y-1/2 min-[1488px]:block"

@@ -4,6 +4,11 @@ import type { SupportedLocale } from 'quotern-i18n';
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.activity.pageTitle': ['会话', 'Sessions', 'セッション', '세션'],
+  'usage.activity.sessionColumn': ['会话', 'Session', 'セッション', '세션'],
+  'usage.activity.tokenShare': ['Token 占比', 'Token share', 'Token 比率', 'Token 비율'],
+  'usage.activity.sortAscending': ['升序', 'Ascending', '昇順', '오름차순'],
+  'usage.activity.sortDescending': ['降序', 'Descending', '降順', '내림차순'],
+  'usage.common.model': ['模型', 'Model', 'モデル', '모델'],
   'usage.activity.overviewScope': ['总览 Agent 范围：{{sources}}', 'Overview agent scope: {{sources}}', '概要の Agent 範囲：{{sources}}', '개요 Agent 범위: {{sources}}'],
   'usage.activity.localOnly': ['请连接本地 Quotern 服务以查看会话。', 'Connect to a local Quotern service to browse sessions.', 'セッションを表示するにはローカルの Quotern サービスに接続してください。', '세션을 보려면 로컬 Quotern 서비스에 연결하세요.'],
   'usage.activity.dataNotes': ['部分信息未记录 · 查看数据说明', 'Some information is missing · View data notes', '一部の情報が未記録 · データの説明を表示', '일부 정보가 기록되지 않음 · 데이터 설명 보기'],

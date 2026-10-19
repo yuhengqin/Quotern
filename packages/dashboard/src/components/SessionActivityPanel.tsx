@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Card, Label, ListBox, SearchField, Select, Tabs, Tooltip } from '@heroui/react';
-import { ArrowDownUp, X } from 'lucide-react';
+import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
+import { ArrowDown, ArrowDownUp, ArrowUp, ChevronUp, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
@@ -16,6 +16,10 @@ import { createSessionPageSearch, sessionAttributionKey, type SessionPageSearch,
 import { getDashboardReturnState, rememberDashboardSessionView } from '../lib/dashboard-return-state';
 
 const number = (value: number, locale: SupportedLocale) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+const sessionColumns = 'min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5';
+const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_7.5rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4';
+const sessionSortLabels = { recent: 'usage.activity.recent', tokens: 'usage.common.totalTokens', cost: 'usage.common.cost', duration: 'usage.explorer.taskTime' } as const;
+type SessionSorting = Pick<SessionPageSearch, 'sort' | 'direction'> & { onSort(sort: SessionSort): void };
 const serviceLabel = (value: string, locale: SupportedLocale) => {
   const key = ({ unknown: 'usage.activity.attributionUnknown', mixed: 'usage.activity.multipleChannels' } as Record<string, string>)[value];
   return key ? translate(locale, key) : ({ openai: 'OpenAI', anthropic: 'Anthropic', xai: 'xAI', opencode: 'OpenCode' } as Record<string, string>)[value] ?? value;
@@ -111,17 +115,17 @@ function UsageAttribution({ snapshot, scope }: { snapshot: SessionActivitySnapsh
 function SessionList({ rows, scope }: { rows: SessionActivity[]; scope: SessionScope }) {
   const { t } = useTranslation();
   return <>
-    {rows.length ? <SessionRows rows={rows.slice(0, 6)} contribution={false} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
+    {rows.length ? <SessionRows rows={rows.slice(0, 6)} showTokenShare={false} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
     <Link to="/sessions" search={createSessionPageSearch(scope)} className="button button--sm button--ghost mt-2 h-7 text-xs">{t('usage.activity.viewAllSessions', { count: rows.length })}</Link>
   </>;
 }
 
 export function SessionBrowser({ rows, usage, value, onChange }: { rows: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void }) {
   const { t } = useTranslation();
-  const { q: query, sources, page, project, sort } = value;
+  const { q: query, sources, page, project, sort, direction } = value;
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
   const facets = useMemo(() => sessionActivityFacets(rows, query, sources, project), [rows, query, sources, project]);
-  const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, sources, project), sort), [rows, query, sources, project, sort]);
+  const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, sources, project), sort, direction), [rows, query, sources, project, sort, direction]);
   const result = sessionActivityPage(filtered, page);
   const hasFilters = Boolean(query.trim() || sources.length || project);
   return <section aria-label={t('usage.activity.allSessions')} className="min-w-0 rounded-2xl border border-separator bg-surface p-4 sm:p-5">
@@ -150,13 +154,16 @@ export function SessionBrowser({ rows, usage, value, onChange }: { rows: Session
             {facets.projects.map(({ value, count }) => <ListBox.Item id={`project:${value}`} key={value} textValue={value} className="text-xs"><span className="min-w-0 truncate" title={value}>{value}</span><span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></FilterSelectPopover>
         </Select>
-        <Select aria-label={t('usage.explorer.sort')} value={sort} onChange={key => { if (typeof key === 'string') onChange({ sort: key as SessionSort }); }} variant="secondary" className="min-w-0 max-w-52">
+        <Select aria-label={t('usage.explorer.sort')} value={sort} onChange={key => { if (typeof key === 'string') onChange({ sort: key as SessionSort, direction: 'descending' }); }} variant="secondary" className="min-w-0 max-w-52">
           <Label className="sr-only">{t('usage.explorer.sort')}</Label>
           <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate" /><Select.Indicator /></Select.Trigger>
           <FilterSelectPopover className="w-52 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.sort')}>
-            {(['recent', 'tokens', 'cost', 'duration'] as const).map(value => <ListBox.Item id={value} key={value} textValue={t(`usage.explorer.${{ recent: 'sortRecent', tokens: 'sortTokens', cost: 'sortCost', duration: 'sortDuration' }[value]}`)} className="text-xs">{t(`usage.explorer.${{ recent: 'sortRecent', tokens: 'sortTokens', cost: 'sortCost', duration: 'sortDuration' }[value]}`)}<ListBox.ItemIndicator /></ListBox.Item>)}
+            {(['recent', 'tokens', 'cost', 'duration'] as const).map(value => <ListBox.Item id={value} key={value} textValue={t(sessionSortLabels[value])} className="text-xs">{t(sessionSortLabels[value])}<ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></FilterSelectPopover>
         </Select>
+        <Button size="sm" variant="tertiary" isIconOnly className="!size-8 !min-h-8 !min-w-8" aria-label={t(direction === 'ascending' ? 'usage.activity.sortDescending' : 'usage.activity.sortAscending')} onPress={() => onChange({ direction: direction === 'ascending' ? 'descending' : 'ascending' })}>
+          {direction === 'ascending' ? <ArrowUp className="size-3.5" aria-hidden /> : <ArrowDown className="size-3.5" aria-hidden />}
+        </Button>
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
         {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
@@ -165,8 +172,7 @@ export function SessionBrowser({ rows, usage, value, onChange }: { rows: Session
         <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '' }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
-      {filtered.length ? <SessionRows rows={result.rows} contribution={Boolean(usage)} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
-      {usage && <p className="text-[11px] text-muted">{t('usage.activity.contributionNote')}</p>}
+      {filtered.length ? <SessionRows rows={result.rows} showTokenShare={Boolean(usage)} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
     </div>
     <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => onChange({ page: result.page - 1 })}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => onChange({ page: result.page + 1 })}>{t('usage.activity.nextPage')}</Button></div></footer>
   </section>;
@@ -179,15 +185,40 @@ function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): voi
   </Button>;
 }
 
-function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribution: boolean }) {
+function SessionSortButton({ label, column, sorting }: { label: string; column: SessionSort; sorting: SessionSorting }) {
+  const { t } = useTranslation();
+  const active = sorting.sort === column;
+  const nextDirection = active && sorting.direction === 'descending' ? 'ascending' : 'descending';
+  return <Button size="sm" variant="tertiary" className={`!h-7 !min-h-7 !min-w-0 !gap-1 !rounded-md !px-1 !text-[11px] !font-medium ${active ? 'text-foreground' : 'text-muted'}`} aria-pressed={active} aria-label={`${label} · ${t(nextDirection === 'ascending' ? 'usage.activity.sortAscending' : 'usage.activity.sortDescending')}`} onPress={() => sorting.onSort(column)}>
+    <Table.SortableColumnHeader className="table__sortable-column-header !gap-1" sortDirection={active ? sorting.direction : undefined} indicator={<ChevronUp className="table__sortable-column-indicator !size-3" aria-hidden />}>{label}</Table.SortableColumnHeader>
+  </Button>;
+}
+
+function SessionRows({ rows, showTokenShare, sorting }: { rows: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   return <div className="@container/session-list divide-y divide-separator">
-      {rows.map(row => <details key={`${row.source}:${row.sessionId}`} className="group py-1">
-        <summary className="grid min-w-0 cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent @3xl/session-list:gap-x-5">
+      {sorting && <div role="group" aria-label={t('usage.explorer.sort')} className={`hidden rounded-lg bg-surface-secondary py-1 text-[11px] font-medium text-muted @3xl/session-list:grid ${sessionColumns}`}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="w-5 shrink-0" aria-hidden />
+          <div className={sessionIdentityColumns}>
+            <span>{t('usage.activity.sessionColumn')}</span><span>{t('usage.explorer.project')}</span>
+            <div className="-ml-1"><SessionSortButton label={t('usage.activity.recent')} column="recent" sorting={sorting} /></div>
+          </div>
+        </div>
+        <div className="grid grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] items-center gap-x-4">
+          <div className="flex justify-end"><SessionSortButton label="Token" column="tokens" sorting={sorting} /></div>
+          <div className="flex justify-end"><SessionSortButton label={t('usage.common.cost')} column="cost" sorting={sorting} /></div>
+        </div>
+      </div>}
+      {rows.map(row => {
+        const hasBilling = row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || Boolean(row.billing.accountRef);
+        const share = showTokenShare && row.sharePercent != null ? row.sharePercent : null;
+        return <details key={`${row.source}:${row.sessionId}`} className="group py-1">
+        <summary className={`grid cursor-pointer list-none rounded-xl py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
           <div className="flex min-w-0 items-center gap-2.5">
             <ProviderIcon provider={row.source} size={20} />
-            <div className="min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,1fr)_minmax(0,8rem)_5rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4">
+            <div className={sessionIdentityColumns}>
               <p className="truncate text-sm font-medium" title={row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId}`}>{row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId.slice(-8)}`}</p>
               <p className="flex min-w-0 items-center gap-1 text-[11px] text-muted @3xl/session-list:contents">
                 <span className="truncate" title={row.projectLabel}>{row.projectLabel}</span>
@@ -196,16 +227,25 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
               </p>
             </div>
           </div>
-          <div className={`shrink-0 text-right text-xs tabular-nums @3xl/session-list:grid @3xl/session-list:items-center @3xl/session-list:gap-x-4 ${contribution ? '@3xl/session-list:grid-cols-[7.5rem_9.5rem]' : '@3xl/session-list:grid-cols-[7.5rem_7rem]'}`}><p className="whitespace-nowrap">{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${number(row.tokens, locale)} Token`}</p><div className="whitespace-nowrap text-[11px] text-muted"><Tooltip delay={200}>
+          <div className="min-w-0 text-right text-xs tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4"><p className="whitespace-nowrap">{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${number(row.tokens, locale)} Token`}</p><div className="whitespace-nowrap text-[11px] text-muted"><Tooltip delay={200}>
             <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">
-              {row.costUsd === null ? t('usage.activity.amountUnknown') : `$${row.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}{contribution && row.sharePercent !== null ? ` · ${row.sharePercent.toFixed(1)}%` : ''}
+              {row.costUsd === null ? t('usage.activity.amountUnknown') : `$${row.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}
             </Tooltip.Trigger>
             <Tooltip.Content placement="top">{costLabel(row.costKind, locale)}</Tooltip.Content>
           </Tooltip></div></div>
         </summary>
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
-          {(row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || row.billing.accountRef || row.taskSeconds != null) && <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1">
-            {(row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || row.billing.accountRef) && <p className="min-w-0 break-words">{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>}
+          {(hasBilling || share !== null || row.taskSeconds != null) && <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            {(hasBilling || share !== null) && <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {hasBilling && <span className="min-w-0 break-words">{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</span>}
+              {share !== null && <span className="inline-flex items-center gap-2">
+                {hasBilling && <span aria-hidden>·</span>}
+                <Tooltip delay={200}>
+                  <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help whitespace-nowrap rounded tabular-nums outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">{t('usage.activity.tokenShare')}: {share.toFixed(1)}%</Tooltip.Trigger>
+                  <Tooltip.Content placement="top" className="max-w-xs text-xs">{t('usage.activity.contributionFilterNote')} {t('usage.activity.contributionNote')}</Tooltip.Content>
+                </Tooltip>
+              </span>}
+            </p>}
             <TaskTime row={row} />
           </div>}
           {!row.models?.length && row.model !== 'unknown' && <p>{row.model}</p>}
@@ -219,12 +259,12 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
             </div>
           </details>}
           {!!row.models?.length && <div className="min-w-0 max-w-full rounded-lg border border-separator">
-            <div className="overflow-x-auto"><table className="w-full text-left text-[11px]"><caption className="sr-only">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</caption><thead className="sticky top-0 bg-surface-secondary"><tr>{[t('usage.explorer.modelDetails'), t('usage.common.input'), t('usage.common.output'), t('usage.common.cache'), t('usage.distribution.cacheWrite'), t('usage.explorer.requests'), t('usage.common.cost')].map((label, i) => <th scope="col" key={i} className="whitespace-nowrap px-2 py-1 font-medium">{label}</th>)}</tr></thead><tbody>{row.models.map(model => <tr key={model.model} className="border-t border-separator"><th scope="row" className="max-w-48 truncate px-2 py-2 font-normal" title={model.model}>{model.model}<span className="block text-muted">{model.serviceTiers.filter(tier => tier !== 'unknown').join(' / ')}</span></th>{[model.input_tokens, model.output_tokens === null || model.reasoning_output_tokens === null ? null : model.output_tokens + model.reasoning_output_tokens, model.cached_input_tokens, model.cache_creation_input_tokens, model.requests].map((value, i) => <td key={i} className="whitespace-nowrap px-2 py-2 tabular-nums">{value === null ? '—' : number(value, locale)}</td>)}<td className="whitespace-nowrap px-2 py-2 tabular-nums" title={costLabel(model.costKind, locale)}>{model.costUsd === null ? `${t('usage.explorer.knownSubtotal')} $${model.knownCostUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}` : `$${model.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto"><table className="w-full text-left text-[11px]"><caption className="sr-only">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</caption><thead className="sticky top-0 bg-surface-secondary"><tr>{[t('usage.common.model'), t('usage.common.input'), t('usage.common.output'), t('usage.common.cache'), t('usage.distribution.cacheWrite'), t('usage.explorer.requests'), t('usage.common.cost')].map((label, i) => <th scope="col" key={i} className="whitespace-nowrap px-2 py-1 font-medium">{label}</th>)}</tr></thead><tbody>{row.models.map(model => <tr key={model.model} className="border-t border-separator"><th scope="row" className="max-w-48 truncate px-2 py-2 font-normal" title={model.model}>{model.model}{model.serviceTiers.some(tier => tier !== 'unknown' && tier !== 'standard') && <span className="block text-muted">{model.serviceTiers.filter(tier => tier !== 'unknown' && tier !== 'standard').join(' / ')}</span>}</th>{[model.input_tokens, model.output_tokens === null || model.reasoning_output_tokens === null ? null : model.output_tokens + model.reasoning_output_tokens, model.cached_input_tokens, model.cache_creation_input_tokens, model.requests].map((value, i) => <td key={i} className="whitespace-nowrap px-2 py-2 tabular-nums">{value === null ? '—' : number(value, locale)}</td>)}<td className="whitespace-nowrap px-2 py-2 tabular-nums" title={costLabel(model.costKind, locale)}>{model.costUsd === null ? `${t('usage.explorer.knownSubtotal')} $${model.knownCostUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}` : `$${model.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}</td></tr>)}</tbody></table></div>
           </div>}
           {row.unallocatedCostUsd != null && <p>{t('usage.explorer.unallocatedCost')}</p>}
           <p>{t('usage.activity.recentDetails', { date: new Date(row.lastActivityAt).toLocaleString(locale), id: row.sessionId })}</p>
         </div>
-      </details>)}
+      </details>; })}
     </div>;
 }
 

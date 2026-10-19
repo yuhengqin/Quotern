@@ -26,6 +26,29 @@ test('session browser filters projects and sorts known costs ahead of unknown wi
   assert.equal(rows[0].sessionId, 'a');
 });
 
+test('session metric sorting supports both directions and keeps missing values last', () => {
+  const rows = [
+    { source: 'codex', sessionId: 'unknown', lastActivityAt: '2026-10-19T03:00Z', tokens: null, costUsd: null, taskSeconds: null },
+    { source: 'codex', sessionId: 'large', lastActivityAt: '2026-10-19T02:00Z', tokens: 100, costUsd: 2, taskSeconds: 90 },
+    { source: 'codex', sessionId: 'zero', lastActivityAt: '2026-10-19T01:00Z', tokens: 0, costUsd: 0, taskSeconds: 0 },
+  ] as SessionActivity[];
+  for (const sort of ['tokens', 'cost', 'duration'] as const) {
+    assert.deepEqual(activity.sortSessionActivity(rows, sort, 'ascending').map(row => row.sessionId), ['zero', 'large', 'unknown']);
+    assert.deepEqual(activity.sortSessionActivity(rows, sort, 'descending').map(row => row.sessionId), ['large', 'zero', 'unknown']);
+  }
+  assert.deepEqual(rows.map(row => row.sessionId), ['unknown', 'large', 'zero']);
+});
+
+test('activity sorting reverses dates while equal metrics keep a stable recent-first order', () => {
+  const rows = [
+    { source: 'codex', sessionId: 'new', lastActivityAt: '2026-10-19T02:00Z', tokens: 2 },
+    { source: 'codex', sessionId: 'old', lastActivityAt: '2026-10-18T02:00Z', tokens: 2 },
+  ] as SessionActivity[];
+  assert.deepEqual(activity.sortSessionActivity(rows, 'recent', 'ascending').map(row => row.sessionId), ['old', 'new']);
+  assert.deepEqual(activity.sortSessionActivity(rows, 'recent', 'descending').map(row => row.sessionId), ['new', 'old']);
+  assert.deepEqual(activity.sortSessionActivity(rows, 'tokens', 'ascending').map(row => row.sessionId), ['new', 'old']);
+});
+
 test('session filter options follow search and the other filter, with counts across every page', () => {
   const rows = [
     ...Array.from({ length: 13 }, (_, i) => ({ source: 'codex', sessionId: `a-${i}`, projectLabel: 'A', sessionTitle: '调研' })),

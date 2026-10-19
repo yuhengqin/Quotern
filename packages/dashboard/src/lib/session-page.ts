@@ -2,7 +2,7 @@ import type { SessionActivitySnapshot } from 'quotern-core';
 import { dateRangeDays, type DashboardDateRange } from './dashboard-date-range.ts';
 import { DASHBOARD_RANGE_DAYS, isDashboardRange, type DashboardRange } from './dashboard-range.ts';
 import { localDateDaysAgo, localDateNow } from './stats-timezone.ts';
-import { relatedSessionActivity, type SessionSort } from './session-activity.ts';
+import { relatedSessionActivity, type SessionSort, type SessionSortDirection } from './session-activity.ts';
 
 export interface SessionScope {
   days: number;
@@ -25,6 +25,7 @@ export interface SessionPageSearch {
   sources: string[];
   project: string;
   sort: SessionSort;
+  direction: SessionSortDirection;
   page: number;
 }
 
@@ -50,6 +51,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     sources: strings(raw.sources),
     project: typeof raw.project === 'string' ? raw.project : '',
     sort: ['recent', 'tokens', 'cost', 'duration'].includes(String(raw.sort)) ? raw.sort as SessionSort : 'recent',
+    direction: raw.direction === 'ascending' ? 'ascending' : 'descending',
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
   };
 }

@@ -39,6 +39,24 @@ test('session URL validation normalizes invalid values without losing valid Unic
   assert.equal(search.q, '小病灶');
 });
 
+test('session sort direction survives URL restoration and changes reset pagination without broadening scope', () => {
+  const previous = parseSessionPageSearch({ sort: 'tokens', direction: 'ascending', page: 4, q: '调研', sources: ['codex'], project: 'Quotern', scopeSources: ['codex'], group: 'billing-group' });
+  const restored = parseSessionPageSearch(JSON.parse(JSON.stringify(previous)));
+  assert.equal(restored.direction, 'ascending');
+  const next = updateSessionPageSearch(restored, { sort: 'cost', direction: 'descending' });
+  assert.equal(next.sort, 'cost');
+  assert.equal(next.direction, 'descending');
+  assert.equal(next.page, 1);
+  assert.equal(next.q, previous.q);
+  assert.equal(next.project, previous.project);
+  assert.equal(next.group, previous.group);
+  assert.deepEqual(next.scopeSources, previous.scopeSources);
+  assert.deepEqual(next.sources, previous.sources);
+  assert.equal(updateSessionPageSearch(restored, { q: '' }).direction, 'ascending');
+  assert.equal(parseSessionPageSearch({}).direction, 'descending');
+  assert.equal(parseSessionPageSearch({ direction: 'invalid' }).direction, 'descending');
+});
+
 test('clearing list filters resets the page but retains the overview and attribution scope', () => {
   const search = parseSessionPageSearch({ days: 30, scopeSources: ['pi', 'omp'], group: '["openai","api",null]', q: 'model', sources: ['pi'], project: 'app', sort: 'cost', page: 8 });
   const cleared = updateSessionPageSearch(search, { q: '', sources: [], project: '' });

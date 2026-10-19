@@ -30,9 +30,21 @@ export function sessionActivityFacets(rows: SessionActivity[], query: string, so
 }
 
 export type SessionSort = 'recent' | 'tokens' | 'cost' | 'duration';
-export function sortSessionActivity(rows: SessionActivity[], sort: SessionSort): SessionActivity[] {
-  const value = (row: SessionActivity) => sort === 'cost' ? row.costUsd ?? -1 : sort === 'duration' ? row.taskSeconds ?? -1 : row.tokens ?? -1;
-  return [...rows].sort((a, b) => (sort === 'recent' ? 0 : value(b) - value(a)) || b.lastActivityAt.localeCompare(a.lastActivityAt) || a.source.localeCompare(b.source) || a.sessionId.localeCompare(b.sessionId));
+export type SessionSortDirection = 'ascending' | 'descending';
+export function sortSessionActivity(rows: SessionActivity[], sort: SessionSort, direction: SessionSortDirection = 'descending'): SessionActivity[] {
+  const value = (row: SessionActivity) => sort === 'cost' ? row.costUsd : sort === 'duration' ? row.taskSeconds : row.tokens;
+  const order = direction === 'ascending' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    let compared: number;
+    if (sort === 'recent') compared = order * a.lastActivityAt.localeCompare(b.lastActivityAt);
+    else {
+      const first = value(a), second = value(b);
+      // Missing measurements stay after known values in either direction, including zero.
+      if (first == null || second == null) compared = Number(first == null) - Number(second == null);
+      else compared = order * (first - second);
+    }
+    return compared || b.lastActivityAt.localeCompare(a.lastActivityAt) || a.source.localeCompare(b.source) || a.sessionId.localeCompare(b.sessionId);
+  });
 }
 
 export function sessionActivityPage(rows: SessionActivity[], page: number) {

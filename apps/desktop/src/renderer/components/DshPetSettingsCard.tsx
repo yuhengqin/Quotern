@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Button, Label, Switch } from '@heroui/react';
+import { Button, Switch } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { DshPetAction, DshPetState, ModelRef, ProviderPatch } from '../../shared/dsh-pet';
 import type { QuotaState } from '../../shared/quota';
@@ -30,7 +30,7 @@ export function DshPetSettingsCard() {
   const updatePet = (index: number, value: Item) => patch({ pets: pets.map((pet, i) => i === index ? { ...pet, ...value } : pet) });
   const animations = new Set<string>(); const visit = (value: unknown) => { if (typeof value === 'string') animations.add(value); else if (Array.isArray(value)) value.forEach(visit); else if (value && typeof value === 'object') { const item = value as Item; if (typeof item.name === 'string') animations.add(item.name); for (const [k, v] of Object.entries(item)) if (!['params', 'default', 'name'].includes(k)) visit(v); } }; visit(conf.animations);
   return <section className="space-y-4 rounded-xl border border-default-200 bg-content1 p-4 text-left" aria-label={text('title')}>
-    <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold">{text('title')}</h3><p className="mt-1 text-xs text-muted">{text('description')}</p></div><Switch aria-label={text('enable')} isSelected={state.enabled} isDisabled={busy} onChange={enabled => { void run({ type: 'set-enabled', enabled }); }}><Switch.Control><Switch.Thumb /></Switch.Control><Label>{text('enable')}</Label></Switch></div>
+    <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold">{text('title')}</h3><p className="mt-1 text-xs text-muted">{text('description')}</p></div><Switch className="shrink-0" aria-label={text('enable')} isSelected={state.enabled} isDisabled={busy} onChange={enabled => { void run({ type: 'set-enabled', enabled }); }}><Switch.Content className="gap-2 text-xs"><Switch.Control><Switch.Thumb /></Switch.Control>{text('enable')}</Switch.Content></Switch></div>
     <div className="flex items-center gap-3 text-xs"><span>{text(`status.${state.status}`)}</span>{state.status === 'error' && <Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'retry' }); }}>{text('retry')}</Button>}</div>
     {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
     {feedback && <p role={failed ? 'alert' : 'status'} className={`break-words text-xs ${failed ? 'text-danger' : 'text-success'}`}>{feedback}</p>}

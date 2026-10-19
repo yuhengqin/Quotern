@@ -15,7 +15,11 @@ export class DshPetConfigStore {
     this.paths = { defaultFile: path.join(runtimeRoot, 'assets/config.jsonc'), userFile: path.join(root, 'main-config.jsonc'), petDir: path.join(root, 'pet') };
     this.vendor = loadVendor(runtimeRoot);
   }
-  read(): MergedConfig { return this.vendor.readAllConfig(this.paths); }
+  read(): MergedConfig {
+    // The optional user layer does not exist on a normal first launch.
+    const paths = existsSync(this.paths.userFile) ? this.paths : { ...this.paths, userFile: this.paths.defaultFile };
+    return this.vendor.readAllConfig(paths);
+  }
   readText(): string { return readFileSync(existsSync(this.paths.userFile) ? this.paths.userFile : this.paths.defaultFile, 'utf8'); }
   version(): string { return this.vendor.configVersion(this.paths); }
 

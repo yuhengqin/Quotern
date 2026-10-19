@@ -53,3 +53,13 @@ corepack pnpm --filter quotern-desktop exec electron-builder --win '--config.win
 - 原开发会话 `084d29f5-684c-4695-a85b-4b2464735ffc` 缺失 guardian 完成凭据，初次交付时保留会话锁。后续按用户明确授权人工核验：原 supervisor、已记录子进程、guardian 及匹配 worktree/Job 名称的进程均不存在；两次只读 `OpenJobObjectW` 返回 `ERROR_FILE_NOT_FOUND (2)`。严格核对会话与两个 owner 的身份字段、原始文件哈希及普通目录内容后，在对应 resource gate 内仅移除 `runtime.lock` 和 `desktop-ui.lock`。原始会话、owner、配置、哈希及独立核验记录保存在实现 worktree 的 `.superpowers/sdd/2026-10-19-dsh-pet-desktop/manual-lock-recovery/`；没有补造 guardian 凭据或清空数据。随后使用实际 `createDevSession(..., 'desktop')` 成功获取并正常释放两锁，记录为 stopped，无 lock/guard 残留；此检查没有启动开发服务。Windows Job 生命周期依据为 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects#managing-job-objects)。
 
 完整独立代码审查发现的四项缺陷已修复，并经另一位 reviewer 限定复核，无新增阻塞项。原始 vendor 快照未修改；所有适配与自检前提修正在生成层记录。
+
+## 启用开关回归修复（2026-10-19）
+
+实际设置卡片的开关遗漏了 HeroUI 3.2.4 必需的 `Switch.Content`，因此只有 Control/Thumb 外观，没有 switch input，也不会触发启用 IPC。此前包验收直接调用 IPC，并仅确认设置卡片存在，未覆盖这条 UI 入口。现已采用安装库及本地 controlled demo 的交互结构，保持原有受控状态、busy 和错误反馈。
+
+首次没有可选 `main-config.jsonc` 时，宿主原本也会对默认回退发出“pets 缺失或为空”告警；实际聚合配置已包含默认宠物，不是启用失败的原因。读取时现将这种正常首启映射到内置默认层，不创建或重写用户文件；显式空 `pets` 的异常告警与回退仍保留。
+
+两项回归均先复现失败：旧 Windows 包缺少可交互 switch input；新首启用例捕获误告警。修复后 Desktop 类型检查、依赖及 Desktop 构建通过，Desktop 测试 **727 tests，707 pass、20 skip、0 fail**。重新构建本地未签名 win-unpacked 后，增强的 `packaged-dsh-pet-smoke.mjs` 经真实渲染 DOM、Electron CDP 鼠标/Space 输入、preload IPC 验证鼠标启用、键盘停用、鼠标再次启用及 helper 运行，同时保留 mock 聊天、密钥加密脱敏、两实例与旧宠物并存和正常退出检查。人工鼠标/DPI 验收边界不变。
+
+本地证据为实现 worktree 的 `.superpowers/sdd/2026-10-19-dsh-pet-desktop/enable-{config-red,config-green,ui-red,typecheck-after-build,build,tests,package,ui-green}.log` 与 `enable-ui-green/{result.json,main.png,stdout.log,stderr.log}`。将工作区从旧实现分支更新到 main 后，第一次类型检查读取了尚未重建的 Core dist；重建本工作区依赖后再次类型检查通过，未更改相关类型或断言来规避错误。

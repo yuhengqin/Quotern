@@ -7,6 +7,23 @@ import { DshPetConfigStore } from './config-store.js';
 
 const runtime = path.resolve('out/dsh-pet');
 
+test('first launch inherits built-in pets without warnings or creating a user config', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-first-config-'));
+  const warnings: string[] = [];
+  t.mock.method(console, 'warn', (...args: unknown[]) => { warnings.push(args.join(' ')); });
+  try {
+    const store = new DshPetConfigStore(root, runtime);
+    const defaults = store.read().main!;
+    assert.ok(Array.isArray(defaults.pets) && defaults.pets.length > 0);
+    assert.deepEqual(warnings, [], 'an absent optional user config is a normal first launch');
+    assert.equal(store.version(), '0');
+    await assert.rejects(readFile(store.paths.userFile), { code: 'ENOENT' });
+    await writeFile(store.paths.userFile, JSON.stringify({ pets: [] }));
+    assert.deepEqual(store.read().main!.pets, defaults.pets);
+    assert.ok(warnings.some(message => /pets.*为空/.test(message)), 'keep warnings for an explicitly empty pets list');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('saves full JSONC without damaging URL or comment-like prompt text, and keeps pack overrides', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-config-'));
   try {

@@ -14,7 +14,7 @@ const probe = createServer(); await new Promise(resolve => probe.listen(0, '127.
 const env = { ...process.env, QUOTERN_DEV_ISOLATED: '1', QUOTERN_DESKTOP_USER_DATA: path.join(directory, 'electron'), QUOTERN_DATA_DIR: path.join(directory, 'data'), QUOTERN_CONFIG_HOME: path.join(directory, 'config-home'), PORTABLE_EXECUTABLE_FILE: path.resolve(exe) };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(path.resolve(exe), [`--remote-debugging-port=${port}`], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-let stdout = '', stderr = '', client, sequence = 0; const pending = new Map();
+let stdout = '', stderr = '', client, evaluate, sequence = 0; const pending = new Map();
 child.stdout.on('data', value => { stdout += String(value); }); child.stderr.on('data', value => { stderr += String(value); });
 const deadline = setTimeout(() => child.kill(), 90_000);
 try {
@@ -24,7 +24,7 @@ try {
   client = new WebSocket(target.webSocketDebuggerUrl); await new Promise((resolve, reject) => { client.addEventListener('open', resolve, { once: true }); client.addEventListener('error', reject, { once: true }); });
   client.addEventListener('message', event => { const value = JSON.parse(event.data); if (value.id && pending.has(value.id)) { pending.get(value.id)(value); pending.delete(value.id); } });
   const call = (method, params) => new Promise((resolve, reject) => { const id = ++sequence; const timer = setTimeout(() => { pending.delete(id); reject(Error(`CDP timeout: ${method}`)); }, 60_000); pending.set(id, value => { clearTimeout(timer); value.error ? reject(Error(value.error.message)) : resolve(value.result); }); client.send(JSON.stringify({ id, method, params })); });
-  const evaluate = async expression => { const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text); return result.result.value; };
+  evaluate = async expression => { const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text); return result.result.value; };
   const dispatch = action => evaluate(`window.tud.dshPet.dispatch(${JSON.stringify(action)})`);
   let initial;
   for (let attempt = 0; attempt < 60; attempt++) { try { initial = await evaluate('window.tud.dshPet.getState()'); } catch {} if (initial) break; await wait(250); }
@@ -38,7 +38,35 @@ try {
   await dispatch({ type: 'set-default-model', model: { provider: 'mock', model: 'smoke' } });
   const main = initial.config.main;
   await dispatch({ type: 'patch-config', patch: { notificationsEnabled: false, pets: main.pets.map(pet => ({ ...pet, whisperEnabled: false })) } });
-  await dispatch({ type: 'set-enabled', enabled: true }); await wait(5500);
+  await evaluate(`window.dispatchEvent(new CustomEvent('tud:open-settings', {detail:{tab:'app'}})); true;`);
+  await wait(500);
+  const section = `[...document.querySelectorAll('section')].find(section => section.getAttribute('aria-label')?.includes('dsh-pet'))`;
+  assert.equal(await evaluate(`!!(${section})?.querySelector('input[role="switch"]')`), true, 'the enable control must render an interactive switch input');
+  const waitState = async (enabled, status) => {
+    let current;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      current = await evaluate('window.tud.dshPet.getState()');
+      const input = await evaluate(`(() => { const input = (${section}).querySelector('input[role="switch"]'); return {checked:input.checked,disabled:input.disabled}; })()`);
+      if (current.enabled === enabled && current.status === status && input.checked === enabled && !input.disabled) return current;
+      if (current.status === 'error') break;
+      await wait(100);
+    }
+    assert.fail(`Switch did not reach enabled=${enabled}, status=${status}: ${JSON.stringify(current)}`);
+  };
+  const clickSwitch = async () => {
+    const point = await evaluate(`(() => { const control = (${section}).querySelector('[data-slot="switch-control"]'); control.scrollIntoView({block:'center'}); const rect = control.getBoundingClientRect(); return {x:rect.x+rect.width/2,y:rect.y+rect.height/2}; })()`);
+    await call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
+    await call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
+  };
+  await clickSwitch();
+  await waitState(true, 'running');
+  await wait(5500);
+  await evaluate(`(${section}).querySelector('input[role="switch"]').focus(); true;`);
+  await call('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+  await call('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+  await waitState(false, 'disabled');
+  await clickSwitch();
+  await waitState(true, 'running');
   let state = await evaluate('window.tud.dshPet.getState()'); assert.equal(state.status, 'running', state.error);
   const chat = await dispatch({ type: 'request', method: 'POST', path: '/chat?pet=main', body: '{"text":"Packaged smoke"}' }); assert.equal(JSON.parse(chat.body).ok, true);
   const history = await dispatch({ type: 'request', method: 'GET', path: '/chat?pet=main' }); assert.equal(JSON.parse(history.body).messages.length, 2);
@@ -54,9 +82,15 @@ try {
   assert.equal(await evaluate(`!![...document.querySelectorAll('section')].find(section => section.getAttribute('aria-label')?.includes('dsh-pet'))`), true);
   await evaluate(`[...document.querySelectorAll('section')].find(section => section.getAttribute('aria-label')?.includes('dsh-pet')).scrollIntoView({block:'start'}); true;`);
   const capture = await call('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(directory, 'main.png'), Buffer.from(capture.data, 'base64'));
-  await writeFile(path.join(directory, 'result.json'), JSON.stringify({ ok: true, enabledByDefault: initial.enabled, encryptedAndRedactedTestKey: true, chatModel: JSON.parse(chat.body), memoryMessages: 2, reloadInstances: state.config.main.pets.length, existingPetCatalog: true }, null, 2));
+  await writeFile(path.join(directory, 'result.json'), JSON.stringify({ ok: true, enabledByDefault: initial.enabled, enabledThroughMouse: true, disabledThroughKeyboard: true, reenabledThroughMouse: true, encryptedAndRedactedTestKey: true, chatModel: JSON.parse(chat.body), memoryMessages: 2, reloadInstances: state.config.main.pets.length, existingPetCatalog: true }, null, 2));
   await evaluate('window.tud.quit(); true');
   await Promise.race([new Promise(resolve => child.once('exit', resolve)), wait(10_000)]);
   assert.equal(child.exitCode, 0, 'Packaged main must exit normally without forced termination');
   console.log(JSON.stringify({ ok: true, directory }));
-} finally { clearTimeout(deadline); client?.close(); if (child.exitCode === null) child.kill(); api.closeAllConnections(); await new Promise(resolve => api.close(resolve)); await writeFile(path.join(directory, 'stdout.log'), stdout); await writeFile(path.join(directory, 'stderr.log'), stderr); }
+} finally {
+  clearTimeout(deadline);
+  if (child.exitCode === null && evaluate) {
+    try { await evaluate('window.tud.quit(); true'); await Promise.race([new Promise(resolve => child.once('exit', resolve)), wait(10_000)]); } catch { /* Fall back only for this smoke's own child. */ }
+  }
+  client?.close(); if (child.exitCode === null) child.kill(); api.closeAllConnections(); await new Promise(resolve => api.close(resolve)); await writeFile(path.join(directory, 'stdout.log'), stdout); await writeFile(path.join(directory, 'stderr.log'), stderr);
+}

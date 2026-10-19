@@ -204,9 +204,11 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
           </Tooltip></div></div>
         </summary>
         <div className="ml-2 flex flex-col gap-2 border-l-2 border-separator py-2 pl-3 text-xs text-muted sm:ml-9">
-          {(row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || row.billing.accountRef) && <p>{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>}
+          {(row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || row.billing.accountRef || row.taskSeconds != null) && <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            {(row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || row.billing.accountRef) && <p className="min-w-0 break-words">{serviceLabel(row.billing.service, locale)} · {modeLabel(row.billing.mode, locale)} · {accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')}</p>}
+            <TaskTime row={row} />
+          </div>}
           {!row.models?.length && row.model !== 'unknown' && <p>{row.model}</p>}
-          {!row.models?.length && row.taskSeconds != null && <p><TaskTime row={row} /></p>}
           {(row.billing.mode === 'unknown' || !row.detailsComplete || !row.models?.length && row.model === 'unknown') && <details className="rounded-lg bg-surface-secondary px-3 py-2">
             <summary className="cursor-pointer text-[11px] outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">{t('usage.activity.dataNotes')}</summary>
             <div className="mt-2 flex flex-col gap-1.5 text-[11px]">
@@ -217,10 +219,6 @@ function SessionRows({ rows, contribution }: { rows: SessionActivity[]; contribu
             </div>
           </details>}
           {!!row.models?.length && <div className="min-w-0 max-w-full rounded-lg border border-separator">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2 py-1 text-[11px]">
-              <span className="font-medium">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</span>
-              <TaskTime row={row} />
-            </div>
             <div className="overflow-x-auto"><table className="w-full text-left text-[11px]"><caption className="sr-only">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</caption><thead className="sticky top-0 bg-surface-secondary"><tr>{[t('usage.explorer.modelDetails'), t('usage.common.input'), t('usage.common.output'), t('usage.common.cache'), t('usage.distribution.cacheWrite'), t('usage.explorer.requests'), t('usage.common.cost')].map((label, i) => <th scope="col" key={i} className="whitespace-nowrap px-2 py-1 font-medium">{label}</th>)}</tr></thead><tbody>{row.models.map(model => <tr key={model.model} className="border-t border-separator"><th scope="row" className="max-w-48 truncate px-2 py-2 font-normal" title={model.model}>{model.model}<span className="block text-muted">{model.serviceTiers.filter(tier => tier !== 'unknown').join(' / ')}</span></th>{[model.input_tokens, model.output_tokens === null || model.reasoning_output_tokens === null ? null : model.output_tokens + model.reasoning_output_tokens, model.cached_input_tokens, model.cache_creation_input_tokens, model.requests].map((value, i) => <td key={i} className="whitespace-nowrap px-2 py-2 tabular-nums">{value === null ? '—' : number(value, locale)}</td>)}<td className="whitespace-nowrap px-2 py-2 tabular-nums" title={costLabel(model.costKind, locale)}>{model.costUsd === null ? `${t('usage.explorer.knownSubtotal')} $${model.knownCostUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}` : `$${model.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}</td></tr>)}</tbody></table></div>
           </div>}
           {row.unallocatedCostUsd != null && <p>{t('usage.explorer.unallocatedCost')}</p>}

@@ -49,6 +49,26 @@ test('session filter options follow search and the other filter, with counts acr
   assert.deepEqual(facets(rows, '无匹配', 'all', ''), { sources: [], projects: [] });
 });
 
+test('multiple session agents combine as a union within the search and project filters', () => {
+  const rows = [
+    { source: 'codex', sessionId: 'a', projectLabel: 'A', sessionTitle: '调研' },
+    { source: 'claude', sessionId: 'b', projectLabel: 'A', sessionTitle: '调研' },
+    { source: 'opencode', sessionId: 'c', projectLabel: 'A', sessionTitle: '调研' },
+    { source: 'claude', sessionId: 'd', projectLabel: 'B', sessionTitle: '调研' },
+    { source: 'codex', sessionId: 'e', projectLabel: 'A', sessionTitle: '实现' },
+  ] as SessionActivity[];
+  assert.deepEqual(filterSessionActivity(rows, '调研', ['codex', 'claude'], 'A'), [rows[0], rows[1]]);
+  assert.deepEqual(filterSessionActivity(rows, '调研', [], 'A'), rows.slice(0, 3));
+  assert.deepEqual(activity.sessionActivityFacets(rows, '调研', ['codex', 'claude'], 'A'), {
+    sources: [{ value: 'claude', count: 1 }, { value: 'codex', count: 1 }, { value: 'opencode', count: 1 }],
+    projects: [{ value: 'A', count: 2 }, { value: 'B', count: 1 }],
+  });
+  assert.deepEqual(activity.sessionActivityFacets(rows, '无匹配', ['codex', 'claude'], 'A'), {
+    sources: [{ value: 'claude', count: 0 }, { value: 'codex', count: 0 }],
+    projects: [{ value: 'A', count: 0 }],
+  });
+});
+
 test('related sessions use exact source and session references even when session attribution is mixed', () => {
   const rows = [
     { source: 'pi', sessionId: 'shared', billing: { service: 'mixed' } },

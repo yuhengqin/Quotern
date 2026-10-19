@@ -6,19 +6,22 @@ export function relatedSessionActivity(rows: SessionActivity[], group: Pick<Sess
 }
 
 export const SESSION_PAGE_SIZE = 12;
-export function filterSessionActivity(rows: SessionActivity[], query: string, source: string, project = ''): SessionActivity[] {
+export function filterSessionActivity(rows: SessionActivity[], query: string, source: string | readonly string[], project = ''): SessionActivity[] {
   const needle = query.trim().toLocaleLowerCase();
-  return rows.filter(row => (source === 'all' || row.source === source) && (!project || row.projectLabel === project) && (!needle || [row.sessionTitle, row.projectLabel, row.model, row.source, row.sessionId, ...(row.models?.map(model => model.model) ?? [])].some(value => value?.toLocaleLowerCase().includes(needle))));
+  const sources = typeof source === 'string' ? source === 'all' ? [] : [source] : source;
+  return rows.filter(row => (!sources.length || sources.includes(row.source)) && (!project || row.projectLabel === project) && (!needle || [row.sessionTitle, row.projectLabel, row.model, row.source, row.sessionId, ...(row.models?.map(model => model.model) ?? [])].some(value => value?.toLocaleLowerCase().includes(needle))));
 }
 
-function sessionFilterOptions(rows: SessionActivity[], key: 'source' | 'projectLabel', selected: string) {
+function sessionFilterOptions(rows: SessionActivity[], key: 'source' | 'projectLabel', selected: string | readonly string[]) {
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row[key], (counts.get(row[key]) ?? 0) + 1);
-  if (selected && !counts.has(selected)) counts.set(selected, 0);
+  for (const value of typeof selected === 'string' ? [selected] : selected) {
+    if (value && !counts.has(value)) counts.set(value, 0);
+  }
   return [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([value, count]) => ({ value, count }));
 }
 
-export function sessionActivityFacets(rows: SessionActivity[], query: string, source: string, project: string) {
+export function sessionActivityFacets(rows: SessionActivity[], query: string, source: string | readonly string[], project: string) {
   // Ignore a facet's own selection so users can switch to its other matching options.
   return {
     sources: sessionFilterOptions(filterSessionActivity(rows, query, 'all', project), 'source', source === 'all' ? '' : source),

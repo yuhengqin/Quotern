@@ -113,13 +113,13 @@ function SessionList({ rows, usage }: { rows: SessionActivity[]; usage: SessionU
 
 function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, description }: { rows: SessionActivity[]; usage?: SessionUsage; open: boolean; onOpenChange(open: boolean): void; title?: string; closeLabel?: string; description?: ReactNode }) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState(''), [source, setSource] = useState('all'), [page, setPage] = useState(1);
+  const [query, setQuery] = useState(''), [sources, setSources] = useState<string[]>([]), [page, setPage] = useState(1);
   const [project, setProject] = useState(''), [sort, setSort] = useState<SessionSort>('recent');
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
-  const facets = useMemo(() => sessionActivityFacets(rows, query, source, project), [rows, query, source, project]);
-  const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, source, project), sort), [rows, query, source, project, sort]);
+  const facets = useMemo(() => sessionActivityFacets(rows, query, sources, project), [rows, query, sources, project]);
+  const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, sources, project), sort), [rows, query, sources, project, sort]);
   const result = sessionActivityPage(filtered, page);
-  const hasFilters = Boolean(query.trim() || source !== 'all' || project);
+  const hasFilters = Boolean(query.trim() || sources.length || project);
   return <Modal.Backdrop isOpen={open} onOpenChange={onOpenChange}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={title ?? t('usage.activity.allSessions')} className="w-full max-w-4xl">
     <Modal.CloseTrigger aria-label={closeLabel ?? t('usage.activity.closeAllSessions')} /><Modal.Header><Modal.Heading>{title ?? t('usage.activity.allSessions')}</Modal.Heading><div className="text-xs text-muted">{description ?? t('usage.explorer.windowNote')}</div></Modal.Header>
     <Modal.Body className="flex flex-col gap-3">
@@ -128,12 +128,16 @@ function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, de
           <Label className="sr-only">{t('usage.activity.search')}</Label>
           <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
         </SearchField>
-        <Select aria-label="Agent" value={source} onChange={key => { if (typeof key === 'string') { setSource(key); setPage(1); } }} variant="secondary" className="min-w-0 max-w-44">
+        <Select aria-label="Agent" selectionMode="multiple" value={sources.length ? sources : ['all']} onChange={keys => {
+          const next = Array.isArray(keys) ? keys.map(String) : keys == null ? [] : [String(keys)];
+          setSources(next.includes('all') && sources.length ? [] : next.filter(value => value !== 'all'));
+          setPage(1);
+        }} variant="secondary" className="min-w-0 max-w-52">
           <Label className="sr-only">Agent</Label>
-          <Select.Trigger ref={sourceTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="truncate">{source === 'all' ? t('usage.filter.allAgents') : sourceLabel(source)}</Select.Value><Select.Indicator /></Select.Trigger>
-          <Select.Popover className="w-56 max-w-[calc(100vw-2rem)]"><ListBox aria-label="Agent">
+          <Select.Trigger ref={sourceTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="min-w-0 truncate">{sources.length === 0 ? t('usage.filter.allAgents') : sources.length > 1 ? t('usage.filter.selectedAgents', { count: sources.length }) : <span className="flex min-w-0 items-center gap-1.5"><ProviderIcon provider={sources[0]} size={18} /><span className="truncate">{sourceLabel(sources[0])}</span></span>}</Select.Value><Select.Indicator /></Select.Trigger>
+          <Select.Popover className="w-64 max-w-[calc(100vw-2rem)]"><ListBox aria-label="Agent" selectionMode="multiple">
             <ListBox.Item id="all" textValue={t('usage.filter.allAgents')} className="text-xs">{t('usage.filter.allAgents')}<ListBox.ItemIndicator /></ListBox.Item>
-            {facets.sources.map(({ value, count }) => <ListBox.Item id={value} key={value} textValue={sourceLabel(value)} className="text-xs"><span>{sourceLabel(value)}</span><span className="ml-auto text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
+            {facets.sources.map(({ value, count }) => <ListBox.Item id={value} key={value} textValue={sourceLabel(value)} className="gap-2 pe-8! text-xs"><span className="flex size-6 shrink-0 items-center justify-center"><ProviderIcon provider={value} size={18} /></span><span className="min-w-0 flex-1 truncate" title={sourceLabel(value)}>{sourceLabel(value)}</span><span className="shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></Select.Popover>
         </Select>
         <Select aria-label={t('usage.explorer.project')} value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') { setProject(key === 'all' ? '' : key.slice('project:'.length)); setPage(1); } }} variant="secondary" className="min-w-0 max-w-56">
@@ -154,9 +158,9 @@ function SessionBrowser({ rows, usage, open, onOpenChange, title, closeLabel, de
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
         {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { setQuery(''); setPage(1); searchInput.current?.focus(); }} />}
-        {source !== 'all' && <SessionFilterChip label={`Agent: ${sourceLabel(source)}`} onRemove={() => { setSource('all'); setPage(1); sourceTrigger.current?.focus(); }} />}
+        {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { setSources(previous => previous.filter(value => value !== source)); setPage(1); sourceTrigger.current?.focus(); }} />)}
         {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { setProject(''); setPage(1); projectTrigger.current?.focus(); }} />}
-        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setQuery(''); setSource('all'); setProject(''); setPage(1); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
+        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setQuery(''); setSources([]); setProject(''); setPage(1); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
       {filtered.length ? <SessionRows rows={result.rows} contribution={Boolean(usage)} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}

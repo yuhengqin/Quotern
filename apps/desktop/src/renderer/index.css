@@ -260,4 +260,18 @@
     border-color: var(--muted);
     border-width: 1px;
   }
+
+  /* React Aria gives trigger-anchored layers (Select/Autocomplete menus,
+   * tooltips) an inline z-index of 100000, while HeroUI paints modal backdrops
+   * at 50. A menu left open when an app-level modal opens would cover the
+   * dialog. Keep modals in the same layer so paint order follows mount order
+   * (= open order): menus opened earlier stay behind the modal, menus opened
+   * inside it still float above. Toasts stay on the very top layer. */
+  .modal__backdrop {
+    z-index: 100000;
+  }
+
+  .toast-region {
+    z-index: 100010;
+  }
 }

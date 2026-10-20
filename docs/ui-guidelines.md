@@ -88,6 +88,7 @@ import { FilterSelectPopover } from './FilterMenu';
 - 公共层不编码业务值，不把空数组、`all` 或 `null` 解释为统一含义；不承担筛选查询和持久化。
 - 不在调用者通过 `style.maxHeight`、`!max-h-*` 或 overflow 类覆盖公共尺寸/滚动约束。特殊需求先评估扩展公共组件，再按总则记录例外。
 - 级联模型菜单保留两个独立滚动列及固定搜索头，通过 `FilterMenuPopover` 的 `bodyClassName` 布局；其厂商/模型状态仍由业务组件管理。
+- 浮层层级：React Aria 把触发器锚定的菜单和 Tooltip 固定为内联 `z-index: 100000`，两端 `index.css` 让 Modal 使用同一层级（按挂载顺序，即打开顺序决定前后），Toast 位于最上层。Modal 内打开的菜单仍在 Modal 之上；从 Toast 动作等顶层提示打开 Modal 时，先用 `lib/overlay-dismiss` 的 `dismissTransientOverlays` 关闭页面级菜单。
 
 ### 范围与例外
 

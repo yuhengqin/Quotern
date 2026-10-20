@@ -4,6 +4,7 @@ import { normalizeLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { dismissTransientOverlays } from '../lib/overlay-dismiss';
 import type { AchievementShareSelection } from './share-model';
 import { createAchievementRequestQueue } from './request-queue';
 import { achievementDisplayName } from './view-model';
@@ -43,6 +44,7 @@ export function AchievementProvider({ request, children }: { request: Achievemen
     return result;
   }, [requestInOrder]);
   const openCelebration = useCallback((ids: string[], keepFamily = false) => {
+    dismissTransientOverlays();
     if (!keepFamily) setFamilyDetail(null);
     setDetailIds(ids);
     const owned = ids.filter(id => snapshotRef.current?.earned.some(item => item.id === id));

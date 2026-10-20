@@ -57,12 +57,12 @@ test('ensureIdentity preserves an explicit pricing source and its refresh config
   assert.deepEqual(config.pricing, { url: 'https://old.example/pricing.json', ttlMs: 60_000 });
 });
 
-test('the retired built-in pricing URL migrates to bundled mode idempotently', () => {
+test('the retired built-in pricing URL migrates to models.dev idempotently', () => {
   const config = baseConfig({ pricing: {
     url: 'https://raw.githubusercontent.com/yuhengqin/Quotern/main/packages/core/src/pricing/pricing.json', ttlMs: 120_000,
   } });
   assert.equal(ensurePricingAligned(config), true);
-  assert.deepEqual(config.pricing, { url: '', ttlMs: 120_000 });
+  assert.deepEqual(config.pricing, { url: 'https://models.dev/catalog.json', ttlMs: 120_000 });
   assert.equal(ensurePricingAligned(config), false);
 });
 
@@ -173,7 +173,7 @@ test('resolvePricingRefreshConfig falls back to baked when config empty', () => 
   delete process.env.PRICING_URL;
   try {
     const r = resolvePricingRefreshConfig({ url: '', ttlMs: null });
-    assert.equal(r.url, null);
+    assert.equal(r.url, 'https://models.dev/catalog.json');
     assert.equal(r.ttlMs, BAKED_PRICING_TTL_MS);
   } finally {
     if (prevUrl === undefined) delete process.env.TUD_PRICING_URL;

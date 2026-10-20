@@ -65,7 +65,7 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 `packages/core/src/server/local-api.ts` 的 `/functions/tud-*` 是本地面板契约。Dashboard 经 HTTP 读取 CLI；Desktop renderer 经 IPC 走同一套内存 local-api，不占 `:8452`。路由、响应与参数见架构注意事项。
 
-定价：`packages/core/src/pricing/pricing.json` 是内置底表。启动时先读有效磁盘覆盖缓存；仅显式配置远端地址时请求一次覆盖表，失败保留已有价格。旧失效默认地址会迁移为空，自定义地址保留。
+定价：`packages/core/src/pricing/pricing.json` 是内置底表。CLI / Desktop 启动先读有效磁盘覆盖缓存，再从 `https://models.dev/catalog.json` 更新一次；转换规则与 `sync:pricing` 共用，失败保留已有价格。自定义 Quotern 格式覆盖地址优先，旧失效默认地址迁移至 models.dev。两端价格页经 HTTP / IPC 的 `/functions/tud-pricing` 读取生效表，runtime 不可用时回退内置表。
 
 ## Runtime
 

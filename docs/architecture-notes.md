@@ -47,6 +47,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | 滚动时间窗口 | 日、小时、模型/项目、report、trend、sessions 和 session-activity 支持成对 `fromTime/toTime`（含时区的 ISO 时间，`[fromTime,toTime)`），与日期参数互斥；report / trend 也与 `days` 互斥。Dashboard / Desktop 的 `1D` 共用最近 24 小时边界，环比取前一段 24 小时；“今天”保留自然日统计。Token 和费用按已有 30 分钟桶起点筛选，不能拆分边界桶；会话 Token 归属沿用桶时间，消息计数和任务时长按实际时间筛选/裁剪。时间窗口绕过整日封存缓存，热力图仍保留自然日历史。 |
 | `GET /functions/tud-sync-status` | 同步时间、来源和 Hook 状态 |
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
+| `GET /functions/tud-pricing` | runtime 生效价格表与 `hasOverlay/updatedAt/refreshing` 状态；不下载远端、不暴露自定义源地址，响应禁止缓存；Desktop 经 IPC 走同一接口 |
 | `POST /functions/tud-trigger-sync` | 可传 `{ source }`；省略或 `all` 为全量，未知来源返回 400 |
 | `POST /functions/tud-ensure-local-range` | 可传 `{ days }`；支持 1、7、30、90；自定义范围传 `{ days, custom: true }`，支持 1–365 的整数，按需扩展采集范围 |
 | `GET /functions/tud-share-backgrounds` | 读取本机共享背景图库，返回图片 Data URL 和元数据 |

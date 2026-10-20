@@ -17,6 +17,7 @@ import {
   resetPricingRuntime,
   startPricingRefresh,
   validatePricingData,
+  getRemotePricingOverlay,
 } from '../src/pricing/index.js';
 import { lookupPricing, lookupPricingStacked, type PricingData } from '../src/pricing/matcher.js';
 import { pricingOverlayPath } from '../src/paths.js';
@@ -503,6 +504,74 @@ test('failed refresh does not clear existing overlay', async () => {
   stop();
 });
 
+test('models.dev startup refresh converts official text prices and preserves bundled supplements', async () => {
+  const stop = startPricingRefresh({
+    url: 'https://models.dev/catalog.json', firstFetchTimeoutMs: 1_000,
+    fetchImpl: async () => new Response(JSON.stringify({ providers: {
+      openai: { models: {
+        'gpt-runtime-fixture': { id: 'gpt-runtime-fixture', cost: { input: 7, output: 21 }, release_date: '2026-10-20', limit: { context: 262144 } },
+        'gpt-image-fixture': { id: 'gpt-image-fixture', cost: { input: 99, output: 99 } },
+      } },
+      'kimi-code-plan-cn': { models: { 'kimi-for-coding': { id: 'kimi-for-coding', name: 'Kimi fixture', cost: { input: 0, output: 0 } } } },
+      'third-party': { models: { 'gpt-runtime-fixture': { id: 'gpt-runtime-fixture', cost: { input: 999, output: 999 } } } },
+    } })),
+  });
+  assert.equal(await stop.ready, true);
+  assert.equal(getModelPricing('openai/gpt-runtime-fixture').input, 7);
+  assert.equal(getModelPricing('claude-fable-5').input, 10);
+  const overlay = getRemotePricingOverlay()!;
+  assert.equal(overlay.exact['openai/gpt-image-fixture'], undefined);
+  assert.equal(overlay.exact['third-party/gpt-runtime-fixture'], undefined);
+  assert.equal(overlay.exact['kimi-code-plan-cn/kimi-for-coding'], undefined);
+  assert.equal(overlay.model_metadata?.['openai/gpt-runtime-fixture']?.context_window, 262144);
+  assert.equal(overlay.subscription_models?.['kimi-code-plan-cn/kimi-for-coding']?.display_name, 'Kimi fixture');
+  stop();
+});
+
+test('invalid models.dev catalog keeps the previous prices', async () => {
+  applyRemotePricingOverlay({ exact: { keep: { input: 8, output: 9 } } });
+  const stop = startPricingRefresh({ url: 'https://models.dev/catalog.json', firstFetchTimeoutMs: 1_000,
+    fetchImpl: async () => new Response(JSON.stringify({ providers: {} })),
+  });
+  assert.equal(await stop.ready, false);
+  assert.equal(getModelPricing('keep').input, 8);
+  stop();
+});
+
+test('cached overlays retain model and subscription metadata', () => {
+  const result = validatePricingData({ exact: {}, model_metadata: { m: { display_name: 'Model', featured: true } }, subscription_models: { s: { display_name: 'Subscription' } } });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.data.model_metadata?.m?.display_name, 'Model');
+  assert.equal(result.data.subscription_models?.s?.display_name, 'Subscription');
+});
+
+test('a stopped refresh cannot block or overwrite a new runtime refresh', async () => {
+  let finish!: (response: Response) => void;
+  const old = startPricingRefresh({ url: 'https://example.test/old', fetchImpl: async () => new Promise(resolve => { finish = resolve; }) });
+  old();
+  const current = startPricingRefresh({ url: 'https://example.test/new', firstFetchTimeoutMs: 1_000,
+    fetchImpl: async () => new Response(JSON.stringify({ exact: { current: { input: 7, output: 21 } } })),
+  });
+  finish(new Response(JSON.stringify({ exact: { obsolete: { input: 99, output: 99 } } })));
+  assert.equal(await current.ready, true);
+  assert.equal(getModelPricing('current').input, 7);
+  assert.equal(getRemotePricingOverlay()?.exact.obsolete, undefined);
+  current();
+});
+
+test('invalid supported models.dev rates cannot replace cached prices', async () => {
+  applyRemotePricingOverlay({ exact: { keep: { input: 8 } } });
+  const stop = startPricingRefresh({ url: 'https://models.dev/catalog.json', firstFetchTimeoutMs: 1_000,
+    fetchImpl: async () => new Response(JSON.stringify({ providers: { openai: { models: {
+      'gpt-fixture': { id: 'gpt-fixture', cost: { input: -1, output: 3 } },
+    } } } })),
+  });
+  assert.equal(await stop.ready, false);
+  assert.equal(getModelPricing('keep').input, 8);
+  stop();
+});
+
 test('identical overlay fetch does not fire onUpdate', async () => {
   applyRemotePricingOverlay({
     exact: { 'stable-model': { input: 1, output: 2 } },
@@ -601,6 +670,7 @@ test('first fetch timeout does not drop a later overlay', async () => {
 
   assert.equal(await stop.ready, false);
   assert.equal(getPricingStatus().hasOverlay, false);
+  assert.equal((getPricingStatus() as { refreshing?: boolean }).refreshing, true);
 
   finish!(
     new Response(JSON.stringify({ exact: { 'late-model': { input: 3, output: 9 } } }), {
@@ -610,6 +680,7 @@ test('first fetch timeout does not drop a later overlay', async () => {
   );
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(getModelPricing('late-model').input, 3);
+  assert.equal((getPricingStatus() as { refreshing?: boolean }).refreshing, false);
   stop();
 });
 

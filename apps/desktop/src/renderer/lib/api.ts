@@ -2,6 +2,15 @@ import { appendDashboardRangeQuery, previousRollingRange, type DashboardDateRang
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 import type { SessionMetrics, UsageReport } from 'quotern-core';
 import type { AchievementSnapshot, AchievementOperation, AchievementNotice } from 'quotern-core/achievements';
+import type { PricingData, PricingStatus } from 'quotern-core';
+import { fetchPricingCatalog as fetchPublishedPricingCatalog, pricingDataToCatalog, type PricingCatalogResponse } from '../../../../../packages/dashboard/src/lib/pricing-data';
+
+export async function fetchPricingCatalog(): Promise<PricingCatalogResponse> {
+  try {
+    const data = await request<{ pricing: PricingData; status: Omit<PricingStatus, 'url'> }>('/functions/tud-pricing');
+    return { ...pricingDataToCatalog(data.pricing, data.status.hasOverlay ? 'runtime' : 'bundled', data.status.updatedAt), refreshing: data.status.refreshing };
+  } catch { return fetchPublishedPricingCatalog(); }
+}
 
 export async function fetchSessionMetrics(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<SessionMetrics> {
   const { others } = apiPrefixes();

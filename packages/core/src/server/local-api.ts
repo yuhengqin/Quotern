@@ -18,7 +18,7 @@ import { aggregateSessionActivity } from '../session-observation.js';
 import { attachSessionTitles } from '../session-titles.js';
 import { aggregateSessionMetrics, type SessionMessage } from '../session-metrics.js';
 import { attributeTaskTimingEvents, type SessionTimingEvent } from '../task-timing.js';
-import { computeTokens } from '../pricing/index.js';
+import { computeTokens, getEffectivePricingData, getPricingStatus } from '../pricing/index.js';
 import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
@@ -90,6 +90,13 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.get('/functions/tud-usage-summary', summaryHandler);
   app.get('/functions/tud-account-usage-summary', summaryHandler);
+
+  app.get('/functions/tud-pricing', (c) => {
+    c.header('Cache-Control', 'no-store');
+    const { hasOverlay, updatedAt, refreshing } = getPricingStatus();
+    // Custom source URLs can embed credentials; the panel needs only table state.
+    return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt, refreshing } }));
+  });
 
   app.get('/functions/tud-usage-report', (c) => {
     try {

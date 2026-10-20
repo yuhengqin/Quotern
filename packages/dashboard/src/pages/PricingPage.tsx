@@ -14,8 +14,9 @@ import { StatusBanner } from '../components/StatusBanner';
 import { usePricingCurrency } from '../hooks/usePricingCurrency';
 import { formatPricingExchangeRate } from '../lib/pricing-currency';
 import { formatPricingReleaseDate } from '../lib/pricing-display';
-import { fetchModelBreakdown, type ModelBreakdownRow } from '../lib/api';
-import { fetchPricingCatalog, type PricingCatalogResponse } from '../lib/pricing-data';
+import { fetchModelBreakdown, fetchPricingCatalog, type ModelBreakdownRow } from '../lib/api';
+import type { PricingCatalogResponse } from '../lib/pricing-data';
+import { DATA_SYNCED_EVENT } from '../lib/shell-events';
 import { filterPricingCatalog, formatContextWindow } from '../lib/pricing-filters';
 import { filterAndSortPricingGroups, getPrimaryPricingVariant, groupPricingCatalog } from '../lib/pricing-groups';
 import {
@@ -32,7 +33,10 @@ function ActiveFilter({ children, onRemove, label }: { children: ReactNode; onRe
   </Button>;
 }
 
-export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (days: number) => Promise<{ models: ModelBreakdownRow[] }> }) {
+export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fetchPricingCatalog }: {
+  loadUsage?: (days: number) => Promise<{ models: ModelBreakdownRow[] }>;
+  loadCatalog?: () => Promise<PricingCatalogResponse>;
+}) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
   const search = useSearch({ strict: false }) as { q?: string };
@@ -66,15 +70,26 @@ export function PricingPage({ loadUsage = fetchModelBreakdown }: { loadUsage?: (
   }, [query]);
   useEffect(() => {
     let cancelled = false;
+    let sequence = 0;
+    let pendingRefresh: ReturnType<typeof setTimeout> | undefined;
     setLoading(true);
     setError(false);
-    void fetchPricingCatalog().then(data => {
-      if (!cancelled) setCatalog(data);
-    }).catch(() => {
-      if (!cancelled) setError(true);
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [retry]);
+    const refresh = () => {
+      clearTimeout(pendingRefresh);
+      const request = ++sequence;
+      void loadCatalog().then(data => {
+        if (!cancelled && request === sequence) {
+          setCatalog(data); setError(false);
+          if (data.refreshing) pendingRefresh = setTimeout(refresh, 1_000);
+        }
+      }).catch(() => {
+        if (!cancelled && request === sequence) setError(true);
+      }).finally(() => { if (!cancelled && request === sequence) setLoading(false); });
+    };
+    refresh();
+    window.addEventListener(DATA_SYNCED_EVENT, refresh);
+    return () => { cancelled = true; clearTimeout(pendingRefresh); window.removeEventListener(DATA_SYNCED_EVENT, refresh); };
+  }, [loadCatalog, retry]);
   useEffect(() => {
     let cancelled = false;
     setUsageStatus('loading');

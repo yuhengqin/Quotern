@@ -1,7 +1,19 @@
 import { appendDashboardRangeQuery, previousRollingRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
-export { fetchPricingCatalog } from './pricing-data.ts';
+import { fetchPricingCatalog as fetchPublishedPricingCatalog, pricingDataToCatalog, type PricingCatalogResponse } from './pricing-data.ts';
+import type { PricingData, PricingStatus } from 'quotern-core';
 export type { PricingCatalogRow, PricingCatalogResponse } from './pricing-data.ts';
+
+/** The runtime owns prices; a standalone/offline panel can still use its bundle. */
+export async function fetchPricingCatalog(url?: string): Promise<PricingCatalogResponse> {
+  if (url !== undefined) return fetchPublishedPricingCatalog(url);
+  try {
+    const data = await request<{ pricing: PricingData; status: Omit<PricingStatus, 'url'> }>('/functions/tud-pricing', {
+      headers: authHeaders(), signal: AbortSignal.timeout(3_000), cache: 'no-store',
+    });
+    return { ...pricingDataToCatalog(data.pricing, data.status.hasOverlay ? 'runtime' : 'bundled', data.status.updatedAt), refreshing: data.status.refreshing };
+  } catch { return fetchPublishedPricingCatalog(); }
+}
 import type {
   LeaderboardMetric,
   LeaderboardOverviewResponse,

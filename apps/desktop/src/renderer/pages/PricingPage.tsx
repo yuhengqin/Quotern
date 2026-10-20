@@ -1,6 +1,6 @@
 import { PricingPage as SharedPricingPage } from '../../../../../packages/dashboard/src/pages/PricingPage';
-import { fetchModelBreakdown } from '../lib/api';
+import { fetchModelBreakdown, fetchPricingCatalog } from '../lib/api';
 
 export function PricingPage() {
-  return <SharedPricingPage loadUsage={fetchModelBreakdown} />;
+  return <SharedPricingPage loadUsage={fetchModelBreakdown} loadCatalog={fetchPricingCatalog} />;
 }

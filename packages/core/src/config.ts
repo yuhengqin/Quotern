@@ -150,7 +150,7 @@ export function bakedPricingConfig(): NonNullable<TudConfig['pricing']> {
 export function ensurePricingAligned(config: TudConfig): boolean {
   const cur = config.pricing;
   const rawUrl = cur?.url?.trim() ?? '';
-  const url = rawUrl === LEGACY_BAKED_PRICING_URL ? BAKED_PRICING_URL : rawUrl;
+  const url = !rawUrl || rawUrl === LEGACY_BAKED_PRICING_URL ? BAKED_PRICING_URL : rawUrl;
   const curTtl =
     cur?.ttlMs != null && Number.isFinite(cur.ttlMs) && cur.ttlMs > 0
       ? cur.ttlMs

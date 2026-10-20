@@ -19,10 +19,12 @@ export interface PricingCatalogRow {
 }
 
 export interface PricingCatalogResponse {
+  /** Only a pending runtime startup fetch needs a follow-up local read. */
+  refreshing?: boolean;
   units: string;
   generatedAt: string | null;
   updatedAt: string | null;
-  source: 'published' | 'bundled';
+  source: 'runtime' | 'published' | 'bundled';
   models: PricingCatalogRow[];
   matching?: Pick<PricingData, 'alias' | 'sourceAlias'>;
 }

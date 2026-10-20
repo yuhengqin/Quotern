@@ -2,13 +2,27 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { fetchPricingCatalog } from './api.ts';
 
-it('uses the bundled catalog by default without requesting an unavailable public URL', async (t) => {
+it('falls back to bundled prices when the local runtime is unavailable', async (t) => {
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 404 }));
   const catalog = await fetchPricingCatalog();
-  assert.equal(fetchMock.mock.calls.length, 0);
+  assert.equal(fetchMock.mock.calls.length, 1);
   assert.equal(catalog.source, 'bundled');
   assert.ok(catalog.models.length > 0);
   assert.match(catalog.generatedAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
+});
+
+it('uses runtime prices even when their timestamp is older than the browser bundle', async t => {
+  t.mock.method(globalThis, 'fetch', async (url: RequestInfo | URL) => {
+    assert.equal(url, '/functions/tud-pricing');
+    return new Response(JSON.stringify({ success: true, data: {
+      pricing: { _meta: { generated_at: '2000-01-01T00:00:00Z' }, exact: { 'openai/gpt-fixture': { input: 7, output: 21 } } },
+      status: { updatedAt: '2026-10-21T01:00:00Z', hasOverlay: true, refreshing: true },
+    } }));
+  });
+  const catalog = await fetchPricingCatalog();
+  assert.equal(catalog.source, 'runtime');
+  assert.equal(catalog.models.find(row => row.model === 'openai/gpt-fixture')?.input, 7);
+  assert.equal((catalog as { refreshing?: boolean }).refreshing, true);
 });
 
 it('loads public Quotern prices without sending dashboard credentials', async (t) => {

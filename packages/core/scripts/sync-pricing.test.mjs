@@ -44,6 +44,9 @@ async function fixture(t, pricing = initialPricing, upstreamCatalog = catalog, m
   for (const name of ['sync-pricing.mjs', 'pricing-metadata.mjs']) {
     await copyFile(join(scriptsDir, name), join(root, 'scripts', name));
   }
+  for (const name of ['models-dev.mjs', 'model-metadata.mjs']) {
+    await copyFile(join(scriptsDir, '..', 'src', 'pricing', name), join(root, 'src', 'pricing', name));
+  }
   const pricingPath = join(root, 'src', 'pricing', 'pricing.json');
   await writeFile(pricingPath, JSON.stringify(pricing));
   const port = await listen(createServer((_req, res) => {

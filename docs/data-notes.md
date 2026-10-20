@@ -111,7 +111,9 @@ Codex 的明确 chatgpt 认证标记，或 OpenAI 来源事件中已知的 rate_
 
 `auto`、`composer` 等名称要按来源解释，不能仅凭宽泛子串猜成另一供应商的模型。更新价格时保留人工条目并核对覆盖表行为，详见 [pricing.test.ts](../packages/core/test/pricing.test.ts)。
 
-价格默认使用随版本发布的内置表，启动时仍加载有效的磁盘覆盖缓存。原仓库 raw 默认地址已不可匿名读取，旧默认配置会迁移为空地址；其他自定义 URL 和有效 TTL 保留。可通过 `TUD_PRICING_URL` / `PRICING_URL` 或 `config.pricing.url` 显式指定符合本项目 schema 的远端覆盖表，环境变量优先，启动时拉取一次，失败保留可用缓存或内置表。浏览器与 Desktop 共享价格页默认展示内置目录；构建时可设置 `VITE_PRICING_URL` 提供公开目录地址，请求不携带凭据，失败回退内置表。`ttlMs` 配置存在不代表定时轮询已经启用。覆盖表变化后需要重建聚合费用，展示值是当前计价结果，不是冻结的历史发票。
+CLI / Desktop 启动先加载内置表和有效磁盘覆盖缓存，再从 `https://models.dev/catalog.json` 获取一次数据。运行时与 `sync:pricing` 共用筛选和转换规则：仅更新支持的官方文本模型价格，保留人工补充、别名、请求修饰规则与手工元数据；订阅渠道仅更新目录元数据，不作为零价 API。启动最多等待 3 秒，网络请求总超时 30 秒；稍后成功仍应用更新，失败保留已有价格，停止 runtime 会取消未完成的请求。成功表原子写入数据目录的 `pricing-overlay.json`，不修改仓库内置表。原仓库 raw 默认地址和空默认配置迁移至 models.dev；自定义 URL 和有效 TTL 保留。`TUD_PRICING_URL` / `PRICING_URL` 或 `config.pricing.url` 仍可指定 Quotern 格式覆盖表，环境变量优先。`ttlMs` 不启用定时轮询。
+
+浏览器与 Desktop 价格页经 HTTP / IPC 的 `GET /functions/tud-pricing` 读取 runtime 的生效表与状态，与费用计算共用价格。打开或刷新网页不会再次下载 models.dev；启动请求尚未结束时，页面每秒重读本地表直至结束，随后仅在数据更新事件或页面重载时重读。无可用 runtime 的独立页面可通过构建时 `VITE_PRICING_URL` 获取公开 Quotern 目录（不携带凭据），否则回退内置表。覆盖表变化后重建聚合费用，展示值是当前计价结果，不是冻结的历史发票。
 
 维护底表使用 `pnpm sync:pricing`，请求自动读取 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（也支持小写形式），不需要额外设置 `NODE_USE_ENV_PROXY`。`_meta.generated_at` 记录本次生成的实际 UTC 时间，页面按本地时区显示；它不是供应商调价时间，也不再固定为当天 UTC 零点。
 

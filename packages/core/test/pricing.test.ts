@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -615,6 +615,17 @@ test('first fetch timeout does not drop a later overlay', async () => {
 
 test('loadCachedPricingOverlay ignores missing or invalid files', () => {
   assert.equal(loadCachedPricingOverlay('/tmp/tud-pricing-does-not-exist'), false);
+});
+
+test('bundled mode still loads a valid persisted overlay without any network request', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-pricing-offline-'));
+  try {
+    await writeFile(pricingOverlayPath(dir), JSON.stringify({ exact: { 'cached-only': { input: 6, output: 9 } } }));
+    const stop = startPricingRefresh({ url: '', dataDir: dir, fetchImpl: async () => assert.fail('unexpected network request') });
+    assert.equal(await stop.ready, true);
+    assert.equal(getModelPricing('cached-only').input, 6);
+    stop();
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test('roundCostUsd keeps 8 decimals instead of rounding to cents', () => {

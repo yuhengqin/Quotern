@@ -34,6 +34,7 @@ import {
   runDoctorDiagnostics,
   readUsageReport,
   resolveDataDir,
+  isIsolatedDevRuntime,
   type AggregateCache,
   type SyncResult,
   type TudConfig,
@@ -106,9 +107,8 @@ async function startPricingOverlayRefresh(
     url: config.pricing?.url,
     ttlMs: config.pricing?.ttlMs,
   });
-  if (!url) return;
   const handle = startPricingRefresh({
-    url,
+    url: url ?? '',
     dataDir: dir,
     firstFetchTimeoutMs: DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
     onUpdate: () => {
@@ -127,7 +127,7 @@ async function startPricingOverlayRefresh(
     },
   });
   pricingRefreshStop = handle;
-  console.log(t('start.pricingOverlay', { url }));
+  console.log(url ? t('start.pricingOverlay', { url }) : t('start.pricingLocal'));
   await handle.ready;
 }
 
@@ -222,10 +222,12 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
   const { hookOk: claudeHookOk } = await setupClaudeHook(dir);
   const { hookOk: codexHookOk } = await setupCodexHook(dir);
   if (!isObserver) {
-    if (!claudeHookOk) {
+    if (isIsolatedDevRuntime()) {
+      console.log(t('start.hookSkippedIsolated'));
+    } else if (!claudeHookOk) {
       console.warn(t('start.hookFailed', { source: 'Claude', interval: pollInterval() }));
     }
-    if (!codexHookOk) {
+    if (!isIsolatedDevRuntime() && !codexHookOk) {
       console.warn(t('start.hookFailed', { source: 'Codex', interval: pollInterval() }));
     }
   }

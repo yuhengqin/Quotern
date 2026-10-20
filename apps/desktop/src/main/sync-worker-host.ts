@@ -1,215 +1,204 @@
-/**
- * Host for the sync utilityProcess. Main process watches signals / timers
- * and applies deltas; parsers run in the child.
- */
+/** Main owns UI/state; each sync utilityProcess owns only its own requests. */
 import { utilityProcess, type UtilityProcess } from 'electron';
 import syncWorkerPath from './sync-worker?modulePath';
-
 import type { SyncResult } from 'quotern-core';
 import type { SyncWorkerRequest, SyncWorkerResponse } from './sync-worker-protocol';
 
 const START_TIMEOUT_MS = 15_000;
 const SYNC_TIMEOUT_MS = 10 * 60_000;
-
-let child: UtilityProcess | null = null;
+const EXIT_TIMEOUT_MS = 5_000;
+type Waiter = { resolve: (results: SyncResult[]) => void; reject: (err: Error) => void };
+interface WorkerInstance {
+  process: UtilityProcess;
+  pid?: number;
+  ready: boolean;
+  expectedExit: boolean;
+  exited: boolean;
+  exit: Promise<void>;
+  resolveExit: () => void;
+  rejectReady?: (err: Error) => void;
+  terminalError?: Error;
+  terminating?: Promise<void>;
+  pending: Map<number, Waiter>;
+}
+let child: WorkerInstance | null = null;
+let starting: Promise<boolean> | null = null;
+let restartTimer: ReturnType<typeof setTimeout> | null = null;
 let nextId = 1;
-const pending = new Map<
-  number,
-  { resolve: (results: SyncResult[]) => void; reject: (err: Error) => void }
->();
-let ready = false;
+let generation = 0;
 let lastDataDir: string | null = null;
 let stopping = false;
-let ignoreNextExit = false;
 let crashRestarts = 0;
 
-function workerScriptPath(): string {
-  return syncWorkerPath;
+function rejectAll(instance: WorkerInstance, error: Error): void {
+  for (const waiter of instance.pending.values()) waiter.reject(error);
+  instance.pending.clear();
 }
-
-function rejectAll(err: Error): void {
-  for (const [, waiter] of pending) waiter.reject(err);
-  pending.clear();
+function cancelRestart(): void {
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = null;
 }
-
-function handleMessage(data: unknown): void {
-  const msg = data as SyncWorkerResponse;
-  if (!msg || typeof msg !== 'object' || !('type' in msg)) return;
-  if (msg.type === 'ready') {
-    ready = true;
-    return;
-  }
-  if (msg.type === 'syncDone') {
-    // 在同步成功后清零，而非 ready：看门狗若在同步中途 SIGKILL，
-    // ready 清零会使 crashRestarts 永远无法累计到上限 5。
-    crashRestarts = 0;
-    const waiter = pending.get(msg.id);
-    if (!waiter) return;
-    pending.delete(msg.id);
-    waiter.resolve(msg.results);
-    return;
-  }
-  if (msg.type === 'syncError') {
-    // 业务错误时进程仍存活，视为一次健康周期结束。
-    crashRestarts = 0;
-    const waiter = pending.get(msg.id);
-    if (!waiter) return;
-    pending.delete(msg.id);
-    waiter.reject(new Error(msg.error));
-  }
-}
-
-export function isSyncWorkerRunning(): boolean {
-  return child != null && ready;
-}
-
-function killChild(): void {
-  const spawned = child;
-  child = null;
-  ready = false;
-  rejectAll(new Error('sync worker stopped'));
-  if (!spawned) return;
-  ignoreNextExit = true;
+async function waitForExit(instance: WorkerInstance): Promise<void> {
+  if (instance.exited) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    spawned.postMessage({ type: 'stop' } satisfies SyncWorkerRequest);
-  } catch {
-    // ignore
+    await Promise.race([instance.exit, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('sync worker did not exit after termination')), EXIT_TIMEOUT_MS);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+function terminate(instance: WorkerInstance, error: Error): Promise<void> {
+  if (instance.terminating) return instance.terminating;
+  instance.expectedExit = true;
+  instance.ready = false;
+  instance.terminalError = error;
+  instance.rejectReady?.(error);
+  if (!instance.exited) {
+    try { instance.process.postMessage({ type: 'stop' } satisfies SyncWorkerRequest); } catch { /* may already be gone */ }
+    try { instance.process.kill(); } catch { /* exit confirmation below remains required */ }
   }
-  try {
-    spawned.kill();
-  } catch {
-    // ignore
-  }
+  instance.terminating = waitForExit(instance).catch(err => {
+    rejectAll(instance, err instanceof Error ? err : new Error(String(err)));
+    throw err;
+  });
+  return instance.terminating;
 }
 
-export async function startSyncWorker(dataDir: string): Promise<boolean> {
+function handleMessage(instance: WorkerInstance, data: unknown): void {
+  if (child !== instance || instance.expectedExit || instance.exited) return;
+  const message = data as SyncWorkerResponse;
+  if (!message || typeof message !== 'object') return;
+  if (message.type === 'ready') return;
+  if (message.type !== 'syncDone' && message.type !== 'syncError') return;
+  crashRestarts = 0;
+  const waiter = instance.pending.get(message.id);
+  if (!waiter) return;
+  instance.pending.delete(message.id);
+  if (message.type === 'syncDone') waiter.resolve(message.results);
+  else waiter.reject(new Error(message.error));
+}
+
+export function isSyncWorkerRunning(): boolean { return Boolean(child?.ready && !child.expectedExit); }
+
+export function startSyncWorker(dataDir: string): Promise<boolean> {
+  if (!stopping && lastDataDir === dataDir) {
+    if (starting) return starting;
+    if (isSyncWorkerRunning()) return Promise.resolve(true);
+  }
+  if (starting) return Promise.reject(new Error('sync worker is starting for another data directory'));
+  cancelRestart();
   stopping = false;
   lastDataDir = dataDir;
-  killChild();
-  try {
-    const spawned = utilityProcess.fork(workerScriptPath(), [], {
-      serviceName: 'Quotern Sync',
-      stdio: 'pipe',
-    });
-    child = spawned;
-    ready = false;
-
-    spawned.stdout?.on('data', (buf: Buffer) => {
-      process.stdout.write(`[tud-sync-worker] ${buf.toString()}`);
-    });
-    spawned.stderr?.on('data', (buf: Buffer) => {
-      process.stderr.write(`[tud-sync-worker] ${buf.toString()}`);
-    });
-    spawned.on('message', (data) => {
-      handleMessage(data);
-    });
-    spawned.on('exit', (code) => {
-      const expected = ignoreNextExit;
-      ignoreNextExit = false;
-      const err = new Error(`sync worker exited (${code ?? 'null'})`);
-      rejectAll(err);
-      if (child === spawned) {
+  const token = ++generation;
+  let instance: WorkerInstance | null = null;
+  const operation = (async () => {
+    try {
+      if (child) await terminate(child, new Error('sync worker replaced'));
+      if (stopping || generation !== token) return false;
+      const spawned = utilityProcess.fork(syncWorkerPath, [], { serviceName: 'Quotern Sync', stdio: 'pipe' });
+      let resolveExit!: () => void;
+      const exit = new Promise<void>(resolve => { resolveExit = resolve; });
+      instance = { process: spawned, pid: spawned.pid, ready: false, expectedExit: false, exited: false, exit, resolveExit, pending: new Map() };
+      const active = instance;
+      child = active;
+      spawned.on('spawn', () => { active.pid = spawned.pid; });
+      spawned.stdout?.on('data', (buffer: Buffer) => process.stdout.write('[tud-sync-worker] ' + buffer.toString()));
+      spawned.stderr?.on('data', (buffer: Buffer) => process.stderr.write('[tud-sync-worker] ' + buffer.toString()));
+      spawned.on('message', data => handleMessage(active, data));
+      spawned.on('error', (type, location) => {
+        console.error('[tud-desktop] sync worker fatal error:', { pid: active.pid, type, location });
+      });
+      spawned.on('exit', code => {
+        if (active.exited) return;
+        active.exited = true;
+        active.ready = false;
+        const error = active.terminalError ?? new Error('sync worker exited (' + (code ?? 'null') + ')');
+        console[active.expectedExit ? 'log' : 'warn']('[tud-desktop] sync worker exited:', {
+          pid: active.pid, code, expected: active.expectedExit, pending: active.pending.size, restarts: crashRestarts,
+        });
+        active.rejectReady?.(error);
+        rejectAll(active, error);
+        active.resolveExit();
+        if (child !== active) return;
         child = null;
-        ready = false;
-      }
-      if (!expected && !stopping && lastDataDir && crashRestarts < 5) {
-        crashRestarts += 1;
-        const dir = lastDataDir;
-        setTimeout(() => {
-          if (!stopping && lastDataDir === dir && !ready) {
-            void startSyncWorker(dir);
-          }
-        }, 500);
-      }
-    });
-
-    const waitReady = new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        spawned.removeListener('message', onMessage);
-        reject(new Error('sync worker ready timeout'));
-      }, START_TIMEOUT_MS);
-      const onMessage = (data: unknown) => {
-        const msg = data as SyncWorkerResponse;
-        if (msg && msg.type === 'ready') {
-          clearTimeout(timer);
-          spawned.removeListener('message', onMessage);
-          resolve();
+        if (!active.expectedExit && !stopping && generation === token && lastDataDir && crashRestarts < 5) {
+          crashRestarts++;
+          const dir = lastDataDir;
+          restartTimer = setTimeout(() => {
+            restartTimer = null;
+            if (!stopping && generation === token && lastDataDir === dir && !child && !starting) void startSyncWorker(dir);
+          }, 500);
         }
-      };
-      spawned.on('message', onMessage);
-    });
-
-    spawned.postMessage({ type: 'init', dataDir } satisfies SyncWorkerRequest);
-    await waitReady;
-    ready = true;
-    console.log(
-      `[tud-desktop] sync utilityProcess ready pid=${spawned.pid ?? '?'}`,
-    );
-    return true;
-  } catch (err) {
-    console.warn(
-      '[tud-desktop] sync utilityProcess failed to start, falling back to in-process:',
-      err instanceof Error ? err.message : err,
-    );
-    killChild();
-    lastDataDir = null;
-    return false;
-  }
-}
-
-/**
- * Tell the worker its cached cursors.json copy is stale. Posted before the sync
- * that follows a range expansion, so the rescan actually re-reads the logs.
- * utilityProcess messages keep their order, so the reset lands first.
- */
-export function invalidateSyncWorkerCursors(): void {
-  if (!child || !ready) return;
-  try {
-    child.postMessage({ type: 'invalidateCursors' } satisfies SyncWorkerRequest);
-  } catch {
-    // A worker that is gone reloads cursors.json from disk when it restarts.
-  }
-}
-
-export function stopSyncWorker(): void {
-  stopping = true;
-  lastDataDir = null;
-  killChild();
-}
-
-export async function runSyncViaWorker(
-  reason: string,
-  source?: string,
-): Promise<SyncResult[]> {
-  if (!child || !ready) {
-    if (lastDataDir) {
-      const ok = await startSyncWorker(lastDataDir);
-      if (!ok) throw new Error('sync worker is not running');
-    } else {
-      throw new Error('sync worker is not running');
+      });
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => { clearTimeout(timer); spawned.removeListener('message', onReady); active.rejectReady = undefined; };
+        const fail = (error: Error) => { cleanup(); reject(error); };
+        const onReady = (data: unknown) => {
+          if ((data as SyncWorkerResponse)?.type !== 'ready' || child !== active || active.expectedExit || generation !== token) return;
+          active.ready = true;
+          cleanup(); resolve();
+        };
+        const timer = setTimeout(() => fail(new Error('sync worker ready timeout')), START_TIMEOUT_MS);
+        active.rejectReady = fail;
+        spawned.on('message', onReady);
+        try { spawned.postMessage({ type: 'init', dataDir } satisfies SyncWorkerRequest); }
+        catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
+      });
+      if (child !== active || stopping || generation !== token) return false;
+      console.log('[tud-desktop] sync utilityProcess ready pid=' + (active.pid ?? '?'));
+      return true;
+    } catch (error) {
+      if (!stopping && generation === token) console.warn('[tud-desktop] sync utilityProcess failed to start:', error instanceof Error ? error.message : error);
+      if (instance && child === instance && !instance.exited) {
+        // Do not fall back to a second writer unless this process has really exited.
+        await terminate(instance, error instanceof Error ? error : new Error(String(error)));
+      }
+      if (child?.expectedExit && !child.exited) throw error;
+      return false;
     }
+  })();
+  const shared = operation.finally(() => { if (starting === shared) starting = null; });
+  starting = shared;
+  return shared;
+}
+
+export function invalidateSyncWorkerCursors(): void {
+  if (!child?.ready || child.expectedExit) return;
+  try { child.process.postMessage({ type: 'invalidateCursors' } satisfies SyncWorkerRequest); } catch { /* next worker reloads disk cursors */ }
+}
+
+export async function stopSyncWorker(): Promise<void> {
+  stopping = true;
+  generation++;
+  lastDataDir = null;
+  cancelRestart();
+  const active = child;
+  starting = null;
+  if (active) await terminate(active, new Error('sync worker stopped'));
+}
+
+export async function runSyncViaWorker(reason: string, source?: string): Promise<SyncResult[]> {
+  if (!isSyncWorkerRunning()) {
+    if (!lastDataDir || !await startSyncWorker(lastDataDir)) throw new Error('sync worker is not running');
   }
+  const active = child;
+  if (!active?.ready || active.expectedExit) throw new Error('sync worker is not running');
   const id = nextId++;
   return new Promise<SyncResult[]>((resolve, reject) => {
     const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`sync worker timed out after ${SYNC_TIMEOUT_MS}ms`));
+      // The caller may recover disk state only after this writer has exited.
+      void terminate(active, new Error('sync worker timed out after ' + SYNC_TIMEOUT_MS + 'ms')).catch(error => {
+        console.error('[tud-desktop] sync worker termination failed:', error instanceof Error ? error.message : error);
+      });
     }, SYNC_TIMEOUT_MS);
-    pending.set(id, {
-      resolve: (results) => {
-        clearTimeout(timer);
-        resolve(results);
-      },
-      reject: (err) => {
-        clearTimeout(timer);
-        reject(err);
-      },
+    active.pending.set(id, {
+      resolve: results => { clearTimeout(timer); resolve(results); },
+      reject: error => { clearTimeout(timer); reject(error); },
     });
-    child!.postMessage({
-      type: 'runSync',
-      id,
-      reason,
-      source,
-    } satisfies SyncWorkerRequest);
+    try { active.process.postMessage({ type: 'runSync', id, reason, source } satisfies SyncWorkerRequest); }
+    catch (error) {
+      active.pending.delete(id); clearTimeout(timer);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }

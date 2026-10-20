@@ -111,7 +111,7 @@ Codex 的明确 chatgpt 认证标记，或 OpenAI 来源事件中已知的 rate_
 
 `auto`、`composer` 等名称要按来源解释，不能仅凭宽泛子串猜成另一供应商的模型。更新价格时保留人工条目并核对覆盖表行为，详见 [pricing.test.ts](../packages/core/test/pricing.test.ts)。
 
-价格覆盖表在启动时先读磁盘缓存，再请求一次 Quotern 仓库中的 `packages/core/src/pricing/pricing.json`；失败保留可用缓存或内置表。浏览器价格页使用同一地址，网络不可用、仓库无法公开读取或响应无效时展示内置价格表。`ttlMs` 配置存在不代表定时轮询已经启用。覆盖表变化后需要重建聚合费用，展示值是当前计价结果，不是冻结的历史发票。
+价格默认使用随版本发布的内置表，启动时仍加载有效的磁盘覆盖缓存。原仓库 raw 默认地址已不可匿名读取，旧默认配置会迁移为空地址；其他自定义 URL 和有效 TTL 保留。可通过 `TUD_PRICING_URL` / `PRICING_URL` 或 `config.pricing.url` 显式指定符合本项目 schema 的远端覆盖表，环境变量优先，启动时拉取一次，失败保留可用缓存或内置表。浏览器与 Desktop 共享价格页默认展示内置目录；构建时可设置 `VITE_PRICING_URL` 提供公开目录地址，请求不携带凭据，失败回退内置表。`ttlMs` 配置存在不代表定时轮询已经启用。覆盖表变化后需要重建聚合费用，展示值是当前计价结果，不是冻结的历史发票。
 
 维护底表使用 `pnpm sync:pricing`，请求自动读取 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（也支持小写形式），不需要额外设置 `NODE_USE_ENV_PROXY`。`_meta.generated_at` 记录本次生成的实际 UTC 时间，页面按本地时区显示；它不是供应商调价时间，也不再固定为当天 UTC 零点。
 

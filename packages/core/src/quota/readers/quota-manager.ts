@@ -25,7 +25,7 @@ export interface QuotaNotification {
 }
 interface Slot {
   reader: QuotaReader; state: QuotaProviderState; identity: string | null; captured: number;
-  observations: Map<string, QuotaObservation>; attempted: number | null; blockedUntil: number; failures: number;
+  observations: Map<string, QuotaObservation>; attempted: number | null; blockedUntil: number; serverBlockedUntil: number; failures: number;
   pending: Promise<void> | null; generation: number;
 }
 export class QuotaManager {
@@ -76,7 +76,7 @@ export class QuotaManager {
       const old = previous.get(this.key(reader));
       if (old?.reader === reader) { previous.delete(this.key(reader)); return old; }
       return { reader, state: this.project(reader, {}), identity: null, captured: 0,
-        observations: new Map(), attempted: null, blockedUntil: 0, failures: 0, pending: null, generation: 0 } as Slot;
+        observations: new Map(), attempted: null, blockedUntil: 0, serverBlockedUntil: 0, failures: 0, pending: null, generation: 0 } as Slot;
     });
     for (const old of previous.values()) old.generation++;
     this.slots.splice(0, this.slots.length, ...next);
@@ -143,7 +143,9 @@ export class QuotaManager {
     const mono = this.mono();
     if (slot.attempted !== null) {
       if (reason !== 'manual' && mono - slot.attempted < 10000) return Promise.resolve();
-      if (reason !== 'manual' && mono < slot.blockedUntil) return Promise.resolve();
+      // Wake/network recovery can retry local failures, but never bypass an
+      // upstream Retry-After deadline (including one retained by a stale read).
+      if (reason !== 'manual' && mono < (reason === 'resume' ? slot.serverBlockedUntil : slot.blockedUntil)) return Promise.resolve();
       if (reason === 'periodic' && mono - slot.attempted < this.interval(slot) * 1000) return Promise.resolve();
       if (reason === 'interaction' && mono - slot.attempted < Math.min(slot.reader.interval, 60) * 1000) return Promise.resolve();
     }
@@ -167,6 +169,7 @@ export class QuotaManager {
       const temporary = ['unavailable', 'temporarily-unavailable'].includes(normalized.status) || normalized.stale;
       const metadata = raw as { retryAfterSeconds?: unknown } | null;
       const declaredRetry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : null);
+      if (declaredRetry !== null) slot.serverBlockedUntil = Math.max(slot.serverBlockedUntil, this.mono() + Math.max(1, Math.min(3600, declaredRetry)) * 1000);
       if (temporary) {
         slot.failures++;
         const retry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : Math.min(1800, 120 * 2 ** Math.min(slot.failures - 1, 4)));
@@ -175,7 +178,11 @@ export class QuotaManager {
           slot.state = { ...slot.state, queriedAt: normalized.queriedAt, stale: true, message: normalized.message, refreshing: true, analyses: {} };
           return;
         }
-      } else { slot.failures = 0; slot.blockedUntil = normalized.provenance?.source === 'omp' && declaredRetry !== null ? this.mono() + Math.max(1, Math.min(3600, declaredRetry)) * 1000 : 0; }
+      } else {
+        slot.failures = 0;
+        slot.serverBlockedUntil = normalized.provenance?.source === 'omp' && declaredRetry !== null ? this.mono() + Math.max(1, Math.min(3600, declaredRetry)) * 1000 : 0;
+        slot.blockedUntil = slot.serverBlockedUntil;
+      }
       normalized.service = slot.state.service;
       normalized.refreshing = true;
       slot.state = normalized;

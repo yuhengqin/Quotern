@@ -5,7 +5,7 @@ import { SUBSCRIPTION_CHANNELS } from '../shared/subscription-channels';
 import type { SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaWindowLabel } from 'quotern-i18n/quota';
 import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
-import { quotaFetch } from './quota-fetch';
+import { quotaFetch, recoverQuotaNetwork } from './quota-fetch';
 import { nativeText } from './native-messages';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
@@ -50,10 +50,16 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
   let constrained = powerMonitor.isOnBatteryPower();
   const signals = () => manager.setSignals(locked, constrained);
   const lock = () => { locked = true; signals(); };
-  const unlock = () => { locked = false; signals(); manager.resumed(); };
+  let disposed = false;
+  const recoverNetwork = () => {
+    void recoverQuotaNetwork().catch(() => {
+      console.warn('[quotern] quota network recovery failed; the next read will retry');
+    }).finally(() => { if (!disposed) manager.resumed(); });
+  };
+  const unlock = () => { locked = false; signals(); recoverNetwork(); };
   const battery = () => { constrained = true; signals(); };
   const ac = () => { constrained = false; signals(); };
-  const resume = () => { locked = powerMonitor.getSystemIdleState(60) === 'locked'; signals(); manager.resumed(); };
+  const resume = () => { locked = powerMonitor.getSystemIdleState(60) === 'locked'; signals(); recoverNetwork(); };
   const suspend = () => manager.setSignals(true, true);
   const listeners = [['lock-screen', lock], ['unlock-screen', unlock], ['on-battery', battery], ['on-ac', ac], ['resume', resume], ['suspend', suspend]] as const;
   for (const [event, listener] of listeners) (powerMonitor as NodeJS.EventEmitter).on(event, listener);
@@ -63,6 +69,7 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
     start: () => { signals(); manager.start(); },
     pause: () => manager.pause(),
     dispose: () => {
+      disposed = true;
       manager.dispose(); if (activeManager === manager) activeManager = null;
       for (const [event, listener] of listeners) (powerMonitor as NodeJS.EventEmitter).removeListener(event, listener);
       for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET]) ipcMain.removeHandler(channel);

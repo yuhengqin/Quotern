@@ -45,7 +45,7 @@ test('ensureIdentity seeds pricing when missing', () => {
   });
 });
 
-test('ensureIdentity overwrites pricing when different from bake', () => {
+test('ensureIdentity preserves an explicit pricing source and its refresh configuration', () => {
   const config = baseConfig({
     pricing: {
       url: 'https://old.example/pricing.json',
@@ -53,8 +53,17 @@ test('ensureIdentity overwrites pricing when different from bake', () => {
     },
   });
   const { changed } = ensureIdentity(config);
-  assert.equal(changed, true);
-  assert.deepEqual(config.pricing, bakedPricingConfig());
+  assert.equal(changed, false);
+  assert.deepEqual(config.pricing, { url: 'https://old.example/pricing.json', ttlMs: 60_000 });
+});
+
+test('the retired built-in pricing URL migrates to bundled mode idempotently', () => {
+  const config = baseConfig({ pricing: {
+    url: 'https://raw.githubusercontent.com/yuhengqin/Quotern/main/packages/core/src/pricing/pricing.json', ttlMs: 120_000,
+  } });
+  assert.equal(ensurePricingAligned(config), true);
+  assert.deepEqual(config.pricing, { url: '', ttlMs: 120_000 });
+  assert.equal(ensurePricingAligned(config), false);
 });
 
 test('ensurePricingAligned no-op when already matching bake', () => {
@@ -164,7 +173,7 @@ test('resolvePricingRefreshConfig falls back to baked when config empty', () => 
   delete process.env.PRICING_URL;
   try {
     const r = resolvePricingRefreshConfig({ url: '', ttlMs: null });
-    assert.equal(r.url, BAKED_PRICING_URL.trim() || null);
+    assert.equal(r.url, null);
     assert.equal(r.ttlMs, BAKED_PRICING_TTL_MS);
   } finally {
     if (prevUrl === undefined) delete process.env.TUD_PRICING_URL;

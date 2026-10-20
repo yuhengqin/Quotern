@@ -40,12 +40,14 @@ let lastFeedAt = Date.now();
 parentPort.on('message', () => { lastFeedAt = Date.now(); });
 setInterval(() => {
   if (Date.now() - lastFeedAt > ${WATCHDOG_TIMEOUT_MS}) {
+    process.stderr.write('[tud-sync-worker] watchdog timeout; terminating pid=' + process.pid + '\\n');
     process.kill(process.pid, 'SIGKILL');
   }
 }, ${WATCHDOG_CHECK_MS});
 `;
   try {
     const watchdog = new Worker(workerSrc, { eval: true });
+    watchdog.on('error', error => reportFailure('watchdog', error));
     watchdog.unref();
     setInterval(() => watchdog.postMessage('feed'), WATCHDOG_FEED_MS).unref();
   } catch {
@@ -67,13 +69,27 @@ if (!parentPort) {
 let runSyncFn: ((reason: string, source?: string) => Promise<SyncResult[]>) | null = null;
 let config: TudConfig | null = null;
 let dataDir = '';
+let activeRequest: { id: number; reason: string; source?: string } | null = null;
+
+function reportFailure(phase: string, error: unknown): void {
+  const details = error as { name?: string; code?: string; stack?: string };
+  console.error('[tud-sync-worker] failure:', { phase, pid: process.pid, request: activeRequest,
+    name: details?.name, code: details?.code,
+    stack: details?.stack?.split('\n').slice(1, 13).join('\n'),
+  });
+}
+// Observe fatal exceptions without suppressing Node's normal fatal exit.
+process.on('uncaughtExceptionMonitor', error => reportFailure('uncaughtException', error));
 
 function post(msg: SyncWorkerResponse): void {
   parentPort!.postMessage(msg);
 }
 
 parentPort.on('message', (event) => {
-  void handle(event.data as SyncWorkerRequest);
+  void handle(event.data as SyncWorkerRequest).catch(error => {
+    reportFailure('message-handler', error);
+    process.exit(1);
+  });
 });
 
 async function handle(msg: SyncWorkerRequest): Promise<void> {
@@ -123,6 +139,7 @@ async function handle(msg: SyncWorkerRequest): Promise<void> {
       return;
     }
     try {
+      activeRequest = { id: msg.id, reason: msg.reason, source: msg.source };
       const results = await runSyncFn(msg.reason, msg.source);
       post({ type: 'syncDone', id: msg.id, results });
     } catch (err) {
@@ -131,6 +148,8 @@ async function handle(msg: SyncWorkerRequest): Promise<void> {
         id: msg.id,
         error: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      if (activeRequest?.id === msg.id) activeRequest = null;
     }
   }
 }

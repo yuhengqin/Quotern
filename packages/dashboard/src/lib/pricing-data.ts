@@ -27,13 +27,13 @@ export interface PricingCatalogResponse {
   matching?: Pick<PricingData, 'alias' | 'sourceAlias'>;
 }
 
-export const PRICING_CATALOG_URL =
-  'https://raw.githubusercontent.com/yuhengqin/Quotern/main/packages/core/src/pricing/pricing.json';
+export const PRICING_CATALOG_URL = import.meta.env?.VITE_PRICING_URL?.trim() || '';
 
 /** Public prices need no dashboard credentials; the bundle also works offline. */
-export async function fetchPricingCatalog(): Promise<PricingCatalogResponse> {
+export async function fetchPricingCatalog(url = PRICING_CATALOG_URL): Promise<PricingCatalogResponse> {
+  if (!url.trim()) return pricingDataToCatalog(bundledPricing as PricingData, 'bundled', null);
   try {
-    const res = await fetch(PRICING_CATALOG_URL, { signal: AbortSignal.timeout(3_000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(3_000), credentials: 'omit' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const published = parsePricingData(await res.json());
     const bundled = bundledPricing as PricingData;

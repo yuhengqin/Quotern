@@ -310,20 +310,17 @@ async function fetchAndApplyOverlay(
 export function startPricingRefresh(
   opts: StartPricingRefreshOptions,
 ): PricingRefreshHandle {
+  if (opts.dataDir) loadCachedPricingOverlay(opts.dataDir);
   const url = opts.url.trim();
   if (!url) {
     const noop = (() => {}) as PricingRefreshHandle;
-    noop.ready = Promise.resolve(false);
+    noop.ready = Promise.resolve(getPricingStatus().hasOverlay);
     return noop;
   }
 
   if (pricingRefreshTimer) {
     clearInterval(pricingRefreshTimer);
     pricingRefreshTimer = null;
-  }
-
-  if (opts.dataDir) {
-    loadCachedPricingOverlay(opts.dataDir);
   }
 
   pricingRefreshUrl = url;

@@ -20,6 +20,8 @@ Claude / Codex Hook 写入 `notify.signal`，常驻进程监听后调度同步�
 
 后台轮询以 1 分钟为起点，同一档位连续 3 个空轮次后逐步退避到 2、5 分钟；下一轮在上一轮完成后安排。Cursor 后台拉取还有 5 分钟最小间隔，手动或 Hook 触发不按该后台间隔限制。数值见 [paths.ts](../packages/core/src/paths.ts)。
 
+隔离开发入口主动跳过 Claude/Codex Hook 注册，并输出说明性日志；这不表示正式用户的 Hook 配置损坏。非隔离模式注册失败时仍输出警告并使用轮询。
+
 排障先区分“没有新数据”“来源被跳过”和“来源报错”，结合 `logs/notify.log`、`logs/sync.log` 与面板同步状态判断。
 
 ## 采集 worker 与卡死恢复
@@ -29,6 +31,10 @@ Desktop 主进程维护窗口、IPC、BucketStore 和 local-api，通常把同�
 [sync-worker.ts](../apps/desktop/src/main/sync-worker.ts) 在独立 worker thread 中维护看门狗。同步进程每 30 秒喂活，连续 5 分钟无法调度时终止该进程，由宿主恢复。把超时器放在已经卡死的事件循环内不能解决这个问题。
 
 [sync-worker-host.ts](../apps/desktop/src/main/sync-worker-host.ts) 在完成一个同步结果或返回同步错误后清零崩溃次数，不在收到 `ready` 时清零。退出事件触发的连续自动重启最多 5 次；后续同步请求仍可能重新启动 worker，因此这不是永久停机开关。
+
+worker 的启动请求合并，每代进程仅处理自己的消息与等待请求；替换、停止及同步超时会确认旧进程退出，避免并行写入。异常退出记录 PID、退出码、等待请求数和重启计数；V8 fatal error 另记录类型与位置。worker 记录最后请求、看门狗触发和致命异常调用栈。
+
+一轮采集中已落盘但尚未回传的增量，在失败后先通过磁盘刷新 BucketStore 和聚合缓存恢复；恢复失败时，下一轮先重试恢复。正常轮次继续只应用增量，不每轮全量重读。该恢复不提供 queue 与 cursor 跨文件写入在任意崩溃时刻的事务保证。
 
 原生 SIGTRAP 应保持致命信号语义，普通 SIGTERM / SIGINT / exit 清理监听继续保留，见 [native-crash-signals.ts](../apps/desktop/src/main/native-crash-signals.ts) 及[对应测试](../apps/desktop/src/main/native-crash-signals.test.ts)。
 

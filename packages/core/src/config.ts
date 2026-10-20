@@ -17,6 +17,7 @@ import { clearCursors } from './queue/index.js';
 import {
   BAKED_PRICING_TTL_MS,
   BAKED_PRICING_URL,
+  LEGACY_BAKED_PRICING_URL,
 } from './pricing/baked-defaults.js';
 
 const DEVICE_ID_RE =
@@ -143,22 +144,23 @@ export function bakedPricingConfig(): NonNullable<TudConfig['pricing']> {
 }
 
 /**
- * Align `config.pricing` to package bake. Missing or different → overwrite.
+ * Seed defaults and retire the unavailable automatic URL. Preserve custom feeds.
  * Returns whether pricing was mutated.
  */
 export function ensurePricingAligned(config: TudConfig): boolean {
-  const desired = bakedPricingConfig();
   const cur = config.pricing;
+  const rawUrl = cur?.url?.trim() ?? '';
+  const url = rawUrl === LEGACY_BAKED_PRICING_URL ? BAKED_PRICING_URL : rawUrl;
   const curTtl =
     cur?.ttlMs != null && Number.isFinite(cur.ttlMs) && cur.ttlMs > 0
       ? cur.ttlMs
       : BAKED_PRICING_TTL_MS;
   if (
     cur == null ||
-    (cur.url ?? '') !== desired.url ||
-    curTtl !== desired.ttlMs
+    cur.url !== url ||
+    cur.ttlMs !== curTtl
   ) {
-    config.pricing = desired;
+    config.pricing = { ...cur, url, ttlMs: curTtl };
     return true;
   }
   return false;

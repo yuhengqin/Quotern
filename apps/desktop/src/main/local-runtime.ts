@@ -40,9 +40,9 @@ import {
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
 import { getQuotaRuntimeState } from './quota-runtime';
+import { createRecoverableSync } from './sync-recovery';
 import {
   invalidateSyncWorkerCursors,
-  isSyncWorkerRunning,
   runSyncViaWorker,
   startSyncWorker,
   stopSyncWorker,
@@ -92,6 +92,9 @@ let ensureInFlight: Promise<{
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let watchdogFailures = 0;
 let watchdogTickInFlight = false;
+let syncEpoch = 0;
+let runtimeStopping = false;
+let stopInFlight: Promise<void> | null = null;
 
 async function startPricingOverlayRefresh(
   dir: string,
@@ -103,9 +106,8 @@ async function startPricingOverlayRefresh(
     url: config.pricing?.url,
     ttlMs: config.pricing?.ttlMs,
   });
-  if (!url) return;
   const handle = startPricingRefresh({
-    url,
+    url: url ?? '',
     dataDir: dir,
     firstFetchTimeoutMs: DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
     onUpdate: () => {
@@ -135,21 +137,27 @@ async function startPricingOverlayRefresh(
     },
   });
   pricingRefreshStop = handle;
-  console.log(`[tud-desktop] pricing overlay: ${url} (startup fetch)`);
+  if (url) console.log(`[tud-desktop] pricing overlay: ${url} (startup fetch)`);
+  else console.log('[tud-desktop] pricing: cached overlay / bundled prices (no remote source configured)');
   await handle.ready;
 }
 
-async function refreshRuntimeFromDisk(): Promise<void> {
-  if (!runtime) return;
+async function refreshRuntimeFromDisk(opts?: { strict?: boolean }): Promise<void> {
+  const current = runtime;
+  if (!current) {
+    if (opts?.strict) throw new Error('local runtime stopped');
+    return;
+  }
   try {
-    const { config } = await loadConfig(runtime.dir);
-    runtime.config = config;
-    await runtime.bucketStore.refresh(
-      runtime.dir,
+    const { config } = await loadConfig(current.dir);
+    current.config = config;
+    await current.bucketStore.refresh(
+      current.dir,
       resolveLocalCollectSince(config),
     );
-    await runtime.aggregateCache.rebuildFromRows(runtime.bucketStore.getRows());
-    await appendJsonLog(syncLogPath(runtime.dir), {
+    await current.aggregateCache.rebuildFromRows(current.bucketStore.getRows());
+    if (runtime !== current) throw new Error('local runtime changed during disk recovery');
+    await appendJsonLog(syncLogPath(current.dir), {
       event: 'bucket_refresh',
       statsSince: config.statsSince,
       localCollectSince: resolveLocalCollectSince(config),
@@ -157,10 +165,11 @@ async function refreshRuntimeFromDisk(): Promise<void> {
     });
     publishDataSynced();
   } catch (err) {
-    await appendJsonLog(syncLogPath(runtime.dir), {
+    await appendJsonLog(syncLogPath(current.dir), {
       event: 'bucket_refresh_error',
       error: err instanceof Error ? err.message : String(err),
     });
+    if (opts?.strict) throw err;
   }
 }
 
@@ -271,6 +280,8 @@ export async function startLocalRuntime(): Promise<{
   recoveredFromCorrupt?: CorruptConfigRecovery;
 }> {
   if (ensureInFlight) return ensureInFlight;
+  if (runtimeStopping) await stopLocalRuntime();
+  if (ensureInFlight) return ensureInFlight;
   if (runtime) {
     return {
       dataDir: runtime.dir,
@@ -311,10 +322,12 @@ async function startLocalRuntimeUnlocked(): Promise<{
 
   const { hookOk: claudeHookOk } = await setupClaudeHook(dir);
   const { hookOk: codexHookOk } = await setupCodexHook(dir);
-  if (!claudeHookOk) {
+  if (isIsolatedDevRuntime()) {
+    console.log('[tud-desktop] 开发隔离模式已跳过 Claude/Codex Hook 注册，使用轮询同步');
+  } else if (!claudeHookOk) {
     console.warn('[tud-desktop] Claude Hook 未注册成功，将依赖轮询同步');
   }
-  if (!codexHookOk) {
+  if (!isIsolatedDevRuntime() && !codexHookOk) {
     console.warn('[tud-desktop] Codex Hook 未注册成功，将依赖轮询同步');
   }
 
@@ -374,18 +387,38 @@ async function startLocalRuntimeUnlocked(): Promise<{
   } else {
     console.warn('[tud-desktop] falling back to in-process sync (MAIN event loop)');
   }
+  const epoch = ++syncEpoch;
+  const assertActive = () => { if (!runtime || epoch !== syncEpoch) throw new Error('local runtime stopped'); };
   const runSyncOverride = workerOk
-    ? async (reason: string, source?: string) => {
-        const results = await runSyncViaWorker(reason, source);
+    ? createRecoverableSync<SyncResult[]>({
+      run: async (reason, source) => {
+        assertActive();
+        if (!await startSyncWorker(dir)) throw new Error('sync worker is not running');
+        assertActive();
+        return runSyncViaWorker(reason, source);
+      },
+      apply: async (results, reason) => {
         const { config: nextCfg } = await loadConfig(dir);
-        if (runtime) runtime.config = nextCfg;
+        assertActive();
+        runtime!.config = nextCfg;
         await timedApplyAfterSync(results);
         lastSyncDoneAt = Date.now();
         if (results.length > 0 && reason !== 'poll') {
           resetPollBackoffToFast();
         }
-        return results;
-      }
+      },
+      recover: async () => {
+        assertActive();
+        // Confirm the old writer has exited before reconciling committed data.
+        await stopSyncWorker();
+        assertActive();
+        await refreshRuntimeFromDisk({ strict: true });
+      },
+      onRecoveryError: error => {
+        if (epoch !== syncEpoch || quitting) return;
+        console.error('[tud-desktop] sync disk recovery failed:', error instanceof Error ? error.message : error);
+      },
+    })
     : undefined;
 
   const { stop, runSync } = watchRuntimeSignals({
@@ -458,8 +491,6 @@ async function startLocalRuntimeUnlocked(): Promise<{
   };
 
   console.log('[tud-desktop] background syncing local usage…');
-  if (!isSyncWorkerRunning()) {
-  }
   void runSync('startup')
     .catch((err) => {
       console.error(
@@ -561,7 +592,7 @@ async function runWatchdogTick(): Promise<void> {
   if (quitting || watchdogTickInFlight) return;
   watchdogTickInFlight = true;
   try {
-    if (!runtime) {
+    if (!runtime || runtimeStopping) {
       await recoverLocalRuntime();
       watchdogFailures = 0;
       return;
@@ -589,7 +620,17 @@ async function runWatchdogTick(): Promise<void> {
   }
 }
 
-export async function stopLocalRuntime(): Promise<void> {
+export function stopLocalRuntime(): Promise<void> {
+  if (stopInFlight) return stopInFlight;
+  runtimeStopping = true;
+  const operation = stopLocalRuntimeUnlocked();
+  const shared = operation.finally(() => { if (stopInFlight === shared) stopInFlight = null; });
+  stopInFlight = shared;
+  return shared;
+}
+
+async function stopLocalRuntimeUnlocked(): Promise<void> {
+  syncEpoch++;
   if (quitting) stopRuntimeWatchdog();
   if (pricingRefreshStop) {
     pricingRefreshStop();
@@ -606,7 +647,7 @@ export async function stopLocalRuntime(): Promise<void> {
   runSyncFn = null;
   publishSyncActivity(false);
   reArmPoll = null;
-  stopSyncWorker();
+  await stopSyncWorker();
   pollBackoff.reset();
   lastSyncDoneAt = 0;
   lastForegroundPokeAt = 0;
@@ -619,6 +660,7 @@ export async function stopLocalRuntime(): Promise<void> {
   }
   lastPublishedCalendarDay = '';
   runtime = null;
+  runtimeStopping = false;
 }
 
 export function onLocalRuntimeSynced(listener: LocalRuntimeSyncListener): () => void {

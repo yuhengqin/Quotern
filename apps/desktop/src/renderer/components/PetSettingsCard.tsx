@@ -33,6 +33,24 @@ function spriteUrl(path: string): string {
   return `quotern-pet://builtin/${path}`;
 }
 
+function ClawdSprite({ path, size, label, preview = false }: { path: string; size: number; label?: string; preview?: boolean }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={preview ? '0 -5 15 24' : '0 0 15 16'}
+      className="shrink-0 overflow-visible"
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+    >
+      {/* Use a fixed character frame, with headroom for preview props. Keep the
+          original animation isolated and its effects visible beyond the frame. */}
+      <image href={spriteUrl(`clawd/${path}`)} x={-15} y={-25} width={45} height={45} />
+    </svg>
+  );
+}
+
 function PetPreview({ pet, state, color }: { pet: PetCatalogEntry; state: string; color: string }) {
   const { t } = useTranslation();
   const [lookDirectionIndex, setLookDirectionIndex] = useState<number | null>(null);
@@ -52,7 +70,7 @@ function PetPreview({ pet, state, color }: { pet: PetCatalogEntry; state: string
     >
       <div ref={boxRef} className="flex h-36 w-36 items-center justify-center">
         {pet.id === 'clawd' ? (
-          <img alt={t('desktop.pet.clawdPreview')} src={spriteUrl(`clawd/${clawdPath}`)} className="h-32 w-32 object-contain" />
+          <ClawdSprite path={clawdPath} size={160} label={t('desktop.pet.clawdPreview')} preview />
         ) : pet.id === 'bot' ? (
           <BotAnimated state={state} color={color} size={164} />
         ) : (
@@ -64,7 +82,7 @@ function PetPreview({ pet, state, color }: { pet: PetCatalogEntry; state: string
 }
 
 function PetCardSprite({ pet, color }: { pet: PetCatalogEntry; color: string }) {
-  if (pet.id === 'clawd') return <img src={spriteUrl('clawd/idle/living.svg')} alt="" className="h-10 w-10 object-contain" />;
+  if (pet.id === 'clawd') return <ClawdSprite path="idle/living.svg" size={44} />;
   if (pet.id === 'bot') return <BotAnimated state="idle-living" color={color} size={44} />;
   return <PetAtlasAnimated character={pet.id} pet={pet} state="idle-living" size={44} />;
 }

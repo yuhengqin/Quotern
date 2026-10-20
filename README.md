@@ -193,6 +193,7 @@ pnpm install
 
 ## 📚 参考项目
 
+- [dsh-pet](https://github.com/PC2005-cloud/dsh-pet): 桌面宠物。
 - [Token Tracker](https://github.com/xiufengsun/TokenTracker): 自动采集 30 款 AI 编码工具 的 token 用量，用一套漂亮的 Dashboard 看真实成本与趋势。
 - [vibe-usage](https://github.com/vibe-cafe/vibe-usage): Token 使用量统计工具（CLI）
 - [OpenUsage](https://github.com/robinebers/openusage): The Only AI Usage Tracker That's Truly Yours

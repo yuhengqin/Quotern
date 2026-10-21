@@ -3,6 +3,7 @@ import { useTranslation } from 'quotern-i18n/react';
 import { Button, Switch } from '@heroui/react';
 import dshPetLogo from '../../../vendor/dsh-pet/assets/logo.png';
 import { DshPetSettingsCard } from './DshPetSettingsCard';
+import { SettingsHelpPopover } from './SettingsHelpPopover';
 import type { PetCatalogEntry } from '../../main/pet-core';
 import type { PetActivationState, PetCatalogRequest, PetSelection, PetSettingPatch, PetState } from '../../shared/pet';
 import type { DshPetState } from '../../shared/dsh-pet';
@@ -300,8 +301,12 @@ export function PetSettingsCard() {
       )}
 
       <div className="mt-5 border-t border-default-200 pt-4 dark:border-default-100/20">
-        <h4 className="text-xs font-semibold text-foreground">{t('desktop.pet.importTitle')}</h4>
-        <p className="mt-1 text-xs text-muted">{t('desktop.pet.importBeforeSite')}<button type="button" className="underline" onClick={() => void window.tud.openExternal('https://codex-pets.net')}>codex-pets.net</button>{t('desktop.pet.importAfterSite')}</p>
+        <div className="flex items-center gap-1">
+          <h4 className="text-xs font-semibold text-foreground">{t('desktop.pet.importTitle')}</h4>
+          <SettingsHelpPopover title={t('desktop.pet.importTitle')}>
+            <p>{t('desktop.pet.importBeforeSite')}<button type="button" className="rounded-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" onClick={() => void window.tud.openExternal('https://codex-pets.net')}>codex-pets.net</button>{t('desktop.pet.importAfterSite')}</p>
+          </SettingsHelpPopover>
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={busy} onClick={() => void catalog({ action: 'import-zip' }, { key: 'desktop.pet.imported' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.importZip')}</button>
           <button type="button" disabled={busy} onClick={() => void catalog({ action: 'list-codex' }, { key: 'desktop.pet.codexImported' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.importCodex')}</button>

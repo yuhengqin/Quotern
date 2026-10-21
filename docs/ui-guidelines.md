@@ -21,6 +21,7 @@
 | 页面布局 | [AppShell](../packages/dashboard/src/components/AppShell.tsx)，由 `routes/__root.tsx` 注册 | 根路由的宽度、滚动容器、Provider 与全局弹层；页面通过 Outlet 接入 | 独立 `AppShell`，保留窗口/托盘差异 |
 | 筛选菜单浮层 | [FilterMenu](../packages/dashboard/src/components/FilterMenu.tsx)，价格、会话、总览 Agent、趋势、分享范围等使用 | 单选、多选、可搜索列表和自定义选项列表的公共尺寸/滚动外壳；详见下一节 | [本地 re-export](../apps/desktop/src/renderer/components/FilterMenu.tsx)，共用同一实现 |
 | 持续状态提示 | [StatusBanner](../packages/dashboard/src/components/StatusBanner.tsx)，DashboardPage、PricingPage、SettingsPanel 使用 | `info/warn/error/success` 状态与说明；操作完成的短暂反馈使用 Toast | 同名独立副本 |
+| 设置帮助说明 | 浏览器设置维持现有说明布局 | 标题旁的独立信息按钮，悬停显示入口名称，点击打开可阅读、可含链接的说明浮层；触发器不放入 Checkbox / Label 的点击区域，关闭与焦点恢复沿用 HeroUI Popover。规则与背景可按需查看，实际状态、错误和操作反馈仍直接显示 | [SettingsHelpPopover](../apps/desktop/src/renderer/components/SettingsHelpPopover.tsx)，用于 QuotaSettings 的提醒与分析、周额度参考节奏、订阅通道，以及 SettingsPanel 的 Token 数量格式和 PetSettingsCard 的导入角色；解释性浮层不套用 FilterMenu |
 | 应用 Toast 队列 | [AppToastContext](../packages/dashboard/src/components/AppToastContext.tsx)，AppShell 提供队列 | `useAppToastQueue` 必须位于 Provider 内；局部队列仍有合法使用场景，如价格页比较数量提示 | 独立 Context 和 `AppToastProvider`，后者避让窗口拖拽区 |
 | 图表基础 | [ChartPrimitives](../packages/dashboard/src/components/ChartPrimitives.tsx)，TokenUsageTrendCard、UsageDistributionCard 等使用 | Recharts 容器、主题、Tooltip/Legend；数据转换与指标含义留在业务图表中 | 同名独立副本 |
 | Agent 来源图标 | [ProviderIcon](../packages/dashboard/src/components/ProviderIcon.tsx)，会话、项目和 Agent 选择器使用 | Agent/采集来源标识及 fallback | 同名文件，分别核对资源与平台能力 |

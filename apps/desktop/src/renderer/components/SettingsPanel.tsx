@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Checkbox,
-  Description,
   Label,
   ListBox,
   Radio,
@@ -37,6 +36,7 @@ import { ThemePreferenceControl } from '../../../../../packages/dashboard/src/co
 import { useTheme } from '@/hooks/useTheme';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
+import { SettingsHelpPopover } from './SettingsHelpPopover';
 
 import {
   getDefaultSettingsTab,
@@ -425,8 +425,12 @@ function AppSettingsPanel() {
               window.location.reload();
             }}
           >
-            <Label>{t('settings.tokenUnit.label')}</Label>
-            <Description>{t('settings.tokenUnit.description')}</Description>
+            <div className="flex items-center gap-1">
+              <Label>{t('settings.tokenUnit.label')}</Label>
+              <SettingsHelpPopover title={t('settings.tokenUnit.label')}>
+                <p>{t('settings.tokenUnit.description')}</p>
+              </SettingsHelpPopover>
+            </div>
             <Radio value="localized">
               <Radio.Content>
                 <Radio.Control>

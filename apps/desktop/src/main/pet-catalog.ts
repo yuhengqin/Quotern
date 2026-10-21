@@ -26,11 +26,11 @@ function bundledAsset(pathname: string): { file: string; contentType: string } |
 }
 
 /** Must be called before app.ready. Only catalog-validated local assets are exposed. */
-export function registerPetAssetScheme(): void {
+export function registerPetAssetScheme(additionalSchemes: Electron.CustomScheme[] = []): void {
   protocol.registerSchemesAsPrivileged([{
     scheme: PET_ASSET_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
-  }]);
+  }, ...additionalSchemes]);
 }
 
 function readUInt24LE(buffer: Buffer, offset: number): number {

@@ -71,6 +71,7 @@ import { registerShareBackgroundIpc } from './share-background-ipc';
 import { PetController } from './pet-controller';
 import { PetActivation } from './pet-activation';
 import { initializeDshPet } from './dsh-pet';
+import { DSH_PET_PREVIEW_PROTOCOL } from '../shared/dsh-pet-preview';
 import { buildDshPetTrayMenu } from './dsh-pet/tray-menu';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
 import { registerPetAssetScheme } from './pet-catalog';
@@ -88,7 +89,8 @@ import {
 } from 'quotern-core';
 
 configureQuoternAppIdentity(app);
-registerPetAssetScheme();
+// Electron requires every privileged scheme in the same pre-ready registration.
+registerPetAssetScheme([DSH_PET_PREVIEW_PROTOCOL]);
 restoreNativeTrapHandler();
 
 type Theme = DesktopWindowTheme;

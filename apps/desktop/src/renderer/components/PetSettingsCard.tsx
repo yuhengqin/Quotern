@@ -285,7 +285,7 @@ export function PetSettingsCard() {
       </>}
       </div>
       <div hidden={!showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
-        <DshPetSettingsCard />
+        <DshPetSettingsCard active={showDshSettings} />
       </div>
     </section>
   );

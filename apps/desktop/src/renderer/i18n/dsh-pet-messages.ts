@@ -6,6 +6,7 @@ export const dshPetRows: Record<string, readonly [string, string, string, string
   operationFailed: ['操作失败，请重试', 'Action failed. Try again.', '操作に失敗しました', '작업에 실패했습니다'], saved: ['已完成', 'Done', '完了', '완료'],
   'status.disabled': ['已关闭', 'Disabled', '無効', '꺼짐'], 'status.starting': ['正在启动', 'Starting', '起動中', '시작 중'], 'status.running': ['运行中', 'Running', '実行中', '실행 중'], 'status.error': ['运行错误', 'Runtime error', '実行エラー', '실행 오류'],
   retry: ['重试', 'Retry', '再試行', '다시 시도'], instances: ['宠物设置', 'Companion settings', 'ペット設定', '펫 설정'], name: ['名称', 'Name', '名前', '이름'],
+  previewUnavailable: ['动画预览暂不可用', 'Animation preview unavailable', 'アニメーションをプレビューできません', '동작 미리보기를 사용할 수 없습니다'],
   balanceEnabled: ['额度气泡', 'Quota bubbles', '利用枠の吹き出し', '사용량 말풍선'], workStatusEnabled: ['工作状态', 'Agent activity', '作業状態', '작업 상태'], fixedEnabled: ['固定位置', 'Stay in place', '位置固定', '위치 고정'],
   display: ['显示位置', 'Display', '表示先', '표시 위치'], 'display.desktop': ['桌面', 'Desktop', 'デスクトップ', '데스크톱'], 'display.none': ['隐藏', 'Hidden', '非表示', '숨김'], 'display.both': ['桌面（含 web 配置）', 'Desktop + web config', 'デスクトップ＋web 設定', '데스크톱 + web 설정'], 'display.web': ['仅 web（本期不显示）', 'Web only (not displayed)', 'web のみ（表示対象外）', 'web 전용 (표시 안 됨)'],
   remove: ['移除', 'Remove', '削除', '제거'],

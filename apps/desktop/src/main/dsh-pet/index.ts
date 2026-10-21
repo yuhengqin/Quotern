@@ -1,16 +1,22 @@
-import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, protocol, shell } from 'electron';
 import path from 'node:path';
 import { DSH_PET_ACTION, DSH_PET_CHANGED, DSH_PET_GET, DSH_PET_NAVIGATION, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK, type DshPetAction } from '../../shared/dsh-pet.js';
 import type { QuotaState } from '../../shared/quota.js';
 import { DshPetController } from './controller.js';
 import { discoverDshPetActivityRoots } from './activity-sources.js';
 import { NotificationNavigation } from './notification-navigation.js';
+import { DSH_PET_PREVIEW_SCHEME } from '../../shared/dsh-pet-preview.js';
+import { DshPetAssetStore } from './asset-store.js';
+import { createDshPetPreviewHandler } from './preview.js';
 
 export function initializeDshPet(options: { getMainWindow(): BrowserWindow | null; getQuota(): QuotaState | null; refreshQuota(): Promise<void>; showMainWindow(): void; coordinateVisibility<T>(visible: boolean, operation: () => Promise<T>): Promise<T> }) {
   const notifications = new Set<Notification>();
   const navigation = new NotificationNavigation();
+  const root = path.join(app.getPath('userData'), 'dsh-pet');
+  const runtimeRoot = app.isPackaged ? path.join(process.resourcesPath, 'dsh-pet') : path.join(__dirname, '../dsh-pet');
+  protocol.handle(DSH_PET_PREVIEW_SCHEME, createDshPetPreviewHandler(new DshPetAssetStore(root, runtimeRoot)));
   const controller = new DshPetController({
-    root: path.join(app.getPath('userData'), 'dsh-pet'), runtimeRoot: app.isPackaged ? path.join(process.resourcesPath, 'dsh-pet') : path.join(__dirname, '../dsh-pet'),
+    root, runtimeRoot,
     executable: process.execPath, appPath: app.getAppPath(), packaged: app.isPackaged, coordinateVisibility: options.coordinateVisibility,
     getQuota: options.getQuota, refreshQuota: options.refreshQuota, showMainWindow: options.showMainWindow,
     isMainWindowVisible: () => Boolean(options.getMainWindow()?.isFocused()),
@@ -29,5 +35,5 @@ export function initializeDshPet(options: { getMainWindow(): BrowserWindow | nul
   ipcMain.handle(DSH_PET_ACTION, (event, action: DshPetAction) => { trusted(event); return controller.dispatch(action); });
   ipcMain.handle(DSH_PET_NAVIGATION_GET, event => { trusted(event); return navigation.peek(); });
   ipcMain.handle(DSH_PET_NAVIGATION_ACK, (event, id: unknown) => { trusted(event); if (typeof id === 'string') navigation.acknowledge(id); });
-  return { controller, dispose: async () => { ipcMain.removeHandler(DSH_PET_GET); ipcMain.removeHandler(DSH_PET_ACTION); ipcMain.removeHandler(DSH_PET_NAVIGATION_GET); ipcMain.removeHandler(DSH_PET_NAVIGATION_ACK); for (const notification of notifications) notification.close(); notifications.clear(); await controller.dispose(); } };
+  return { controller, dispose: async () => { protocol.unhandle(DSH_PET_PREVIEW_SCHEME); ipcMain.removeHandler(DSH_PET_GET); ipcMain.removeHandler(DSH_PET_ACTION); ipcMain.removeHandler(DSH_PET_NAVIGATION_GET); ipcMain.removeHandler(DSH_PET_NAVIGATION_ACK); for (const notification of notifications) notification.close(); notifications.clear(); await controller.dispose(); } };
 }

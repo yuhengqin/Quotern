@@ -2,6 +2,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
+@source "../../../../packages/dashboard/src/components/UsageTrendExplorer.tsx";
 @source "../../../../packages/dashboard/src/components/SessionActivityPanel.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardTimeRangeControl.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardDateRangePicker.tsx";

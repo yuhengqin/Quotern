@@ -158,7 +158,7 @@ export function PetSettingsCard() {
 
   const applySelection = async (target: PetSelection) => {
     setBusy(true); setError(null); setNotice(null);
-    try { setActivation(await window.tud.pet.select(target)); setNotice({ key: 'desktop.pet.selectedNotice' }); }
+    try { setActivation(await window.tud.pet.select(target)); }
     catch { setError({ key: 'desktop.pet.saveFailed' }); }
     finally { setBusy(false); }
   };
@@ -212,7 +212,6 @@ export function PetSettingsCard() {
         </Switch>
       </div>
       {currentName && <p role="status" className="mt-2 text-xs text-foreground">{t('desktop.pet.currentName', { name: currentName })}<span className="text-muted"> · {t(enabled ? 'desktop.pet.enabled' : 'desktop.pet.disabled')}</span></p>}
-      <p className="mt-1 text-xs text-muted">{t('desktop.pet.pickerDescription')}</p>
       {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
       {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
 

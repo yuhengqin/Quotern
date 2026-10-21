@@ -7,6 +7,7 @@ import { localDateNow } from 'quotern-core/timezone';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
 import { isLocalRuntimeSyncing, localApiRequest, onLocalRuntimeSyncActivity, onLocalRuntimeSynced } from './local-runtime';
 import { PetCatalog } from './pet-catalog';
+import { createPetCursorSampler } from './pet-pointer';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
 import { NATIVE_MESSAGES, nativeText, type NativeMessageKey } from './native-messages';
@@ -38,7 +39,7 @@ import {
 } from '../shared/pet';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CURSOR_POLL_MS = 50;
+const CURSOR_POLL_MS = process.platform === 'win32' ? 16 : 50;
 const IDLE_SLEEP_MS = 60_000;
 const EDGE_ANIMATION_MS = 200;
 const DATA_REFRESH_MS = 60_000;
@@ -69,6 +70,9 @@ export class PetController {
     bubbleBand: PET_BUBBLE_BAND,
   };
   private window: BrowserWindow | null = null;
+  private ignoringMouse: boolean | null = null;
+  private pointerPressed = false;
+  private sampleCursor = createPetCursorSampler();
   private basePosition: Point | null = null;
   private docked = false;
   private dragging: { cursor: Point; position: Point; direction: 'left' | 'right' } | null = null;
@@ -123,6 +127,14 @@ export class PetController {
     if (this.window && !this.window.isDestroyed()) {
       this.window.webContents.send(PET_EVENT_CHANNEL, { type, detail });
     }
+  }
+
+  private setMouseIgnored(ignore: boolean): void {
+    const w = this.window;
+    if (!w || w.isDestroyed() || this.ignoringMouse === ignore) return;
+    // Windows forwarding installs a process-wide WH_MOUSE_LL hook, even while hidden.
+    w.setIgnoreMouseEvents(ignore, { forward: process.platform !== 'win32' });
+    this.ignoringMouse = ignore;
   }
 
   private currentSize(): { width: number; height: number } {
@@ -231,7 +243,7 @@ export class PetController {
       webPreferences: { preload: defaultPreloadPath(), sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     this.window = w;
-    w.setIgnoreMouseEvents(true, { forward: true });
+    this.setMouseIgnored(true);
     w.webContents.setWindowOpenHandler(({ url }) => {
       if (/^https?:\/\//.test(url)) void shell.openExternal(url);
       return { action: 'deny' };
@@ -240,7 +252,12 @@ export class PetController {
       if (!w.isDestroyed()) w.webContents.send(PET_STATE_CHANNEL, this.state);
     });
     w.on('closed', () => {
-      if (this.window === w) this.window = null;
+      if (this.window === w) {
+        this.window = null;
+        this.ignoringMouse = null;
+        this.pointerPressed = false;
+        this.sampleCursor = createPetCursorSampler();
+      }
       this.stopCursorTimer();
     });
     void this.loadRenderer(w).catch(error => console.error('[tud-desktop] pet renderer failed:', error));
@@ -251,12 +268,15 @@ export class PetController {
     if (!visible) {
       this.stopCursorTimer();
       this.stopEdgeAnimation();
+      this.pointerPressed = false;
+      this.sampleCursor = createPetCursorSampler();
       if (this.dragging) {
         this.dragging = null;
         this.emitPetEvent('pet:drag-end');
       }
       this.state.hover = false;
       this.state.miniMode = this.docked;
+      this.setMouseIgnored(true);
       this.window?.hide();
       this.broadcast();
       return;
@@ -312,7 +332,11 @@ export class PetController {
       if (this.docked && !this.dragging) this.applyBounds(true);
       this.broadcast();
     }
-    if (!this.edgeTimer) w.setIgnoreMouseEvents(!region.overSprite && !this.dragging, { forward: true });
+    if (!this.edgeTimer) this.setMouseIgnored(!region.overSprite && !this.dragging && !this.pointerPressed);
+    if (process.platform === 'win32') {
+      const sample = this.sampleCursor(bounds, cursor, hover, this.pointerPressed || this.dragging !== null);
+      if (sample !== undefined) this.emitPetEvent('pet:cursor-position', sample);
+    }
     const sprite = petSpriteRect(bounds, this.state.bubbleBand);
     const centerX = bounds.x + sprite.x + sprite.width / 2;
     const centerY = bounds.y + sprite.y + sprite.height / 2;
@@ -447,7 +471,15 @@ export class PetController {
 
   private handleCommand(event: Electron.IpcMainEvent, raw: unknown): void {
     if (!this.window || event.sender !== this.window.webContents || typeof raw !== 'string') return;
-    if (raw === 'context-menu') this.showContextMenu();
+    if (raw === 'pointer-down' && this.window.isVisible()) {
+      this.pointerPressed = true;
+      this.setMouseIgnored(false);
+    }
+    else if (raw === 'pointer-up') {
+      this.pointerPressed = false;
+      this.pollCursor();
+    }
+    else if (raw === 'context-menu') this.showContextMenu();
     else if (raw === 'sync') void this.triggerSync();
     else if (raw === 'hide') this.setSettingsFromMenu({ visible: false });
     else if (raw === 'drag-left' || raw === 'drag-right') this.startDrag(raw === 'drag-left' ? 'left' : 'right');

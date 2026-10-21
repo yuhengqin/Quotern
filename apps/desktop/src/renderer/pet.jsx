@@ -697,6 +697,23 @@ function Pet() {
     }
   }, [hovering]);
 
+  // Windows supplies bounded hover samples instead of forwarded global mouse moves.
+  // Keep actual pointer capture and the tap/drag threshold on real DOM events.
+  const updateLean = useCallback((clientX) => {
+    let f = (clientX / window.innerWidth - 0.5) * 2;
+    if (Math.abs(f) < LEAN_DEADZONE) f = 0;
+    setLeanX(Math.max(-1, Math.min(1, f)));
+  }, []);
+  useEffect(() => {
+    const update = ({ detail }) => {
+      if (dragRef.current) return;
+      if (detail == null) setLeanX(0);
+      else updateLean(detail.x);
+    };
+    window.addEventListener('pet:cursor-position', update);
+    return () => window.removeEventListener('pet:cursor-position', update);
+  }, [updateLean]);
+
   useEffect(() => {
     const update = () => {
       const raw = window.__ttPetLookDirectionIndex;
@@ -828,6 +845,7 @@ function Pet() {
     if (e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { x: e.clientX, y: e.clientY, dragging: false };
+    post('pet:pointer-down');
   }, []);
   const onMouseMove = useCallback((e) => {
     const d = dragRef.current;
@@ -835,9 +853,7 @@ function Pet() {
     // Clawd leans toward it. The pet receives moves across its whole window, so just
     // sliding the cursor left/right over it drives the lean — no click needed.
     if (!d || !d.dragging) {
-      let f = (e.clientX / window.innerWidth - 0.5) * 2; // −1 (left) … +1 (right)
-      if (Math.abs(f) < LEAN_DEADZONE) f = 0;
-      setLeanX(Math.max(-1, Math.min(1, f)));
+      updateLean(e.clientX);
     }
     if (d?.dragging) {
       post('pet:move:0:0');
@@ -851,17 +867,19 @@ function Pet() {
       post(deltaX < 0 ? "pet:drag-left" : "pet:drag-right");
       post('pet:move:0:0');
     }
-  }, []);
+  }, [updateLean]);
   const onMouseUp = useCallback((e) => {
     const d = dragRef.current;
     dragRef.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (d?.dragging) post('pet:drag-end');
     else if (d) triggerTap();
+    post('pet:pointer-up');
   }, [triggerTap]);
   const onPointerCancel = useCallback(() => {
     if (dragRef.current?.dragging) post('pet:drag-end');
     dragRef.current = null;
+    post('pet:pointer-up');
   }, []);
   const onContextMenu = useCallback((e) => {
     e.preventDefault();
@@ -937,6 +955,7 @@ function Pet() {
       onPointerMove={onMouseMove}
       onPointerUp={onMouseUp}
       onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onPointerCancel}
       onContextMenu={onContextMenu}
       style={{
         width: "100%",

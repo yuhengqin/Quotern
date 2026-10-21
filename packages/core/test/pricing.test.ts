@@ -177,10 +177,26 @@ test('GLM 5.3 Flash and FlashX resolve current official-channel prices', () => {
   assert.equal(flashx.cache_read, 0.075);
 });
 
-test('kimi-k2.7-code resolves to 0.95/4, not the kimi-k2 rule', () => {
-  const p = getModelPricing('kimi-k2.7-code');
-  assert.equal(p.input, 0.95);
-  assert.equal(p.output, 4);
+test('kimi-k2.7-code exact regional prices take priority over the kimi-k2 fuzzy rule', () => {
+  const international = { input: 0.95, output: 4, cache_read: 0.19, cache_write: 0 };
+  const china = { input: 0.9711, output: 4.0337, cache_read: 0.1942, cache_write: 0 };
+  applyRemotePricingOverlay({
+    exact: {
+      'moonshotai/kimi-k2': { input: 0.6, output: 2.5 },
+      'moonshotai/kimi-k2.7-code': international,
+      'moonshotai-cn/kimi-k2.7-code': china,
+    },
+    fuzzy: [{ match: 'kimi-k2', ref: 'moonshotai/kimi-k2' }],
+  });
+
+  // Short IDs use the deterministic regional match; they do not imply international pricing.
+  for (const [model, rates] of [
+    ['kimi-k2.7-code', china],
+    ['moonshotai/kimi-k2.7-code', international],
+    ['moonshotai-cn/kimi-k2.7-code', china],
+  ] as const) {
+    assert.deepEqual(getModelPricing(model), rates, model);
+  }
 });
 
 test('exact-derived match beats every fuzzy catch-all: each exact short name resolves to its own price or a same-name regional variant', () => {

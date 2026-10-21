@@ -45,13 +45,19 @@ describe('pricing model groups', () => {
     ]).length, 2);
   });
 
-  it('groups real MiniMax regional APIs and plans whose exact calling IDs match without canonical metadata', () => {
+  it('groups real MiniMax regional APIs and plans without losing their distinct API rates', () => {
     const ids = new Set(['minimax/MiniMax-M2.5', 'minimax-cn/MiniMax-M2.5', 'minimax-coding-plan/MiniMax-M2.5', 'minimax-cn-coding-plan/MiniMax-M2.5']);
     const entries = pricingDataToCatalog(bundledPricing as PricingData, 'bundled', null).models.filter(row => ids.has(row.model));
     assert.equal(entries.length, 4);
     const groups = groupPricingCatalog(entries);
     assert.equal(groups.length, 1);
-    assert.equal(groups[0]!.apiVariants.length, 1);
+    const apiRates = new Map(entries.filter(row => row.billingMode !== 'subscription').map(row =>
+      [row.model, [row.input, row.output, row.cacheRead, row.cacheWrite]] as const));
+    assert.equal(apiRates.size, 2);
+    const groupedApiRates = groups[0]!.apiVariants.flatMap(variant => variant.entries.map(entry =>
+      [entry.model, [variant.row.input, variant.row.output, variant.row.cacheRead, variant.row.cacheWrite]] as const));
+    assert.equal(groupedApiRates.length, apiRates.size);
+    assert.deepEqual(new Map(groupedApiRates), apiRates);
     assert.equal(groups[0]!.subscriptionVariants.length, 1);
     assert.deepEqual(groups[0]!.subscriptionVariants[0]!.regions, ['中国', '国际']);
   });
@@ -64,7 +70,7 @@ describe('pricing model groups', () => {
   });
 
   it('keeps differences in raw cache rates, context, and unknown versus zero visible', () => {
-    for (const difference of [{ cacheRead: 0.3000001 }, { contextWindow: 262_144 }, { cacheWrite: null }, { cacheRead: 0 }]) {
+    for (const difference of [{ input: 3.1 }, { output: 15.1 }, { cacheRead: 0.3000001 }, { contextWindow: 262_144 }, { cacheWrite: null }, { cacheRead: 0 }]) {
       const group = groupPricingCatalog([api, { ...regionalApi, ...difference }])[0]!;
       assert.equal(group.apiVariants.length, 2);
     }

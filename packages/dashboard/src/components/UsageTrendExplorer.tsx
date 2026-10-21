@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Card, Label, ListBox, Select, Tabs } from '@heroui/react';
+import { Button, Card, Label, ListBox, Modal, Select, Tabs, Tooltip } from '@heroui/react';
+import { Maximize2 } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from 'recharts';
 import type { UsageTrend } from 'quotern-core';
@@ -66,6 +67,7 @@ function LocalUsageTrendExplorer(props: Props) {
     return () => observer.disconnect();
   }, []);
   const singleDay = range.start === range.end;
+  const rangeLabel = range.fromTime ? t('usage.range.last24Hours') : formatTrendDateRange(range, today, t('usage.range.today'));
   const ticks = useMemo(() => data ? getTrendAxisTicks(data.points, data.granularity, singleDay, cardWidth) : [], [data, singleDay, cardWidth]);
   const options = [
     { value: 'auto', label: t('usage.explorer.autoResolved', { grain: t(`usage.explorer.${controls.autoGranularity}`) }) },
@@ -73,14 +75,14 @@ function LocalUsageTrendExplorer(props: Props) {
   ];
   return <div className="min-w-0 lg:col-span-2">
     <div role="group" aria-label={t('usage.explorer.grain')} className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-      <p className="min-w-0 text-xs text-muted">{range.fromTime ? t('usage.range.last24Hours') : formatTrendDateRange(range, today, t('usage.range.today'))}</p>
+      <p className="min-w-0 text-xs text-muted">{rangeLabel}</p>
       <TrendSelect label={t('usage.explorer.grain')} value={controls.selection} options={options} onChange={value => {
         if (options.some(option => option.value === value)) setGrain(value as TrendSelection);
       }} />
     </div>
     <div ref={chartGrid} className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
-      <TrendChart variant="tokens" data={data} error={error} singleDay={singleDay} ticks={ticks} />
-      <TrendChart variant="usage" data={data} error={error} singleDay={singleDay} ticks={ticks} />
+      <TrendChart variant="tokens" data={data} error={error} singleDay={singleDay} ticks={ticks} rangeLabel={rangeLabel} />
+      <TrendChart variant="usage" data={data} error={error} singleDay={singleDay} ticks={ticks} rangeLabel={rangeLabel} />
     </div>
   </div>;
 }
@@ -101,9 +103,14 @@ function TrendSelect({ label, value, options, onChange }: {
   </Select>;
 }
 
-function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'tokens' | 'usage'; data: UsageTrend | null; error: boolean; singleDay: boolean; ticks: string[] }) {
+interface TrendChartProps {
+  variant: 'tokens' | 'usage'; data: UsageTrend | null; error: boolean;
+  singleDay: boolean; ticks: string[]; rangeLabel: string;
+}
+
+function TrendChart({ variant, data, error, singleDay, ticks, rangeLabel }: TrendChartProps) {
   const { t } = useTranslation();
-  const gradientId = useId().replace(/:/g, '');
+  const [expanded, setExpanded] = useState(false);
   const [metric, setMetric] = useState<'tokens' | 'cost'>('tokens');
   const [view, setView] = useState<'all' | 'detail'>('all');
   const [grouping, setGrouping] = useState<'total' | 'models'>('total');
@@ -111,19 +118,72 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
   const title = variant === 'tokens'
     ? t(view === 'all' ? 'usage.explorer.tokenTotalTitle' : 'usage.explorer.tokenBreakdownTitle')
     : t(metric === 'cost' ? 'usage.explorer.costTitle' : 'usage.explorer.usageTitle');
+  const renderControls = () => <div className="flex max-w-full flex-wrap items-center gap-2">
+      {variant === 'usage' && metric === 'cost' && <TrendSelect label={t('usage.explorer.grouping')} value={grouping} options={(['total', 'models'] as const).map(value => ({ value, label: t(`usage.explorer.${value}`) }))} onChange={value => { if (value === 'total' || value === 'models') setGrouping(value); }} />}
+      {variant === 'usage' ? <DashboardMetricTabs ariaLabel={t('usage.chart.dailyMetric')} metrics={['tokens', 'cost'] as const} selectedMetric={metric} onMetricChange={setMetric} />
+        : <Tabs selectedKey={view} onSelectionChange={key => setView(String(key) as 'all' | 'detail')}><Tabs.ListContainer><Tabs.List aria-label={t('usage.chart.viewMode')} className="*:h-6 *:px-3 *:text-xs">{(['all', 'detail'] as const).map(value => <Tabs.Tab id={value} key={value}>{t(`usage.common.${value}`)}<Tabs.Indicator /></Tabs.Tab>)}</Tabs.List></Tabs.ListContainer></Tabs>}
+    </div>;
+  const bodyProps = { variant, data, error, singleDay, ticks, metric, grouping, chart };
   return <Card className="h-full min-w-0 overflow-hidden rounded-2xl">
     <Card.Header className="flex-row flex-wrap items-start justify-between gap-3 pb-0">
       <Card.Title className="min-w-0 flex-1 basis-40">{title}</Card.Title>
       <div className="flex max-w-full flex-wrap items-center gap-2">
-      {variant === 'usage' && metric === 'cost' && <TrendSelect label={t('usage.explorer.grouping')} value={grouping} options={(['total', 'models'] as const).map(value => ({ value, label: t(`usage.explorer.${value}`) }))} onChange={value => { if (value === 'total' || value === 'models') setGrouping(value); }} />}
-      {variant === 'usage' ? <DashboardMetricTabs ariaLabel={t('usage.chart.dailyMetric')} metrics={['tokens', 'cost'] as const} selectedMetric={metric} onMetricChange={setMetric} />
-        : <Tabs selectedKey={view} onSelectionChange={key => setView(String(key) as 'all' | 'detail')}><Tabs.ListContainer><Tabs.List aria-label={t('usage.chart.viewMode')} className="*:h-6 *:px-3 *:text-xs">{(['all', 'detail'] as const).map(value => <Tabs.Tab id={value} key={value}>{t(`usage.common.${value}`)}<Tabs.Indicator /></Tabs.Tab>)}</Tabs.List></Tabs.ListContainer></Tabs>}
+        {renderControls()}
+        <Tooltip>
+          <Button isIconOnly size="sm" variant="ghost" className="size-8 min-w-8 shrink-0 text-muted"
+            aria-label={t('usage.explorer.expandChart', { title })} onPress={() => setExpanded(true)}>
+            <Maximize2 aria-hidden="true" className="size-4" />
+          </Button>
+          <Tooltip.Content>{t('usage.explorer.expand')}</Tooltip.Content>
+        </Tooltip>
       </div>
     </Card.Header>
     <Card.Content className="pt-3">
+      <TrendChartBody {...bodyProps} />
+    </Card.Content>
+    <Modal.Backdrop isOpen={expanded} onOpenChange={setExpanded}>
+      <Modal.Container placement="center" scroll="inside" className="p-3 sm:p-6">
+        <Modal.Dialog className="w-full min-w-0 !max-w-[1280px] !max-h-[calc(100dvh-1.5rem)]">
+          <Modal.CloseTrigger aria-label={t('usage.common.close')} />
+          <Modal.Header className="gap-3 pr-10">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Modal.Heading>{title}</Modal.Heading>
+              {renderControls()}
+            </div>
+            <p className="text-xs text-muted">{rangeLabel}</p>
+          </Modal.Header>
+          <Modal.Body className="min-w-0">
+            <TrendChartBody {...bodyProps} expanded />
+          </Modal.Body>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
+  </Card>;
+}
+
+function TrendChartBody({ variant, data, error, singleDay, ticks, metric, grouping, chart, expanded = false }: Omit<TrendChartProps, 'rangeLabel'> & {
+  metric: 'tokens' | 'cost'; grouping: 'total' | 'models'; chart: ReturnType<typeof projectChart> | null; expanded?: boolean;
+}) {
+  const { t } = useTranslation();
+  const gradientId = useId().replace(/:/g, '');
+  const plot = useRef<HTMLDivElement>(null);
+  const [plotWidth, setPlotWidth] = useState(720);
+  useEffect(() => {
+    const element = plot.current;
+    if (!expanded || !element) return;
+    const observer = new ResizeObserver(() => setPlotWidth(element.getBoundingClientRect().width));
+    observer.observe(element);
+    setPlotWidth(element.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, [expanded]);
+  const visibleTicks = useMemo(() => expanded && data ? getTrendAxisTicks(data.points, data.granularity, singleDay, plotWidth) : ticks, [expanded, data, singleDay, plotWidth, ticks]);
+  const heightClass = expanded ? 'h-[min(60dvh,640px)] min-h-40' : 'h-[260px]';
+  // Hidden Recharts tooltips retain their previous coordinates after a resize.
+  // Remove them from layout so a wide-screen position cannot widen the modal body.
+  return <div ref={plot} className="min-w-0 [&_.recharts-tooltip-wrapper[style*='visibility:_hidden']]:hidden">
       {error && <p role="status" className="mb-2 text-xs text-warning">{t('usage.explorer.error')}</p>}
-      {!chart ? <p role="status" className="flex h-[260px] items-center justify-center text-sm text-muted">{t(error ? 'usage.explorer.error' : 'usage.explorer.loading')}</p>
-        : <><ChartContainer config={chart.config} className="h-[260px] w-full" initialDimension={{ width: 720, height: 260 }}>
+      {!chart ? <p role="status" className={`flex items-center justify-center text-sm text-muted ${heightClass}`}>{t(error ? 'usage.explorer.error' : 'usage.explorer.loading')}</p>
+        : <><ChartContainer config={chart.config} className={`w-full ${heightClass}`} initialDimension={{ width: 720, height: 260 }}>
           <ComposedChart data={chart.rows} accessibilityLayer margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <defs>{chart.keys.map(key => <linearGradient key={key} id={`${gradientId}-${key}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={`var(--color-${key})`} stopOpacity={0.28} />
@@ -131,7 +191,7 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
               <stop offset="100%" stopColor={`var(--color-${key})`} stopOpacity={0} />
             </linearGradient>)}</defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" axisLine={false} tickLine={false} ticks={ticks} interval={0} tick={({ x, y, payload }) => <text x={x} y={y} dy={12} fontSize={11} className="fill-muted" textAnchor={ticks.length > 1 && payload.value === ticks[0] ? 'start' : ticks.length > 1 && payload.value === ticks.at(-1) ? 'end' : 'middle'}>{payload.value}</text>} />
+            <XAxis dataKey="label" axisLine={false} tickLine={false} ticks={visibleTicks} interval={0} tick={({ x, y, payload }) => <text x={x} y={y} dy={12} fontSize={11} className="fill-muted" textAnchor={visibleTicks.length > 1 && payload.value === visibleTicks[0] ? 'start' : visibleTicks.length > 1 && payload.value === visibleTicks.at(-1) ? 'end' : 'middle'}>{payload.value}</text>} />
             <YAxis axisLine={false} tickLine={false} width={58} tickFormatter={value => metric === 'cost' ? formatUsd(Number(value)) : formatTokens(Number(value))} tick={{ fontSize: 11 }} />
             <ChartTooltip content={metric === 'tokens' ? <TokenTrendTooltip weekly={data?.granularity === 'weekly'} /> : undefined} labelFormatter={data?.granularity === 'weekly' ? (label, payload) => {
               const point = payload?.[0]?.payload as { tooltipLabel?: string; partialWeek?: boolean } | undefined;
@@ -146,8 +206,7 @@ function TrendChart({ variant, data, error, singleDay, ticks }: { variant: 'toke
           </ComposedChart>
         </ChartContainer><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">{chart.keys.map(key => <span className="inline-flex min-w-0 items-center gap-1.5" key={key}><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: chart.config[key]?.color }} /><span className="max-w-52 truncate" title={String(chart.config[key]?.label)}>{chart.config[key]?.label}</span></span>)}</div></>}
       {!!data?.points.some(point => point.unpricedTokens > 0) && metric === 'cost' && <p className="mt-2 text-[11px] text-muted">{t('usage.explorer.partial')}</p>}
-    </Card.Content>
-  </Card>;
+  </div>;
 }
 
 /** Read the full bucket so the total-only line still exposes every Token component. */

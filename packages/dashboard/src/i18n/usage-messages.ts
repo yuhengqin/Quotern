@@ -243,6 +243,8 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.explorer.usageTitle': ['用量趋势', 'Usage trend', '使用量の推移', '사용량 추이'],
   'usage.explorer.tokenTotalTitle': ['Token 总量趋势', 'Total token trend', 'Token 合計の推移', '총 Token 추이'],
   'usage.explorer.tokenBreakdownTitle': ['Token 分项趋势', 'Token breakdown trend', 'Token 内訳の推移', 'Token 항목별 추이'],
+  'usage.explorer.expand': ['展开图表', 'Expand chart', 'グラフを拡大', '차트 확대'],
+  'usage.explorer.expandChart': ['展开{{title}}', 'Expand {{title}}', '{{title}}を拡大', '{{title}} 확대'],
   'usage.explorer.range': ['选定期间用量', 'Usage in selected period', '選択期間の使用量', '선택 기간 사용량'],
   'usage.explorer.loading': ['正在读取趋势…', 'Loading trends…', '推移を読み込み中…', '추이 불러오는 중…'],
   'usage.explorer.error': ['趋势暂未更新', 'Trends could not be refreshed', '推移を更新できませんでした', '추이를 새로 고치지 못했습니다'],

@@ -31,7 +31,6 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'desktop.pet.setCurrent': ['设为当前宠物', 'Set as current pet', '現在のペットに設定', '현재 펫으로 설정'],
   'desktop.pet.enabled': ['已开启', 'Enabled', '有効', '사용'],
   'desktop.pet.disabled': ['已关闭', 'Disabled', '無効', '사용 안 함'],
-  'desktop.pet.description': ['悬浮在桌面上，随本机用量变化表情。单击看短句，拖动调整位置，右键打开菜单。', 'Floats on your desktop and reacts to local usage. Click for a short message, drag to move it, or right-click for its menu.', 'デスクトップに浮かび、ローカルの使用状況に応じて表情が変わります。クリックで一言を表示、ドラッグで移動、右クリックでメニューを開けます。', '바탕 화면에 떠 있으며 이 기기의 사용량에 따라 표정이 바뀝니다. 클릭하면 짧은 메시지를 보고, 드래그로 옮기고, 오른쪽 클릭으로 메뉴를 엽니다.'],
   'desktop.pet.show': ['显示', 'Show', '表示', '표시'],
   'desktop.pet.remove': ['移除 {{name}}', 'Remove {{name}}', '{{name}} を削除', '{{name}} 제거'],
   'desktop.pet.removed': ['已移除 {{name}}', 'Removed {{name}}', '{{name}} を削除しました', '{{name}} 제거됨'],

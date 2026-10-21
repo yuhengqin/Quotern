@@ -261,7 +261,6 @@ export function PetSettingsCard() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">{selected?.displayName}<span className="text-xs font-normal text-muted">{t('desktop.pet.previewing')}</span></h4>
-          <p className="mt-1 text-xs text-muted">{t('desktop.pet.description')}</p>
         </div>
         {selected && selectionAction({ kind: 'builtin', character: selected.id })}
       </div>

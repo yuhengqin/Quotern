@@ -1,10 +1,9 @@
 export const dshPetRows: Record<string, readonly [string, string, string, string]> = Object.fromEntries(Object.entries({
   title: ['大肥鱼', '大肥鱼', '大肥鱼', '大肥鱼'],
-  description: ['一只桌宠陪伴，保留完整视频动作与甩抛；右键宠物打开菜单。', 'One companion with video animations and throwing. Right-click for its menu.', '1匹のペットが動画アニメーションと投げ操作に対応。右クリックでメニューを表示。', '한 마리의 펫이 영상 동작과 던지기를 지원합니다. 오른쪽 클릭으로 메뉴를 여세요.'],
   enable: ['启用', 'Enable', '有効', '사용'], loading: ['正在读取独立宠物设置…', 'Loading companion settings…', '設定を読み込み中…', '설정 불러오는 중…'],
   unavailable: ['独立宠物暂不可用', 'Companion unavailable', '現在利用できません', '펫을 사용할 수 없습니다'],
   operationFailed: ['操作失败，请重试', 'Action failed. Try again.', '操作に失敗しました', '작업에 실패했습니다'], saved: ['已完成', 'Done', '完了', '완료'],
-  'status.disabled': ['已关闭', 'Disabled', '無効', '꺼짐'], 'status.starting': ['正在启动', 'Starting', '起動中', '시작 중'], 'status.running': ['运行中', 'Running', '実行中', '실행 중'], 'status.error': ['运行错误', 'Runtime error', '実行エラー', '실행 오류'],
+  'status.starting': ['正在启动', 'Starting', '起動中', '시작 중'], 'status.error': ['运行错误', 'Runtime error', '実行エラー', '실행 오류'],
   retry: ['重试', 'Retry', '再試行', '다시 시도'], instances: ['宠物设置', 'Companion settings', 'ペット設定', '펫 설정'], name: ['名称', 'Name', '名前', '이름'],
   previewUnavailable: ['动画预览暂不可用', 'Animation preview unavailable', 'アニメーションをプレビューできません', '동작 미리보기를 사용할 수 없습니다'],
   balanceEnabled: ['额度气泡', 'Quota bubbles', '利用枠の吹き出し', '사용량 말풍선'], workStatusEnabled: ['工作状态', 'Agent activity', '作業状態', '작업 상태'], fixedEnabled: ['固定位置', 'Stay in place', '位置固定', '위치 고정'],

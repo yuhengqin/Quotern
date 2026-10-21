@@ -108,8 +108,15 @@ export function DshPetSettingsCard({ active = true, headerAction }: { active?: b
     return run({ type: 'patch-pet', petId: String(id), patch: value }, background);
   };
   return <div className="space-y-4 text-left" role="group" data-pet-settings="dsh" aria-label={text('title')} aria-busy={pending > 0}>
-    <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h4 className="flex items-center gap-2 text-sm font-semibold">{text('title')}<span className="text-xs font-normal text-muted">{t('desktop.pet.previewing')}</span></h4><p className="mt-1 text-xs text-muted">{text('description')}</p></div>{headerAction}</div>
-    <div className="flex items-center gap-3 text-xs"><span>{text(`status.${state.status}`)}</span>{state.status === 'error' && <Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'retry' }); }}>{text('retry')}</Button>}</div>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">{text('title')}<span className="text-xs font-normal text-muted">{t('desktop.pet.previewing')}</span></h4>
+      </div>
+      {headerAction}
+    </div>
+    {(state.status === 'starting' || state.status === 'error') && (
+      <div className="flex items-center gap-3 text-xs"><span role="status">{text(`status.${state.status}`)}</span>{state.status === 'error' && <Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'retry' }); }}>{text('retry')}</Button>}</div>
+    )}
     {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
     {feedback && <p role={failed ? 'alert' : 'status'} className={`break-words text-xs ${failed ? 'text-danger' : 'text-success'}`}>{feedback}</p>}
     <Section title={text('controls')}>

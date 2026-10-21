@@ -412,7 +412,7 @@ function flushPendingConfigResetNotice(): void {
   sendToMainWindowWhenReady(main, () => broadcastConfigResetNotice());
 }
 
-async function openSettings(detail?: { tab?: 'sync' | 'app' }): Promise<void> {
+async function openSettings(detail?: { tab?: 'sync' | 'pet' | 'app' }): Promise<void> {
   await showMainWindowAsync();
   const w = getMainWindow();
   if (!w) return;
@@ -551,7 +551,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
           const window = getMainWindow();
           return Boolean(window?.isVisible() && !window.isMinimized());
         },
-        openSettings: () => void openSettings({ tab: 'app' }),
+        openSettings: () => void openSettings({ tab: 'pet' }),
         getDark: () => currentTheme === 'dark',
         getLocale: getNativeLocale,
         getQuotaState: getQuotaRuntimeState,

@@ -9,6 +9,7 @@ import {
 } from "react";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import {
+  getDefaultSettingsTab,
   OPEN_SETTINGS_EVENT,
   type OpenSettingsDetail,
   type SettingsTabId,
@@ -41,7 +42,7 @@ export function BackendConfigModal({
 }: BackendConfigModalProps = {}) {
   const { t } = useTranslation();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>("app");
+  const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>(getDefaultSettingsTab);
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
   const activeTab = controlledTab ?? uncontrolledTab;

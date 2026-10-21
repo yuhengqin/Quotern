@@ -137,7 +137,7 @@ declare global {
       onDataSynced: (callback: () => void) => () => void;
       onOpenSettings: (
         callback: (detail?: {
-          tab?: 'sync' | 'app';
+          tab?: 'sync' | 'pet' | 'app';
         }) => void,
       ) => () => void;
       onRuntimeNotice: (

@@ -24,6 +24,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'desktop.pet.operationFailed': ['宠物操作失败，请重试。', 'Pet action failed. Try again.', 'ペットの操作に失敗しました。再試行してください。', '펫 작업에 실패했습니다. 다시 시도하세요.'],
   'desktop.pet.settings': ['桌面宠物设置', 'Desktop pet settings', 'デスクトップペットの設定', '데스크톱 펫 설정'],
   'desktop.pet.title': ['桌面宠物', 'Desktop pet', 'デスクトップペット', '데스크톱 펫'],
+  'desktop.pet.tab': ['宠物', 'Pets', 'ペット', '펫'],
   'desktop.pet.enable': ['启用桌面宠物', 'Enable desktop pet', 'デスクトップペットを有効にする', '데스크톱 펫 사용'],
   'desktop.pet.current': ['当前宠物', 'Current pet', '現在のペット', '현재 펫'],
   'desktop.pet.currentName': ['当前宠物：{{name}}', 'Current pet: {{name}}', '現在のペット：{{name}}', '현재 펫: {{name}}'],

@@ -106,7 +106,7 @@ const TRAE_CN_SUBSCRIPTION_GET_CHANNEL = 'trae-cn-subscription:get';
 const WORKBUDDY_GLOBAL_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-global-subscription:get';
 const WORKBUDDY_MAINLAND_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-mainland-subscription:get';
 
-type SettingsTabId = 'sync' | 'app';
+type SettingsTabId = 'sync' | 'pet' | 'app';
 
 async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise<SavedShareBackground[]> {
   try {
@@ -407,7 +407,7 @@ const tudApi = {
       const next: {
         tab?: SettingsTabId;
             } = {};
-      if (raw.tab === 'sync' || raw.tab === 'app') {
+      if (raw.tab === 'sync' || raw.tab === 'pet' || raw.tab === 'app') {
         next.tab = raw.tab;
       }
       callback(next);

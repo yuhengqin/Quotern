@@ -21,6 +21,7 @@ import { ShareActivityModal } from './ShareActivityModal';
 import { WindowTitleControls } from './WindowTitleControls';
 import {
   dispatchOpenSettings,
+  getDefaultSettingsTab,
   type SettingsTabId,
 } from '@/lib/shell-events';
 import { ShareSnapshotProvider } from '../../../../../packages/dashboard/src/hooks/ShareSnapshotContext';
@@ -46,7 +47,7 @@ export function AppShell() {
   const pathname = useLocation({ select: (location) => location.pathname });
   // const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTabId>('app');
+  const [settingsTab, setSettingsTab] = useState<SettingsTabId>(getDefaultSettingsTab);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
   const [toastQueue] = useState(

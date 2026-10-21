@@ -5,7 +5,11 @@ export const OPEN_SETTINGS_EVENT = 'tud:open-settings';
 export const OPEN_ABOUT_EVENT = 'tud:open-about';
 export const OPEN_SHARE_EVENT = 'tud:open-share';
 
-export type SettingsTabId = 'sync' | 'app' | 'subscription' | 'about';
+export type SettingsTabId = 'sync' | 'pet' | 'app' | 'subscription' | 'about';
+
+export function getDefaultSettingsTab(): SettingsTabId {
+  return window.tud?.platform === 'win32' ? 'pet' : 'app';
+}
 
 export type OpenSettingsDetail = {
   tab?: SettingsTabId;

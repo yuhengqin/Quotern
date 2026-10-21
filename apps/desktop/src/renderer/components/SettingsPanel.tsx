@@ -37,12 +37,14 @@ import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
 
 import {
+  getDefaultSettingsTab,
   type SettingsTabId,
 } from '@/lib/shell-events';
 
 type DesktopSettingsTabId = SettingsTabId;
 
 const TAB_ITEMS: { id: DesktopSettingsTabId; labelKey: string }[] = [
+  { id: 'pet', labelKey: 'desktop.pet.tab' },
   { id: 'subscription', labelKey: 'settings.tabs.subscription' },
   { id: 'app', labelKey: 'settings.tabs.app' },
   { id: 'about', labelKey: 'settings.tabs.about' },
@@ -67,8 +69,9 @@ export function SettingsPanel({
     () => new ToastQueue({ maxVisibleToasts: 1 }),
   );
   const { t } = useTranslation();
+  const isWindows = window.tud?.platform === 'win32';
   const [uncontrolledTab, setUncontrolledTab] =
-    useState<DesktopSettingsTabId>('app');
+    useState<DesktopSettingsTabId>(getDefaultSettingsTab);
   const tab = activeTab ?? uncontrolledTab;
   const setTab = onTabChange ?? setUncontrolledTab;
 
@@ -82,7 +85,7 @@ export function SettingsPanel({
       >
         <Tabs.ListContainer className="m-3 mr-14 w-fit">
           <Tabs.List aria-label={t('settings.tabs.category')} className="w-fit">
-            {TAB_ITEMS.map((item) => (
+            {TAB_ITEMS.filter((item) => item.id !== 'pet' || isWindows).map((item) => (
               <Tabs.Tab
                 className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
                 id={item.id}
@@ -95,11 +98,16 @@ export function SettingsPanel({
           </Tabs.List>
         </Tabs.ListContainer>
 
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
-          {tab === 'app' && <AppSettingsPanel />}
-        </Tabs.Panel>
+        {isWindows && (
+          <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">
+            {tab === 'pet' && <PetSettingsCard />}
+          </Tabs.Panel>
+        )}
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="subscription">
           {tab === 'subscription' && <SubscriptionChannelSettings />}
+        </Tabs.Panel>
+        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
+          {tab === 'app' && <AppSettingsPanel />}
         </Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="about">
           {tab === 'about' && <AboutContent />}
@@ -121,7 +129,6 @@ function AppSettingsPanel() {
   const [localeError, setLocaleError] = useState(false);
   const cliMode = true;
   const isMac = window.tud?.platform === 'darwin';
-  const isWindows = window.tud?.platform === 'win32';
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [openAtLogin, setOpenAtLogin] = useState(true);
   const [autostartLoading, setAutostartLoading] = useState(true);
@@ -396,8 +403,6 @@ function AppSettingsPanel() {
           )}
         </div>
       )}
-
-      {isWindows && <PetSettingsCard />}
 
       <Card variant="tertiary" className="rounded-xl shadow-none">
         <Card.Content>

@@ -137,12 +137,14 @@ const mainWindowLauncher = createMainWindowLauncher(showMainWindowNow, () => {
 async function acquireDesktopInstanceLock(): Promise<boolean> {
   const dir = resolveDataDir();
   if (!isHeartbeatFresh(await readRuntimeHeartbeat(dir))) {
-    console.warn('[tud-desktop] stale desktop heartbeat; evicting leftover instances');
     try {
-      await evictRuntimeKind('desktop', {
+      const stopped = await evictRuntimeKind('desktop', {
         exceptPid: process.pid,
         dataDir: dir,
       });
+      if (stopped.length > 0) {
+        console.warn(`[tud-desktop] cleaned up ${stopped.length} leftover desktop instance(s): ${stopped.join(', ')}`);
+      }
     } catch (err) {
       console.error(
         '[tud-desktop] failed to evict leftover desktop instances:',

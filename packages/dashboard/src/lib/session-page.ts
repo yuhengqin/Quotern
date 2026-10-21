@@ -27,6 +27,9 @@ export interface SessionPageSearch {
   sort: SessionSort;
   direction: SessionSortDirection;
   page: number;
+  sessionSource?: string;
+  sessionId?: string;
+  sessionFocus?: string;
 }
 
 const date = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -40,6 +43,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
   const calendar = !preset && date(raw.start) && date(raw.end) && raw.start <= raw.end;
   const instants = calendar && typeof raw.fromTime === 'string' && typeof raw.toTime === 'string'
     && Number.isFinite(Date.parse(raw.fromTime)) && Number.isFinite(Date.parse(raw.toTime)) && Date.parse(raw.fromTime) < Date.parse(raw.toTime);
+  const target = ['codex', 'claude', 'dsh'].includes(String(raw.sessionSource)) && typeof raw.sessionId === 'string' && raw.sessionId.length > 0 && raw.sessionId.length <= 512 && !/[\u0000-\u001f]/.test(raw.sessionId);
   return {
     days: preset ? DASHBOARD_RANGE_DAYS[preset] : Number.isInteger(days) && days >= 1 && days <= 365 ? days : 7,
     ...(preset ? { range: preset } : raw.range === 'custom' && calendar ? { range: 'custom' as const } : {}),
@@ -53,6 +57,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     sort: ['recent', 'tokens', 'cost', 'duration'].includes(String(raw.sort)) ? raw.sort as SessionSort : 'recent',
     direction: raw.direction === 'ascending' ? 'ascending' : 'descending',
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+    ...(target ? { sessionSource: String(raw.sessionSource), sessionId: raw.sessionId as string, ...(typeof raw.sessionFocus === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.sessionFocus) ? { sessionFocus: raw.sessionFocus } : {}) } : {}),
   };
 }
 

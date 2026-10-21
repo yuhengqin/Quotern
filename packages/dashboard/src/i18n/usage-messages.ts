@@ -4,6 +4,8 @@ import type { SupportedLocale } from 'quotern-i18n';
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.activity.pageTitle': ['会话', 'Sessions', 'セッション', '세션'],
+  'usage.activity.notificationTarget': ['通知关联会话 · 已采集记录', 'Session from notification · collected history', '通知のセッション · 収集済み履歴', '알림의 세션 · 수집된 기록'],
+  'usage.activity.notificationMissing': ['当前采集数据中未找到该会话，数据同步后会自动重试。', 'This session is not in the collected data yet. It will be checked again after data sync.', '収集済みデータにこのセッションはありません。同期後に再確認します。', '수집된 데이터에서 이 세션을 찾지 못했습니다. 동기화 후 다시 확인합니다.'],
   'usage.activity.sessionColumn': ['会话', 'Session', 'セッション', '세션'],
   'usage.activity.tokenShare': ['Token 占比', 'Token share', 'Token 比率', 'Token 비율'],
   'usage.activity.sortAscending': ['升序', 'Ascending', '昇順', '오름차순'],

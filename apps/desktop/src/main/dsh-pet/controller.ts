@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { DshPetAction, DshPetState } from '../../shared/dsh-pet.js';
+import type { DshPetAction, DshPetState, SessionNavigationTarget } from '../../shared/dsh-pet.js';
 import type { QuotaState } from '../../shared/quota.js';
 import { DshPetConfigStore } from './config-store.js';
 import { DshPetAssetStore } from './asset-store.js';
@@ -15,7 +15,7 @@ import { atomicPrivateFile } from './storage.js';
 interface Options {
   root: string; runtimeRoot: string; executable: string; appPath: string; packaged: boolean; secrets: SecretStorage;
   getQuota(): QuotaState | null; refreshQuota?(): Promise<void>; showMainWindow(): void; openDirectory(directory: string): Promise<void>;
-  fetch?: (url: string, init: RequestInit) => Promise<Response>; isMainWindowVisible?(): boolean; notify?(title: string, body: string): void;
+  fetch?: (url: string, init: RequestInit) => Promise<Response>; isMainWindowVisible?(): boolean; notify?(title: string, body: string, target?: SessionNavigationTarget): void;
   onChanged?(state: DshPetState): void; roots?: ActivityRoot[] | (() => Promise<ActivityRoot[]>); spawn?: (exe: string, args: string[], options: SpawnOptions) => ChildProcess;
 }
 export class DshPetController {

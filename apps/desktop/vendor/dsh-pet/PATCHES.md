@@ -1,5 +1,7 @@
 # Quotern integration
 
+The generated `runtime/controls.js` is a Quotern-owned backport of the playback receipt, occupancy lock and motion contracts from upstream `cf3ed3c4dd6829b252f352d4c61a18db6fdb26d4` (`src/host/playback.ts`, `lock.ts`, `motion-cue.ts`, `runtime/electron-helper/sprite.js` and `events.js`). It loads after the audited sprite/events and before boot. The host adaptation lives in `src/main/dsh-pet/controls.ts`; it bounds record/wait counts, cancels outstanding records on shutdown and retains the authenticated named pipe. Remote animation URLs and the upstream standalone HTTP server are not imported. The original snapshot and its manifest remain unchanged.
+
 Source snapshot: https://github.com/PC2005-cloud/dsh-pet at `6c5f04321be050525b5cbb7bb8ee5f53e89deb6f` (`0.3.7`). `UPSTREAM.json` records every vendored file and its SHA-256 digest; all entries match the upstream snapshot except the three files carrying the default pet rename below.
 
 Code: MIT, see LICENSE. Upstream media/prompts/source videos permit open-source use and prohibit commercial use. Derived introductions, displays and distribution must credit https://github.com/PC2005-cloud/dsh-pet (see UPSTREAM_README.md).

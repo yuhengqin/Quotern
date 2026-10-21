@@ -1,4 +1,4 @@
-import type { ActivityEvent, ModelRef, RpcRequest, RpcResponse } from '../../shared/dsh-pet.js';
+import type { ActivityEvent, ModelRef, RpcRequest, RpcResponse, SessionNavigationTarget } from '../../shared/dsh-pet.js';
 import type { QuotaState } from '../../shared/quota.js';
 import type { DshPetConfigStore } from './config-store.js';
 import type { DshPetAssetStore } from './asset-store.js';
@@ -6,12 +6,13 @@ import type { DshPetMemoryStore } from './memory-store.js';
 import type { DshPetModelService, ModelMessage } from './model-service.js';
 import type { MemeEntry, PetInstance } from './vendor.js';
 import { toDshPetBalance } from './balance.js';
+import { DshPetControls, motionCue, type PlaybackStatus } from './controls.js';
 
 interface Options {
   config: DshPetConfigStore; assets: DshPetAssetStore; memory: DshPetMemoryStore; models: DshPetModelService;
   getQuota(): QuotaState | null; quotaSource(): string | null; refreshQuota?(): Promise<void>;
   reload(): Promise<void>; showMainWindow(): void; now?(): number; onChanged?(): void;
-  notify?(title: string, body: string): void; isMainWindowVisible?(): boolean;
+  notify?(title: string, body: string, target?: SessionNavigationTarget): void; isMainWindowVisible?(): boolean;
 }
 const json = (body: unknown, status = 200): RpcResponse => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const failure = (reason: string, message?: string) => ({ ok: false, reason, ...(message ? { message } : {}) });
@@ -23,6 +24,7 @@ export class DshPetService {
   private readonly lifetime = new AbortController();
   private readonly poll;
   private readonly work;
+  private readonly controls;
   private readonly conversations = new Map<string, Promise<unknown>>();
   private readonly whispers = new Map<string, AbortController>();
   private readonly events = new Set<string>();
@@ -37,6 +39,7 @@ export class DshPetService {
   constructor(private readonly options: Options) {
     this.poll = new options.config.vendor.PollStateStore();
     this.work = new options.config.vendor.WorkStatusStore();
+    this.controls = new DshPetControls(() => this.now(), (pet, leaf, data) => this.poll.writePet(pet, leaf, data));
   }
   private now(): number { return this.options.now?.() ?? Date.now(); }
   start(): void { if (!this.timer && !this.lifetime.signal.aborted) { void this.refreshAutomatic(); this.timer = setInterval(() => { void this.refreshAutomatic().catch(() => {}); }, 1000); this.timer.unref(); } }
@@ -50,25 +53,58 @@ export class DshPetService {
     const method = request.method, route = rawRoute.split('?')[0]!;
     const cfg = this.options.config.read(), vendor = this.options.config.vendor;
     if (method === 'GET' && route === '/config') return json(cfg);
-    if (method === 'GET' && route === '/state') return json({ ...this.poll.read(), configVersion: this.options.config.version() });
+    if (method === 'GET' && route === '/state') { this.controls.sweep(); return json({ ...this.poll.read(), configVersion: this.options.config.version() }); }
+    const playback = /^\/playback\/([a-zA-Z0-9-]+)(\/report)?$/.exec(route);
+    if (playback) {
+      const record = this.controls.get(playback[1]!);
+      if (!record) return json(failure('playback-not-found'), 404);
+      if (method === 'GET' && !playback[2]) { const result = await this.controls.query(record.playbackId, url.searchParams, signal); return json(result.body, result.status); }
+      if (method === 'POST' && playback[2]) {
+        if (url.searchParams.get('pet') !== record.petId || !['playing', 'ended', 'failed', 'cancelled'].includes(String(body.status)) || (body.reason !== undefined && typeof body.reason !== 'string')) return json(failure('bad-request'), 400);
+        return json({ ok: true, ...this.controls.report(record.playbackId, body.status as PlaybackStatus, body.reason as string | undefined) });
+      }
+      return json(failure('not-found'), 404);
+    }
     if (method === 'GET' && /^\/(thumb|pic|font)\//.test(route)) { const asset = await this.options.assets.resolve(rawRoute); return asset ? { status: 200, ...asset } : json(failure('not-found'), 404); }
     if (method === 'POST' && route === '/open-host') { this.options.showMainWindow(); return json({ ok: true }); }
     if (method === 'POST' && route === '/reload') { this.scheduleReload(); return json({ reloading: true }); }
     if (method === 'POST' && route === '/balance') { await this.refreshBalance(true); return json({ ok: true }); }
     if (method === 'POST' && route === '/pet-display') {
       if (typeof body.id !== 'string' || !['web', 'desktop', 'both', 'none'].includes(String(body.display))) return json(failure('bad-request'), 400);
+      if (body.display !== 'desktop' && body.display !== 'both') this.controls.release(body.id, { force: true });
       await this.options.config.setDisplay(body.id, body.display as 'web' | 'desktop' | 'both' | 'none');
       this.scheduleReload(); this.options.onChanged?.(); return json(this.options.config.read());
     }
     const requested = url.searchParams.get('pet') ?? '';
     const active = String(vendor.flattenPetList(cfg)[0]?.id ?? '');
-    if (method === 'POST' && route === '/anim') {
-      const result = vendor.decideAnim({ cfg, requested, active, name: body.name });
-      if (result.ok) this.poll.writePet(result.petId, 'anim', { name: result.name });
-      return json(result);
-    }
     const id = requested || active, instance = vendor.findPetInstance(cfg, id);
     if (!instance) return json(failure('pet-not-found'), 404);
+    if (method === 'POST' && ['/lock', '/position', '/throw'].includes(route) && !requested) return json(failure('pet-required'), 400);
+    if (method === 'POST' && route === '/lock/release') return json(this.controls.release(id, body));
+    if (method === 'POST' && ['/anim', '/broadcast', '/lock', '/position', '/throw'].includes(route)) {
+      if (!['desktop', 'both'].includes(String(instance.pet.display))) return json(failure('pet-not-displayed'));
+      const surface = url.searchParams.get('surface');
+      if (surface && surface !== 'desktop' && surface !== 'any') return json(failure('surface-unavailable'), 400);
+      if (route === '/lock') { this.whispers.get(id)?.abort(); return json(this.controls.acquire(id, body)); }
+      const gate = this.controls.gate(id, url.searchParams.get('lock'));
+      if (!gate.ok) return json(gate);
+      if (route === '/position' || route === '/throw') {
+        const result = motionCue(route, body);
+        if (result.ok) { const { ok: _ok, ...cue } = result; this.poll.writePet(id, route.slice(1), cue); }
+        return json({ ...result, petId: id });
+      }
+    }
+    if (method === 'POST' && route === '/anim') {
+      const result = vendor.decideAnim({ cfg, requested, active, name: body.name });
+      if (body.facing !== undefined && body.facing !== 'left' && body.facing !== 'right') return json(failure('bad-request'), 400);
+      if (result.ok) {
+        const record = this.controls.create(result.petId, result.name);
+        if (!record) return json(failure('busy'), 429);
+        this.poll.writePet(result.petId, 'anim', { name: result.name, playbackId: record.playbackId, ...(body.facing ? { facing: body.facing } : {}) });
+        return json({ ...result, playbackId: record.playbackId });
+      }
+      return json(result);
+    }
     if (method === 'GET' && route === '/chat') { const rounds = Number(instance.conf.chatMemoryRounds ?? 5); return json({ ok: true, messages: this.options.memory.get(instance.entry, id, rounds), rounds }); }
     if (method === 'POST' && route === '/broadcast') {
       if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 2000) return json(failure('bad-request'), 400);
@@ -132,7 +168,7 @@ export class DshPetService {
       const { text: _text, ...action } = result; return action;
     } finally { this.whispers.delete(id); }
   }
-  private notification(title: string, body: string): void { if (this.options.config.read().main?.notificationsEnabled && !this.options.isMainWindowVisible?.()) this.options.notify?.(title, body); }
+  private notification(title: string, body: string, target?: SessionNavigationTarget): void { if (this.options.config.read().main?.notificationsEnabled && !this.options.isMainWindowVisible?.()) this.options.notify?.(title, body, target); }
   private ownActivity(id: string, state: ActivityEvent['state']): void { this.onActivity({ id: `pet-${++this.seq}`, source: 'pet', sessionId: id, timestamp: new Date(this.now()).toISOString(), state, evidence: 'model-response', terminal: state === 'success' || state === 'error' }); }
   onActivity(event: ActivityEvent): void {
     if (this.lifetime.signal.aborted || this.events.has(event.id)) return;
@@ -143,7 +179,7 @@ export class DshPetService {
     else if (event.state) { this.work.setState(key, event.state, ++this.seq); if (event.task !== undefined) this.work.setTask(key, event.task); this.activity.set(key, { at, expires: now + (event.terminal ? (event.state === 'result' ? 10_000 : 60_000) : 120_000) }); }
     else { this.work.clear(key); this.activity.delete(key); }
     this.publishWork();
-    if (event.source !== 'pet' && (event.state === 'waiting' || event.terminal && ['success', 'error'].includes(event.state ?? ''))) this.notification(event.state === 'waiting' ? 'Agent 需要确认' : event.state === 'success' ? 'Agent 本轮完成' : 'Agent 发生错误', `${event.source} · ${event.evidence}`);
+    if (event.source !== 'pet' && (event.state === 'waiting' || event.terminal && ['success', 'error'].includes(event.state ?? ''))) this.notification(event.state === 'waiting' ? 'Agent 需要确认' : event.state === 'success' ? 'Agent 本轮完成' : 'Agent 发生错误', `${event.source} · ${event.evidence}`, ['codex', 'claude', 'dsh'].includes(event.source) ? { source: event.source as SessionNavigationTarget['source'], sessionId: event.sessionId } : undefined);
     this.options.onChanged?.();
   }
   private publishWork(): void { const { state, task } = this.work.snapshot(); const data = { state, task }, signature = JSON.stringify(data); if (signature !== this.workSignature) { this.workSignature = signature; this.poll.writeSection('workStatus', data); } }
@@ -161,11 +197,11 @@ export class DshPetService {
     const seconds = Number(object(cfg.main?.eventsRefreshSec).balance ?? 1800);
     if (pets.some(pet => pet.balanceEnabled) && now - this.balanceAt >= seconds * 1000) { this.balanceAt = now; await this.refreshBalance(false); }
     for (const pet of pets) {
-      const id = String(pet.id), instance = vendor.findPetInstance(cfg, id); if (!instance || !pet.whisperEnabled) continue;
+      const id = String(pet.id), instance = vendor.findPetInstance(cfg, id); if (!instance || !pet.whisperEnabled || this.controls.locked(id)) continue;
       const interval = Number(object(instance.conf.eventsRefreshSec).whisper ?? 300) * 1000;
       if (now - (this.whisperAt.get(id) ?? -Infinity) >= interval && (this.options.models.publicState().defaultModel || modelRef(instance.conf.whisperModel))) { this.whisperAt.set(id, now); void this.whisper(id, instance).catch(() => {}); }
     }
   }
-  dispose(): void { this.lifetime.abort(); if (this.timer) clearInterval(this.timer); if (this.reloadTimer) clearTimeout(this.reloadTimer); this.options.models.dispose(); }
+  dispose(): void { this.controls.dispose(); this.lifetime.abort(); if (this.timer) clearInterval(this.timer); if (this.reloadTimer) clearTimeout(this.reloadTimer); this.options.models.dispose(); }
   async drain(): Promise<void> { await Promise.allSettled([...this.conversations.values()]); }
 }

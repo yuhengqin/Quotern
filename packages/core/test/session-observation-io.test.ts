@@ -41,6 +41,11 @@ test('session ledger persists final call snapshots, retries safely and serves fi
   await syncSessionSource(directory, 'claude', discovered);
   assert.equal((await (await app.request('/functions/tud-session-activity?fromDate=2026-10-16&toDate=2026-10-16&sources=claude')).json()).data.sessions[0].sessionTitle, '修复 导出功能');
   assert.equal(result.sessions[0].tokens, 30); assert.equal(result.otherTokens, 1); assert.equal(result.sessions[0].context.usedTokens, null);
+  const focused = await (await app.request('/functions/tud-session-activity?fromDate=2026-10-20&toDate=2026-10-21&sessionSource=claude&sessionId=fixture-session')).json();
+  assert.equal(focused.data.sessions[0]?.sessionId, 'fixture-session', 'notification lookup must find a collected session outside the page date window');
+  const wrongSource = await (await app.request('/functions/tud-session-activity?sessionSource=codex&sessionId=fixture-session')).json();
+  assert.equal(wrongSource.data.sessions.length, 0, 'the same id in another source must not match');
+  assert.equal((await app.request('/functions/tud-session-activity?sessionSource=claude')).status, 400);
   assert.equal((await app.request('/functions/tud-session-activity?sources=unknown')).status, 400);
   assert.equal((await app.request('/functions/tud-session-activity?fromDate=broken&toDate=2026-10-16')).status, 400);
   assert.equal((await app.request('/functions/tud-session-activity', { headers: { Origin: 'https://evil.example' } })).status, 403);

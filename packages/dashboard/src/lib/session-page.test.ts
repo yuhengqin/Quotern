@@ -11,6 +11,14 @@ test('session navigation freezes the selected day and overview Agent scope', () 
   assert.deepEqual(search.scopeSources, ['codex', 'claude']);
 });
 
+test('notification session targets retain an exact source/id pair across URL restoration', () => {
+  const search = parseSessionPageSearch({ sessionSource: 'codex', sessionId: 'session.一 & 2' });
+  assert.equal(search.sessionSource, 'codex');
+  assert.equal(search.sessionId, 'session.一 & 2');
+  assert.equal(parseSessionPageSearch({ sessionSource: 'codex' }).sessionId, undefined);
+  assert.equal(parseSessionPageSearch({ sessionSource: 'arbitrary', sessionId: 'id' }).sessionId, undefined);
+});
+
 test('session navigation preserves exact rolling instants through a serialized URL state', () => {
   const dateRange = { start: '2026-10-18', end: '2026-10-19', fromTime: '2026-10-18T02:14:00.000Z', toTime: '2026-10-19T02:14:00.000Z' };
   const search = createSessionPageSearch({ days: 1, selectedDate: null, dateRange, sources: [] });

@@ -138,6 +138,22 @@ Windows 设置 → 应用 → **独立 dsh-pet**。默认关闭，与下面的�
 
 聊天使用用户配置的独立 OpenAI 兼容 API，密钥由系统安全存储加密；不会读取 DSH 或订阅登录凭证。聊天和开启的自动碎碎念会使用模型额度；未配置模型时其它行为仍可用。聊天与碎碎念可分别选择模型，首选失败最多回落到宠物默认模型一次；操作结果显示实际服务商/模型。聊天串行、按实例保存历史，可单独清除。停用/退出/更新会取消未完成请求。
 
+播放回执、占用锁和位置/抛掷控制按上游 `cf3ed3c4dd6829b252f352d4c61a18db6fdb26d4` 定向接入，原始 vendor 快照保持 `6c5f043`。接口沿用 `window.tud.dshPet.dispatch({type:'request',method,path,body})` 与 helper 的鉴权管道，不增加 HTTP 监听；`body` 为 JSON 字符串，返回 `RpcResponse`，业务结果在其 JSON `body` 中。控制仅作用于当前唯一桌面实例，不接受远程素材 URL。
+
+| 路径（省略 `/dsh-pet-7340`） | 行为 |
+| --- | --- |
+| `POST /anim?pet=main`，`{name,facing?}` | 播放池内动作，返回 `playbackId`；可指定 `left/right`，文字动作仍保持可读朝向 |
+| `GET /playback/<id>` | 查询 `accepted/playing/ended/failed/cancelled`；`accepted` 仅表示受理，播放结果由真实 video 上报 |
+| `GET /playback/<id>?wait=ended,failed,cancelled&timeout=10000` | 等待回执，wait/timeout 成对，最长 10 秒；断开与停用取消等待，终态不可被迟到报告覆盖 |
+| `POST /lock?pet=main`，`{ttl?}` 或 `{lockId,ttl?}` | 占用/续期；默认 120 秒、范围 1 秒至 30 分钟，返回 `lockId/expiresAt` |
+| `POST /lock/release?pet=main`，`{lockId}` | 释放；renderer 的 `{force:true}` 表示用户接管，点击/拖拽/菜单优先于自动控制 |
+| `POST /position?pet=main&lock=<id>`，`{x,y,mode,duration?}` | 中心坐标归一化为 0–1，mode 为 instant/spring/line；line 的 duration 为 0–120000ms，renderer 再夹到真实显示器工作区 |
+| `POST /throw?pet=main&lock=<id>`，`{angle,power}` | 0°向右、90°向上，power 为正且不超过 100；复用原生重力、反弹、摩擦及软限速 |
+
+未占用时无需 `lock` 参数，原有手动操作保留。占用期间随机动画、漫游、自动余额展示、自动碎碎念与工作气泡让路，工作状态仍持续记录；到期自动解冻，旧编号明确返回 `lock-lost`，用户操作可提前接管。回执最多保留 512 条，终态保留 60 秒；120 秒没有后续播放报告的活跃记录转为 `failed/renderer-timeout`。运行时适配与生成代码测试位于 `scripts/dsh-pet-controls-*`，原生检查使用全新私有目录，避免正式采集与模型调用。
+
+Agent 通知点击会保留 `source + sessionId`，主窗口重建后经挂载读取与按编号确认消费，再进入共享 `/sessions` 页自动展开精确记录。定向查询读取现有采集缓存，在 `localCollectSince` 范围内查历史，不触发补采集，也不依靠标题/子串匹配。未采集、来源身份无法对应或超出采集起点时明确提示未找到，并保留目标等待常规同步重读；宠物自身聊天通知仍只打开主窗口。
+
 额度来源需要明确选择，直接使用 Quotern 新鲜读数；真实余额和窗口已用百分比分别显示，缺失或陈旧不补零。工作状态只读现有 Codex、Claude、DSH 的新日志，不写 hooks 或统计数据；首次读取只记基线。各来源实际观测状态与缺失原因见设置；Codex 普通完成仅表示“有结果”，不会据此庆祝目标成功。没有明确审批/错误事件时不声称已接入对应档位。过期状态会解除工作循环。
 
 辅助模式在正常应用初始化前分流，使用安装的 Electron、独立 userData 和带启动令牌的随机 Windows 命名管道，无 HTTP 回调端口。关闭开关、退出和更新均回收辅助进程；崩溃显示错误，需手动重试。硬件加速和 DPI 修正仅用于辅助进程。正式资源位于 `resources/dsh-pet/`，构建仅读取固定 vendor 快照，不依赖 `reference/`。

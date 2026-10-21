@@ -117,3 +117,27 @@ corepack pnpm exec node .superpowers/sdd/helper-interactions.cjs apps/desktop/re
 最终 25/25 项 helper 检查通过，Desktop 类型检查、完整 Desktop 构建、本地未签名 win-unpacked 打包均退出 0。完整 `corepack pnpm test`（含全仓构建）退出 0：14 个 runner 合计 **1744 tests，1709 pass、35 skip、0 fail**；Desktop 合计 **731 tests，711 pass、20 skip、0 fail**。原生 helper smoke 和打包主应用 smoke 再次通过，包括两只宠物、106 个素材解析、输入状态、开关、聊天记忆、加密脱敏、旧宠物并存和正常退出。未安装、未发布；真实 Windows 全桌面卡顿改善须在重启开发实例加载新生成资源后由用户确认。
 
 本地调查及回归证据在实现 worktree 的 `.superpowers/sdd/2026-10-19-dsh-pet-desktop/`：`pointer-build-{red,green}.log`、`pointer-busy-red.log`、`pointer-{build-final,package-final,helper-final,workspace-tests,typecheck,native,packaged}.log` 与对应结果目录。`pointer-profile-*` 是隔离调查 fixture，未改动用户 profile；Windows 截图失败后停止 OS 自动化，没有将其当作物理鼠标性能验证成功。
+
+## 控制回执与通知会话定位（2026-10-21）
+
+基于 `86742ba`，定向接入上游 `cf3ed3c4dd6829b252f352d4c61a18db6fdb26d4` 的播放回执、可续期占用锁、位置与抛掷控制；原始 vendor 快照保持 `6c5f043`，通过 Quotern host 与生成的 `runtime/controls.js` 适配。通知保留 `source + sessionId`，经主进程 pending/ACK 在窗口重建后定位共享会话页，读取已采集历史并展开精确记录；未找到时不替换成相似会话。接口和边界见 [Desktop README](../../apps/desktop/README.md#独立-dsh-pet)。
+
+独立审查发现并修复三条时序问题，均先复现再增加回归：终态回执跨清理时间的等待异常、锁期间工作状态归零导致解锁后动画停顿，以及用户接管后迟到的状态快照重新冻结宠物。生成运行时测试还覆盖首拉前已有指令、真实媒体事件成功/失败/替换、屏幕边界和拖拽优先级。
+
+最终验证环境为 Windows、Node `v24.14.0`、Corepack pnpm `11.1.2`。以下命令均退出 0：
+
+| 检查 | 结果 |
+| --- | --- |
+| `corepack pnpm test`（含全仓构建） | 1805 tests：1770 pass、35 skipped、0 fail |
+| `corepack pnpm --filter quotern-desktop typecheck` | 通过 |
+| `corepack pnpm --filter quotern-dashboard exec tsc --noEmit` | 通过 |
+| `git diff --check` | 通过 |
+
+35 项跳过包括符号链接 2、POSIX 开发实例/运行时 9、Windows 打开文件覆盖限制 1、Desktop 平台限定 17、vendor dsh-pet 源码守卫 3、Linux systemd 3。三个 vendor 守卫涉及浏览器余额气泡、配置唯一填充点、宠物固定双端一致性，这些静态守卫本轮没有执行。完整输出在本工作区 `.quotern-dev/control-final-verification.log`。
+
+新增两份按需运行的原生验收脚本，均使用全新私有 profile/fixture，无正式日志根目录、模型服务或额度账号：
+
+- `apps/desktop/scripts/dsh-pet-controls-smoke.ts`：真实 Electron helper、透明视频、鉴权管道与 CDP 输入，**10/10 通过**。覆盖锁暂停两路 video、ended/failed/替换回执、instant/line/spring 位置、抛掷物理、指针接管和到期解冻。证据：`.quotern-dev/controls-acceptance-20261021-g/result.json`、`helper.png`。
+- `apps/desktop/scripts/dsh-pet-navigation-smoke.ts`：真实 Notification 对象的 click 回调、Desktop preload、React 路由和 Core 缓存，**4/4 通过**。覆盖 renderer 挂载前点击定位旧会话、重复点击重开详情、窗口销毁重建后连续点击保留最新目标、缺失目标不回退相似记录。证据：`.quotern-dev/navigation-acceptance-20261021-b/result.json`、`missing-session.png`。
+
+原生检查脚本及 helper 已正常退出，按其专属启动路径查询未发现遗留 Electron 进程。通知检查拦截 `show()` 并在真实 Notification 对象上触发 `click`，**不包含 Windows 系统 toast 实际投递和人工点击**；CDP 指针输入也不等同于物理鼠标手感或跨应用穿透验收。未重新验证多屏/DPI/热插拔、签名安装包或发布，未使用付费外部模型、未改动正式用户配置和采集数据。

@@ -32,6 +32,8 @@
 
 ### 业务内复用入口
 
+通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动展开已有会话；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史；缺记录时保留目标等待常规同步。Dashboard 与 Desktop 使用同一页面和详情行，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与展开行为保留。
+
 | 能力 | 入口与使用点 | 适用边界及共享方式 |
 | --- | --- | --- |
 | 总览 Agent 多选 | [DashboardFilter.ToolChannelSelect](../packages/dashboard/src/components/DashboardFilter.tsx)，总览及 ShareActivityModal 使用 | 空数组表示全部。Desktop 总览/托盘使用自己的 DashboardFilter；共享分享弹窗使用 Dashboard 版本 |

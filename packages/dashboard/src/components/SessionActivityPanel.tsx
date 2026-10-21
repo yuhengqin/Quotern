@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
 import { ArrowDown, ArrowDownUp, ArrowUp, ChevronUp, X } from 'lucide-react';
@@ -176,6 +176,23 @@ export function SessionBrowser({ rows, usage, value, onChange }: { rows: Session
     </div>
     <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => onChange({ page: result.page - 1 })}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => onChange({ page: result.page + 1 })}>{t('usage.activity.nextPage')}</Button></div></footer>
   </section>;
+}
+
+/** A notification is an exact identity lookup, independent of list filters and pagination. */
+export function FocusedSession({ rows, source, sessionId, focusKey }: { rows: SessionActivity[]; source: string; sessionId: string; focusKey?: string }) {
+  const { t } = useTranslation();
+  const container = useRef<HTMLDivElement>(null);
+  const row = rows.find(value => value.source === source && value.sessionId === sessionId);
+  useLayoutEffect(() => {
+    const details = container.current?.querySelector('details');
+    if (!details || !row) return;
+    details.open = true;
+    details.querySelector('summary')?.focus({ preventScroll: true });
+    details.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+  }, [row?.source, row?.sessionId, focusKey]);
+  return <div ref={container} className="rounded-2xl border border-separator bg-surface p-4">
+    {row ? <SessionRows rows={[row]} showTokenShare={false} /> : <p role="status" className="py-6 text-sm text-muted">{t('usage.activity.notificationMissing')}</p>}
+  </div>;
 }
 
 function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): void }) {

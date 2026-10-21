@@ -28,6 +28,7 @@ import { AchievementProvider } from '../../../../../packages/dashboard/src/achie
 import { AchievementOverlays } from '../../../../../packages/dashboard/src/achievements/AchievementOverlays';
 import { updateAchievements } from '@/lib/api';
 import { TITLEBAR_HEIGHT } from '../../shared/window-chrome';
+import { parseSessionPageSearch } from '../../../../../packages/dashboard/src/lib/session-page';
 
 /**
  * Publish the shared title-bar height to CSS so `.desktop-window-drag-region`
@@ -77,6 +78,30 @@ export function AppShell() {
       setSettingsOpen(true);
     });
   }, []);
+
+  useEffect(() => {
+    const api = window.tud?.dshPet;
+    if (typeof api?.getNavigation !== 'function') return;
+    let disposed = false, running = false, again = false;
+    const consume = () => {
+      again = true;
+      if (running) return;
+      running = true;
+      void (async () => {
+        while (again && !disposed) {
+          again = false;
+          const target = await api.getNavigation();
+          if (!target || disposed) continue;
+          setSettingsOpen(false); setAboutOpen(false);
+          await navigate({ to: '/sessions', search: parseSessionPageSearch({ sessionSource: target.source, sessionId: target.sessionId, sessionFocus: target.navigationId }), resetScroll: false });
+          if (!disposed) await api.acknowledgeNavigation(target.navigationId);
+        }
+      })().catch(() => {}).finally(() => { running = false; });
+    };
+    const unsubscribe = api.onNavigation(consume);
+    consume();
+    return () => { disposed = true; unsubscribe(); };
+  }, [navigate]);
 
   useEffect(() => {
     if (typeof window.tud?.onRuntimeNotice !== 'function') return;

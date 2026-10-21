@@ -5,7 +5,7 @@ import { History as RotateCcwClock } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { BackToUsageLink } from '../components/BackToUsageLink';
 import { DashboardTimeRangeControl } from '../components/DashboardTimeRangeControl';
-import { SessionAttributionSummary, SessionBrowser, SessionCoverageNote } from '../components/SessionActivityPanel';
+import { FocusedSession, SessionAttributionSummary, SessionBrowser, SessionCoverageNote } from '../components/SessionActivityPanel';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { useRollingDayRange } from '@/hooks/useRollingDayRange';
 import { isCliBackend } from '@/lib/api';
@@ -25,7 +25,8 @@ export function SessionsPage() {
   } : null), [rollingRange, search.start, search.end, search.fromTime, search.toTime]);
   const timeControl = sessionTimeRangeControl(search);
   const local = isCliBackend();
-  const { data, error } = useSessionActivity(search.days, null, dateRange, search.scopeSources, local);
+  const target = search.sessionSource && search.sessionId ? { source: search.sessionSource, sessionId: search.sessionId } : undefined;
+  const { data, error } = useSessionActivity(search.days, null, dateRange, search.scopeSources, local, target);
   const rows = useMemo(() => data ? sessionPageRows(data, search.group) : [], [data, search.group]);
   const group = data?.billing.find(row => sessionAttributionKey(row) === search.group);
   const update = (patch: Partial<SessionPageSearch>) => {
@@ -46,9 +47,12 @@ export function SessionsPage() {
       <div className="flex items-center gap-2"><RotateCcwClock className="size-6 text-accent" aria-hidden /><h1 className="text-2xl font-semibold tracking-tight">{t('usage.activity.pageTitle')}</h1></div>
       {search.scopeSources.length > 0 && <p className="mt-2 text-xs text-muted">{t('usage.activity.overviewScope', { sources: new Intl.ListFormat(i18n.resolvedLanguage).format(search.scopeSources.map(sourceLabel)) })}</p>}
     </header>
-    <div className="mb-4">
+    {target ? <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs text-muted">{t('usage.activity.notificationTarget')} · {sourceLabel(target.source)}</p>
+      <Button size="sm" variant="tertiary" onPress={() => update({ sessionSource: undefined, sessionId: undefined })}>{t('usage.activity.allSessions')}</Button>
+    </div> : <div className="mb-4">
       <DashboardTimeRangeControl value={timeControl.value} customRange={timeControl.customRange} onChange={changeTimeRange} onCustomRangeChange={changeTimeRange} />
-    </div>
+    </div>}
     {!local ? <p role="status" className="py-8 text-sm text-muted">{t('usage.activity.localOnly')}</p> : <>
       {error && <p role="status" className="mb-4 text-xs text-warning">{t('usage.activity.readError')} {data ? t('usage.activity.staleReading') : t('usage.activity.unavailable')}</p>}
       {search.group && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-xs">
@@ -56,7 +60,7 @@ export function SessionsPage() {
         <Button size="sm" variant="tertiary" onPress={() => update({ group: undefined })}>{t('usage.activity.allSessions')}</Button>
       </div>}
       {!data ? <p role="status" className="py-12 text-center text-sm text-muted">{t(error ? 'usage.activity.unavailable' : 'usage.activity.loading')}</p> : <>
-        <SessionBrowser rows={rows} usage={search.group ? undefined : data} value={search} onChange={update} />
+        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} /> : <SessionBrowser rows={rows} usage={search.group ? undefined : data} value={search} onChange={update} />}
         <SessionCoverageNote snapshot={data} />
       </>}
     </>}

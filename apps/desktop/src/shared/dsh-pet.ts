@@ -8,6 +8,8 @@ export interface ModelSettings { providers: Array<Omit<ProviderPatch, 'apiKey'> 
 export interface ModelResult { ok: boolean; text?: string; image?: string; reason?: string; message?: string; provider?: string; model?: string; fallback: boolean }
 export interface SourceCapabilities { source: string; states: WorkStatusState[]; reason: string | null; lastEventAt: string | null }
 export interface ActivityEvent { id: string; source: string; sessionId: string; turnId?: string; timestamp: string; state: WorkStatusState | null; evidence: string; terminal?: boolean; task?: string | null; taskOnly?: boolean }
+export interface SessionNavigationTarget { source: 'codex' | 'claude' | 'dsh'; sessionId: string }
+export interface SessionNavigation extends SessionNavigationTarget { navigationId: string }
 export interface DshPetState { enabled: boolean; status: 'disabled' | 'starting' | 'running' | 'error'; error: string | null; config: MergedConfig; models: ModelSettings; quotaSource: string | null; sources: SourceCapabilities[] }
 export type DshPetAction =
   | { type: 'set-enabled'; enabled: boolean } | { type: 'retry' }
@@ -22,3 +24,6 @@ export type DshPetAction =
 export const DSH_PET_GET = 'dsh-pet:get';
 export const DSH_PET_ACTION = 'dsh-pet:action';
 export const DSH_PET_CHANGED = 'dsh-pet:changed';
+export const DSH_PET_NAVIGATION = 'dsh-pet:navigation';
+export const DSH_PET_NAVIGATION_GET = 'dsh-pet:navigation-get';
+export const DSH_PET_NAVIGATION_ACK = 'dsh-pet:navigation-ack';

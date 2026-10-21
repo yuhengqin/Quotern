@@ -92,6 +92,10 @@ async function handleBridgeRequest(request) {
   await writeFile(runtimeFile, helper);
   await writeFile(preloadFile, preload);
   await writeFile(spriteFile, sprite);
+  await cp(path.join(desktopRoot, 'scripts/dsh-pet-controls-runtime.js'), path.join(output, 'runtime/controls.js'));
+  const htmlFile = path.join(output, 'runtime/index.html');
+  const html = await readFile(htmlFile, 'utf8');
+  await writeFile(htmlFile, replaceRequired(html, '<script src="./renderer.js"></script>', '<script src="./controls.js"></script>\n    <script src="./renderer.js"></script>'));
   await build({ entryPoints: [path.join(desktopRoot, 'src/main/dsh-pet/helper-adapter.ts')], outfile: path.join(output, 'runtime/quotern-adapter.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',
     plugins: [{ name: 'quotern-window-label', setup(bundle) {

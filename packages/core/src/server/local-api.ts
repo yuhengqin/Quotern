@@ -165,13 +165,17 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.get('/functions/tud-session-activity', async c => {
     if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);
-    const bounds = readDateBounds(c);
+    const targetSource = c.req.query('sessionSource'), targetId = c.req.query('sessionId');
+    const targeted = targetSource !== undefined || targetId !== undefined;
+    if (targeted && (!['codex', 'claude', 'dsh'].includes(targetSource ?? '') || !targetId || targetId.length > 512 || /[\u0000-\u001f]/.test(targetId))) return c.json({ success: false, message: 'INVALID_SESSION_TARGET', data: null }, 400);
+    // Notification lookup reads already-collected history; it never starts collection or widens localCollectSince.
+    const bounds = targeted ? undefined : readDateBounds(c);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
-    const sources = c.req.query('sources')?.split(',').map(source => normalizeSyncSource(source));
+    const sources = targeted ? [targetSource!] : c.req.query('sources')?.split(',').map(source => normalizeSyncSource(source));
     if (sources?.some(source => !source)) return c.json({ success: false, message: 'INVALID_SOURCE', data: null }, 400);
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 7));
     const window = resolveAggregateWindow(days, resolveLocalCollectSince(deps.getConfig()), undefined, bounds);
-    const fromDate = window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
+    const fromDate = targeted ? window.statsSinceDate : window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
     const rows = deps.bucketStore.getRows().filter(row => {
       const date = localDateAndHour(row.hour_start).date;
       return date >= fromDate && date <= window.toDate && inTimeBounds(row.hour_start, bounds) && (!sources?.length || (sources as string[]).includes(row.source));
@@ -201,6 +205,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     for (const row of [...snapshot.sessions.map(session => session.billing), ...snapshot.billing]) {
       if (row.accountRef && labels.has(row.accountRef)) row.accountLabel = [...labels.get(row.accountRef)!].join(' / ');
     }
+    if (targeted) snapshot.sessions = snapshot.sessions.filter(session => session.source === targetSource && session.sessionId === targetId);
     return c.json(ok(snapshot));
   });
 

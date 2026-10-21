@@ -14,19 +14,11 @@ function Field({ label, children }: { label: string; children: ReactNode }) { re
 function Group({ title, children, open = false }: { title: string; children: ReactNode; open?: boolean }) { return <details open={open || undefined} className="rounded-lg border border-default-200 p-3"><summary className="cursor-pointer text-sm font-medium text-foreground">{title}</summary><div className="mt-3 space-y-3">{children}</div></details>; }
 function Section({ title, children }: { title: string; children: ReactNode }) { return <section aria-label={title} className="space-y-3">{children}</section>; }
 
-function AnimationPreview({ name, requested }: { name: string; requested: boolean }) {
+function AnimationPreview({ name }: { name: string }) {
   const { t } = useTranslation();
-  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [failed, setFailed] = useState(false);
-  const video = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const change = () => { setReducedMotion(query.matches); if (query.matches) video.current?.pause(); };
-    query.addEventListener('change', change);
-    return () => query.removeEventListener('change', change);
-  }, []);
   return <div className="flex h-48 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800">
-    {failed ? <p role="status" className="px-4 text-center text-xs text-muted">{t('desktop.dshPet.previewUnavailable')}</p> : <video ref={video} src={dshPetPreviewUrl(name)} width={320} height={180} className="h-full w-full object-contain" aria-label={name} autoPlay={requested || !reducedMotion} loop muted playsInline preload="metadata" onError={() => setFailed(true)} />}
+    {failed ? <p role="status" className="px-4 text-center text-xs text-muted">{t('desktop.dshPet.previewUnavailable')}</p> : <video src={dshPetPreviewUrl(name)} width={320} height={180} className="h-full w-full object-contain" aria-label={name} autoPlay loop muted playsInline preload="metadata" onError={() => setFailed(true)} />}
   </div>;
 }
 type SavedFieldProps = { value: string | number; revision: number; onSave: (value: string) => Promise<unknown> };
@@ -120,7 +112,7 @@ export function DshPetSettingsCard({ active = true, headerAction }: { active?: b
     {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
     {feedback && <p role={failed ? 'alert' : 'status'} className={`break-words text-xs ${failed ? 'text-danger' : 'text-success'}`}>{feedback}</p>}
     <Section title={text('controls')}>
-      {active && <AnimationPreview key={`${animation}:${previewRevision}`} name={animation} requested={previewRevision > 0} />}
+      {active && <AnimationPreview key={`${animation}:${previewRevision}`} name={animation} />}
       <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-6" role="group" aria-label={t('desktop.pet.previewActions')}>
         {DSH_PET_PREVIEW_ACTIONS.map(item => <button type="button" key={item.name} aria-pressed={animation === item.name} onClick={() => { setAnimation(item.name); setPreviewRevision(value => value + 1); }} className={`rounded-md px-1 py-1.5 text-[11px] focus-visible:outline-2 focus-visible:outline-accent ${animation === item.name ? 'bg-accent/15 font-semibold text-foreground' : 'text-muted hover:bg-default-100'}`}>{t(item.labelKey)}</button>)}
       </div>

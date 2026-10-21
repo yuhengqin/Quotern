@@ -20,11 +20,12 @@ const until = async (predicate, label) => {
   }
   throw Error(`Timed out: ${label}`);
 };
-const start = async (name, userData = profile) => {
+const start = async (name, userData = profile, reducedMotion = 'reduce') => {
   const probe = await launchProbe(executable, path.join(directory, name), { args: [desktop], env: { QUOTERN_DESKTOP_USER_DATA: userData } });
   try {
     const page = await probe.connect(target => /index\.html/.test(target.url));
     await until(() => page.evaluate('Boolean(window.tud?.pet?.select)'), 'preload');
+    await page.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: reducedMotion }] });
     await page.evaluate("window.tud.setLocalePreference('zh-CN')");
     const state = () => page.evaluate('Promise.all([window.tud.pet.getState(), window.tud.dshPet.getState()])');
     const root = `document.querySelector('section[aria-label="桌面宠物设置"]')`;
@@ -40,6 +41,11 @@ const start = async (name, userData = profile) => {
     const toggle = () => click(`(${root}).querySelector('[data-slot="switch-control"]')`);
     return { probe, page, state, root, tile, button, click, toggle };
   } catch (error) { await probe.close(); throw error; }
+};
+const calmStartsAutomatically = async ({ page, root, button }) => {
+  assert.equal(await page.evaluate(`(${button('平静')}).getAttribute('aria-pressed')`), 'true');
+  await until(() => page.evaluate(`(() => { const video = (${root}).querySelector('video'); return video && video.readyState >= 2 && !video.paused && video.currentTime > 0.1; })()`), 'default calm preview starts without clicking an action');
+  assert.equal(await page.evaluate(`decodeURIComponent(new URL((${root}).querySelector('video').currentSrc).pathname)`), '/用鲸鱼尾巴拍打地面.webm');
 };
 
 let active;
@@ -64,6 +70,8 @@ try {
   await page.screenshot(path.join(directory, 'builtin-preview.png'));
   checks.push('explicit apply while off preserves off; enabling uses applied Bot despite another preview');
   await click(tile('大肥鱼'));
+  await calmStartsAutomatically(active);
+  checks.push('calm preview autoplays on first selection even with reduced motion enabled');
   assert.equal(await page.evaluate(`(${tile('大肥鱼')}).textContent.trim()`), '大肥鱼');
   const previewActions = [
     ['平静', '用鲸鱼尾巴拍打地面'], ['思考', '舞狮头'], ['多任务', '原地左转奔跑'],
@@ -72,15 +80,16 @@ try {
   assert.deepEqual(await page.evaluate(`Array.from((${root}).querySelector('[data-pet-settings="dsh"] [role="group"]').querySelectorAll('button'), el => el.textContent.trim())`), previewActions.map(([label]) => label));
   for (const [label, animation] of previewActions) {
     await click(button(label));
-    await until(() => page.evaluate(`(() => { const video = (${root}).querySelector('video'); return video.readyState >= 2 && !video.paused; })()`), `${label} preview decodes while inactive`);
+    await until(() => page.evaluate(`(() => { const video = (${root}).querySelector('video'); return video.readyState >= 2 && !video.paused && video.currentTime > 0.1; })()`), `${label} preview decodes and advances while inactive`);
     const media = await page.evaluate(`(() => { const video = (${root}).querySelector('video'); return { name: decodeURIComponent(new URL(video.currentSrc).pathname), playing: !video.paused, selected: (${button(label)}).getAttribute('aria-pressed') }; })()`);
     assert.equal(media.name, `/${animation}.webm`);
-    assert.equal(media.playing, true);
+    assert.equal(media.playing, true, `${label} preview keeps playing`);
     assert.equal(media.selected, 'true');
   }
   await page.evaluate(`window.__petPreviewBeforeReplay = (${root}).querySelector('video'); true;`);
   await click(button('休息'));
   assert.equal(await page.evaluate(`(${root}).querySelector('video') !== window.__petPreviewBeforeReplay`), true);
+  await until(() => page.evaluate(`(() => { const video = (${root}).querySelector('video'); return !video.paused && video.currentTime > 0.1; })()`), 'repeated action starts playing again');
   await page.screenshot(path.join(directory, 'dsh-preview-states.png'));
   checks.push('dsh tile only shows 大肥鱼; six shared state labels play their assigned media; repeating a state restarts preview');
   assert.equal((await state())[0].settings.visible, true);
@@ -106,6 +115,8 @@ try {
 
   active = await start('second');
   ({ page, state, root, tile, button, click, toggle } = active);
+  await calmStartsAutomatically(active);
+  checks.push('opening settings with dsh already selected autoplays calm without action clicks');
   assert.equal((await state())[0].currentKind, 'dsh');
   assert.equal((await state())[1].enabled, false);
   assert.deepEqual((await state())[1].config, config);
@@ -124,11 +135,13 @@ try {
   assert.deepEqual(page.errors, []);
   await active.probe.close(); active = undefined;
 
-  active = await start('third');
+  active = await start('third', profile, 'no-preference');
   ({ page, state, root, tile, click, toggle } = active);
   assert.equal((await state())[0].currentKind, 'builtin');
   assert.equal((await state())[0].settings.character, 'bot');
   await click(tile('大肥鱼'));
+  await calmStartsAutomatically(active);
+  checks.push('calm preview also autoplays without reduced motion');
   await toggle();
   assert.equal((await state())[0].settings.visible, true);
   assert.equal((await state())[0].settings.character, 'bot');

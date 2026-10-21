@@ -24,9 +24,6 @@ export const DEFAULT_PET_SETTINGS: PetSettings = {
 export const BUILTIN_PETS = [
   { id: 'clawd', displayName: 'Clawd', spriteVersionNumber: 1, custom: false },
   { id: 'bot', displayName: 'Bot', spriteVersionNumber: 1, custom: false },
-  { id: 'sprout', displayName: 'Sprout', spriteVersionNumber: 1, custom: false },
-  { id: 'byte', displayName: 'Byte', spriteVersionNumber: 1, custom: false },
-  { id: 'ember', displayName: 'Ember', spriteVersionNumber: 1, custom: false },
 ] as const;
 
 export interface PetCatalogEntry {

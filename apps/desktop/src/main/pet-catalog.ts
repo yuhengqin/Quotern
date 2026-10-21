@@ -10,7 +10,6 @@ const MAX_PACKAGE = 12 * 1024 * 1024;
 const MAX_MANIFEST = 16 * 1024;
 const MAX_ATLAS = 10 * 1024 * 1024;
 const BUILTIN_IDS: Set<string> = new Set(BUILTIN_PETS.map(pet => pet.id));
-const HIDABLE_IDS = new Set(['sprout', 'byte', 'ember']);
 
 export const PET_ASSET_SCHEME = 'quotern-pet';
 
@@ -20,8 +19,6 @@ function bundledAsset(pathname: string): { file: string; contentType: string } |
     : path.join(app.getAppPath(), 'src', 'renderer', 'public');
   const clawd = /^\/clawd\/((?:[a-z0-9-]+\/)*[a-z0-9-]+\.svg)$/.exec(pathname);
   if (clawd) return { file: path.join(root, 'clawd', clawd[1]!), contentType: 'image/svg+xml' };
-  const atlas = /^\/pets\/(sprout|byte|ember)\/spritesheet\.webp$/.exec(pathname);
-  if (atlas) return { file: path.join(root, 'pets', atlas[1]!, 'spritesheet.webp'), contentType: 'image/webp' };
   return null;
 }
 
@@ -197,16 +194,8 @@ export class PetCatalog {
     return this.checkedPetDirectory(dir);
   }
 
-  private async hiddenIds(): Promise<Set<string>> {
-    try {
-      const raw = JSON.parse(await readFile(this.hiddenPath, 'utf8')) as unknown;
-      return new Set(Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string' && HIDABLE_IDS.has(id)) : []);
-    } catch { return new Set(); }
-  }
-
   async list(): Promise<PetCatalogEntry[]> {
-    const hidden = await this.hiddenIds();
-    const builtins = BUILTIN_PETS.filter(pet => !hidden.has(pet.id)).map(pet => ({ ...pet }));
+    const builtins = BUILTIN_PETS.map(pet => ({ ...pet }));
     let entries: string[];
     try { entries = await readdir(this.root); } catch { return builtins; }
     const customs = await Promise.all(entries.filter(id => PET_ID_RE.test(id) && !BUILTIN_IDS.has(id)).map(async id => {
@@ -248,13 +237,6 @@ export class PetCatalog {
   }
 
   async remove(id: string): Promise<void> {
-    if (HIDABLE_IDS.has(id)) {
-      const hidden = await this.hiddenIds();
-      hidden.add(id);
-      await mkdir(this.root, { recursive: true });
-      await writeFile(this.hiddenPath, `${JSON.stringify([...hidden].sort())}\n`);
-      return;
-    }
     const target = await this.safeInstalledPath(id);
     const files = await readdir(target);
     if (files.some(name => name !== 'pet.json' && name !== 'spritesheet.webp')) {

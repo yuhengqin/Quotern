@@ -216,6 +216,16 @@ export function PetSettingsCard() {
       {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <button
+          type="button"
+          disabled={busy}
+          aria-pressed={showDshSettings}
+          onClick={() => setPreviewTarget({ kind: 'dsh' })}
+          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${showDshSettings ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
+        >
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><img src={dshPetLogo} alt="" width={44} height={44} className="size-11 object-contain" /></span>
+          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span>{activation?.currentKind === 'dsh' && <span className="block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
+        </button>
         {state?.catalog.map(pet => (
           <div key={pet.id} className="relative">
             <button
@@ -229,7 +239,7 @@ export function PetSettingsCard() {
               <span className="min-w-0"><span className="block truncate">{pet.displayName}</span>{activation?.currentKind === 'builtin' && state.settings.character === pet.id && <span className="mt-0.5 block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
               {pet.spriteVersionNumber === 2 && <span className="ml-auto text-[9px] opacity-60">V2</span>}
             </button>
-            {(pet.custom || ['sprout', 'byte', 'ember'].includes(pet.id)) && (
+            {pet.custom && (
               <button
                 type="button"
                 disabled={busy}
@@ -241,16 +251,6 @@ export function PetSettingsCard() {
             )}
           </div>
         ))}
-        <button
-          type="button"
-          disabled={busy}
-          aria-pressed={showDshSettings}
-          onClick={() => setPreviewTarget({ kind: 'dsh' })}
-          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${showDshSettings ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
-        >
-          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><img src={dshPetLogo} alt="" width={44} height={44} className="size-11 object-contain" /></span>
-          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span>{activation?.currentKind === 'dsh' && <span className="block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
-        </button>
       </div>
 
       {/* Keep both editors mounted so changing the selected tile preserves drafts. */}
@@ -305,7 +305,6 @@ export function PetSettingsCard() {
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={busy} onClick={() => void catalog({ action: 'import-zip' }, { key: 'desktop.pet.imported' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.importZip')}</button>
           <button type="button" disabled={busy} onClick={() => void catalog({ action: 'list-codex' }, { key: 'desktop.pet.codexImported' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.importCodex')}</button>
-          <button type="button" disabled={busy} onClick={() => void catalog({ action: 'restore-builtins' }, { key: 'desktop.pet.restored' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.restore')}</button>
         </div>
         <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); if (url.trim()) void catalog({ action: 'install-url', url: url.trim() }, { key: 'desktop.pet.imported' }); }}>
           <input type="text" aria-label={t('desktop.pet.url')} placeholder={t('desktop.pet.url')} value={url} disabled={busy} onChange={event => setUrl(event.target.value)} className="min-w-0 flex-1 rounded-md border border-default-200 bg-content1 px-2 py-1.5 text-xs dark:border-default-100/20" />

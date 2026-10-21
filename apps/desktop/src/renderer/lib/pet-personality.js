@@ -1,4 +1,4 @@
-export const PET_CHARACTER_IDS = ["clawd", "bot", "sprout", "byte", "ember"];
+export const PET_CHARACTER_IDS = ["clawd", "bot"];
 
 /**
  * How a character is drawn. Explicit because it used to be inferred from the

@@ -14,29 +14,31 @@ test('Codex Pets page and download links resolve to the same package ID', () => 
 });
 
 test('standard pet atlas dimension validation accepts V1 and rejects mismatched V2', () => {
-  const atlas = readFileSync('src/renderer/public/pets/sprout/spritesheet.webp');
+  const atlas = readFileSync('src/main/fixtures/pet-atlas-v1.webp');
   assert.deepEqual(readWebpDimensions(atlas), { width: 1536, height: 1872 });
   const manifest = { id: 'custom-sprout', displayName: 'Custom Sprout', description: 'Test', spritesheetPath: 'spritesheet.webp' };
   assert.equal(validatePetPackage(Buffer.from(JSON.stringify(manifest)), atlas).spriteVersionNumber, 1);
   assert.throws(() => validatePetPackage(Buffer.from(JSON.stringify({ ...manifest, spriteVersionNumber: 2 })), atlas));
 });
 
-test('a custom pet can be removed and imported again with the same ID', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-catalog-'));
-  try {
-    const catalog = new PetCatalog(root);
-    const atlas = readFileSync('src/renderer/public/pets/sprout/spritesheet.webp');
-    const manifest = Buffer.from(JSON.stringify({ id: 'custom-sprout', displayName: 'Custom Sprout', description: 'Test', spritesheetPath: 'spritesheet.webp' }));
-    await catalog.installBuffers(manifest, atlas);
-    assert.ok((await catalog.list()).some(pet => pet.id === 'custom-sprout'));
-    await catalog.remove('custom-sprout');
-    assert.ok(!(await catalog.list()).some(pet => pet.id === 'custom-sprout'));
-    await catalog.installBuffers(manifest, atlas);
-    assert.ok((await catalog.list()).some(pet => pet.id === 'custom-sprout'));
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+for (const id of ['custom-sprout', 'sprout', 'byte', 'ember']) {
+  test(`a custom pet (${id}) can be removed and imported again with the same ID`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-catalog-'));
+    try {
+      const catalog = new PetCatalog(root);
+      const atlas = readFileSync('src/main/fixtures/pet-atlas-v1.webp');
+      const manifest = Buffer.from(JSON.stringify({ id, displayName: 'Custom Pet', description: 'Test', spritesheetPath: 'spritesheet.webp' }));
+      await catalog.installBuffers(manifest, atlas);
+      assert.ok((await catalog.list()).some(pet => pet.id === id));
+      await catalog.remove(id);
+      assert.ok(!(await catalog.list()).some(pet => pet.id === id));
+      await catalog.installBuffers(manifest, atlas);
+      assert.ok((await catalog.list()).some(pet => pet.id === id));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
 
 test('importable Codex pets expose a preview atlas and can be imported', async () => {
   const temp = await mkdtemp(path.join(tmpdir(), 'quotern-codex-pet-'));
@@ -44,7 +46,7 @@ test('importable Codex pets expose a preview atlas and can be imported', async (
     const source = path.join(temp, 'codex-pets');
     const petDir = path.join(source, 'custom-sprout');
     await mkdir(petDir, { recursive: true });
-    const atlas = readFileSync('src/renderer/public/pets/sprout/spritesheet.webp');
+    const atlas = readFileSync('src/main/fixtures/pet-atlas-v1.webp');
     const manifest = Buffer.from(JSON.stringify({ id: 'custom-sprout', displayName: 'Custom Sprout', description: 'Test', spritesheetPath: 'spritesheet.webp' }));
     await Promise.all([
       writeFile(path.join(petDir, 'pet.json'), manifest),

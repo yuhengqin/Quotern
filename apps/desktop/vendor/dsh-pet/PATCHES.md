@@ -2,7 +2,7 @@
 
 The generated `runtime/controls.js` is a Quotern-owned backport of the playback receipt, occupancy lock and motion contracts from upstream `cf3ed3c4dd6829b252f352d4c61a18db6fdb26d4` (`src/host/playback.ts`, `lock.ts`, `motion-cue.ts`, `runtime/electron-helper/sprite.js` and `events.js`). It loads after the audited sprite/events and before boot. The host adaptation lives in `src/main/dsh-pet/controls.ts`; it bounds record/wait counts, cancels outstanding records on shutdown and retains the authenticated named pipe. Remote animation URLs and the upstream standalone HTTP server are not imported. The original snapshot and its manifest remain unchanged.
 
-Source snapshot: https://github.com/PC2005-cloud/dsh-pet at `6c5f04321be050525b5cbb7bb8ee5f53e89deb6f` (`0.3.7`). `UPSTREAM.json` records every vendored file and its SHA-256 digest; all entries match the upstream snapshot except the three files carrying the default pet rename below.
+Source snapshot: https://github.com/PC2005-cloud/dsh-pet at `6c5f04321be050525b5cbb7bb8ee5f53e89deb6f` (`0.3.7`). `UPSTREAM.json` records every vendored file and its SHA-256 digest; all entries match the upstream snapshot except the three files carrying the default pet rename and the customized logo below.
 
 Code: MIT, see LICENSE. Upstream media/prompts/source videos permit open-source use and prohibit commercial use. Derived introductions, displays and distribution must credit https://github.com/PC2005-cloud/dsh-pet (see UPSTREAM_README.md).
 
@@ -10,7 +10,7 @@ The preparation script builds only the checked-in snapshot and copies only manif
 
 The desktop companion's transport and host integration are maintained in Quotern's own source; any build-time adaptations are applied to the output, preserving the original snapshot for comparison.
 
-The default pet is renamed from `蓝毛小女仆` to `大肥鱼` directly in the snapshot's `assets/config.jsonc` and the two host fixtures `src/host/anim.test.ts` and `src/host/broadcast.test.ts`, so the shipped default matches Quotern's role name. These three files are the only snapshot content that differs from upstream, and their `UPSTREAM.json` digests cover the renamed copies. Every other snapshot file must stay byte-identical to upstream.
+The default pet is renamed from `蓝毛小女仆` to `大肥鱼` directly in the snapshot's `assets/config.jsonc` and the two host fixtures `src/host/anim.test.ts` and `src/host/broadcast.test.ts`, so the shipped default matches Quotern's role name. Their `UPSTREAM.json` digests cover the renamed copies. `assets/logo.png` is a user-customized character image, imported by the desktop settings tile instead of the generic fish icon; its manifest digest covers the customized image. Every other snapshot file must stay byte-identical to upstream.
 
 The generated host bundle replaces the regular-expression JSONC comment stripper with Quotern's string-aware scanner. URLs and prompt literals containing `//` or `/* */` must survive advanced configuration edits unchanged.
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'quotern-i18n/react';
-import { Fish } from 'lucide-react';
+import dshPetLogo from '../../../vendor/dsh-pet/assets/logo.png';
 import { DshPetSettingsCard } from './DshPetSettingsCard';
 import type { PetCatalogEntry } from '../../main/pet-core';
 import type { PetCatalogRequest, PetSettingPatch, PetState } from '../../shared/pet';
@@ -193,7 +193,7 @@ export function PetSettingsCard() {
           onClick={() => setShowDshSettings(true)}
           className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${showDshSettings ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
         >
-          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><Fish className="size-8 text-accent" /></span>
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><img src={dshPetLogo} alt="" width={44} height={44} className="size-11 object-contain" /></span>
           <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span></span>
         </button>
       </div>

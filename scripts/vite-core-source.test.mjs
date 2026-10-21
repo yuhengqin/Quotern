@@ -13,6 +13,7 @@ const { build, createServer, loadConfigFromFile } = await import(pathToFileURL(r
 const imports = [
   'achievements', 'daily-model-key', 'timezone', 'project-label', 'dashboard-trend',
   'leaderboard', 'pricing-matcher', 'local-metrics', 'quota/shared/quota-presentation',
+  'quota/shared/subscription-channels',
 ];
 const entry = imports.map(name => `export * from 'quotern-core/${name}';`).join('\n')
   + "\nexport { default as pricing } from 'quotern-core/pricing-data';\n";

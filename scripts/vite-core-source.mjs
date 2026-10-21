@@ -11,6 +11,7 @@ const browserEntries = new Map([
   ['quotern-core/project-label', 'project-label.ts'],
   ['quotern-core/timezone', 'timezone.ts'],
   ['quotern-core/quota/shared/quota-presentation', 'quota/shared/quota-presentation.ts'],
+  ['quotern-core/quota/shared/subscription-channels', 'quota/shared/subscription-channels.ts'],
 ]);
 
 /** Keep renderer HMR independent of clean Core builds. Node-only exports stay on dist. */

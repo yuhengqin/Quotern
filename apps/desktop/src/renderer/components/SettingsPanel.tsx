@@ -33,6 +33,8 @@ import { PetSettingsCard } from '@/components/PetSettingsCard';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
 import { useTranslation } from 'quotern-i18n/react';
 import { LanguagePreferenceControl } from '../../../../../packages/dashboard/src/components/LanguagePreferenceControl';
+import { ThemePreferenceControl } from '../../../../../packages/dashboard/src/components/ThemePreferenceControl';
+import { useTheme } from '@/hooks/useTheme';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
 
@@ -125,6 +127,7 @@ function SubscriptionChannelSettings() {
 /** 自动更新 + 开机自启 + 设备信息。 */
 function AppSettingsPanel() {
   const { t } = useTranslation();
+  const { themeMode, setThemeMode } = useTheme();
   const { preference, locale, systemLocale, setPreference } = useLocalePreference();
   const [localeError, setLocaleError] = useState(false);
   const cliMode = true;
@@ -296,6 +299,11 @@ function AppSettingsPanel() {
         </Card.Content>
       </Card>
       {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
+        </Card.Content>
+      </Card>
       {error && <StatusBanner tone="error" title={t(error)} />}
       {autostartError && (
         <StatusBanner tone="error" title={t(autostartError)} />

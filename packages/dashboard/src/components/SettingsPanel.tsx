@@ -15,9 +15,11 @@ import {
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
 import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
+import { ThemePreferenceControl } from '@/components/ThemePreferenceControl';
 import { StatusBanner } from '@/components/StatusBanner';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
+import { useTheme } from '@/hooks/useTheme';
 import { useTranslation } from 'quotern-i18n/react';
 import {
   type SettingsTabId,
@@ -86,6 +88,7 @@ export function SettingsPanel({
 
 function AppSettingsPanel() {
   const { t } = useTranslation();
+  const { themeMode, setThemeMode } = useTheme();
   const { preference, locale, systemLocale, setPreference } = useLocalePreference();
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +121,9 @@ function AppSettingsPanel() {
     <div className="flex flex-col gap-4">
       <Surface className="rounded-xl p-4" variant="secondary">
         <LanguagePreferenceControl value={preference} systemLocale={systemLocale} onChange={setPreference} />
+      </Surface>
+      <Surface className="rounded-xl p-4" variant="secondary">
+        <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
       </Surface>
       <Surface className="rounded-xl p-4" variant="secondary">
         <RadioGroup

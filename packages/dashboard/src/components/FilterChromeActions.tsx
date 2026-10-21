@@ -1,14 +1,11 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
-import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
 import { useAppToastQueue } from '@/components/AppToastContext';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { isCliBackend, triggerSync } from '@/lib/api';
-import { GITHUB_REPO_URL } from '@/lib/downloads';
 import {
   dispatchDataSynced,
   dispatchOpenSettings,
@@ -17,18 +14,9 @@ import {
 import { cn } from '@/lib/utils';
 import { createSessionPageSearch, type SessionScope } from '../lib/session-page';
 
-function openGithubRepository(): void {
-  const opened = window.open(GITHUB_REPO_URL, '_blank');
-  if (opened) {
-    opened.opener = null;
-    return;
-  }
-  window.location.assign(GITHUB_REPO_URL);
-}
-
 /**
- * Filter-bar chrome: share / refresh / settings + theme toggle.
- * Public web shows share + theme; CLI also shows refresh / settings.
+ * Page actions and an always-available settings entry for browser preferences.
+ * Sync is available only with the local runtime.
  */
 export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionScope }) {
   const { t } = useTranslation();
@@ -96,11 +84,6 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
           <p>{t('shell.pricing')}</p>
         </Tooltip.Content>
       </Tooltip>
-      <ChromeAction
-        icon={<LogoGithub className="size-4" />}
-        label={t('shell.githubRepository')}
-        onPress={openGithubRepository}
-      />
       <AchievementEntry />
       <ChromeAction
         icon={<Share2 className="size-4" aria-hidden />}
@@ -110,28 +93,25 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
         }}
       />
       {cliBackend ? (
-        <>
-          <ChromeAction
-            disabled={busy}
-            icon={
-              <RefreshCw
-                className={cn('size-4', busy && 'animate-spin')}
-                aria-hidden
-              />
-            }
-            label={refreshLabel}
-            onPress={() => {
-              void refreshData();
-            }}
-          />
-          <ChromeAction
-            icon={<Settings className="size-4" aria-hidden />}
-            label={t('shell.settings')}
-            onPress={() => dispatchOpenSettings()}
-          />
-        </>
+        <ChromeAction
+          disabled={busy}
+          icon={
+            <RefreshCw
+              className={cn('size-4', busy && 'animate-spin')}
+              aria-hidden
+            />
+          }
+          label={refreshLabel}
+          onPress={() => {
+            void refreshData();
+          }}
+        />
       ) : null}
-      <ThemeToggle />
+      <ChromeAction
+        icon={<Settings className="size-4" aria-hidden />}
+        label={t('shell.settings')}
+        onPress={() => dispatchOpenSettings()}
+      />
     </div>
   );
 }

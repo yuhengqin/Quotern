@@ -1,6 +1,7 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 @import "@heroui/styles";
+@source "../../../../packages/dashboard/src/components/ThemePreferenceControl.tsx";
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
 @source "../../../../packages/dashboard/src/components/UsageTrendExplorer.tsx";
 @source "../../../../packages/dashboard/src/components/SessionActivityPanel.tsx";

@@ -1,13 +1,11 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
-import { LogoGithub } from '@gravity-ui/icons';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
 import { AutoUpdateAction } from '@/components/AutoUpdateAction';
 import { useAppToastQueue } from '@/components/AppToastContext';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { isCliBackend, triggerSync } from '@/lib/api';
 import {
   dispatchDataSynced,
@@ -19,11 +17,7 @@ import { createSessionPageSearch, type SessionScope } from '../../../../../packa
 
 const primaryChromeBtn =
   'inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[#1e80ff] px-2.5 text-[12px] font-medium text-white outline-none transition-colors hover:bg-[#1171ee] focus-visible:ring-2 focus-visible:ring-[#1e80ff]/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-[#4b9cff] dark:hover:bg-[#3a8ff0]';
-function openGithubRepository(): void {
-  void window.tud.openExternal('https://github.com/yuhengqin/Quotern');
-}
-
-/** Filter-bar chrome: share / refresh / settings + theme toggle. */
+/** Filter-bar chrome: page actions / refresh / settings. */
 export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionScope }) {
   const { t } = useTranslation();
   const cliBackend = isCliBackend();
@@ -89,11 +83,6 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
           <p>{t('shell.pricing')}</p>
         </Tooltip.Content>
       </Tooltip>
-      <ChromeAction
-        icon={<LogoGithub className="size-4" />}
-        label={t('shell.githubRepository')}
-        onPress={openGithubRepository}
-      />
       <AchievementEntry />
       <ChromeAction
         icon={<Share2 className="size-4" aria-hidden />}
@@ -120,7 +109,6 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
         label={t('shell.settings')}
         onPress={() => dispatchOpenSettings()}
       />
-      <ThemeToggle />
     </div>
   );
 }

@@ -2,10 +2,11 @@ import { Link } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { SupportedToolsGrid } from '@/components/SupportedToolsGrid';
 import { APP_DISPLAY_NAME, appVersion } from '@/lib/about';
+import { GITHUB_REPO_URL } from '@/lib/downloads';
 
 const FEEDBACK_URL = 'https://github.com/yuhengqin/Quotern/issues/new';
 
-/** Shared about body — version + supported tools. */
+/** About body — version, repository, feedback, and supported tools. */
 export function AboutContent() {
   const { t } = useTranslation();
   const version = appVersion();
@@ -18,6 +19,15 @@ export function AboutContent() {
           {APP_DISPLAY_NAME}{' '}
           <span className="font-mono text-foreground/90">v{version}</span>
         </p>
+        <Link
+          className="w-fit text-sm text-accent"
+          href={GITHUB_REPO_URL}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          {t('shell.githubRepository')}
+          <Link.Icon />
+        </Link>
       </section>
 
       <section className="space-y-1.5">

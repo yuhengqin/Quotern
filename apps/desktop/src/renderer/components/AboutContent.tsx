@@ -9,8 +9,9 @@ import {
 } from '@/lib/about';
 
 const FEEDBACK_URL = 'https://github.com/yuhengqin/Quotern/issues/new';
+const GITHUB_REPO_URL = 'https://github.com/yuhengqin/Quotern';
 
-/** Shared about body — version + supported tools. */
+/** About body — version, repository, feedback, and supported tools. */
 export function AboutContent() {
   const { t } = useTranslation();
   const version = appVersion();
@@ -23,6 +24,19 @@ export function AboutContent() {
           {APP_DISPLAY_NAME}{' '}
           <span className="font-mono text-foreground/90">v{version}</span>
         </p>
+        <Link
+          className="w-fit text-sm text-accent"
+          href={GITHUB_REPO_URL}
+          rel="noopener noreferrer"
+          target="_blank"
+          onClick={(event) => {
+            event.preventDefault();
+            void window.tud.openExternal(GITHUB_REPO_URL);
+          }}
+        >
+          {t('shell.githubRepository')}
+          <Link.Icon />
+        </Link>
       </section>
 
       <section className="space-y-1.5">

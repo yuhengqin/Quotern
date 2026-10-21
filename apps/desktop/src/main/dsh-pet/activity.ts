@@ -89,6 +89,7 @@ export class DshPetActivityMonitor {
       try {
         const info = await stat(input.path);
         let cursor = this.cursors.get(key);
+        if (cursor && info.size === cursor.offset && cursor.birth === info.birthtimeMs) continue;
         const file = await open(input.path, 'r');
         try {
           if (!cursor || info.size < cursor.offset || cursor.birth !== info.birthtimeMs) {
@@ -99,7 +100,6 @@ export class DshPetActivityMonitor {
             this.cursors.set(key, cursor);
             continue; // Every newly observed file gets an EOF baseline; never replay copied history.
           }
-          if (info.size === cursor.offset) continue;
           const start = Math.max(cursor.offset, info.size - 1024 * 1024);
           if (start !== cursor.offset) cursor.pending = Buffer.alloc(0);
           const bytes = Buffer.alloc(info.size - start);

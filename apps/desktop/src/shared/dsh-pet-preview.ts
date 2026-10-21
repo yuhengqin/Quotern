@@ -4,14 +4,14 @@ export const DSH_PET_PREVIEW_PROTOCOL = {
   privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
 };
 
-// Keep the upstream animation names for playback; only shorten the visible label.
+// Match the other pets' preview states while preserving upstream media names.
 export const DSH_PET_PREVIEW_ACTIONS = [
-  { name: '舞狮头', label: '舞狮头' },
-  { name: '点击回应-开心跃动', label: '开心跃动' },
-  { name: '原地左转奔跑', label: '原地左转奔跑' },
-  { name: '哈欠连天', label: '哈欠连天' },
-  { name: '用鲸鱼尾巴拍打地面', label: '用鲸鱼尾巴拍打地面' },
-  { name: '堆雪人', label: '堆雪人' },
+  { name: '用鲸鱼尾巴拍打地面', labelKey: 'desktop.pet.preview.calm' },
+  { name: '舞狮头', labelKey: 'desktop.pet.preview.thinking' },
+  { name: '原地左转奔跑', labelKey: 'desktop.pet.preview.multitask' },
+  { name: '堆雪人', labelKey: 'desktop.pet.preview.continuous' },
+  { name: '点击回应-开心跃动', labelKey: 'desktop.pet.preview.celebrate' },
+  { name: '哈欠连天', labelKey: 'desktop.pet.preview.rest' },
 ] as const;
 
 export function dshPetPreviewUrl(name: string): string {

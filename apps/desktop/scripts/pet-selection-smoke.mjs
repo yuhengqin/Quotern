@@ -29,7 +29,7 @@ const start = async (name, userData = profile) => {
     const state = () => page.evaluate('Promise.all([window.tud.pet.getState(), window.tud.dshPet.getState()])');
     const root = `document.querySelector('section[aria-label="桌面宠物设置"]')`;
     await until(async () => {
-      await page.evaluate("window.dispatchEvent(new CustomEvent('tud:open-settings',{detail:{tab:'app'}})); true;");
+      await page.evaluate("window.dispatchEvent(new CustomEvent('tud:open-settings',{detail:{tab:'pet'}})); true;");
       return page.evaluate(`Boolean((${root})?.querySelector('[role="switch"]'))`);
     }, 'settings mount');
     const idle = () => until(() => page.evaluate(`!(${root}).querySelector('[role="switch"]').disabled`), 'settings idle');
@@ -64,14 +64,32 @@ try {
   await page.screenshot(path.join(directory, 'builtin-preview.png'));
   checks.push('explicit apply while off preserves off; enabling uses applied Bot despite another preview');
   await click(tile('大肥鱼'));
-  await click(button('开心跃动'));
-  await until(() => page.evaluate(`(${root}).querySelector('video').readyState >= 2`), 'dsh preview decodes while inactive');
+  assert.equal(await page.evaluate(`(${tile('大肥鱼')}).textContent.trim()`), '大肥鱼');
+  const previewActions = [
+    ['平静', '用鲸鱼尾巴拍打地面'], ['思考', '舞狮头'], ['多任务', '原地左转奔跑'],
+    ['连续使用', '堆雪人'], ['庆祝', '点击回应-开心跃动'], ['休息', '哈欠连天'],
+  ];
+  assert.deepEqual(await page.evaluate(`Array.from((${root}).querySelector('[data-pet-settings="dsh"] [role="group"]').querySelectorAll('button'), el => el.textContent.trim())`), previewActions.map(([label]) => label));
+  for (const [label, animation] of previewActions) {
+    await click(button(label));
+    await until(() => page.evaluate(`(() => { const video = (${root}).querySelector('video'); return video.readyState >= 2 && !video.paused; })()`), `${label} preview decodes while inactive`);
+    const media = await page.evaluate(`(() => { const video = (${root}).querySelector('video'); return { name: decodeURIComponent(new URL(video.currentSrc).pathname), playing: !video.paused, selected: (${button(label)}).getAttribute('aria-pressed') }; })()`);
+    assert.equal(media.name, `/${animation}.webm`);
+    assert.equal(media.playing, true);
+    assert.equal(media.selected, 'true');
+  }
+  await page.evaluate(`window.__petPreviewBeforeReplay = (${root}).querySelector('video'); true;`);
+  await click(button('休息'));
+  assert.equal(await page.evaluate(`(${root}).querySelector('video') !== window.__petPreviewBeforeReplay`), true);
+  await page.screenshot(path.join(directory, 'dsh-preview-states.png'));
+  checks.push('dsh tile only shows 大肥鱼; six shared state labels play their assigned media; repeating a state restarts preview');
   assert.equal((await state())[0].settings.visible, true);
   assert.equal((await state())[1].enabled, false);
   await click(button('设为当前宠物'));
   await until(async () => (await state())[1].status === 'running', 'dsh helper starts');
   assert.equal((await state())[0].settings.visible, false);
   assert.equal((await state())[0].currentKind, 'dsh');
+  assert.equal(await page.evaluate(`(${tile('大肥鱼')}).textContent.trim()`), '大肥鱼✓ 当前宠物');
   await click(button('小'));
   await until(async () => (await state())[1].status === 'running', 'dsh size restart');
   const config = (await state())[1].config;

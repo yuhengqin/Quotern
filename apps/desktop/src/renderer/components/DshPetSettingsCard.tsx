@@ -121,8 +121,8 @@ export function DshPetSettingsCard({ active = true, headerAction }: { active?: b
     {feedback && <p role={failed ? 'alert' : 'status'} className={`break-words text-xs ${failed ? 'text-danger' : 'text-success'}`}>{feedback}</p>}
     <Section title={text('controls')}>
       {active && <AnimationPreview key={`${animation}:${previewRevision}`} name={animation} requested={previewRevision > 0} />}
-      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3" role="group" aria-label={t('desktop.pet.previewActions')}>
-        {DSH_PET_PREVIEW_ACTIONS.map(item => <button type="button" key={item.name} aria-pressed={animation === item.name} onClick={() => { setAnimation(item.name); setPreviewRevision(value => value + 1); }} className={`rounded-md px-2 py-1.5 text-xs focus-visible:outline-2 focus-visible:outline-accent ${animation === item.name ? 'bg-accent/15 font-semibold text-foreground' : 'text-muted hover:bg-default-100'}`}>{item.label}</button>)}
+      <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-6" role="group" aria-label={t('desktop.pet.previewActions')}>
+        {DSH_PET_PREVIEW_ACTIONS.map(item => <button type="button" key={item.name} aria-pressed={animation === item.name} onClick={() => { setAnimation(item.name); setPreviewRevision(value => value + 1); }} className={`rounded-md px-1 py-1.5 text-[11px] focus-visible:outline-2 focus-visible:outline-accent ${animation === item.name ? 'bg-accent/15 font-semibold text-foreground' : 'text-muted hover:bg-default-100'}`}>{t(item.labelKey)}</button>)}
       </div>
     </Section>
     <Section title={text('instances')}>

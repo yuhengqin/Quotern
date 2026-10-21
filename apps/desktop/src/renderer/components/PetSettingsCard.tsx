@@ -224,7 +224,7 @@ export function PetSettingsCard() {
           className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${showDshSettings ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
         >
           <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><img src={dshPetLogo} alt="" width={44} height={44} className="size-11 object-contain" /></span>
-          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span>{activation?.currentKind === 'dsh' && <span className="block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
+          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span>{activation?.currentKind === 'dsh' && <span className="mt-0.5 block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
         </button>
         {state?.catalog.map(pet => (
           <div key={pet.id} className="relative">

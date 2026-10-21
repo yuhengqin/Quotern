@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'quotern-i18n/react';
+import { Button, Switch } from '@heroui/react';
 import dshPetLogo from '../../../vendor/dsh-pet/assets/logo.png';
 import { DshPetSettingsCard } from './DshPetSettingsCard';
 import type { PetCatalogEntry } from '../../main/pet-core';
-import type { PetCatalogRequest, PetSettingPatch, PetState } from '../../shared/pet';
+import type { PetActivationState, PetCatalogRequest, PetSelection, PetSettingPatch, PetState } from '../../shared/pet';
+import type { DshPetState } from '../../shared/dsh-pet';
 // These two renderers are shared with the standalone pet page copied from TokenTracker.
 // @ts-expect-error The upstream JSX module has no TypeScript declarations.
 import { BotAnimated } from '../ui/foundation/BotAnimated.jsx';
@@ -92,6 +94,7 @@ function PetCardSprite({ pet, color }: { pet: PetCatalogEntry; color: string }) 
 export function PetSettingsCard() {
   const { t } = useTranslation();
   const [state, setState] = useState<PetState | null>(null);
+  const [activation, setActivation] = useState<PetActivationState | null>(null);
   const [previewState, setPreviewState] = useState<string>('idle-living');
   const [autoRotatePreview, setAutoRotatePreview] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -100,7 +103,9 @@ export function PetSettingsCard() {
   const [url, setUrl] = useState('');
   const [codexPets, setCodexPets] = useState<PetCatalogEntry[] | null>(null);
   const [selectedCodex, setSelectedCodex] = useState<string[]>([]);
-  const [showDshSettings, setShowDshSettings] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState<PetSelection | null>(null);
+  const [dshState, setDshState] = useState<DshPetState | null>(null);
+  const showDshSettings = previewTarget?.kind === 'dsh';
 
   useEffect(() => {
     let live = true;
@@ -110,6 +115,28 @@ export function PetSettingsCard() {
     });
     return () => { live = false; unsubscribe(); };
   }, []);
+
+  useEffect(() => {
+    let live = true;
+    const unsubscribe = window.tud.pet.onSelection(next => { if (live) setActivation(next); });
+    void window.tud.pet.getSelection().then(next => { if (live) setActivation(next); }).catch(() => {
+      if (live) setError({ key: 'desktop.pet.unavailable' });
+    });
+    return () => { live = false; unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    const unsubscribe = window.tud.dshPet.onState(next => { if (live) setDshState(next); });
+    void window.tud.dshPet.getState().then(next => { if (live) setDshState(next); }).catch(() => {
+      if (live) setError({ key: 'desktop.pet.unavailable' });
+    });
+    return () => { live = false; unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    if (activation && (state || activation.currentKind === 'dsh')) setPreviewTarget(current => current ?? (activation.currentKind === 'dsh' ? { kind: 'dsh' } : { kind: 'builtin', character: state!.settings.character }));
+  }, [state, activation]);
 
   useEffect(() => {
     if (!autoRotatePreview || showDshSettings) return;
@@ -122,7 +149,30 @@ export function PetSettingsCard() {
     return () => window.clearInterval(timer);
   }, [autoRotatePreview, showDshSettings]);
 
-  const selected = useMemo(() => state?.catalog.find(pet => pet.id === state.settings.character) ?? state?.catalog[0], [state]);
+  const selected = useMemo(() => state?.catalog.find(pet => previewTarget?.kind === 'builtin' && pet.id === previewTarget.character)
+    ?? state?.catalog.find(pet => pet.id === state.settings.character) ?? state?.catalog[0], [state, previewTarget]);
+  const currentName = activation?.currentKind === 'dsh' ? t('desktop.dshPet.title') : state?.catalog.find(pet => pet.id === state.settings.character)?.displayName;
+  const enabled = activation?.enabled ?? false;
+  const currentAvailable = activation?.currentKind === 'dsh' ? Boolean(dshState) : Boolean(state);
+  const previewIsCurrent = activation?.currentKind === (showDshSettings ? 'dsh' : 'builtin') && (showDshSettings || state?.settings.character === selected?.id);
+
+  const applySelection = async (target: PetSelection) => {
+    setBusy(true); setError(null); setNotice(null);
+    try { setActivation(await window.tud.pet.select(target)); setNotice({ key: 'desktop.pet.selectedNotice' }); }
+    catch { setError({ key: 'desktop.pet.saveFailed' }); }
+    finally { setBusy(false); }
+  };
+
+  const setEnabled = async (value: boolean) => {
+    setBusy(true); setError(null); setNotice(null);
+    try { setActivation(await window.tud.pet.setEnabled(value)); }
+    catch { setError({ key: 'desktop.pet.saveFailed' }); }
+    finally { setBusy(false); }
+  };
+
+  const selectionAction = (target: PetSelection) => previewIsCurrent
+    ? <span className="shrink-0 rounded-md bg-accent/10 px-2 py-1.5 text-xs font-medium text-foreground">✓ {t('desktop.pet.current')}</span>
+    : <Button size="sm" variant="secondary" isDisabled={busy || !activation || !(target.kind === 'dsh' ? dshState : state)} onPress={() => { void applySelection(target); }}>{t('desktop.pet.setCurrent')}</Button>;
 
   const update = async (patch: PetSettingPatch) => {
     setBusy(true); setError(null); setNotice(null);
@@ -146,10 +196,8 @@ export function PetSettingsCard() {
         const imported = result.data && typeof result.data === 'object' && 'pet' in result.data
           ? result.data.pet as PetCatalogEntry | undefined
           : undefined;
-        setState(imported?.id
-          ? await window.tud.pet.setSettings({ character: imported.id })
-          : await window.tud.pet.getState());
-        if (imported?.id) setUrl('');
+        setState(await window.tud.pet.getState());
+        if (imported?.id) { setUrl(''); setPreviewTarget({ kind: 'builtin', character: imported.id }); }
       }
     } catch { setError({ key: 'desktop.pet.operationFailed' }); }
     finally { setBusy(false); }
@@ -157,8 +205,16 @@ export function PetSettingsCard() {
 
   return (
     <section className="rounded-xl border border-default-200 bg-content1 p-4 text-left dark:border-default-100/20" aria-label={t('desktop.pet.settings')}>
-      <h3 className="text-sm font-semibold text-foreground">{t('desktop.pet.title')}</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-foreground">{t('desktop.pet.title')}</h3>
+        <Switch aria-label={t('desktop.pet.enable')} isSelected={enabled} isDisabled={busy || !activation || (!enabled && !currentAvailable)} onChange={value => { void setEnabled(value); }}>
+          <Switch.Content className="gap-2 text-xs"><Switch.Control><Switch.Thumb /></Switch.Control>{t('desktop.pet.enable')}</Switch.Content>
+        </Switch>
+      </div>
+      {currentName && <p role="status" className="mt-2 text-xs text-foreground">{t('desktop.pet.currentName', { name: currentName })}<span className="text-muted"> · {t(enabled ? 'desktop.pet.enabled' : 'desktop.pet.disabled')}</span></p>}
       <p className="mt-1 text-xs text-muted">{t('desktop.pet.pickerDescription')}</p>
+      {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
+      {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {state?.catalog.map(pet => (
@@ -166,12 +222,12 @@ export function PetSettingsCard() {
             <button
               type="button"
               disabled={busy}
-              aria-pressed={!showDshSettings && state.settings.character === pet.id}
-              onClick={() => { setShowDshSettings(false); if (state.settings.character !== pet.id) void update({ character: pet.id }); }}
-              className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${!showDshSettings && state.settings.character === pet.id ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
+              aria-pressed={!showDshSettings && selected?.id === pet.id}
+              onClick={() => setPreviewTarget({ kind: 'builtin', character: pet.id })}
+              className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${!showDshSettings && selected?.id === pet.id ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
             >
               <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden"><PetCardSprite pet={pet} color={state.settings.botColor} /></span>
-              <span className="truncate">{pet.displayName}</span>
+              <span className="min-w-0"><span className="block truncate">{pet.displayName}</span>{activation?.currentKind === 'builtin' && state.settings.character === pet.id && <span className="mt-0.5 block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
               {pet.spriteVersionNumber === 2 && <span className="ml-auto text-[9px] opacity-60">V2</span>}
             </button>
             {(pet.custom || ['sprout', 'byte', 'ember'].includes(pet.id)) && (
@@ -190,11 +246,11 @@ export function PetSettingsCard() {
           type="button"
           disabled={busy}
           aria-pressed={showDshSettings}
-          onClick={() => setShowDshSettings(true)}
+          onClick={() => setPreviewTarget({ kind: 'dsh' })}
           className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${showDshSettings ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
         >
           <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><img src={dshPetLogo} alt="" width={44} height={44} className="size-11 object-contain" /></span>
-          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span></span>
+          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span>{activation?.currentKind === 'dsh' && <span className="block text-[10px] font-normal text-muted">✓ {t('desktop.pet.current')}</span>}</span>
         </button>
       </div>
 
@@ -203,18 +259,13 @@ export function PetSettingsCard() {
       {!state ? (
         error ? <p role="alert" className="text-xs text-danger">{t(error.key, error.options)}</p> : <p role="status" className="text-xs text-muted">{t('desktop.pet.loading')}</p>
       ) : <>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">{selected?.displayName}</h4>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">{selected?.displayName}<span className="text-xs font-normal text-muted">{t('desktop.pet.previewing')}</span></h4>
           <p className="mt-1 text-xs text-muted">{t('desktop.pet.description')}</p>
         </div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-foreground">
-          <input type="checkbox" checked={state.settings.visible} disabled={busy} onChange={event => void update({ visible: event.target.checked })} />
-          {t('desktop.pet.show')}
-        </label>
+        {selected && selectionAction({ kind: 'builtin', character: selected.id })}
       </div>
-      {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
-      {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
 
       {selected && !showDshSettings && (
         <div className="mt-4">
@@ -285,7 +336,7 @@ export function PetSettingsCard() {
       </>}
       </div>
       <div hidden={!showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
-        <DshPetSettingsCard active={showDshSettings} />
+        <DshPetSettingsCard active={showDshSettings} headerAction={selectionAction({ kind: 'dsh' })} />
       </div>
     </section>
   );

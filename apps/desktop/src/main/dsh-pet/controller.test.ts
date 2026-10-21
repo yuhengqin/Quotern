@@ -28,6 +28,18 @@ test('enabling from settings, tray and startup waits for exclusive activation', 
   } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
+test('an already disabled companion can be deactivated even when its default config is unreadable', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-broken-config-'));
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'app', packaged: false,
+    getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
+  });
+  try {
+    controller.config.paths.defaultFile = path.join(root, 'missing-default.jsonc');
+    assert.throws(() => controller.getState());
+    await assert.doesNotReject(controller.deactivate());
+  } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
 test('rapid enable and disable requests preserve their order through the shared coordinator', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-toggle-order-'));
   const activation = new PetActivation({ builtin: async () => {}, dsh: async () => {} });

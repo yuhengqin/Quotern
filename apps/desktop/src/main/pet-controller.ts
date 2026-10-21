@@ -57,6 +57,7 @@ export class PetController {
   private settings: PetSettings = { ...DEFAULT_PET_SETTINGS };
   private state: PetState = {
     settings: this.settings,
+    currentKind: 'builtin',
     catalog: [],
     stats: toPetStats({}, {}, {}, localDateNow()),
     limits: [],
@@ -98,6 +99,7 @@ export class PetController {
     getLocale: () => SupportedLocale;
     getQuotaState?: () => QuotaState | null;
     coordinateVisibility?: <T>(visible: boolean, operation: () => Promise<T>) => Promise<T>;
+    getCurrentKind?: () => PetState['currentKind'];
   }) {}
 
   private t(key: NativeMessageKey): string {
@@ -117,7 +119,7 @@ export class PetController {
   }
 
   private broadcast(): void {
-    this.state = { ...this.state, settings: { ...this.settings } };
+    this.state = { ...this.state, settings: { ...this.settings }, currentKind: this.options.getCurrentKind?.() ?? 'builtin' };
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(PET_STATE_CHANNEL, this.state);
     }
@@ -647,6 +649,15 @@ export class PetController {
   }
 
   isVisible(): boolean { return this.settings.visible; }
+
+  getState(): PetState { return this.state; }
+
+  refreshSelection(): void { this.broadcast(); }
+
+  /** Only the shared activation coordinator may bypass visibility coordination. */
+  activate(): Promise<PetState> { return this.applySettings({ visible: true }); }
+
+  selectCharacter(character: string): Promise<PetState> { return this.applySettings({ character }); }
 
   async hide(): Promise<void> { if (this.settings.visible) await this.applySettings({ visible: false }); }
 

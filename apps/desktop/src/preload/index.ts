@@ -64,9 +64,15 @@ import {
   PET_GET_CHANNEL,
   PET_SET_CHANNEL,
   PET_STATE_CHANNEL,
+  PET_SELECT_CHANNEL,
+  PET_ENABLE_CHANNEL,
+  PET_SELECTION_GET_CHANNEL,
+  PET_SELECTION_STATE_CHANNEL,
   type PetCatalogRequest,
   type PetSettingPatch,
   type PetState,
+  type PetSelection,
+  type PetActivationState,
 } from '../shared/pet';
 
 const API_REQUEST_CHANNEL = 'tud:api-request';
@@ -141,6 +147,14 @@ const tudApi = {
 
   pet: {
     getState: (): Promise<PetState> => ipcRenderer.invoke(PET_GET_CHANNEL),
+    select: (target: PetSelection): Promise<PetActivationState> => ipcRenderer.invoke(PET_SELECT_CHANNEL, target),
+    setEnabled: (enabled: boolean): Promise<PetActivationState> => ipcRenderer.invoke(PET_ENABLE_CHANNEL, enabled),
+    getSelection: (): Promise<PetActivationState> => ipcRenderer.invoke(PET_SELECTION_GET_CHANNEL),
+    onSelection: (callback: (state: PetActivationState) => void) => {
+      const listener = (_event: unknown, state: PetActivationState) => callback(state);
+      ipcRenderer.on(PET_SELECTION_STATE_CHANNEL, listener);
+      return () => ipcRenderer.removeListener(PET_SELECTION_STATE_CHANNEL, listener);
+    },
     setSettings: (patch: PetSettingPatch): Promise<PetState> => ipcRenderer.invoke(PET_SET_CHANNEL, patch),
     catalog: (request: PetCatalogRequest): Promise<{ ok: boolean; data?: unknown; error?: string }> =>
       ipcRenderer.invoke(PET_CATALOG_CHANNEL, request),

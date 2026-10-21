@@ -28,7 +28,7 @@ try {
   const sizeButtons = () => `[...(${section}).querySelectorAll('[role="group"] button[aria-pressed]')]`;
   const state = () => ev('window.tud.dshPet.getState()');
   const idle = async () => {
-    for (let i = 0; i < 150; i++) { if (await ev(`!!(${section})?.querySelector('input[role="switch"]') && !(${section}).querySelector('input[role="switch"]').disabled && (${section}).getAttribute('aria-busy')!=='true'`)) return; await wait(100); }
+    for (let i = 0; i < 150; i++) { if (await ev(`!!(${petSection})?.querySelector('input[role="switch"]') && !(${petSection}).querySelector('input[role="switch"]').disabled && (${section}).getAttribute('aria-busy')!=='true'`)) return; await wait(100); }
     throw Error('Settings stayed busy');
   };
   const click = async expression => { await page.click(expression); await wait(60); await idle(); };
@@ -64,8 +64,8 @@ try {
     const before = await state(), builtinBefore = await ev('window.tud.pet.getState()');
     await page.click(petTile('Clawd'));
     assert.equal(await ev(`(${section}).checkVisibility()`), false);
-    assert.equal(await ev(`(${petSection}).querySelector('h4').textContent`), 'Clawd');
-    assert.equal(await ev(`(${petSection}).querySelector('input[type="checkbox"]').checked`), builtinBefore.settings.visible);
+    assert.ok((await ev(`(${petSection}).querySelector('h4').textContent`)).startsWith('Clawd'));
+    assert.equal(await ev(`(${petSection}).querySelector('input[role="switch"]').checked`), builtinBefore.settings.visible || before.enabled);
     await page.click(petTile(text('title')));
     assert.equal(await ev(`(${section}).checkVisibility()`), true);
     assert.equal((await state()).enabled, before.enabled, 'view selection must not toggle the companion');
@@ -150,7 +150,7 @@ try {
   await check('font-size', async () => { await edit('fontSize','23'); assert.equal((await state()).config.main.font.size,23); });
   await check('quota-unselected', async () => { await select('quota',''); assert.equal((await state()).quotaSource,null); });
   await check('interval:balance', async () => { await edit('interval.balance','1234',0,group('behavior')); assert.equal((await state()).config.main.eventsRefreshSec.balance,1234); });
-  await check('enable-after-settings', async () => { await click(`(${section}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'running'); await wait(1500); assert.equal((await state()).status,'running'); });
+  await check('enable-after-settings', async () => { await ev('window.tud.pet.select({kind:"dsh"})'); await click(`(${petSection}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'running'); await wait(1500); assert.equal((await state()).status,'running'); });
   const ownedHelper = () => {
     const command=`Get-CimInstance Win32_Process -Filter 'ParentProcessId = ${probe.child.pid}' | Where-Object { $_.CommandLine -like '*--quotern-dsh-pet-helper*' } | Select-Object -ExpandProperty ProcessId`;
     const output=execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{encoding:'utf8',windowsHide:true});
@@ -171,7 +171,7 @@ try {
     const animation=await ev(`(${field('animation')}).options[1].value`); await select('animation',animation); await click(button('play',group('controls')));
     assert.ok((await readPetState()).pets[target].anim.counter>before);
   });
-  await check('disable-before-advanced', async () => { await click(`(${section}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'disabled'); });
+  await check('disable-before-advanced', async () => { await click(`(${petSection}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'disabled'); });
   await check('load-jsonc', async () => { await click(button('loadConfig')); assert.ok((await ev(`(${section}).querySelector('textarea[name="jsonc"]').value`)).includes((await state()).config.main.pets[0].name)); });
   const jsonc=`(${section}).querySelector('textarea[name="jsonc"]')`;
   await check('invalid-jsonc-preserves-draft-and-config', async () => { const before=JSON.stringify((await state()).config); await page.fill(jsonc,'{"pets":'); await click(button('saveConfig')); assert.ok(await ev(`!!(${section}).querySelector('[role="alert"]')`)); assert.equal(await ev(`(${jsonc}).value`),'{"pets":'); assert.equal(JSON.stringify((await state()).config),before); });

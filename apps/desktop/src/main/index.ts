@@ -70,6 +70,8 @@ import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
 import { PetController } from './pet-controller';
 import { PetActivation } from './pet-activation';
+import path from 'node:path';
+import { PET_SELECT_CHANNEL, PET_ENABLE_CHANNEL, PET_SELECTION_GET_CHANNEL, PET_SELECTION_STATE_CHANNEL, type PetSelection } from '../shared/pet';
 import { initializeDshPet } from './dsh-pet';
 import { DSH_PET_PREVIEW_PROTOCOL } from '../shared/dsh-pet-preview';
 import { buildDshPetTrayMenu } from './dsh-pet/tray-menu';
@@ -242,6 +244,7 @@ function registerShareCardIpc(): void {
 let disposeTrayUsageSync: (() => void) | null = null;
 let onPowerResumeListener: (() => void) | null = null;
 let petController: PetController | null = null;
+let toggleCurrentPet: (() => void) | null = null;
 let dshPet: Awaited<ReturnType<typeof initializeDshPet>> | null = null;
 let trayUsageRefreshGeneration = 0;
 
@@ -517,10 +520,25 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       petController?.updateQuotaState(state);
     } });
     if (process.platform === 'win32') {
+      const broadcastSelection = () => {
+        const window = getMainWindow();
+        if (window && !window.isDestroyed()) window.webContents.send(PET_SELECTION_STATE_CHANNEL, activation.getState());
+        petController?.refreshSelection();
+      };
       const activation = new PetActivation({
         builtin: async () => { await petController?.hide(); },
         dsh: async () => { await dshPet?.controller.deactivate(); },
+      }, {
+        file: path.join(app.getPath('userData'), 'pet-selection.json'),
+        isEnabled: () => Boolean(petController?.isVisible() || dshPet?.controller.isEnabled()),
+        enable: {
+          builtin: async () => { if (!petController) throw new Error('Desktop pet unavailable'); await petController.activate(); },
+          dsh: async () => { if (!dshPet) throw new Error('Desktop pet unavailable'); await dshPet.controller.activate(); },
+        },
+        selectBuiltin: async character => { if (!petController) throw new Error('Desktop pet unavailable'); await petController.selectCharacter(character); },
+        onChanged: broadcastSelection,
       });
+      await activation.initialize().catch(error => console.error('[tud-desktop] failed to load current pet:', error));
       petController = new PetController({
         toggleMainWindow: () => {
           const window = getMainWindow();
@@ -536,6 +554,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         getLocale: getNativeLocale,
         getQuotaState: getQuotaRuntimeState,
         coordinateVisibility: (visible, operation) => activation.run('builtin', visible, operation),
+        getCurrentKind: () => activation.currentKind,
       });
       try {
         await petController.initialize();
@@ -548,10 +567,31 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       }
       // Restore dsh-pet last: old configurations with both enabled converge to one pet.
       try {
-        dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow, coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation) });
+        dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow, coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation), onStateChanged: broadcastSelection });
         await dshPet.controller.initialize();
       }
-      catch (error) { console.error('[tud-desktop] independent dsh-pet initialization failed:', error instanceof Error ? error.message : 'unknown'); }
+      catch (error) {
+        console.error('[tud-desktop] independent dsh-pet initialization failed:', error instanceof Error ? error.message : 'unknown');
+        try { await dshPet?.dispose(); } catch (disposeError) { console.error('[tud-desktop] failed to dispose independent pet:', disposeError); }
+        dshPet = null;
+      }
+      const trustedPetSettings = (event: Electron.IpcMainInvokeEvent) => {
+        const window = getMainWindow();
+        if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Pet settings sender rejected');
+      };
+      ipcMain.handle(PET_SELECT_CHANNEL, async (event, target: PetSelection) => {
+        trustedPetSettings(event);
+        await activation.select(target);
+        return activation.getState();
+      });
+      ipcMain.handle(PET_ENABLE_CHANNEL, async (event, enabled: boolean) => {
+        trustedPetSettings(event);
+        await activation.setEnabled(enabled);
+        return activation.getState();
+      });
+      ipcMain.handle(PET_SELECTION_GET_CHANNEL, event => { trustedPetSettings(event); return activation.getState(); });
+      // The generic tray action resumes the applied pet, independent of preview.
+      toggleCurrentPet = () => { void activation.setEnabled(!activation.getState().enabled).catch(error => console.error('[tud-desktop] pet toggle failed:', error)); };
     }
     try {
       await initAutostartOnLaunch();
@@ -572,7 +612,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       showMainWindow,
       openSettings: () => openSettings(),
       triggerSync,
-      togglePet: () => petController?.toggle(),
+      togglePet: () => toggleCurrentPet?.(),
       getDshPetMenu: () => buildDshPetTrayMenu(dshPet?.controller ?? null, getNativeLocale()),
       onOpen: () => { void quotaRuntime?.manager.refresh('interaction'); },
     });
@@ -670,6 +710,10 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeTrayPopover();
     petController?.dispose();
     petController = null;
+    toggleCurrentPet = null;
+    ipcMain.removeHandler(PET_SELECT_CHANNEL);
+    ipcMain.removeHandler(PET_ENABLE_CHANNEL);
+    ipcMain.removeHandler(PET_SELECTION_GET_CHANNEL);
     disposeTrayUsageSync?.();
     disposeTrayUsageSync = null;
     if (onPowerResumeListener) {

@@ -51,7 +51,7 @@ try {
   let [builtin, dsh] = await state();
   assert.equal(builtin.settings.visible, true); assert.equal(dsh.enabled, false); assert.equal(dsh.status, 'disabled');
   checks.push('enabling Clawd closes and disables dsh helper');
-  await page.click(`(${section}).querySelector('[data-slot="switch-control"]')`);
+  await page.click(`[...(${section}).querySelectorAll('button')].find(el=>el.textContent.trim()==='设为当前宠物')`);
   await until(async () => (await state())[1].status === 'running', 'UI dsh enable');
   [builtin, dsh] = await state(); assert.equal(builtin.settings.visible, false); assert.equal(dsh.enabled, true);
   checks.push('enabling dsh from UI persists Clawd off');

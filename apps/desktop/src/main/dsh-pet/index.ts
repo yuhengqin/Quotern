@@ -9,7 +9,7 @@ import { DSH_PET_PREVIEW_SCHEME } from '../../shared/dsh-pet-preview.js';
 import { DshPetAssetStore } from './asset-store.js';
 import { createDshPetPreviewHandler } from './preview.js';
 
-export function initializeDshPet(options: { getMainWindow(): BrowserWindow | null; getQuota(): QuotaState | null; refreshQuota(): Promise<void>; showMainWindow(): void; coordinateVisibility<T>(visible: boolean, operation: () => Promise<T>): Promise<T> }) {
+export function initializeDshPet(options: { getMainWindow(): BrowserWindow | null; getQuota(): QuotaState | null; refreshQuota(): Promise<void>; showMainWindow(): void; coordinateVisibility<T>(visible: boolean, operation: () => Promise<T>): Promise<T>; onStateChanged?(): void }) {
   const notifications = new Set<Notification>();
   const navigation = new NotificationNavigation();
   const root = path.join(app.getPath('userData'), 'dsh-pet');
@@ -22,7 +22,7 @@ export function initializeDshPet(options: { getMainWindow(): BrowserWindow | nul
     isMainWindowVisible: () => Boolean(options.getMainWindow()?.isFocused()),
     openDirectory: async directory => { const error = await shell.openPath(directory); if (error) throw new Error(error); },
     roots: discoverDshPetActivityRoots,
-    onChanged: state => { const window = options.getMainWindow(); if (window && !window.isDestroyed()) window.webContents.send(DSH_PET_CHANGED, state); },
+    onChanged: state => { const window = options.getMainWindow(); if (window && !window.isDestroyed()) window.webContents.send(DSH_PET_CHANGED, state); options.onStateChanged?.(); },
     notify: (title, body, target) => { if (!Notification.isSupported()) return; const notice = new Notification({ title, body, silent: true }); notifications.add(notice); notice.once('click', () => {
       if (target) navigation.open(target);
       options.showMainWindow();

@@ -7,8 +7,17 @@ export const PET_STATE_CHANNEL = 'pet:state';
 export const PET_COMMAND_CHANNEL = 'pet:command';
 export const PET_CATALOG_CHANNEL = 'pet:catalog';
 export const PET_EVENT_CHANNEL = 'pet:event';
+export const PET_SELECT_CHANNEL = 'pet:select';
+export const PET_ENABLE_CHANNEL = 'pet:enable';
+export const PET_SELECTION_GET_CHANNEL = 'pet:selection:get';
+export const PET_SELECTION_STATE_CHANNEL = 'pet:selection:state';
+
+export type PetKind = 'builtin' | 'dsh';
+export type PetSelection = { kind: 'builtin'; character: string } | { kind: 'dsh' };
+export interface PetActivationState { currentKind: PetKind; enabled: boolean }
 
 export interface PetState {
+  currentKind: PetKind;
   settings: PetSettings;
   catalog: PetCatalogEntry[];
   stats: PetStats;

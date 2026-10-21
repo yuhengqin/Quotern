@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { Button, Switch } from '@heroui/react';
+import { Button } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { DshPetAction, DshPetState } from '../../shared/dsh-pet';
 import { DSH_PET_WIDTHS, dshPetSize } from '../../shared/dsh-pet-size';
@@ -59,7 +59,7 @@ function useSavedDraft({ value, revision, onSave }: SavedFieldProps) {
 function SavedInput({ value, revision, onSave, ...props }: SavedFieldProps & Omit<ComponentProps<'input'>, 'value' | 'defaultValue' | 'onChange' | 'onBlur'>) {
   return <input {...props} {...useSavedDraft({ value, revision, onSave })} />;
 }
-export function DshPetSettingsCard({ active = true }: { active?: boolean }) {
+export function DshPetSettingsCard({ active = true, headerAction }: { active?: boolean; headerAction?: ReactNode }) {
   const { t } = useTranslation(); const text = (key: string) => t(`desktop.dshPet.${key}`);
   const [state, setState] = useState<DshPetState | null>(null), [quota, setQuota] = useState<QuotaState | null>(null);
   const [busy, setBusy] = useState(false), [feedback, setFeedback] = useState(''), [failed, setFailed] = useState(false);
@@ -108,7 +108,7 @@ export function DshPetSettingsCard({ active = true }: { active?: boolean }) {
     return run({ type: 'patch-pet', petId: String(id), patch: value }, background);
   };
   return <div className="space-y-4 text-left" role="group" data-pet-settings="dsh" aria-label={text('title')} aria-busy={pending > 0}>
-    <div className="flex items-start justify-between gap-3"><div><h4 className="text-sm font-semibold">{text('title')}</h4><p className="mt-1 text-xs text-muted">{text('description')}</p></div><Switch className="shrink-0" aria-label={text('enable')} isSelected={state.enabled} isDisabled={busy} onChange={enabled => { void run({ type: 'set-enabled', enabled }); }}><Switch.Content className="gap-2 text-xs"><Switch.Control><Switch.Thumb /></Switch.Control>{text('enable')}</Switch.Content></Switch></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h4 className="flex items-center gap-2 text-sm font-semibold">{text('title')}<span className="text-xs font-normal text-muted">{t('desktop.pet.previewing')}</span></h4><p className="mt-1 text-xs text-muted">{text('description')}</p></div>{headerAction}</div>
     <div className="flex items-center gap-3 text-xs"><span>{text(`status.${state.status}`)}</span>{state.status === 'error' && <Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'retry' }); }}>{text('retry')}</Button>}</div>
     {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
     {feedback && <p role={failed ? 'alert' : 'status'} className={`break-words text-xs ${failed ? 'text-danger' : 'text-success'}`}>{feedback}</p>}

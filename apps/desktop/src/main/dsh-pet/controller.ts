@@ -42,6 +42,7 @@ export class DshPetController {
     }
   }
   getState(): DshPetState { return { enabled: this.enabled, status: this.status, error: this.error, config: this.config.read(), quotaSource: this.quotaSource, sources: this.monitor?.capabilities() ?? ['codex', 'claude', 'dsh'].map(source => ({ source, states: [], reason: '宠物未运行；尚未监听', lastEventAt: null })) }; }
+  isEnabled(): boolean { return this.enabled; }
   private changed(): void { if (!this.disposed) this.options.onChanged?.(this.getState()); }
   private enqueue<T>(operation: () => Promise<T>): Promise<T> { const run = this.queue.then(operation); this.queue = run.catch(() => {}); return run; }
   private persist(): Promise<void> { return atomicPrivateFile(path.join(this.options.root, 'preferences.json'), JSON.stringify({ enabled: this.enabled, quotaSource: this.quotaSource, petId: this.config.petId() })); }
@@ -64,7 +65,17 @@ export class DshPetController {
     return this.applyAction(action);
   }
   /** Coordinator-only stop; bypass its outer queue to avoid recursive locking. */
-  deactivate(): Promise<unknown> { return this.applyAction({ type: 'set-enabled', enabled: false }); }
+  deactivate(): Promise<unknown> {
+    return this.enqueue(async () => {
+      // An inactive companion must not require readable media/config to allow
+      // the independent builtin pet to start. Keep this check inside its queue.
+      if (!this.enabled) { await this.stop(); return; }
+      await this.setEnabled(false);
+      this.changed();
+    });
+  }
+  /** Coordinator-only start, paired with deactivate to avoid recursive locking. */
+  activate(): Promise<unknown> { return this.applyAction({ type: 'set-enabled', enabled: true }); }
   private applyAction(action: DshPetAction): Promise<unknown> {
     if (!action || typeof action !== 'object' || this.disposed) return Promise.reject(new Error('宠物操作无效'));
     if (action.type === 'read-config') return Promise.resolve(this.config.readEditableText());

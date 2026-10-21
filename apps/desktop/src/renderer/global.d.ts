@@ -23,14 +23,7 @@ declare global {
       close: () => void;
       showMainWindow: () => void;
       quit: () => void;
-      pet: {
-        getState: () => Promise<import('../shared/pet').PetState>;
-        setSettings: (patch: import('../shared/pet').PetSettingPatch) => Promise<import('../shared/pet').PetState>;
-        catalog: (request: import('../shared/pet').PetCatalogRequest) => Promise<{ ok: boolean; data?: unknown; error?: string }>;
-        command: (command: string) => void;
-        onState: (callback: (state: import('../shared/pet').PetState) => void) => () => void;
-        onEvent: (callback: (event: { type: string; detail?: unknown }) => void) => () => void;
-      };
+      pet: import('../preload/index').TudApi['pet'];
       getAutoUpdateState: () => Promise<import('../shared/auto-update').AutoUpdateState>;
       checkForUpdates: () => Promise<import('../shared/auto-update').AutoUpdateState>;
       installDownloadedUpdate: () => Promise<import('../shared/auto-update').AutoUpdateState>;

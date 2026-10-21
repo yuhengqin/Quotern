@@ -1,5 +1,5 @@
 export const dshPetRows: Record<string, readonly [string, string, string, string]> = Object.fromEntries(Object.entries({
-  title: ['独立 dsh-pet', 'Independent dsh-pet', '独立 dsh-pet', '독립 dsh-pet'],
+  title: ['大肥鱼', '大肥鱼', '大肥鱼', '大肥鱼'],
   description: ['一只桌宠陪伴，保留完整视频动作与甩抛；右键宠物打开菜单。', 'One companion with video animations and throwing. Right-click for its menu.', '1匹のペットが動画アニメーションと投げ操作に対応。右クリックでメニューを表示。', '한 마리의 펫이 영상 동작과 던지기를 지원합니다. 오른쪽 클릭으로 메뉴를 여세요.'],
   enable: ['启用', 'Enable', '有効', '사용'], loading: ['正在读取独立宠物设置…', 'Loading companion settings…', '設定を読み込み中…', '설정 불러오는 중…'],
   unavailable: ['独立宠物暂不可用', 'Companion unavailable', '現在利用できません', '펫을 사용할 수 없습니다'],

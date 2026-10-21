@@ -30,7 +30,9 @@ let page, inspector;
 try {
   page = await probe.connect(target => /index\.html/.test(target.url));
   const ev = page.evaluate;
-  const section = `[...document.querySelectorAll('section')].find(el=>el.getAttribute('aria-label')?.includes('dsh-pet'))`;
+  const section = `document.querySelector('[data-pet-settings="dsh"]')`;
+  const petSection = `(${section}).closest('section')`;
+  const petTile = name => `[...(${petSection}).querySelectorAll('button[aria-pressed]')].find(el=>el.textContent.includes(${JSON.stringify(name)}))`;
   const group = key => `[...(${section}).querySelectorAll('details')].find(el=>el.querySelector('summary')?.textContent===${JSON.stringify(text(key))})`;
   const button = (key, within = section, index = 0) => `[...(${within}).querySelectorAll('button')].filter(el=>el.textContent.trim()===${JSON.stringify(text(key))})[${index}]`;
   const field = (key, index = 0) => `[...(${section}).querySelectorAll('label')].filter(el=>el.childNodes[0]?.textContent===${JSON.stringify(text(key))} || el.textContent.trim()===${JSON.stringify(text(key))})[${index}]?.querySelector('input,select,textarea')`;
@@ -65,6 +67,25 @@ try {
     if (await ev(`!!(${section})`)) break;
   }
   await idle();
+  await page.click(petTile(text('title')));
+  await check('unified-pet-settings-and-preserved-drafts', async () => {
+    assert.equal(await ev(`(${petSection}).querySelectorAll('h3').length`), 1, 'one desktop pet card');
+    assert.equal(await ev(`(${section}).querySelectorAll('section').length`), 0, 'companion settings are embedded');
+    const before = await state(), builtinBefore = await ev('window.tud.pet.getState()');
+    await page.click(`(${group('models')}).querySelector('summary')`);
+    await page.fill(`(${group('models')}).querySelector('input[name="id"]')`, 'unsaved-provider');
+    await page.click(petTile('Clawd'));
+    assert.equal(await ev(`(${section}).checkVisibility()`), false);
+    assert.equal(await ev(`(${petSection}).querySelector('h4').textContent`), 'Clawd');
+    assert.equal(await ev(`(${petSection}).querySelector('input[type="checkbox"]').checked`), builtinBefore.settings.visible);
+    await page.click(petTile(text('title')));
+    assert.equal(await ev(`(${section}).checkVisibility()`), true);
+    assert.equal(await ev(`(${group('models')}).querySelector('input[name="id"]').value`), 'unsaved-provider');
+    assert.equal((await state()).enabled, before.enabled, 'view selection must not toggle the companion');
+    assert.equal((await ev('window.tud.pet.getState()')).settings.visible, builtinBefore.settings.visible, 'view selection must not toggle the built-in pet');
+    await page.fill(`(${group('models')}).querySelector('input[name="id"]')`, '');
+    await page.click(`(${group('models')}).querySelector('summary')`);
+  });
   for (const key of ['instances','behavior','models','controls','activity','advanced']) {
     await check(`fold:${key}`, async () => {
       const summary = `(${group(key)}).querySelector('summary')`;

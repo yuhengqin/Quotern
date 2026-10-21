@@ -24,6 +24,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'desktop.pet.operationFailed': ['宠物操作失败，请重试。', 'Pet action failed. Try again.', 'ペットの操作に失敗しました。再試行してください。', '펫 작업에 실패했습니다. 다시 시도하세요.'],
   'desktop.pet.settings': ['桌面宠物设置', 'Desktop pet settings', 'デスクトップペットの設定', '데스크톱 펫 설정'],
   'desktop.pet.title': ['桌面宠物', 'Desktop pet', 'デスクトップペット', '데스크톱 펫'],
+  'desktop.pet.pickerDescription': ['选择角色，分别设置显示与行为。', 'Choose a character to adjust its visibility and behavior.', 'キャラクターを選び、それぞれの表示と動作を設定します。', '캐릭터를 선택해 표시 여부와 동작을 각각 설정하세요.'],
   'desktop.pet.description': ['悬浮在桌面上，随本机用量变化表情。单击看短句，拖动调整位置，右键打开菜单。', 'Floats on your desktop and reacts to local usage. Click for a short message, drag to move it, or right-click for its menu.', 'デスクトップに浮かび、ローカルの使用状況に応じて表情が変わります。クリックで一言を表示、ドラッグで移動、右クリックでメニューを開けます。', '바탕 화면에 떠 있으며 이 기기의 사용량에 따라 표정이 바뀝니다. 클릭하면 짧은 메시지를 보고, 드래그로 옮기고, 오른쪽 클릭으로 메뉴를 엽니다.'],
   'desktop.pet.show': ['显示', 'Show', '表示', '표시'],
   'desktop.pet.remove': ['移除 {{name}}', 'Remove {{name}}', '{{name}} を削除', '{{name}} 제거'],

@@ -30,7 +30,6 @@ import {
 import { AboutContent } from '@/components/AboutContent';
 import { StatusBanner } from '@/components/StatusBanner';
 import { PetSettingsCard } from '@/components/PetSettingsCard';
-import { DshPetSettingsCard } from '@/components/DshPetSettingsCard';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
 import { useTranslation } from 'quotern-i18n/react';
 import { LanguagePreferenceControl } from '../../../../../packages/dashboard/src/components/LanguagePreferenceControl';
@@ -399,7 +398,6 @@ function AppSettingsPanel() {
       )}
 
       {isWindows && <PetSettingsCard />}
-      {isWindows && <DshPetSettingsCard />}
 
       <Card variant="tertiary" className="rounded-xl shadow-none">
         <Card.Content>

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'quotern-i18n/react';
+import { Fish } from 'lucide-react';
+import { DshPetSettingsCard } from './DshPetSettingsCard';
 import type { PetCatalogEntry } from '../../main/pet-core';
 import type { PetCatalogRequest, PetSettingPatch, PetState } from '../../shared/pet';
 // These two renderers are shared with the standalone pet page copied from TokenTracker.
@@ -98,6 +100,7 @@ export function PetSettingsCard() {
   const [url, setUrl] = useState('');
   const [codexPets, setCodexPets] = useState<PetCatalogEntry[] | null>(null);
   const [selectedCodex, setSelectedCodex] = useState<string[]>([]);
+  const [showDshSettings, setShowDshSettings] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -109,7 +112,7 @@ export function PetSettingsCard() {
   }, []);
 
   useEffect(() => {
-    if (!autoRotatePreview) return;
+    if (!autoRotatePreview || showDshSettings) return;
     const timer = window.setInterval(() => {
       setPreviewState(current => {
         const index = PREVIEW_STATES.findIndex(item => item.id === current);
@@ -117,7 +120,7 @@ export function PetSettingsCard() {
       });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [autoRotatePreview]);
+  }, [autoRotatePreview, showDshSettings]);
 
   const selected = useMemo(() => state?.catalog.find(pet => pet.id === state.settings.character) ?? state?.catalog[0], [state]);
 
@@ -152,35 +155,20 @@ export function PetSettingsCard() {
     finally { setBusy(false); }
   };
 
-  if (!state) return error
-    ? <div role="alert" className="text-sm text-danger">{t(error.key, error.options)}</div>
-    : <div className="text-sm text-muted">{t('desktop.pet.loading')}</div>;
-
   return (
     <section className="rounded-xl border border-default-200 bg-content1 p-4 text-left dark:border-default-100/20" aria-label={t('desktop.pet.settings')}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">{t('desktop.pet.title')}</h3>
-          <p className="mt-1 text-xs text-muted">{t('desktop.pet.description')}</p>
-        </div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-foreground">
-          <input type="checkbox" checked={state.settings.visible} disabled={busy} onChange={event => void update({ visible: event.target.checked })} />
-          {t('desktop.pet.show')}
-        </label>
-      </div>
-
-      {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
-      {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
+      <h3 className="text-sm font-semibold text-foreground">{t('desktop.pet.title')}</h3>
+      <p className="mt-1 text-xs text-muted">{t('desktop.pet.pickerDescription')}</p>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {state.catalog.map(pet => (
+        {state?.catalog.map(pet => (
           <div key={pet.id} className="relative">
             <button
               type="button"
               disabled={busy}
-              aria-pressed={state.settings.character === pet.id}
-              onClick={() => void update({ character: pet.id })}
-              className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${state.settings.character === pet.id ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
+              aria-pressed={!showDshSettings && state.settings.character === pet.id}
+              onClick={() => { setShowDshSettings(false); if (state.settings.character !== pet.id) void update({ character: pet.id }); }}
+              className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${!showDshSettings && state.settings.character === pet.id ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
             >
               <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden"><PetCardSprite pet={pet} color={state.settings.botColor} /></span>
               <span className="truncate">{pet.displayName}</span>
@@ -198,9 +186,37 @@ export function PetSettingsCard() {
             )}
           </div>
         ))}
+        <button
+          type="button"
+          disabled={busy}
+          aria-pressed={showDshSettings}
+          onClick={() => setShowDshSettings(true)}
+          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-accent ${showDshSettings ? 'border-accent bg-accent/10 font-semibold' : 'border-default-200 hover:bg-default-100 dark:border-default-100/20'}`}
+        >
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center"><Fish className="size-8 text-accent" /></span>
+          <span className="min-w-0"><span className="block truncate">{t('desktop.dshPet.title')}</span><span className="mt-0.5 block text-[10px] font-normal text-muted">dsh-pet</span></span>
+        </button>
       </div>
 
-      {selected && (
+      {/* Keep both editors mounted so changing the selected tile preserves drafts. */}
+      <div hidden={showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
+      {!state ? (
+        error ? <p role="alert" className="text-xs text-danger">{t(error.key, error.options)}</p> : <p role="status" className="text-xs text-muted">{t('desktop.pet.loading')}</p>
+      ) : <>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h4 className="text-sm font-semibold text-foreground">{selected?.displayName}</h4>
+          <p className="mt-1 text-xs text-muted">{t('desktop.pet.description')}</p>
+        </div>
+        <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-foreground">
+          <input type="checkbox" checked={state.settings.visible} disabled={busy} onChange={event => void update({ visible: event.target.checked })} />
+          {t('desktop.pet.show')}
+        </label>
+      </div>
+      {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
+      {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
+
+      {selected && !showDshSettings && (
         <div className="mt-4">
           <PetPreview pet={selected} state={previewState} color={state.settings.botColor} />
           <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-6" aria-label={t('desktop.pet.previewActions')}>
@@ -265,6 +281,11 @@ export function PetSettingsCard() {
             )}
           </div>
         )}
+      </div>
+      </>}
+      </div>
+      <div hidden={!showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
+        <DshPetSettingsCard />
       </div>
     </section>
   );

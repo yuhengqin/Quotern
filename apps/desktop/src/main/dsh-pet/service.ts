@@ -1,22 +1,19 @@
-import type { ActivityEvent, ModelRef, RpcRequest, RpcResponse, SessionNavigationTarget } from '../../shared/dsh-pet.js';
+import type { ActivityEvent, RpcRequest, RpcResponse, SessionNavigationTarget } from '../../shared/dsh-pet.js';
 import type { QuotaState } from '../../shared/quota.js';
 import type { DshPetConfigStore } from './config-store.js';
 import type { DshPetAssetStore } from './asset-store.js';
-import type { DshPetMemoryStore } from './memory-store.js';
-import type { DshPetModelService, ModelMessage } from './model-service.js';
 import type { MemeEntry, PetInstance } from './vendor.js';
 import { toDshPetBalance } from './balance.js';
 import { DshPetControls, motionCue, type PlaybackStatus } from './controls.js';
 
 interface Options {
-  config: DshPetConfigStore; assets: DshPetAssetStore; memory: DshPetMemoryStore; models: DshPetModelService;
+  config: DshPetConfigStore; assets: DshPetAssetStore;
   getQuota(): QuotaState | null; quotaSource(): string | null; refreshQuota?(): Promise<void>;
   reload(): Promise<void>; showMainWindow(): void; now?(): number; onChanged?(): void;
   notify?(title: string, body: string, target?: SessionNavigationTarget): void; isMainWindowVisible?(): boolean;
 }
 const json = (body: unknown, status = 200): RpcResponse => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const failure = (reason: string, message?: string) => ({ ok: false, reason, ...(message ? { message } : {}) });
-const modelRef = (raw: unknown): ModelRef | undefined => { const ref = raw as ModelRef | null; return ref?.provider && ref.model ? ref : undefined; };
 const object = (raw: unknown): Record<string, unknown> => raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
 
 /** Host actions shared by the helper and the independent settings IPC. No HTTP listener. */
@@ -25,11 +22,8 @@ export class DshPetService {
   private readonly poll;
   private readonly work;
   private readonly controls;
-  private readonly conversations = new Map<string, Promise<unknown>>();
-  private readonly whispers = new Map<string, AbortController>();
   private readonly events = new Set<string>();
   private readonly activity = new Map<string, { at: number; expires: number }>();
-  private readonly whisperAt = new Map<string, number>();
   private balanceAt = -Infinity;
   private balanceRun: Promise<void> | null = null;
   private seq = 0;
@@ -85,7 +79,7 @@ export class DshPetService {
       if (!['desktop', 'both'].includes(String(instance.pet.display))) return json(failure('pet-not-displayed'));
       const surface = url.searchParams.get('surface');
       if (surface && surface !== 'desktop' && surface !== 'any') return json(failure('surface-unavailable'), 400);
-      if (route === '/lock') { this.whispers.get(id)?.abort(); return json(this.controls.acquire(id, body)); }
+      if (route === '/lock') return json(this.controls.acquire(id, body));
       const gate = this.controls.gate(id, url.searchParams.get('lock'));
       if (!gate.ok) return json(gate);
       if (route === '/position' || route === '/throw') {
@@ -105,17 +99,11 @@ export class DshPetService {
       }
       return json(result);
     }
-    if (method === 'GET' && route === '/chat') { const rounds = Number(instance.conf.chatMemoryRounds ?? 5); return json({ ok: true, messages: this.options.memory.get(instance.entry, id, rounds), rounds }); }
     if (method === 'POST' && route === '/broadcast') {
       if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 2000) return json(failure('bad-request'), 400);
       const pool = await this.memes(instance);
       const image = typeof body.image === 'string' && pool.some(item => item.name === body.image) ? body.image : undefined;
       this.poll.writePet(id, 'say', { text: body.text.trim(), ...(image ? { image } : {}) }); return json({ ok: true });
-    }
-    if (method === 'POST' && route === '/whisper') return json(await this.whisper(id, instance, signal));
-    if (method === 'POST' && route === '/chat') {
-      if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 2000) return json(failure('bad-request'), 400);
-      return json(await this.chat(id, instance, body.text.trim(), signal));
     }
     return json(failure('not-found'), 404);
   }
@@ -128,48 +116,7 @@ export class DshPetService {
     for (const [name, desc] of Object.entries(object(instance.conf.memes))) if (typeof desc === 'string' && desc.trim() && await this.options.assets.resolve(`/pic/memes/${encodeURIComponent(instance.entry)}/${encodeURIComponent(name)}.png`)) pool.push({ name, desc });
     return pool;
   }
-  private prompt(instance: PetInstance): string { return `${String(instance.conf.whisperPrompt ?? '')}\n你的名字是“${String(instance.pet.name ?? instance.pet.id)}”。\n${this.options.config.vendor.timeContextOf(new Date(this.now()))}`; }
-  private async chat(id: string, instance: PetInstance, text: string, external?: AbortSignal): Promise<unknown> {
-    this.whispers.get(id)?.abort();
-    const timeout = AbortSignal.timeout(50_000);
-    const signal = AbortSignal.any([this.lifetime.signal, timeout, ...(external ? [external] : [])]);
-    const previous = this.conversations.get(id) ?? Promise.resolve();
-    const run = previous.catch(() => {}).then(async () => {
-      if (signal.aborted) return failure('cancelled');
-      const pool = instance.conf.chatImageEnabled ? this.options.config.vendor.limitPool(await this.memes(instance), Number(instance.conf.chatImageLimit ?? 10)) : [];
-      const messages: ModelMessage[] = [{ role: 'system', content: `${this.prompt(instance)}${pool.length ? `\n可选表情包：\n${this.options.config.vendor.memeCatalog(pool)}\n合适时在末尾写[图:名称]，最多一张。` : ''}` }, ...this.options.memory.get(instance.entry, id, Number(instance.conf.chatMemoryRounds ?? 5)).map(({ role, content }) => ({ role, content })), { role: 'user', content: text }];
-      this.ownActivity(id, 'thinking');
-      const result = await this.options.models.generate({ petId: id, kind: 'chat', messages, preferred: modelRef(instance.conf.chatModel), signal });
-      if (signal.aborted) { this.ownActivity(id, null); return failure(timeout.aborted ? 'timeout' : 'cancelled'); }
-      if (!result.ok) { this.ownActivity(id, 'error'); this.notification('宠物回复失败', result.message ?? result.reason ?? '模型请求失败'); return result; }
-      const say = this.options.config.vendor.extractChatImage(result.text!, pool);
-      try { await this.options.memory.append(instance.entry, id, [{ role: 'user', content: text, ts: this.now() }, { role: 'assistant', content: say.text, ts: this.now() }], signal); }
-      catch (error) { if (signal.aborted) { this.ownActivity(id, null); return failure('cancelled'); } throw error; }
-      if (signal.aborted) { this.ownActivity(id, null); return failure('cancelled'); }
-      this.poll.writePet(id, 'say', say); this.ownActivity(id, null); this.notification('宠物回复完成', String(instance.pet.name ?? id));
-      const { text: _text, ...action } = result; return action;
-    });
-    this.conversations.set(id, run);
-    try { return await run; } finally { if (this.conversations.get(id) === run) this.conversations.delete(id); }
-  }
-  private async whisper(id: string, instance: PetInstance, external?: AbortSignal): Promise<unknown> {
-    if (this.conversations.has(id) || this.whispers.has(id)) return failure('busy');
-    const pending = new AbortController(); this.whispers.set(id, pending);
-    const signal = AbortSignal.any([this.lifetime.signal, pending.signal, ...(external ? [external] : [])]);
-    const session = `whisper:${id}`;
-    try {
-      const pool = instance.conf.whisperImageEnabled ? await this.memes(instance) : [];
-      const image = pool.length ? pool[Math.floor(Math.random() * pool.length)] : undefined;
-      this.ownActivity(session, 'thinking');
-      const result = await this.options.models.generate({ petId: id, kind: 'whisper', preferred: modelRef(instance.conf.whisperModel), messages: [{ role: 'system', content: this.prompt(instance) }, { role: 'user', content: `随口说一句20字以内的话。${image ? `配合这张表情包：${image.desc}` : ''}` }], signal });
-      if (signal.aborted) { this.ownActivity(session, null); return failure('cancelled'); }
-      this.ownActivity(session, result.ok ? null : 'error');
-      if (result.ok) this.poll.writePet(id, 'say', { text: result.text, ...(image ? { image: image.name } : {}) });
-      const { text: _text, ...action } = result; return action;
-    } finally { this.whispers.delete(id); }
-  }
   private notification(title: string, body: string, target?: SessionNavigationTarget): void { if (this.options.config.read().main?.notificationsEnabled && !this.options.isMainWindowVisible?.()) this.options.notify?.(title, body, target); }
-  private ownActivity(id: string, state: ActivityEvent['state']): void { this.onActivity({ id: `pet-${++this.seq}`, source: 'pet', sessionId: id, timestamp: new Date(this.now()).toISOString(), state, evidence: 'model-response', terminal: state === 'success' || state === 'error' }); }
   onActivity(event: ActivityEvent): void {
     if (this.lifetime.signal.aborted || this.events.has(event.id)) return;
     const at = Date.parse(event.timestamp), now = this.now(), key = `${event.source}:${event.sessionId}`;
@@ -196,12 +143,6 @@ export class DshPetService {
     const cfg = this.options.config.read(), vendor = this.options.config.vendor, pets = vendor.flattenPetList(cfg);
     const seconds = Number(object(cfg.main?.eventsRefreshSec).balance ?? 1800);
     if (pets.some(pet => pet.balanceEnabled) && now - this.balanceAt >= seconds * 1000) { this.balanceAt = now; await this.refreshBalance(false); }
-    for (const pet of pets) {
-      const id = String(pet.id), instance = vendor.findPetInstance(cfg, id); if (!instance || !pet.whisperEnabled || this.controls.locked(id)) continue;
-      const interval = Number(object(instance.conf.eventsRefreshSec).whisper ?? 300) * 1000;
-      if (now - (this.whisperAt.get(id) ?? -Infinity) >= interval && (this.options.models.publicState().defaultModel || modelRef(instance.conf.whisperModel))) { this.whisperAt.set(id, now); void this.whisper(id, instance).catch(() => {}); }
-    }
   }
-  dispose(): void { this.controls.dispose(); this.lifetime.abort(); if (this.timer) clearInterval(this.timer); if (this.reloadTimer) clearTimeout(this.reloadTimer); this.options.models.dispose(); }
-  async drain(): Promise<void> { await Promise.allSettled([...this.conversations.values()]); }
+  dispose(): void { this.controls.dispose(); this.lifetime.abort(); if (this.timer) clearInterval(this.timer); if (this.reloadTimer) clearTimeout(this.reloadTimer); }
 }

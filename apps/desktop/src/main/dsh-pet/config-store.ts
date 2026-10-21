@@ -6,6 +6,13 @@ import type { MergedConfig } from '../../shared/dsh-pet.js';
 import { parseJsonc } from './jsonc.js';
 import { loadVendor, type ConfigPaths, type VendorHost } from './vendor.js';
 import { atomicPrivateFile } from './storage.js';
+import { DSH_PET_WIDTHS, dshPetSize } from '../../shared/dsh-pet-size.js';
+
+const modelFields = new Set(['whisperPrompt', 'chatMemoryRounds', 'whisperModel', 'chatModel', 'whisperImageEnabled', 'chatImageEnabled', 'chatImageLimit']);
+function withoutModels(conf: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(conf).filter(([key]) => !modelFields.has(key)).map(([key, value]) =>
+    key === 'eventsRefreshSec' && value && typeof value === 'object' ? [key, { balance: (value as Record<string, unknown>).balance }] : [key, value]));
+}
 
 export class DshPetConfigStore {
   readonly paths: ConfigPaths;
@@ -29,13 +36,18 @@ export class DshPetConfigStore {
       ?? pets.find(pet => pet.display === 'desktop' || pet.display === 'both') ?? pets[0];
     this.selectedId = chosen ? String(chosen.id) : null;
     return Object.fromEntries(Object.entries(config).map(([entry, conf]) => [entry, {
-      ...conf,
+      ...withoutModels(conf),
       physics: { ...conf.physics as object, petCollision: false },
-      pets: (Array.isArray(conf.pets) ? conf.pets as Record<string, unknown>[] : []).filter(pet => pet.id === this.selectedId),
+      pets: (Array.isArray(conf.pets) ? conf.pets as Record<string, unknown>[] : []).filter(pet => pet.id === this.selectedId).map(({ whisperEnabled: _unused, ...pet }) => ({ ...pet, size: DSH_PET_WIDTHS[dshPetSize(pet.size)] })),
     }]));
   }
   petId(): string | null { this.read(); return this.selectedId; }
   readText(): string { return readFileSync(existsSync(this.paths.userFile) ? this.paths.userFile : this.paths.defaultFile, 'utf8'); }
+  readEditableText(): string {
+    const raw = withoutModels(parseJsonc(this.readText()));
+    if (Array.isArray(raw.pets)) raw.pets = raw.pets.map(({ whisperEnabled: _unused, ...pet }) => pet);
+    return JSON.stringify(raw, null, 2);
+  }
   version(): string { return this.vendor.configVersion(this.paths); }
 
   saveText(text: string): Promise<void> {
@@ -55,7 +67,7 @@ export class DshPetConfigStore {
       const merged = this.vendor.readAllConfig({ ...this.paths, userFile: staged });
       const baseline = parseJsonc(readFileSync(this.paths.defaultFile, 'utf8'));
       if (!this.vendor.saveUserConfig({ ...baseline, ...raw }, raw)) throw new Error('配置 pets 或设置字段无效');
-      for (const key of ['physics', 'font', 'confineToScreen', 'notificationsEnabled', 'whisperImageEnabled', 'chatImageEnabled', 'whisperModel', 'chatModel', 'eventsRefreshSec', 'animationWeights', 'animations', 'chatMemoryRounds', 'chatImageLimit', 'whisperPrompt', 'workStatusTexts']) {
+      for (const key of ['physics', 'font', 'confineToScreen', 'notificationsEnabled', 'eventsRefreshSec', 'animationWeights', 'animations', 'workStatusTexts']) {
         if (Object.hasOwn(raw, key) && JSON.stringify(raw[key]) !== JSON.stringify(merged.main?.[key])) throw new Error(`配置 ${key} 无效，未保存`);
       }
       if (raw.pets !== undefined && Array.isArray(raw.pets) && (merged.main?.pets as unknown[])?.length !== raw.pets.length) throw new Error('配置 pets 含重复或无效 ID');
@@ -72,7 +84,7 @@ export class DshPetConfigStore {
   }
   patchPet(id: string, patch: Record<string, unknown>): Promise<void> {
     const run = this.writes.then(async () => {
-      const allowed = new Set(['name', 'size', 'balanceEnabled', 'whisperEnabled', 'workStatusEnabled', 'fixedEnabled', 'display', 'position']);
+      const allowed = new Set(['name', 'size', 'balanceEnabled', 'workStatusEnabled', 'fixedEnabled', 'display', 'position']);
       if (Object.keys(patch).some(key => !allowed.has(key))) throw new Error('宠物设置字段无效');
       const found = this.vendor.findPetInstance(this.readAll(), id);
       if (!found) throw new Error('没有这只宠物');

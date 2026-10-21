@@ -1,39 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DshPetService } from './service.js';
 import { DshPetConfigStore } from './config-store.js';
 import { DshPetAssetStore } from './asset-store.js';
-import { DshPetModelService, type ModelMessage } from './model-service.js';
-import { DshPetMemoryStore } from './memory-store.js';
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-service-'));
-  const calls: ModelMessage[][] = [];
-  const api = createServer(async (request, response) => {
-    let text = ''; for await (const chunk of request) text += String(chunk);
-    const body = JSON.parse(text) as { messages: ModelMessage[] };
-    calls.push(body.messages);
-    const slow = body.messages.at(-1)?.content === 'Slow' || body.messages.at(-1)?.content.includes('随口说一句');
-    if (slow) await new Promise(resolve => setTimeout(resolve, 100));
-    if (!response.destroyed) { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { content: `reply-${calls.length}` }, finish_reason: 'stop' }] })); }
-  });
-  await new Promise<void>(resolve => api.listen(0, '127.0.0.1', resolve));
-  const models = new DshPetModelService(root, { isEncryptionAvailable: () => false, encryptString: () => { throw new Error(); }, decryptString: () => { throw new Error(); } });
-  await models.setProviders({ id: 'local', name: 'Local', baseUrl: `http://127.0.0.1:${(api.address() as { port: number }).port}/v1`, models: ['test'] });
-  await models.setDefaultModel({ provider: 'local', model: 'test' });
   const config = new DshPetConfigStore(root, path.resolve('out/dsh-pet'));
-  const memory = new DshPetMemoryStore(root);
   let reloads = 0, now = Date.now(), focused = false; const notifications: string[] = [], targets: unknown[] = [];
-  const service = new DshPetService({ config, models, memory, assets: new DshPetAssetStore(root, path.resolve('out/dsh-pet')), getQuota: () => null, quotaSource: () => null, reload: async () => { reloads++; }, showMainWindow: () => {}, now: () => now, notify: (title, _body, target) => { notifications.push(title); targets.push(target); }, isMainWindowVisible: () => focused });
+  const service = new DshPetService({ config, assets: new DshPetAssetStore(root, path.resolve('out/dsh-pet')), getQuota: () => null, quotaSource: () => null, reload: async () => { reloads++; }, showMainWindow: () => {}, now: () => now, notify: (title, _body, target) => { notifications.push(title); targets.push(target); }, isMainWindowVisible: () => focused });
   const call = async (method: string, route: string, body?: unknown, signal?: AbortSignal) => {
     const result = await service.handle({ id: 1, method, url: `/dsh-pet-7340/${route}`, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, signal);
     return { status: result.status, body: JSON.parse(result.body ?? '{}') };
   };
-  return { root, models, memory, config, service, call, calls, notifications, targets, focus: (value: boolean) => { focused = value; }, get reloads() { return reloads; }, advance: (ms: number) => { now += ms; }, close: async () => { service.dispose(); api.closeAllConnections(); await new Promise<void>(resolve => api.close(() => resolve())); await rm(root, { recursive: true, force: true }); } };
+  return { root, config, service, call, notifications, targets, focus: (value: boolean) => { focused = value; }, get reloads() { return reloads; }, advance: (ms: number) => { now += ms; }, close: async () => { service.dispose(); await rm(root, { recursive: true, force: true }); } };
 }
 
 test('preserves runtime state/action contracts and validates every built-in animation', async () => {
@@ -58,19 +41,19 @@ test('preserves runtime state/action contracts and validates every built-in anim
   } finally { await f.close(); }
 });
 
-test('legacy inactive companions receive neither automatic model requests nor manual actions', async () => {
+test('chat, conversation history and model-generated whispers are unavailable', async () => {
   const f = await fixture();
   try {
-    const pet = (f.config.read().main!.pets as object[])[0]!;
-    await f.config.patchMain({ pets: [{ ...pet, whisperEnabled: true }, { ...pet, id: 'unused', whisperEnabled: true }] });
+    for (const [method, route] of [['GET', 'chat?pet=main'], ['POST', 'chat?pet=main'], ['POST', 'whisper?pet=main']]) {
+      assert.equal((await f.call(method!, route!, { text: 'hello' })).status, 404);
+    }
     await f.service.refreshAutomatic();
-    await new Promise(resolve => setTimeout(resolve, 200));
-    assert.equal(f.calls.length, 1, 'only the active companion can generate automatic whispers');
-    assert.equal((await f.call('POST', 'chat?pet=unused', { text: 'No request' })).status, 404);
-    assert.equal(f.calls.length, 1);
-    assert.equal((await f.call('GET', 'state')).body.pets.unused, undefined);
+    const cfg = (await f.call('GET', 'config')).body;
+    assert.equal(cfg.main.chatModel, undefined);
+    assert.equal(cfg.main.pets[0].whisperEnabled, undefined);
   } finally { await f.close(); }
 });
+
 
 test('explicit notifications respect focus, the global switch and event deduplication', async () => {
   const f = await fixture();
@@ -83,55 +66,8 @@ test('explicit notifications respect focus, the global switch and event deduplic
   } finally { await f.close(); }
 });
 
-test('manual whisper works with automatic whispers off; an incoming chat cancels a pending whisper', async () => {
-  const f = await fixture();
-  try {
-    const main = f.config.read().main!;
-    await f.config.patchMain({ pets: (main.pets as Record<string, unknown>[]).map(pet => ({ ...pet, whisperEnabled: false })) });
-    assert.equal((await f.call('POST', 'whisper?pet=main')).body.ok, true);
-    const counter = (await f.call('GET', 'state')).body.pets.main.say.counter;
-    const pending = f.call('POST', 'whisper?pet=main'); await new Promise(resolve => setTimeout(resolve, 20));
-    const chat = f.call('POST', 'chat?pet=main', { text: 'Slow' });
-    assert.equal((await pending).body.ok, false);
-    assert.equal((await f.call('GET', 'state')).body.pets.main.say.counter, counter);
-    assert.equal((await chat).body.ok, true);
-    assert.equal(f.memory.get('main', 'main', 5).length, 2);
-  } finally { await f.close(); }
-});
 
-test('model replies clear their own work bubble while retaining external agent status', async () => {
-  const f = await fixture();
-  try {
-    assert.equal((await f.call('POST', 'chat?pet=main', { text: 'Visible reply' })).body.ok, true);
-    let state = (await f.call('GET', 'state')).body;
-    assert.equal(state.sections.workStatus.data.state, null, 'a synthetic completion must not cover the chat reply');
-    assert.match(state.pets.main.say.data.text, /reply-/);
-    assert.equal((await f.call('POST', 'whisper?pet=main')).body.ok, true);
-    state = (await f.call('GET', 'state')).body;
-    assert.equal(state.sections.workStatus.data.state, null);
-    f.service.onActivity({ id: 'external-success', source: 'dsh', sessionId: 'external', state: 'success', timestamp: new Date().toISOString(), evidence: 'real-event', terminal: true });
-    assert.equal((await f.call('POST', 'chat?pet=main', { text: 'Another reply' })).body.ok, true);
-    assert.equal((await f.call('GET', 'state')).body.sections.workStatus.data.state, 'success');
-  } finally { await f.close(); }
-});
 
-test('serializes the whole conversation, publishes after memory commits, and cancels without stale writes', async () => {
-  const f = await fixture();
-  try {
-    const replies = await Promise.all([f.call('POST', 'chat?pet=main', { text: 'One' }), f.call('POST', 'chat?pet=main', { text: 'Two' })]);
-    assert.ok(replies.every(reply => reply.body.ok && reply.body.text === undefined));
-    assert.deepEqual(f.calls[1]!.filter(message => message.role === 'user').map(message => message.content), ['One', 'Two']);
-    assert.equal(f.memory.get('main', 'main', 10).length, 4);
-    const before = (await f.call('GET', 'state')).body.pets.main.say.counter;
-    const abort = new AbortController();
-    const slow = f.call('POST', 'chat?pet=main', { text: 'Slow' }, abort.signal);
-    await new Promise(resolve => setTimeout(resolve, 20)); abort.abort();
-    assert.equal((await slow).body.ok, false);
-    assert.equal(f.memory.get('main', 'main', 10).length, 4);
-    assert.equal((await f.call('GET', 'state')).body.pets.main.say.counter, before);
-    assert.equal((await f.call('GET', 'chat?pet=main')).body.messages.length, 4);
-  } finally { await f.close(); }
-});
 
 test('keeps six-state priorities, deduplicates events and clears expired work without celebrating', async () => {
   const f = await fixture();
@@ -195,7 +131,7 @@ test('locks gate control, expire and let user input preempt without dropping age
   try {
     const lock = (await f.call('POST', 'lock?pet=main', { ttl: 1000 })).body;
     assert.equal(lock.ok, true);
-    await f.service.refreshAutomatic(); assert.equal(f.calls.length, 0, 'automatic whisper must not spend model calls while occupied');
+    await f.service.refreshAutomatic();
     assert.equal((await f.call('POST', 'lock?pet=main')).body.reason, 'locked');
     assert.equal((await f.call('POST', 'position?pet=main', { x: .2, y: .3, mode: 'instant' })).body.reason, 'lock-required');
     const query = `pet=main&lock=${lock.lockId}`;

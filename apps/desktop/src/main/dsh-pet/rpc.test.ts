@@ -23,7 +23,7 @@ test('authenticates private pipe requests and aborts handlers when their client 
     client.write(JSON.stringify({ token, id: 1, method: 'GET', url: '/dsh-pet-7340/state' }) + '\n');
     const [data] = await result;
     assert.deepEqual(JSON.parse(String(data)), { id: 1, status: 200, body: '{"ready":true}' });
-    client.write(JSON.stringify({ token, id: 2, method: 'POST', url: '/dsh-pet-7340/chat' }) + '\n');
+    client.write(JSON.stringify({ token, id: 2, method: 'POST', url: '/dsh-pet-7340/broadcast' }) + '\n');
     await new Promise(resolve => setTimeout(resolve, 30));
     client.destroy();
     assert.ok(observedAbort);

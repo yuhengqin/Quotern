@@ -5,22 +5,19 @@ import type { DshPetAction, DshPetState, SessionNavigationTarget } from '../../s
 import type { QuotaState } from '../../shared/quota.js';
 import { DshPetConfigStore } from './config-store.js';
 import { DshPetAssetStore } from './asset-store.js';
-import { DshPetMemoryStore } from './memory-store.js';
-import { DshPetModelService, type SecretStorage } from './model-service.js';
 import { DshPetRpcServer } from './rpc.js';
 import { DshPetService } from './service.js';
 import { DshPetActivityMonitor, type ActivityRoot } from './activity.js';
 import { atomicPrivateFile } from './storage.js';
 
 interface Options {
-  root: string; runtimeRoot: string; executable: string; appPath: string; packaged: boolean; secrets: SecretStorage;
+  root: string; runtimeRoot: string; executable: string; appPath: string; packaged: boolean;
   getQuota(): QuotaState | null; refreshQuota?(): Promise<void>; showMainWindow(): void; openDirectory(directory: string): Promise<void>;
-  fetch?: (url: string, init: RequestInit) => Promise<Response>; isMainWindowVisible?(): boolean; notify?(title: string, body: string, target?: SessionNavigationTarget): void;
+  coordinateVisibility?<T>(visible: boolean, operation: () => Promise<T>): Promise<T>; isMainWindowVisible?(): boolean; notify?(title: string, body: string, target?: SessionNavigationTarget): void;
   onChanged?(state: DshPetState): void; roots?: ActivityRoot[] | (() => Promise<ActivityRoot[]>); spawn?: (exe: string, args: string[], options: SpawnOptions) => ChildProcess;
 }
 export class DshPetController {
   readonly config: DshPetConfigStore;
-  private models: DshPetModelService;
   private service: DshPetService | null = null;
   private monitor: DshPetActivityMonitor | null = null;
   private pipe: DshPetRpcServer | null = null;
@@ -36,12 +33,15 @@ export class DshPetController {
     const preferences = path.join(options.root, 'preferences.json');
     const raw = existsSync(preferences) ? JSON.parse(readFileSync(preferences, 'utf8')) as { enabled?: unknown; quotaSource?: unknown; petId?: unknown } : {};
     this.config = new DshPetConfigStore(options.root, options.runtimeRoot, typeof raw.petId === 'string' ? raw.petId : undefined);
-    this.models = this.createModels();
     this.enabled = raw.enabled === true; this.quotaSource = typeof raw.quotaSource === 'string' ? raw.quotaSource : null;
   }
-  private createModels(): DshPetModelService { return new DshPetModelService(this.options.root, this.options.secrets, { fetch: this.options.fetch }); }
-  async initialize(): Promise<void> { if (this.enabled) await this.enqueue(async () => { await this.persist(); await this.start(); }); }
-  getState(): DshPetState { return { enabled: this.enabled, status: this.status, error: this.error, config: this.config.read(), models: this.models.publicState(), quotaSource: this.quotaSource, sources: this.monitor?.capabilities() ?? ['codex', 'claude', 'dsh'].map(source => ({ source, states: [], reason: '宠物未运行；尚未监听', lastEventAt: null })) }; }
+  async initialize(): Promise<void> {
+    if (this.enabled) {
+      const start = () => this.enqueue(async () => { await this.persist(); await this.start(); });
+      if (this.options.coordinateVisibility) await this.options.coordinateVisibility(true, start); else await start();
+    }
+  }
+  getState(): DshPetState { return { enabled: this.enabled, status: this.status, error: this.error, config: this.config.read(), quotaSource: this.quotaSource, sources: this.monitor?.capabilities() ?? ['codex', 'claude', 'dsh'].map(source => ({ source, states: [], reason: '宠物未运行；尚未监听', lastEventAt: null })) }; }
   private changed(): void { if (!this.disposed) this.options.onChanged?.(this.getState()); }
   private enqueue<T>(operation: () => Promise<T>): Promise<T> { const run = this.queue.then(operation); this.queue = run.catch(() => {}); return run; }
   private persist(): Promise<void> { return atomicPrivateFile(path.join(this.options.root, 'preferences.json'), JSON.stringify({ enabled: this.enabled, quotaSource: this.quotaSource, petId: this.config.petId() })); }
@@ -57,8 +57,17 @@ export class DshPetController {
     if (enabled && !this.paused) await this.start(); else await this.stop();
   }
   dispatch(action: DshPetAction): Promise<unknown> {
+    const visible = action?.type === 'set-enabled' ? action.enabled : action?.type === 'set-desktop-visible' ? action.visible : undefined;
+    if (typeof visible === 'boolean' && this.options.coordinateVisibility) {
+      return this.options.coordinateVisibility(visible, () => this.applyAction(action));
+    }
+    return this.applyAction(action);
+  }
+  /** Coordinator-only stop; bypass its outer queue to avoid recursive locking. */
+  deactivate(): Promise<unknown> { return this.applyAction({ type: 'set-enabled', enabled: false }); }
+  private applyAction(action: DshPetAction): Promise<unknown> {
     if (!action || typeof action !== 'object' || this.disposed) return Promise.reject(new Error('宠物操作无效'));
-    if (action.type === 'read-config') return Promise.resolve(this.config.readText());
+    if (action.type === 'read-config') return Promise.resolve(this.config.readEditableText());
     if (action.type === 'request') {
       if (!this.service || typeof action.path !== 'string' || action.path.length > 4096 || !action.path.startsWith('/') || !['GET', 'POST'].includes(action.method) || (action.body !== undefined && typeof action.body !== 'string')) return Promise.reject(new Error('宠物未运行或请求无效'));
       return this.service.handle({ id: 1, method: action.method, url: `/dsh-pet-7340${action.path}`, body: action.body });
@@ -86,11 +95,7 @@ export class DshPetController {
           break;
         }
         case 'reset-config': await this.config.reset(); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
-        case 'save-provider': await this.models.setProviders(action.provider); break;
-        case 'remove-provider': if (typeof action.id !== 'string') throw new Error('服务商无效'); await this.models.removeProvider(action.id); break;
-        case 'set-default-model': await this.models.setDefaultModel(action.model); break;
         case 'set-quota-source': if (action.source !== null && (typeof action.source !== 'string' || action.source.length > 200)) throw new Error('额度来源无效'); this.quotaSource = action.source; await this.persist(); break;
-        case 'clear-memory': if (typeof action.petId !== 'string' || !this.config.vendor.findPetInstance(this.config.read(), action.petId)) throw new Error('宠物无效'); await this.stop(); await new DshPetMemoryStore(this.options.root).clear(action.petId); if (this.enabled && !this.paused) await this.start(); break;
         case 'open-directory': await atomicPrivateFile(path.join(this.options.root, '.directory'), 'Quotern dsh-pet'); await this.options.openDirectory(this.options.root); break;
         default: throw new Error('未知宠物操作');
       }
@@ -103,8 +108,7 @@ export class DshPetController {
     try {
       const pets = this.config.vendor.flattenPetList(this.config.read()).filter(pet => pet.display === 'desktop' || pet.display === 'both');
       if (!pets.length) { this.enabled = false; await this.persist(); this.status = 'disabled'; this.changed(); return; }
-      this.models = this.createModels();
-      const service = new DshPetService({ config: this.config, models: this.models, memory: new DshPetMemoryStore(this.options.root), assets: new DshPetAssetStore(this.options.root, this.options.runtimeRoot), getQuota: this.options.getQuota, quotaSource: () => this.quotaSource, refreshQuota: this.options.refreshQuota, reload: () => this.enqueue(async () => { await this.stop(); if (this.enabled && !this.paused) await this.start(); this.changed(); }), showMainWindow: this.options.showMainWindow, isMainWindowVisible: this.options.isMainWindowVisible, notify: this.options.notify, onChanged: () => this.changed() });
+      const service = new DshPetService({ config: this.config, assets: new DshPetAssetStore(this.options.root, this.options.runtimeRoot), getQuota: this.options.getQuota, quotaSource: () => this.quotaSource, refreshQuota: this.options.refreshQuota, reload: () => this.enqueue(async () => { await this.stop(); if (this.enabled && !this.paused) await this.start(); this.changed(); }), showMainWindow: this.options.showMainWindow, isMainWindowVisible: this.options.isMainWindowVisible, notify: this.options.notify, onChanged: () => this.changed() });
       this.service = service;
       const pipe = new DshPetRpcServer(); this.pipe = pipe; const address = await pipe.start((request, signal) => service.handle(request, signal));
       this.monitor = new DshPetActivityMonitor({ roots: this.options.roots ?? [], onEvent: event => service.onActivity(event) });
@@ -125,7 +129,7 @@ export class DshPetController {
     } catch { await this.stop(); this.status = 'error'; this.error = '宠物启动失败，请检查配置后重试'; this.changed(); }
   }
   private async stop(): Promise<void> {
-    this.monitor?.dispose(); this.monitor = null; const service = this.service; this.service = null; service?.dispose(); await service?.drain();
+    this.monitor?.dispose(); this.monitor = null; const service = this.service; this.service = null; service?.dispose();
     const pipe = this.pipe; this.pipe = null; await pipe?.close();
     const child = this.child; this.child = null;
     if (child && child.exitCode == null) await new Promise<void>(resolve => { const timer = setTimeout(resolve, 5000); child.once('exit', () => { clearTimeout(timer); resolve(); }); child.kill(); });

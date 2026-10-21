@@ -69,6 +69,7 @@ import { restoreNativeTrapHandler } from './native-crash-signals';
 import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
 import { PetController } from './pet-controller';
+import { PetActivation } from './pet-activation';
 import { initializeDshPet } from './dsh-pet';
 import { buildDshPetTrayMenu } from './dsh-pet/tray-menu';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
@@ -514,8 +515,10 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       petController?.updateQuotaState(state);
     } });
     if (process.platform === 'win32') {
-      try { dshPet = await initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow }); }
-      catch (error) { console.error('[tud-desktop] independent dsh-pet initialization failed:', error instanceof Error ? error.message : 'unknown'); }
+      const activation = new PetActivation({
+        builtin: async () => { await petController?.hide(); },
+        dsh: async () => { await dshPet?.controller.deactivate(); },
+      });
       petController = new PetController({
         toggleMainWindow: () => {
           const window = getMainWindow();
@@ -530,6 +533,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         getDark: () => currentTheme === 'dark',
         getLocale: getNativeLocale,
         getQuotaState: getQuotaRuntimeState,
+        coordinateVisibility: (visible, operation) => activation.run('builtin', visible, operation),
       });
       try {
         await petController.initialize();
@@ -540,6 +544,12 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         }
         petController = null;
       }
+      // Restore dsh-pet last: old configurations with both enabled converge to one pet.
+      try {
+        dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow, coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation) });
+        await dshPet.controller.initialize();
+      }
+      catch (error) { console.error('[tud-desktop] independent dsh-pet initialization failed:', error instanceof Error ? error.message : 'unknown'); }
     }
     try {
       await initAutostartOnLaunch();

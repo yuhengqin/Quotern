@@ -7,6 +7,21 @@ import { DshPetConfigStore } from './config-store.js';
 
 const runtime = path.resolve('out/dsh-pet');
 
+test('runtime sizes use three Clawd-scale presets without rewriting legacy files', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-size-'));
+  try {
+    const store = new DshPetConfigStore(root, runtime);
+    const base = store.readAll().main!;
+    const pet = (base.pets as object[])[0]!;
+    for (const [width, expected] of [[160, 160], [204, 204], [264, 264], [462, 264], [190, 204]]) {
+      const raw = JSON.stringify({ pets: [{ ...pet, size: width }] });
+      await writeFile(store.paths.userFile, raw);
+      assert.equal(store.vendor.flattenPetList(store.read())[0]!.size, expected);
+      assert.equal(await store.readText(), raw);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('legacy instances and pet packs expose one stable companion without deleting configuration', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-single-'));
   try {
@@ -45,14 +60,14 @@ test('first launch inherits built-in pets without warnings or creating a user co
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('saves full JSONC without damaging URL or comment-like prompt text, and keeps pack overrides', async () => {
+test('saves full JSONC without damaging URL or comment-like text, and keeps pack overrides', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-config-'));
   try {
     const store = new DshPetConfigStore(root, runtime);
     const config = store.read().main!;
     const prompt = 'Visit https://example.com/a//b and keep /* literal */ text';
-    await store.saveText('// a real comment\n' + JSON.stringify({ ...config, whisperPrompt: prompt, font: { family: 'system', size: 23, followPet: false } }));
-    assert.equal(store.read().main!.whisperPrompt, prompt);
+    await store.saveText('// a real comment\n' + JSON.stringify({ ...config, pets: (config.pets as object[]).map(pet => ({ ...pet, name: prompt })), font: { family: 'system', size: 23, followPet: false } }));
+    assert.equal(store.vendor.flattenPetList(store.read())[0]!.name, prompt);
     await mkdir(path.join(root, 'pet'), { recursive: true });
     const pet = { ...(config.pets as Record<string, unknown>[])[0], id: 'fish.extra', name: 'Extra', display: 'desktop' };
     await writeFile(path.join(root, 'pet/fish-config.json'), JSON.stringify({ pets: [pet] }));
@@ -71,7 +86,7 @@ test('rejects malformed and invalid settings while preserving the last valid con
     await store.saveText(valid);
     await assert.rejects(store.saveText('{broken'), /JSON|配置|syntax/i);
     await assert.rejects(store.saveText(JSON.stringify({ ...JSON.parse(valid), physics: { gravity: -5 } })), /physics|配置/i);
-    for (const invalid of [{ chatMemoryRounds: -1 }, { chatImageLimit: -1 }, { whisperPrompt: 42 }, { workStatusTexts: 42 }]) await assert.rejects(store.saveText(JSON.stringify(invalid)), /配置/i);
+    for (const invalid of [{ font: { size: -1 } }, { workStatusTexts: 42 }]) await assert.rejects(store.saveText(JSON.stringify(invalid)), /配置/i);
     assert.equal(await readFile(path.join(root, 'main-config.jsonc'), 'utf8'), valid);
     await store.reset();
     assert.equal(store.read().main!.font && (store.read().main!.font as { family: string }).family, 'system');

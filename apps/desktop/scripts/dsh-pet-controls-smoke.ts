@@ -23,7 +23,6 @@ async function main() {
   const controller = new DshPetController({
     root: path.join(directory, 'host'), runtimeRoot: path.resolve(runtime!), executable: process.execPath,
     appPath: path.resolve(desktop!), packaged: false, roots: [],
-    secrets: { isEncryptionAvailable: () => false, encryptString: () => { throw Error('unused'); }, decryptString: () => { throw Error('unused'); } },
     getQuota: () => null, showMainWindow() {}, openDirectory: async () => {},
     spawn: (exe, args, options) => { const child = spawn(exe, [...args, `--remote-debugging-port=${port}`], options); child.stderr?.on('data', chunk => { stderr += chunk; }); return child; },
   });
@@ -37,7 +36,7 @@ async function main() {
   };
   try {
     const pet = (controller.getState().config.main!.pets as object[])[0]!;
-    await controller.dispatch({ type: 'patch-config', patch: { notificationsEnabled: false, pets: [{ ...pet, size: 180, display: 'desktop', whisperEnabled: false, balanceEnabled: false, fixedEnabled: true }] } });
+    await controller.dispatch({ type: 'patch-config', patch: { notificationsEnabled: false, pets: [{ ...pet, size: 180, display: 'desktop', balanceEnabled: false, fixedEnabled: true }] } });
     await controller.dispatch({ type: 'set-enabled', enabled: true });
     await until(async () => {
       try { const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); const target = targets.find((value: { type: string }) => value.type === 'page'); if (!target) return false; page = await connectPage(target); return true; } catch { return false; }

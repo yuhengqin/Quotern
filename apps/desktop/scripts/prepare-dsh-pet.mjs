@@ -3,12 +3,12 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { patchDshPetChat } from './patch-dsh-pet-chat.mjs';
+import { withoutPetChat } from './patch-dsh-pet-features.mjs';
 import { patchDshPetPointer } from './patch-dsh-pet-pointer.mjs';
 import { patchDshPetMotion } from './patch-dsh-pet-motion.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
-const hostModules = ['config', 'state', 'work-status', 'notify-events', 'memes', 'anim', 'broadcast', 'time-context', 'model-selection'];
+const hostModules = ['config', 'state', 'work-status', 'notify-events', 'anim', 'broadcast'];
 
 /** Build only the checked-in snapshot. No reference checkout, network or user data. */
 export async function prepareDshPet({ vendorRoot = path.join(desktopRoot, 'vendor/dsh-pet'), outputRoot = path.join(desktopRoot, 'out/dsh-pet') } = {}) {
@@ -88,6 +88,7 @@ async function handleBridgeRequest(request) {
   sprite = replaceRequired(sprite, "OPEN_TARGET === 'desktop' ? '打开 DeepSeek Harness' : '打开网站'", "'打开 Quotern'");
   sprite = replaceRequired(sprite, 'window.petBridge.openDshSite(ORIGIN)', 'window.petBridge.openHost()');
   sprite = patchDshPetMotion(sprite);
+  sprite = withoutPetChat(sprite);
   ({ helper, preload, sprite } = patchDshPetPointer({ helper, preload, sprite }));
   await writeFile(runtimeFile, helper);
   await writeFile(preloadFile, preload);
@@ -99,7 +100,7 @@ async function handleBridgeRequest(request) {
   await build({ entryPoints: [path.join(desktopRoot, 'src/main/dsh-pet/helper-adapter.ts')], outfile: path.join(output, 'runtime/quotern-adapter.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',
     plugins: [{ name: 'quotern-window-label', setup(bundle) {
-      bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]chat\.ts$/ }, async args => ({ loader: 'ts', contents: patchDshPetChat(await readFile(args.path, 'utf8')) }));
+      bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]index\.ts$/ }, async args => ({ loader: 'ts', contents: (await readFile(args.path, 'utf8')).replace(/^export \* from '\.\/chat';.*$/m, '') }));
       bundle.onLoad({ filter: /[/\\]src[/\\]shared[/\\]balance\.ts$/ }, async args => {
         let contents = await readFile(args.path, 'utf8');
         for (const [from, to] of [

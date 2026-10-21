@@ -16,10 +16,6 @@ export interface VendorHost {
   saveUserConfig(raw: unknown, existing?: Record<string, unknown>): Record<string, unknown> | null;
   animationNames(animations: unknown): string[];
   decideAnim(args: { cfg: MergedConfig; requested: string; active: string; name: unknown }): { ok: true; petId: string; name: string } | { ok: false; reason: string; message: string };
-  extractChatImage(text: string, pool: MemeEntry[]): { text: string; image?: string };
-  limitPool(pool: MemeEntry[], limit: number): MemeEntry[];
-  memeCatalog(pool: MemeEntry[]): string;
-  timeContextOf(now: Date): string;
   PollStateStore: new () => { writeSection(name: string, data: unknown): void; writePet(id: string, name: string, data: unknown): void; read(): PollState };
   WorkStatusStore: new () => { setState(id: string, state: WorkStatusState, seq?: number): boolean; clear(id: string): boolean; setTask(id: string, task: string | null): boolean; snapshot(): { state: WorkStatusState | null; task: string | null; ts: number } };
   [key: string]: unknown;

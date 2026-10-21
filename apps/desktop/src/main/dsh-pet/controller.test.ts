@@ -6,11 +6,48 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ChildProcess } from 'node:child_process';
 import { DshPetController } from './controller.js';
+import { PetActivation } from '../pet-activation.js';
+
+test('enabling from settings, tray and startup waits for exclusive activation', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-activation-'));
+  let activated = 0, spawned = 0;
+  const options = { root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'app', packaged: false,
+    getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
+    coordinateVisibility: async <T>(visible: boolean, operation: () => Promise<T>): Promise<T> => { if (visible) activated++; return operation(); },
+    spawn: () => { assert.ok(activated > spawned); spawned++; const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit')); return true; } }); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess; },
+  };
+  let controller = new DshPetController(options);
+  try {
+    await controller.dispatch({ type: 'set-enabled', enabled: true });
+    assert.equal(activated, 1);
+    await controller.dispatch({ type: 'set-enabled', enabled: false });
+    await controller.dispatch({ type: 'set-desktop-visible', petId: 'main', visible: true });
+    assert.equal(activated, 2);
+    await controller.dispose(); controller = new DshPetController(options);
+    await controller.initialize(); assert.equal(activated, 3);
+  } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('rapid enable and disable requests preserve their order through the shared coordinator', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-toggle-order-'));
+  const activation = new PetActivation({ builtin: async () => {}, dsh: async () => {} });
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'app', packaged: false,
+    getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
+    coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation),
+    spawn: () => { const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit')); return true; } }); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess; },
+  });
+  try {
+    await Promise.all([controller.dispatch({ type: 'set-enabled', enabled: true }), controller.dispatch({ type: 'set-enabled', enabled: false })]);
+    assert.equal(controller.getState().enabled, false);
+    await Promise.all([false, true, false].map(enabled => controller.dispatch({ type: 'set-enabled', enabled })));
+    assert.equal(controller.getState().enabled, false);
+  } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
+});
 test('disabled by default; serial enable/reload/pause/crash/retry owns one child and isolates helper profile', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-controller-'));
   const children: Array<EventEmitter & { kill(): boolean }> = [], launches: Array<{ args: readonly string[]; env: NodeJS.ProcessEnv }> = [];
   const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'isolated-app', packaged: false,
-    secrets: { isEncryptionAvailable: () => false, encryptString: () => { throw new Error(); }, decryptString: () => { throw new Error(); } }, getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {},
+    getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {},
     roots: [], spawn: (_exe, args, options) => { launches.push({ args, env: options.env! }); const child = Object.assign(new EventEmitter(), { pid: 1234, stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit', 0, null)); return true; } }); children.push(child); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess; },
   });
   try {
@@ -31,7 +68,6 @@ test('one visibility switch stops the subsystem, preserves the web bit and resto
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-visibility-'));
   const children: EventEmitter[] = [];
   const makeController = () => new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'isolated-app', packaged: false,
-    secrets: { isEncryptionAvailable: () => false, encryptString: () => { throw new Error(); }, decryptString: () => { throw new Error(); } },
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
     spawn: (_exe, _args, options) => {
       assert.equal(JSON.parse(options.env!.DSH_PET_PETS!).length, 1, 'the helper must receive only one pet');

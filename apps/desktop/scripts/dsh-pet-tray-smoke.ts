@@ -27,7 +27,6 @@ async function main() {
   const controller = new DshPetController({
     root: path.join(directory, 'host'), runtimeRoot: path.resolve(runtime!),
     executable: process.execPath, appPath: path.resolve(desktop!), packaged: false,
-    secrets: { isEncryptionAvailable: () => false, encryptString: () => { throw Error('unused'); }, decryptString: () => { throw Error('unused'); } },
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
     spawn: (exe, args, options) => {
       assert.equal(JSON.parse(options.env!.DSH_PET_PETS!).length, 1);
@@ -64,14 +63,14 @@ async function main() {
   try {
     const pet = (controller.getState().config.main!.pets as object[])[0]!;
     await controller.dispatch({ type: 'patch-config', patch: { notificationsEnabled: false, pets: [
-      { ...pet, size: 180, display: 'both', whisperEnabled: false, balanceEnabled: false, fixedEnabled: true },
-      { ...pet, id: 'legacy', display: 'desktop', whisperEnabled: false },
+      { ...pet, size: 180, display: 'both', balanceEnabled: false, fixedEnabled: true },
+      { ...pet, id: 'legacy', display: 'desktop' },
     ] } });
     await controller.dispatch({ type: 'set-enabled', enabled: true });
     await helperReady(); checks.push('real-helper-loads-with-existing-patches');
     for (const [visibleDisplay, hiddenDisplay] of [['both', 'web'], ['desktop', 'none']] as const) {
       if (display() !== visibleDisplay) {
-        await controller.dispatch({ type: 'patch-config', patch: { pets: [{ ...pet, size: 180, display: visibleDisplay, whisperEnabled: false, balanceEnabled: false, fixedEnabled: true }] } });
+        await controller.dispatch({ type: 'patch-config', patch: { pets: [{ ...pet, size: 180, display: visibleDisplay, balanceEnabled: false, fixedEnabled: true }] } });
         await helperReady();
       }
       const item = menu().getMenuItemById('dsh-pets')!;

@@ -1,7 +1,6 @@
 // Dedicated host/controller + real packaged helper. No normal Quotern collector.
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DshPetController } from '../src/main/dsh-pet/controller';
@@ -13,20 +12,11 @@ async function main() {
   assert.ok(executable && runtimeRoot && output, 'exe runtimeRoot output');
   const directory=path.resolve(output); await mkdir(directory,{recursive:true});
   const results: Array<{name:string;ok:boolean;error?:string}>=[];
-  let requests=0, openedHost=0, stdout='', stderr='', child: ChildProcess | null=null;
+  let openedHost=0, stdout='', stderr='', child: ChildProcess | null=null;
   const clients: any[]=[];
-  const api=createServer(async(req,res)=>{
-    let body='';for await(const chunk of req)body+=chunk;
-    const raw=JSON.parse(body); requests++;
-    res.setHeader('content-type','application/json');
-    if(raw.messages.at(-1)?.content?.includes('audit-model-error')){res.statusCode=503;res.end('{}');return;}
-    res.end(JSON.stringify({choices:[{message:{content:`Helper界面回复${requests}`},finish_reason:'stop'}]}));
-  });
-  await new Promise<void>(resolve=>api.listen(0,'127.0.0.1',resolve));
   const port=await unusedPort();
   const inspectorPort=await unusedPort();
   const controller=new DshPetController({root:path.join(directory,'host'),runtimeRoot:path.resolve(runtimeRoot),executable:path.resolve(executable),appPath:appPath?path.resolve(appPath):path.join(path.dirname(path.resolve(executable)),'resources/app.asar'),packaged:!appPath,
-    secrets:{isEncryptionAvailable:()=>false,encryptString:()=>{throw Error('not used');},decryptString:()=>{throw Error('not used');}},
     getQuota:()=>null,showMainWindow:()=>{openedHost++;},openDirectory:async()=>{},roots:[],
     spawn:(exe,args,options)=>{const launched=spawn(exe,[...args,`--remote-debugging-port=${port}`,`--inspect=127.0.0.1:${inspectorPort}`],options);child=launched;launched.once('exit',()=>{if(child===launched)child=null;});launched.stdout?.on('data',c=>{stdout+=String(c);});launched.stderr?.on('data',c=>{stderr+=String(c);});return launched;},
   });
@@ -46,24 +36,26 @@ async function main() {
   };
   const check=async(name:string,fn:()=>Promise<void>)=>{try{await fn();results.push({name,ok:true});}catch(error){results.push({name,ok:false,error:String((error as Error).stack??error)});await page?.screenshot(path.join(directory,`failure-${results.length}.png`)).catch(()=>{});}console.log(JSON.stringify(results.at(-1)));};
   const ev=(code:string)=>page.evaluate(code);
-  const menu='.dsh-pet-menu', chat='.dsh-pet-chat';
+  const menu='.dsh-pet-menu';
   const visibleColumns=`[...document.querySelectorAll('.dsh-pet-menu-column')].filter(el=>el.offsetWidth&&el.offsetHeight&&getComputedStyle(el).display!=='none')`;
   const menuItem=(label:string)=>`[...document.querySelectorAll('.dsh-pet-menu-item')].find(el=>el.querySelector('span')?.textContent===${JSON.stringify(label)})`;
   const clean=async()=>{await page.key('Escape');await wait(160);};
   const openMenu=async()=>{await clean();await page.click('document.querySelector(".pet-hit")','right');for(let i=0;i<30;i++){if(await ev(`!!document.querySelector('${menu}')`))return;await wait(50);}throw Error('context menu did not open');};
   const hover=async(expression:string)=>{const point=await ev(`(()=>{const e=(${expression});if(!e)throw Error('missing menu branch');const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await page.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});await wait(80);};
-  const openChat=async()=>{await openMenu();await page.click(menuItem('对话'));for(let i=0;i<30;i++){if(await ev(`!!document.querySelector('${chat} textarea')`))return;await wait(50);}throw Error('chat did not open');};
-  const waitFor=async(expression:string)=>{for(let i=0;i<100;i++){if(await ev(expression))return;await wait(50);}throw Error(`Timed out: ${expression}`);};
-  const poll=async()=>JSON.parse((await controller.dispatch({type:'request',method:'GET',path:'/state'}) as {body:string}).body);
   try{
     const original=controller.getState().config.main!;
     await controller.dispatch({type:'patch-config',patch:{notificationsEnabled:false,workStatusTexts:[['思考'],['工作'],['结果'],['等待'],['本轮工作完成占位'],['发生错误占位']],pets:[
-      {...(original.pets as object[])[0],size:280,whisperEnabled:false,fixedEnabled:true,workStatusEnabled:true,position:{corner:'top-right',marginX:20,marginY:40}},
+      {...(original.pets as object[])[0],size:280,fixedEnabled:true,workStatusEnabled:true,position:{corner:'top-right',marginX:20,marginY:40}},
     ]}});
-    await controller.dispatch({type:'save-provider',provider:{id:'local',name:'Local helper audit',baseUrl:`http://127.0.0.1:${(api.address() as any).port}/v1`,models:['audit']}});
-    await controller.dispatch({type:'set-default-model',model:{provider:'local',model:'audit'}});
     await controller.dispatch({type:'set-enabled',enabled:true}); await connect();await wait(1000);
     await check('single-real-helper-page',async()=>{assert.equal((await pages()).length,1);assert.equal(await ev('window.__dshPetDebug.spriteCount'),1);});
+    for (const width of [160,204,264]) await check(`rendered-size:${width}`,async()=>{
+      await controller.dispatch({type:'patch-pet',petId:'main',patch:{size:width}});await connect();await wait(300);
+      const rect=await ev(`(()=>{const r=document.querySelector('.pet-hit').getBoundingClientRect();return{width:r.width,height:r.height}})()`);
+      assert.ok(Math.abs(rect.height-width*285/640)<2,JSON.stringify(rect));
+      assert.ok(Math.abs(rect.width-width*240/640)<2,JSON.stringify(rect));
+      await page.screenshot(path.join(directory,`size-${width}.png`));
+    });
     // Controlled cursor input exercises the real native polling timer, without
     // moving the user's physical pointer or relying on injected DOM mousemove.
     await native.evaluate(`(()=>{
@@ -85,8 +77,7 @@ async function main() {
       await check('native-poll-restores-hover-without-forwarded-mousemove',async()=>{await outside();await nativePoint('document.querySelector(".pet-hit")');assert.equal(await ev('window.__dshPetDebug.tooltipOn'),true);const calls=await native.evaluate('__pointerAudit.calls');assert.equal(calls.at(-1).ignore,false);assert.ok(calls.every((call:any)=>call.forward===false),'no Windows native call may enable the global mouse hook');});
       await check('native-poll-clears-hover-and-restores-passthrough',async()=>{await outside();assert.equal(await ev('window.__dshPetDebug.tooltipOn'),false);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);});
       await check('native-poll-does-not-stream-far-away-desktop-movement',async()=>{await native.evaluate('__pointerAudit.samples=0;__pointerAudit.calls=[];true;');await native.evaluate('new Promise(resolve=>{let n=0;const timer=setInterval(()=>{__pointerAudit.point={x:-10000+n++,y:-10000};if(n>=100){clearInterval(timer);resolve(true);}},1);})');await wait(80);assert.equal(await native.evaluate('__pointerAudit.samples'),0);assert.equal((await native.evaluate('__pointerAudit.calls')).length,0);});
-      await check('native-poll-preserves-menu-input-regions',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openMenu();await nativePoint(menuItem('对话'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await outside();assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);await nativePoint(menuItem('对话'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await clean();});
-      await check('native-poll-preserves-chat-input-regions',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openChat();await nativePoint(`document.querySelector('${chat} textarea')`);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await outside();assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);await nativePoint(`document.querySelector('${chat} textarea')`);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);assert.equal(await ev('window.__dshPetDebug.chatOpen'),true);await clean();});
+      await check('native-poll-preserves-menu-input-regions',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openMenu();await nativePoint(menuItem('动作'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await outside();assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);await nativePoint(menuItem('动作'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await clean();});
       await check('native-poll-preserves-drag-capture-outside-window',async()=>{await nativePoint('document.querySelector(".pet-hit")');const point=await ev(`(()=>{const r=document.querySelector('.pet-hit').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1});await wait(100);await outside();assert.equal(await ev('window.__dshPetDebug.inputBusy'),true);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});await wait(100);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);assert.equal(await ev('window.__dshPetDebug.tooltipOn'),false);});
     }finally{await native.evaluate('globalThis.__restorePointerAudit?.();true;');await clean();}
     await check('ordinary-left-click-animates',async()=>{await page.click('document.querySelector(".pet-hit")');await wait(180);assert.ok(await ev(`document.querySelector('.pet-video.is-front')?.src`));assert.equal(await ev('window.__dshPetDebug.errors.length'),0);});
@@ -101,17 +92,7 @@ async function main() {
       assert.equal(await ev(`!!document.querySelector('${menu}')`),false);
       const video=await ev(`document.querySelector('.pet-video.is-front')?.src??''`);assert.ok(decodeURIComponent(video).includes(name),`${name} was not played: ${video}`);
     });
-    await check('chat-focus-and-escape',async()=>{await openChat();assert.equal(await ev(`document.activeElement===document.querySelector('${chat} textarea')`),true);await page.key('Escape');assert.equal(await ev(`!!document.querySelector('${chat}')`),false);});
-    await check('chat-composition-enter-does-not-send',async()=>{
-      await openChat();await page.fill(`document.querySelector('${chat} textarea')`,'输入法确认测试');const before=requests;
-      await ev(`document.querySelector('${chat} textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:229,isComposing:true,bubbles:true})); true;`);
-      await wait(300);assert.equal(requests,before,'IME confirmation must not send chat');assert.equal(await ev(`!!document.querySelector('${chat}')`),true);
-      await clean();
-    });
-    await check('chat-error-remains-editable',async()=>{await openChat();await page.fill(`document.querySelector('${chat} textarea')`,'audit-model-error');await page.key('Enter');await waitFor(`Boolean(document.querySelector('${chat} .dsh-pet-chat-err')?.textContent)`);assert.equal(await ev(`document.querySelector('${chat} textarea').disabled`),false);assert.equal(await ev(`document.querySelector('${chat} textarea').value`),'audit-model-error');await page.fill(`document.querySelector('${chat} textarea')`,'保留错误提示并继续输入'.repeat(100));const r=await ev(`(()=>{const r=document.querySelector('${chat}').getBoundingClientRect();return{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight}})()`);assert.ok(r.left>=0&&r.top>=0&&r.right<=r.width&&r.bottom<=r.height,JSON.stringify(r));await clean();});
-    await check('chat-growth-stays-in-viewport',async()=>{await openChat();await page.fill(`document.querySelector('${chat} textarea')`,'边缘输入框'.repeat(160));await wait(200);const r=await ev(`(()=>{const r=document.querySelector('${chat}').getBoundingClientRect();return{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:innerWidth,height:innerHeight}})()`);assert.ok(r.left>=0&&r.top>=0&&r.right<=r.width&&r.bottom<=r.height,JSON.stringify(r));await clean();});
-    await check('chat-success-shows-actual-reply',async()=>{await openChat();await page.fill(`document.querySelector('${chat} textarea')`,'你好，回复可见性测试');await page.key('Enter');await waitFor(`!document.querySelector('${chat}')`);await wait(500);const bubble=await ev(`document.querySelector('.pet-bubble.is-on')?.textContent??''`);assert.match(bubble,/Helper界面回复/,'model reply must be visible instead of being hidden by the generic work status');});
-    await check('manual-whisper-shows-actual-reply',async()=>{await openMenu();const before=(await poll()).pets.main?.say?.counter??0;await page.click(menuItem('碎碎念'));await wait(700);assert.ok((await poll()).pets.main.say.counter>before);assert.match(await ev(`document.querySelector('.pet-bubble.is-on')?.textContent??''`),/Helper界面回复/);});
+    await check('menu-has-no-retired-items',async()=>{await openMenu();assert.equal(await ev(`[...document.querySelector('.dsh-pet-menu-column').querySelectorAll('.dsh-pet-menu-item span')].some(el=>['对话','碎碎念'].includes(el.textContent))`),false);await clean();});
     await check('manual-quota-without-account-explains-unavailable',async()=>{await openMenu();await page.click(menuItem('查看余额'));await wait(500);assert.ok(await ev(`document.querySelector('.pet-bubble.is-on')?.textContent`));});
     await check('open-quotern-reaches-host',async()=>{await openMenu();const before=openedHost;await page.click(menuItem('打开 Quotern'));await wait(150);assert.equal(openedHost,before+1);});
     await check('drag-and-go-home',async()=>{
@@ -135,9 +116,9 @@ async function main() {
     await page.screenshot(path.join(directory,'helper-final.png'));
   }catch(error){results.push({name:'runner',ok:false,error:String((error as Error).stack??error)});throw error;}
   finally{
-    await controller.dispose();for(const client of clients)client.close();api.closeAllConnections();await new Promise<void>(resolve=>api.close(()=>resolve()));
+    await controller.dispose();for(const client of clients)client.close();
     await writeFile(path.join(directory,'stdout.log'),stdout);await writeFile(path.join(directory,'stderr.log'),stderr);
-    await writeFile(path.join(directory,'result.json'),JSON.stringify({ok:results.length>0&&results.every(r=>r.ok),checks:results.length,passed:results.filter(r=>r.ok).length,requests,openedHost,results},null,2));
+    await writeFile(path.join(directory,'result.json'),JSON.stringify({ok:results.length>0&&results.every(r=>r.ok),checks:results.length,passed:results.filter(r=>r.ok).length,openedHost,results},null,2));
   }
   if(results.some(r=>!r.ok))process.exitCode=1;
 }

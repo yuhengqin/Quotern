@@ -61,6 +61,9 @@ test('builds the full offline pet runtime without document previews or an unlice
     vm.runInContext(await readFile(path.join(outputRoot, 'runtime/shared-core.js'), 'utf8'), context);
     assert.equal(typeof context.PetShared.flattenConfigPets, 'function');
     assert.equal(typeof context.PetShared.throwStep, 'function');
+    assert.equal(context.PetShared.mountChatDialog, undefined);
+    const sprite = await readFile(path.join(outputRoot, 'runtime/sprite.js'), 'utf8');
+    assert.doesNotMatch(sprite, /showChatFromMenu|showWhisperFromMenu|mountChatDialog|action: 'chat'|action: 'whisper'/);
     const balance = context.PetShared.toBalanceState({ ok: true, provider: 'Codex', shape: 'windows', data: { monthly: 95, monthlyLabel: '每日请求', monthlyResetsAt: '2030-01-01T00:00:00Z' } });
     assert.ok(context.PetShared.balanceBubbleView(balance).some(row => row.text.includes('每日请求')));
     const vendor = createRequire(import.meta.url)(path.join(outputRoot, 'host.cjs'));

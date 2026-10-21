@@ -93,6 +93,7 @@ export class PetController {
     getDark: () => boolean;
     getLocale: () => SupportedLocale;
     getQuotaState?: () => QuotaState | null;
+    coordinateVisibility?: <T>(visible: boolean, operation: () => Promise<T>) => Promise<T>;
   }) {}
 
   private t(key: NativeMessageKey): string {
@@ -332,6 +333,11 @@ export class PetController {
     if (input.character !== undefined && (typeof input.character !== 'string' || !PET_ID_RE.test(input.character))) throw new Error(this.t('native.pet.invalidCharacter'));
     if (input.size !== undefined && !['small', 'medium', 'large'].includes(input.size)) throw new Error(this.t('native.pet.invalidSize'));
     if (input.botColor !== undefined && !['auto', 'bleu', 'turquoise', 'vert', 'ambre', 'rose', 'violet'].includes(input.botColor)) throw new Error(this.t('native.pet.invalidColor'));
+    const apply = () => this.applySettings(input);
+    return input.visible !== undefined && this.options.coordinateVisibility ? this.options.coordinateVisibility(input.visible, apply) : apply();
+  }
+
+  private applySettings(input: PetSettingPatch): Promise<PetState> {
     const run = this.settingsQueue.then(async () => {
       if (input.character && !this.state.catalog.some(pet => pet.id === input.character)) throw new Error(this.t('native.pet.characterGone'));
       const previousVisible = this.settings.visible;
@@ -588,7 +594,10 @@ export class PetController {
       this.broadcast();
     });
     this.dataTimer = setInterval(() => void this.refreshData(), DATA_REFRESH_MS);
-    if (this.settings.visible) this.setVisible(true);
+    if (this.settings.visible) {
+      const show = async () => { this.setVisible(true); };
+      if (this.options.coordinateVisibility) await this.options.coordinateVisibility(true, show); else await show();
+    }
     this.broadcast();
     void this.refreshData();
   }
@@ -606,6 +615,8 @@ export class PetController {
   }
 
   isVisible(): boolean { return this.settings.visible; }
+
+  async hide(): Promise<void> { if (this.settings.visible) await this.applySettings({ visible: false }); }
 
   toggle(): void { this.setSettingsFromMenu({ visible: !this.settings.visible }); }
 

@@ -22,7 +22,7 @@ test('one tray checkbox enables or stops the single companion without a submenu'
   assert.deepEqual(actions[1], { type: 'set-enabled', enabled: false });
   state.status = 'starting';
   assert.equal(item().enabled, false);
-  assert.equal(buildDshPetTrayMenu(controller, 'en')[0]!.label, 'Independent pet');
+  assert.equal(buildDshPetTrayMenu(controller, 'en')[0]!.label, '大肥鱼');
 });
 
 test('an invalid pet config disables its submenu instead of breaking the main tray', t => {

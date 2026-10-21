@@ -28,7 +28,7 @@
 | 订阅品牌图标 | [SubscriptionBrandIcon](../packages/dashboard/src/components/SubscriptionBrandIcon.tsx)，QuotaUsageCard 使用 | 订阅品牌；与 Agent/模型厂商有不同语义与资源集合 | 独立实现，Desktop 支持的品牌/资源更多 |
 | 主题切换 | [ThemeToggle](../packages/dashboard/src/components/ThemeToggle.tsx)，FilterChromeActions 使用 | 跟随系统、浅色、深色循环与可访问标签 | 独立组件及主题 hook |
 | 语言偏好 | [LanguagePreferenceControl](../packages/dashboard/src/components/LanguagePreferenceControl.tsx)，SettingsPanel 使用 | 四种语言单选，系统语言对应项标记“自动”并保存 `system`；`systemLocale` 独立于当前界面语言 | Desktop SettingsPanel 直接引用，系统语言由主进程提供 |
-| 原生托盘独立桌宠入口 | 浏览器端不提供 | 原生系统菜单使用 Electron Menu，不套用 FilterMenu；单个复选项控制唯一桌宠与后台任务，历史网页显示位保留 | [TrayPopover](../apps/desktop/src/main/TrayPopover.ts) 在每次右键打开时读取 [dsh-pet/tray-menu](../apps/desktop/src/main/dsh-pet/tray-menu.ts)，关闭后仍可恢复同一只；[设置卡片](../apps/desktop/src/renderer/components/DshPetSettingsCard.tsx) 仅编辑单实例，不提供多开或目标选择；原有宠物开关独立保留 |
+| 原生托盘大肥鱼入口 | 浏览器端不提供 | 原生系统菜单使用 Electron Menu，不套用 FilterMenu；名称固定为「大肥鱼」，单击复选项切换唯一桌宠及后台任务的开关，历史网页显示位保留 | [TrayPopover](../apps/desktop/src/main/TrayPopover.ts) 在每次右键打开时读取 [dsh-pet/tray-menu](../apps/desktop/src/main/dsh-pet/tray-menu.ts)，关闭后仍可恢复同一只；[设置卡片](../apps/desktop/src/renderer/components/DshPetSettingsCard.tsx) 仅编辑单实例，不提供多开或目标选择；原有宠物开关独立保留 |
 
 ### 业务内复用入口
 

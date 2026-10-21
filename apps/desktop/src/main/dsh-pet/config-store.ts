@@ -11,15 +11,30 @@ export class DshPetConfigStore {
   readonly paths: ConfigPaths;
   readonly vendor: VendorHost;
   private writes: Promise<void> = Promise.resolve();
-  constructor(readonly root: string, readonly runtimeRoot: string) {
+  private selectedId: string | null;
+  constructor(readonly root: string, readonly runtimeRoot: string, preferredPetId?: string) {
+    this.selectedId = preferredPetId ?? null;
     this.paths = { defaultFile: path.join(runtimeRoot, 'assets/config.jsonc'), userFile: path.join(root, 'main-config.jsonc'), petDir: path.join(root, 'pet') };
     this.vendor = loadVendor(runtimeRoot);
   }
-  read(): MergedConfig {
+  readAll(): MergedConfig {
     // The optional user layer does not exist on a normal first launch.
     const paths = existsSync(this.paths.userFile) ? this.paths : { ...this.paths, userFile: this.paths.defaultFile };
     return this.vendor.readAllConfig(paths);
   }
+  /** Keep legacy files intact; every runtime consumer receives exactly one pet. */
+  read(): MergedConfig {
+    const config = this.readAll(), pets = this.vendor.flattenPetList(config);
+    const chosen = pets.find(pet => pet.id === this.selectedId)
+      ?? pets.find(pet => pet.display === 'desktop' || pet.display === 'both') ?? pets[0];
+    this.selectedId = chosen ? String(chosen.id) : null;
+    return Object.fromEntries(Object.entries(config).map(([entry, conf]) => [entry, {
+      ...conf,
+      physics: { ...conf.physics as object, petCollision: false },
+      pets: (Array.isArray(conf.pets) ? conf.pets as Record<string, unknown>[] : []).filter(pet => pet.id === this.selectedId),
+    }]));
+  }
+  petId(): string | null { this.read(); return this.selectedId; }
   readText(): string { return readFileSync(existsSync(this.paths.userFile) ? this.paths.userFile : this.paths.defaultFile, 'utf8'); }
   version(): string { return this.vendor.configVersion(this.paths); }
 
@@ -47,26 +62,36 @@ export class DshPetConfigStore {
       await rename(staged, this.paths.userFile);
     } finally { await rm(staged, { force: true }); }
   }
-  reset(): Promise<void> { return this.saveText(readFileSync(this.paths.defaultFile, 'utf8')); }
+  async reset(): Promise<void> { await this.saveText(readFileSync(this.paths.defaultFile, 'utf8')); this.selectedId = null; }
   async patchMain(patch: Record<string, unknown>): Promise<void> {
     await this.saveText(JSON.stringify({ ...parseJsonc(this.readText()), ...patch }, null, 2));
   }
   setDisplay(id: string, display: string): Promise<void> {
+    if (!['web', 'desktop', 'both', 'none'].includes(display)) return Promise.reject(new Error('display 无效'));
+    return this.patchPet(id, { display });
+  }
+  patchPet(id: string, patch: Record<string, unknown>): Promise<void> {
     const run = this.writes.then(async () => {
-      if (!['web', 'desktop', 'both', 'none'].includes(display)) throw new Error('display 无效');
-      const found = this.vendor.findPetInstance(this.read(), id);
+      const allowed = new Set(['name', 'size', 'balanceEnabled', 'whisperEnabled', 'workStatusEnabled', 'fixedEnabled', 'display', 'position']);
+      if (Object.keys(patch).some(key => !allowed.has(key))) throw new Error('宠物设置字段无效');
+      const found = this.vendor.findPetInstance(this.readAll(), id);
       if (!found) throw new Error('没有这只宠物');
+      const update = (pet: Record<string, unknown>) => pet.id === id ? { ...pet, ...patch,
+        ...(patch.position ? { position: { ...pet.position as object, ...patch.position as object } } : {}),
+      } : pet;
+      const effective = (found.conf.pets as Record<string, unknown>[]).map(update);
+      if (!this.vendor.saveUserConfig({ ...found.conf, pets: effective })) throw new Error('宠物设置无效');
       if (found.entry === 'main') {
         const raw = parseJsonc(this.readText());
         const pets = (Array.isArray(raw.pets) ? raw.pets : found.conf.pets) as Record<string, unknown>[];
-        await this.save(JSON.stringify({ ...raw, pets: pets.map(pet => pet.id === id ? { ...pet, display } : pet) }, null, 2));
+        await this.save(JSON.stringify({ ...raw, pets: pets.map(update) }, null, 2));
       } else {
         if (path.basename(found.entry) !== found.entry || /[\\/:]/.test(found.entry)) throw new Error('宠物包目录无效');
         if (lstatSync(this.paths.petDir).isSymbolicLink()) throw new Error('宠物包目录不能是链接');
         const entry = this.vendor.readPetConfigEntry(this.paths, found.entry);
         if (!entry?.raw || lstatSync(entry.path).isSymbolicLink()) throw new Error('宠物包配置无效');
         const file = entry.path, raw = entry.raw;
-        const pets = (raw.pets as Record<string, unknown>[]).map(pet => pet.id === id ? { ...pet, display } : pet);
+        const pets = (raw.pets as Record<string, unknown>[]).map(update);
         await atomicPrivateFile(file, JSON.stringify({ ...raw, pets }, null, 2));
       }
     });

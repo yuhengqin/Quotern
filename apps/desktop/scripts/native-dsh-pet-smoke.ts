@@ -44,10 +44,10 @@ async function main() {
     assert.ok(line, `No renderer dump: ${stderr}`); const dump = JSON.parse(line.split(' => ')[1]!) as Record<string, any>;
     assert.equal(dump.hasBridge, true); assert.equal(dump.errorVisible, false); assert.equal(dump.sprites, 1); assert.equal(dump.menuSmoke.menuMounted, true); assert.equal(dump.menuSmoke.errsNew, 0); assert.equal(dump.releaseKeptPosition.kept, true); assert.equal(dump.interactiveFlip.inside, true); assert.equal(dump.interactiveFlip.outside, true); assert.equal(dump.interactiveFlip.duringDragForced, true);
     assert.match(stdout, /interactiveIgnoring":false,"passthroughIgnoring":true/);
-    assert.match(stdout, /windows=2/); assert.ok(dump.videoSrcA.startsWith('dsh-pet-bridge:'));
+    assert.match(stdout, /windows=1/); assert.ok(dump.videoSrcA.startsWith('dsh-pet-bridge:'));
     const names = config.vendor.animationNames(original.animations); for (const name of names) assert.ok(await assets.resolve(`/thumb/main/${encodeURIComponent(name)}.webm`));
     await writeFile(path.join(directory, 'result.json'), JSON.stringify({ code, animationsResolved: names.length, routes: [...routes], dump }, null, 2));
-    console.log(JSON.stringify({ ok: true, windows: 2, animationsResolved: names.length, directory }));
+    console.log(JSON.stringify({ ok: true, windows: 1, animationsResolved: names.length, directory }));
   } finally { clearTimeout(timeout); service.dispose(); await pipe.close(); api.closeAllConnections(); await new Promise<void>(resolve => api.close(() => resolve())); if (child.exitCode === null) child.kill(); }
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

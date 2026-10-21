@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { patchDshPetChat } from './patch-dsh-pet-chat.mjs';
 import { patchDshPetPointer } from './patch-dsh-pet-pointer.mjs';
+import { patchDshPetMotion } from './patch-dsh-pet-motion.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const hostModules = ['config', 'state', 'work-status', 'notify-events', 'memes', 'anim', 'broadcast', 'time-context', 'model-selection'];
@@ -86,6 +87,7 @@ async function handleBridgeRequest(request) {
   let sprite = await readFile(spriteFile, 'utf8');
   sprite = replaceRequired(sprite, "OPEN_TARGET === 'desktop' ? '打开 DeepSeek Harness' : '打开网站'", "'打开 Quotern'");
   sprite = replaceRequired(sprite, 'window.petBridge.openDshSite(ORIGIN)', 'window.petBridge.openHost()');
+  sprite = patchDshPetMotion(sprite);
   ({ helper, preload, sprite } = patchDshPetPointer({ helper, preload, sprite }));
   await writeFile(runtimeFile, helper);
   await writeFile(preloadFile, preload);

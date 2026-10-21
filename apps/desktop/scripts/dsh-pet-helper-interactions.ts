@@ -9,7 +9,7 @@ import { DshPetController } from '../src/main/dsh-pet/controller';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 async function main() {
-  const [executable, runtimeRoot, output] = process.argv.slice(2);
+  const [executable, runtimeRoot, output, appPath] = process.argv.slice(2);
   assert.ok(executable && runtimeRoot && output, 'exe runtimeRoot output');
   const directory=path.resolve(output); await mkdir(directory,{recursive:true});
   const results: Array<{name:string;ok:boolean;error?:string}>=[];
@@ -25,13 +25,13 @@ async function main() {
   await new Promise<void>(resolve=>api.listen(0,'127.0.0.1',resolve));
   const port=await unusedPort();
   const inspectorPort=await unusedPort();
-  const controller=new DshPetController({root:path.join(directory,'host'),runtimeRoot:path.resolve(runtimeRoot),executable:path.resolve(executable),appPath:path.join(path.dirname(path.resolve(executable)),'resources/app.asar'),packaged:true,
+  const controller=new DshPetController({root:path.join(directory,'host'),runtimeRoot:path.resolve(runtimeRoot),executable:path.resolve(executable),appPath:appPath?path.resolve(appPath):path.join(path.dirname(path.resolve(executable)),'resources/app.asar'),packaged:!appPath,
     secrets:{isEncryptionAvailable:()=>false,encryptString:()=>{throw Error('not used');},decryptString:()=>{throw Error('not used');}},
     getQuota:()=>null,showMainWindow:()=>{openedHost++;},openDirectory:async()=>{},roots:[],
-    spawn:(exe,args,options)=>{child=spawn(exe,[...args,`--remote-debugging-port=${port}`,`--inspect=127.0.0.1:${inspectorPort}`],options);child.stdout?.on('data',c=>{stdout+=String(c);});child.stderr?.on('data',c=>{stderr+=String(c);});return child;},
+    spawn:(exe,args,options)=>{const launched=spawn(exe,[...args,`--remote-debugging-port=${port}`,`--inspect=127.0.0.1:${inspectorPort}`],options);child=launched;launched.once('exit',()=>{if(child===launched)child=null;});launched.stdout?.on('data',c=>{stdout+=String(c);});launched.stderr?.on('data',c=>{stderr+=String(c);});return launched;},
   });
   let page: any, second: any, native: any;
-  const pages=async()=>((await(await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).filter(p=>p.type==='page');
+  const pages=async()=>{try{return((await(await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as any[]).filter(p=>p.type==='page');}catch{return[];}};
   const connect=async()=>{
     let targets:any[]=[];
     for(let i=0;i<120;i++){try{targets=await pages();}catch{}if(targets.length)break;await wait(100);}
@@ -59,12 +59,11 @@ async function main() {
     const original=controller.getState().config.main!;
     await controller.dispatch({type:'patch-config',patch:{notificationsEnabled:false,workStatusTexts:[['思考'],['工作'],['结果'],['等待'],['本轮工作完成占位'],['发生错误占位']],pets:[
       {...(original.pets as object[])[0],size:280,whisperEnabled:false,fixedEnabled:true,workStatusEnabled:true,position:{corner:'top-right',marginX:20,marginY:40}},
-      {...(original.pets as object[])[0],id:'friend',name:'菜单同伴',size:200,whisperEnabled:false,fixedEnabled:true,position:{corner:'bottom-right',marginX:200,marginY:80}},
     ]}});
     await controller.dispatch({type:'save-provider',provider:{id:'local',name:'Local helper audit',baseUrl:`http://127.0.0.1:${(api.address() as any).port}/v1`,models:['audit']}});
     await controller.dispatch({type:'set-default-model',model:{provider:'local',model:'audit'}});
     await controller.dispatch({type:'set-enabled',enabled:true}); await connect();await wait(1000);
-    await check('two-real-helper-pages',async()=>{assert.equal((await pages()).length,2);assert.equal(await ev('window.__dshPetDebug.spriteCount'),1);assert.equal(await second.evaluate('window.__dshPetDebug.spriteCount'),1);});
+    await check('single-real-helper-page',async()=>{assert.equal((await pages()).length,1);assert.equal(await ev('window.__dshPetDebug.spriteCount'),1);});
     // Controlled cursor input exercises the real native polling timer, without
     // moving the user's physical pointer or relying on injected DOM mousemove.
     await native.evaluate(`(()=>{
@@ -125,14 +124,14 @@ async function main() {
     });
     await check('menu-reload-replaces-helper',async()=>{await openMenu();const previous=child?.pid;await page.click(menuItem('重载配置'));for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);await connect();assert.equal(controller.getState().status,'running');});
     await check('menu-click-outside-closes',async()=>{await openMenu();await page.call('Input.dispatchMouseEvent',{type:'mousePressed',x:2,y:2,button:'left',clickCount:1});await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:2,y:2,button:'left',clickCount:1});assert.equal(await ev(`!!document.querySelector('${menu}')`),false);});
-    for(const [label,value,count] of [['两者','both',2],['仅桌面','desktop',2],['仅网页','web',1],['都不','none',1]] as const){
+    for(const [label,value,count] of [['两者','both',1],['仅桌面','desktop',1],['仅网页','web',0],['都不','none',0]] as const){
       // Restore the fixture before testing another choice that hides its own window.
-      if((controller.getState().config.main!.pets as any[])[0].display==='web'){
-        const pets=(controller.getState().config.main!.pets as any[]).map((pet,index)=>index===0?{...pet,display:'desktop'}:pet);
-        await controller.dispatch({type:'patch-config',patch:{pets}});await connect();
+      if(!controller.getState().enabled){
+        await controller.dispatch({type:'set-enabled',enabled:true});await connect();
       }
-      await check(`display-menu:${value}`,async()=>{await openMenu();await hover(menuItem('显示位置'));const previous=child?.pid;await page.click(menuItem(label));for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);await connect();assert.equal((controller.getState().config.main!.pets as any[])[0].display,value);assert.equal((await pages()).length,count);});
+      await check(`display-menu:${value}`,async()=>{await openMenu();await hover(menuItem('显示位置'));const previous=child?.pid;await page.click(menuItem(label));for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);if(count)await connect();assert.equal((controller.getState().config.main!.pets as any[])[0].display,value);assert.equal((await pages()).length,count);if(!count)assert.equal(controller.getState().enabled,false);});
     }
+    if(!controller.getState().enabled){await controller.dispatch({type:'set-enabled',enabled:true});await connect();}
     await page.screenshot(path.join(directory,'helper-final.png'));
   }catch(error){results.push({name:'runner',ok:false,error:String((error as Error).stack??error)});throw error;}
   finally{

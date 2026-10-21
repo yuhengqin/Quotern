@@ -8,6 +8,42 @@ import vm from 'node:vm';
 
 const vendorRoot = new URL('../vendor/dsh-pet/', import.meta.url);
 
+test('generated desktop wandering respects the current screen and the facing after a turn', async () => {
+  const { prepareDshPet } = await import('./prepare-dsh-pet.mjs');
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-wandering-'));
+  try {
+    await prepareDshPet({ vendorRoot, outputRoot: root });
+    const context = vm.createContext({
+      VIEW: { w: 2000, h: 800 },
+      AREAS: [{ x: 0, y: 0, width: 1000, height: 800 }, { x: 1000, y: 0, width: 1000, height: 800 }],
+    });
+    vm.runInContext(await readFile(path.join(root, 'runtime/shared-core.js'), 'utf8'), context);
+    vm.runInContext(`const S = PetShared;\n${await readFile(path.join(root, 'runtime/sprite.js'), 'utf8')}
+      function wander({ x = 500, facing = 'right', locked = false, anim = 'turn' } = {}) {
+        const pet = Object.assign(Object.create(PetSprite.prototype), {
+          moveRef: null, pendingMove: null, throwRef: null,
+          size: S.PET_REF_WIDTH, halfW: 40, sideAllow: 0,
+          facing, confineToScreen: locked, anim,
+          animations: { turn: ['turn'], moves: {
+            actions: [{ name: 'walk' }],
+            default: { minDist: 100, maxDist: 100, margin: 0, leadSec: 0, tailSec: 0 },
+          } },
+          currentCenterX: () => x, currentCenterY: () => 400,
+          switchTo: () => {},
+        });
+        return { result: pet.tryMove('walk'), plan: pet.pendingMove };
+      }
+    `, context);
+    assert.equal(vm.runInContext("wander({ facing: 'right' }).plan.dir", context), 1, 'a completed turn must not invert rightward walking');
+    assert.equal(vm.runInContext("wander({ facing: 'left' }).plan.dir", context), -1, 'a completed turn must not invert leftward walking');
+    assert.equal(vm.runInContext("wander({ x: 950, locked: true, anim: 'idle' }).result", context), false, 'locked wandering must stop at an adjacent screen');
+    assert.equal(vm.runInContext("wander({ x: 950, anim: 'idle' }).result", context), 'walk', 'unlocked wandering still crosses adjacent screens');
+    assert.equal(vm.runInContext("wander({ x: 1200, locked: true }).plan.dir", context), 1, 'the current screen can be a secondary screen');
+    vm.runInContext('AREAS[1].x = 1200;', context);
+    assert.equal(vm.runInContext("wander({ x: 1050, facing: 'left', locked: true, anim: 'idle' }).result", context), 'walk', 'a pet in a display gap uses its nearest screen');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('builds the full offline pet runtime without document previews or an unlicensed font', async () => {
   const { prepareDshPet } = await import('./prepare-dsh-pet.mjs');
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-build-'));

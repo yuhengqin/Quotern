@@ -7,6 +7,27 @@ import { DshPetConfigStore } from './config-store.js';
 
 const runtime = path.resolve('out/dsh-pet');
 
+test('legacy instances and pet packs expose one stable companion without deleting configuration', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-single-'));
+  try {
+    const store = new DshPetConfigStore(root, runtime);
+    const base = store.vendor.readAllConfig({ ...store.paths, userFile: store.paths.defaultFile }).main!;
+    const pet = (base.pets as object[])[0]!;
+    const file = path.join(root, 'main-config.jsonc');
+    const raw = JSON.stringify({ ...base, pets: [{ ...pet, display: 'none' }, { ...pet, id: 'current', display: 'desktop' }, { ...pet, id: 'other', display: 'desktop' }] });
+    await writeFile(file, raw);
+    await mkdir(path.join(root, 'pet'));
+    const packFile = path.join(root, 'pet/fish-config.jsonc');
+    const pack = JSON.stringify({ pets: [{ ...pet, id: 'pack', display: 'desktop' }] });
+    await writeFile(packFile, pack);
+    assert.deepEqual(store.vendor.flattenPetList(store.read()).map(pet => pet.id), ['current']);
+    assert.equal(await readFile(file, 'utf8'), raw);
+    assert.equal(await readFile(packFile, 'utf8'), pack);
+    await store.setDisplay('current', 'none');
+    assert.deepEqual(store.vendor.flattenPetList(store.read()).map(pet => pet.id), ['current'], 'hiding must not switch to another legacy pet');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('first launch inherits built-in pets without warnings or creating a user config', async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-first-config-'));
   const warnings: string[] = [];
@@ -35,7 +56,7 @@ test('saves full JSONC without damaging URL or comment-like prompt text, and kee
     await mkdir(path.join(root, 'pet'), { recursive: true });
     const pet = { ...(config.pets as Record<string, unknown>[])[0], id: 'fish.extra', name: 'Extra', display: 'desktop' };
     await writeFile(path.join(root, 'pet/fish-config.json'), JSON.stringify({ pets: [pet] }));
-    const merged = store.read();
+    const merged = store.readAll();
     assert.equal((merged.fish!.font as Record<string, unknown>).size, 23);
     assert.equal((merged.fish!.pets as Record<string, unknown>[])[0]!.id, 'fish.extra');
     assert.ok((await store.readText()).startsWith('// a real comment'));
@@ -66,5 +87,23 @@ test('pack display changes preserve its actual JSONC file and advanced fields', 
     await writeFile(file, JSON.stringify({ pets: [{ ...(main.pets as object[])[0], id: 'fish' }], whisperPrompt: 'keep', advancedField: { keep: true } }));
     await store.setDisplay('fish', 'none');
     const raw = JSON.parse(await readFile(file, 'utf8')); assert.equal(raw.pets[0].display, 'none'); assert.equal(raw.whisperPrompt, 'keep'); assert.deepEqual(raw.advancedField, { keep: true });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('a selected pet pack can be edited while other configured pets stay inactive', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-single-pack-'));
+  try {
+    const store = new DshPetConfigStore(root, runtime, 'fish');
+    const main = store.readAll().main!;
+    await mkdir(path.join(root, 'pet'));
+    const file = path.join(root, 'pet/fish-config.jsonc');
+    await writeFile(file, JSON.stringify({ pets: [{ ...(main.pets as object[])[0], id: 'fish' }], advancedField: 'keep' }));
+    assert.deepEqual(store.vendor.flattenPetList(store.read()).map(pet => pet.id), ['fish']);
+    await store.patchPet('fish', { name: 'One fish', position: { marginX: 31 } });
+    const pet = store.vendor.flattenPetList(store.read())[0]!;
+    assert.equal(pet.name, 'One fish'); assert.equal((pet.position as { marginX: number }).marginX, 31);
+    assert.equal(JSON.parse(await readFile(file, 'utf8')).advancedField, 'keep');
+    await assert.rejects(store.patchPet('fish', { size: -1 }));
+    await assert.rejects(store.patchPet('fish', { id: 'another' }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });

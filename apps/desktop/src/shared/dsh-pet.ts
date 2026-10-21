@@ -13,6 +13,8 @@ export type DshPetAction =
   | { type: 'set-enabled'; enabled: boolean } | { type: 'retry' }
   | { type: 'read-config' } | { type: 'save-config'; text: string } | { type: 'reset-config' }
   | { type: 'patch-config'; patch: Record<string, unknown> }
+  | { type: 'patch-pet'; petId: string; patch: Record<string, unknown> }
+  | { type: 'set-desktop-visible'; petId: string; visible: boolean }
   | { type: 'save-provider'; provider: ProviderPatch } | { type: 'remove-provider'; id: string }
   | { type: 'set-default-model'; model: ModelRef | null } | { type: 'set-quota-source'; source: string | null }
   | { type: 'clear-memory'; petId: string } | { type: 'open-directory' }

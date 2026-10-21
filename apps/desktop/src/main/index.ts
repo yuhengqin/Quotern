@@ -70,6 +70,7 @@ import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
 import { PetController } from './pet-controller';
 import { initializeDshPet } from './dsh-pet';
+import { buildDshPetTrayMenu } from './dsh-pet/tray-menu';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
 import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
@@ -560,6 +561,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       openSettings: () => openSettings(),
       triggerSync,
       togglePet: () => petController?.toggle(),
+      getDshPetMenu: () => buildDshPetTrayMenu(dshPet?.controller ?? null, getNativeLocale()),
       onOpen: () => { void quotaRuntime?.manager.refresh('interaction'); },
     });
     quotaRuntime.start();

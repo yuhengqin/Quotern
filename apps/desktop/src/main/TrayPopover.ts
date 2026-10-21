@@ -6,6 +6,7 @@ import {
   ipcMain,
   nativeImage,
   screen,
+  type MenuItemConstructorOptions,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -60,6 +61,7 @@ export interface TrayPopoverOptions {
   triggerSync: () => void;
   /** Windows desktop pet toggle. */
   togglePet?: () => void;
+  getDshPetMenu?: () => MenuItemConstructorOptions[];
   onOpen?: () => void;
 }
 
@@ -112,6 +114,7 @@ function buildTrayMenu(options: TrayPopoverOptions): Menu {
       label: nativeText(locale, 'native.tray.togglePet'),
       click: () => options.togglePet?.(),
     }] : []),
+    ...(options.getDshPetMenu?.() ?? []),
     {
       label: nativeText(locale, 'native.tray.settings'),
       click: () => options.openSettings(),
@@ -288,7 +291,10 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
 
   if (isMac || process.platform === 'win32') {
     tray.on('click', () => { options.onOpen?.(); togglePopover(); });
-    tray.on('right-click', () => { if (trayMenu) tray?.popUpContextMenu(trayMenu); });
+    tray.on('right-click', () => {
+      trayMenu = buildTrayMenu(options);
+      tray?.popUpContextMenu(trayMenu);
+    });
     ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
     ipcMain.on(TRAY_POPOVER_RESIZE_CHANNEL, handlePopoverResize);
   } else {

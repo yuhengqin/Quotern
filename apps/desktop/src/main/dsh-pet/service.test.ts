@@ -58,6 +58,20 @@ test('preserves runtime state/action contracts and validates every built-in anim
   } finally { await f.close(); }
 });
 
+test('legacy inactive companions receive neither automatic model requests nor manual actions', async () => {
+  const f = await fixture();
+  try {
+    const pet = (f.config.read().main!.pets as object[])[0]!;
+    await f.config.patchMain({ pets: [{ ...pet, whisperEnabled: true }, { ...pet, id: 'unused', whisperEnabled: true }] });
+    await f.service.refreshAutomatic();
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.equal(f.calls.length, 1, 'only the active companion can generate automatic whispers');
+    assert.equal((await f.call('POST', 'chat?pet=unused', { text: 'No request' })).status, 404);
+    assert.equal(f.calls.length, 1);
+    assert.equal((await f.call('GET', 'state')).body.pets.unused, undefined);
+  } finally { await f.close(); }
+});
+
 test('explicit notifications respect focus, the global switch and event deduplication', async () => {
   const f = await fixture();
   try {

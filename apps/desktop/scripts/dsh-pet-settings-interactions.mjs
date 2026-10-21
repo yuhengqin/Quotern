@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { transform } from 'esbuild';
 import { connectPage, launchProbe, unusedPort, wait } from './desktop-cdp.mjs';
 
-const [executable, output] = process.argv.slice(2);
+const [executable, output, appPath] = process.argv.slice(2);
 assert.ok(executable && output, 'exe output');
 const localeSource = await readFile(new URL('../src/renderer/i18n/dsh-pet-messages.ts', import.meta.url), 'utf8');
 const module = await transform(localeSource, { loader: 'ts', format: 'esm' });
@@ -25,7 +25,7 @@ const api = createServer(async (request, response) => {
 });
 await new Promise(resolve => api.listen(0, '127.0.0.1', resolve));
 const inspectorPort = await unusedPort();
-const probe = await launchProbe(executable, output, { args: [`--inspect=127.0.0.1:${inspectorPort}`] });
+const probe = await launchProbe(executable, output, { args: [...(appPath ? [path.resolve(appPath)] : []), `--inspect=127.0.0.1:${inspectorPort}`] });
 let page, inspector;
 try {
   page = await probe.connect(target => /index\.html/.test(target.url));
@@ -76,8 +76,11 @@ try {
     });
     if (!await ev(`(${group(key)}).open`)) await page.click(`(${group(key)}).querySelector('summary')`);
   }
-  await check('last-companion-removal-disabled', async () => assert.equal(await ev(`(${button('remove', group('instances'))}).disabled`), true));
-  await check('add-companion', async () => { await click(button('add')); assert.equal((await state()).config.main.pets.length, 2); });
+  await check('single-companion-settings', async () => {
+    assert.equal((await state()).config.main.pets.length, 1);
+    assert.equal(await ev(`(${group('instances')}).querySelectorAll('button').length`), 0, 'no add/remove companion controls');
+    assert.equal(await ev(`(${section}).textContent.includes('多宠物碰撞')`), false);
+  });
   await check('name-blur-save', async () => { await edit('name','界面审计宠物'); assert.equal((await state()).config.main.pets[0].name,'界面审计宠物'); });
   await check('size-blur-save', async () => { await edit('size','248'); assert.equal((await state()).config.main.pets[0].size,248); });
   await check('pending-save-preserves-newer-draft-and-focus', async () => {
@@ -89,7 +92,7 @@ try {
       if(typeof original!=='function')throw Error('Missing owned test IPC handler');
       globalThis.__auditRestore=()=>{ipc.removeHandler('dsh-pet:action');ipc.handle('dsh-pet:action',original);};
       let once=true;ipc.removeHandler('dsh-pet:action');ipc.handle('dsh-pet:action',async(event,action)=>{
-        if(once&&action.type==='patch-config'){once=false;await new Promise(resolve=>{globalThis.__auditRelease=resolve;});}
+        if(once&&action.type==='patch-pet'){once=false;await new Promise(resolve=>{globalThis.__auditRelease=resolve;});}
         return original(event,action);
       });return true;
     })()`);
@@ -113,9 +116,9 @@ try {
   });
   await check('blur-save-does-not-swallow-next-button', async () => {
     const count=(await state()).config.main.pets.length;
-    await page.fill(field('name'),'直接移焦名称'); await click(button('add'));
+    await page.fill(field('name'),'直接移焦名称'); await click(button('clearMemory',group('controls')));
     assert.equal((await state()).config.main.pets[0].name,'直接移焦名称');
-    assert.equal((await state()).config.main.pets.length,count+1,'the first click after editing must still add the companion');
+    assert.equal((await state()).config.main.pets.length,count,'the next action must keep one companion');
   });
   for (const key of ['balanceEnabled','whisperEnabled','workStatusEnabled','fixedEnabled']) await check(`companion-toggle:${key}`, async () => {
     const before = (await state()).config.main.pets[0][key];
@@ -123,10 +126,9 @@ try {
     await ev(`(${field(key)}).focus(); true;`); await page.key(' '); await wait(60); await idle();
     assert.equal((await state()).config.main.pets[0][key], before);
   });
-  for (const value of ['none','web','both','desktop']) await check(`display:${value}`, async () => { await select('display',value); assert.equal((await state()).config.main.pets[0].display,value); });
   for (const value of ['top-left','top-right','bottom-left','bottom-right']) await check(`corner:${value}`, async () => { await select('corner',value); assert.equal((await state()).config.main.pets[0].position.corner,value); });
   for (const [key,value] of [['marginX',31],['marginY',49]]) await check(`offset:${key}`, async () => { await edit(key,String(value)); assert.equal((await state()).config.main.pets[0].position[key],value); });
-  for (const [key,owner,property] of [['confine',null,'confineToScreen'],['notifications',null,'notificationsEnabled'],['collision','physics','petCollision'],['ceiling','physics','ceilingBounce'],['followPet','font','followPet']]) await check(`behavior-toggle:${key}`, async () => {
+  for (const [key,owner,property] of [['confine',null,'confineToScreen'],['notifications',null,'notificationsEnabled'],['ceiling','physics','ceilingBounce'],['followPet','font','followPet']]) await check(`behavior-toggle:${key}`, async () => {
     const main=(await state()).config.main, before=owner?main[owner][property]:main[property]; await click(field(key));
     const after=(await state()).config.main; assert.equal(owner?after[owner][property]:after[property],!before);
   });
@@ -164,23 +166,16 @@ try {
   });
   const readPetState=async()=>JSON.parse((await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:'/state'})`)).body);
   await check('manual-quota', async () => { await click(button('balance',group('controls'))); assert.equal(await ev(`(${section}).querySelector('[role="alert"]')?.textContent??''`),''); });
-  await check('manual-target-second', async () => { const pets=(await state()).config.main.pets; await select('instance',pets[1].id); assert.equal(await ev(`(${field('instance')}).value`),pets[1].id); });
+  await check('manual-single-target', async () => { assert.equal((await state()).config.main.pets.length,1); assert.equal(await ev(`(${group('controls')}).querySelectorAll('select').length`),1,'only the animation selector remains'); });
   await check('manual-animation', async () => {
-    const target=await ev(`(${field('instance')}).value`), before=(await readPetState()).pets[target]?.anim?.counter??0;
+    const target=(await state()).config.main.pets[0].id, before=(await readPetState()).pets[target]?.anim?.counter??0;
     const animation=await ev(`(${field('animation')}).options[1].value`); await select('animation',animation); await click(button('play',group('controls')));
     assert.ok((await readPetState()).pets[target].anim.counter>before);
   });
-  await check('chat-from-form', async () => { await page.fill(field('chat'),'界面审计你好'); await click(button('send',group('controls'))); const id=await ev(`(${field('instance')}).value`); const response=await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:${JSON.stringify('/chat?pet=')}+encodeURIComponent(${JSON.stringify(id)})})`); assert.equal(JSON.parse(response.body).messages.length,2); });
+  await check('chat-from-form', async () => { await page.fill(field('chat'),'界面审计你好'); await click(button('send',group('controls'))); const id=(await state()).config.main.pets[0].id; const response=await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:${JSON.stringify('/chat?pet=')}+encodeURIComponent(${JSON.stringify(id)})})`); assert.equal(JSON.parse(response.body).messages.length,2); });
   await check('chat-error-feedback-and-draft', async () => { await page.fill(field('chat'),'audit-model-error'); await click(button('send',group('controls'))); assert.match(await ev(`(${section}).querySelector('[role="alert"]')?.textContent??''`),/503/); assert.equal(await ev(`(${field('chat')}).value`),'audit-model-error'); });
-  await check('manual-whisper', async () => { const id=await ev(`(${field('instance')}).value`), before=(await readPetState()).pets[id]?.say?.counter??0; await click(button('whisper',group('controls'))); assert.ok((await readPetState()).pets[id].say.counter>before); });
-  await check('clear-selected-memory', async () => { const id=await ev(`(${field('instance')}).value`); await click(button('clearMemory',group('controls'))); const response=await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:${JSON.stringify('/chat?pet=')}+encodeURIComponent(${JSON.stringify(id)})})`); assert.equal(JSON.parse(response.body).messages.length,0); });
-  await check('remove-companion-updates-manual-target',async()=>{
-    const pets=(await state()).config.main.pets, removed=pets[1].id;
-    await click(button('remove',group('instances'),1));
-    assert.equal((await state()).config.main.pets.length,pets.length-1);
-    assert.equal((await state()).config.main.pets.some(p=>p.id===removed),false);
-    assert.equal(await ev(`(${field('instance')}).value`),pets[0].id);
-  });
+  await check('manual-whisper', async () => { const id=(await state()).config.main.pets[0].id, before=(await readPetState()).pets[id]?.say?.counter??0; await click(button('whisper',group('controls'))); assert.ok((await readPetState()).pets[id].say.counter>before); });
+  await check('clear-selected-memory', async () => { const id=(await state()).config.main.pets[0].id; await click(button('clearMemory',group('controls'))); const response=await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:${JSON.stringify('/chat?pet=')}+encodeURIComponent(${JSON.stringify(id)})})`); assert.equal(JSON.parse(response.body).messages.length,0); });
   await check('disable-before-advanced', async () => { await click(`(${section}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'disabled'); });
   await check('load-jsonc', async () => { await click(button('loadConfig')); assert.ok((await ev(`(${section}).querySelector('textarea[name="jsonc"]').value`)).includes((await state()).config.main.pets[0].name)); });
   const jsonc=`(${section}).querySelector('textarea[name="jsonc"]')`;
@@ -190,6 +185,12 @@ try {
     await page.fill(jsonc,'// UI acceptance\n'+JSON.stringify(main,null,2)); await click(button('saveConfig'));
     assert.equal((await state()).config.main.pets[0].name,'高级配置宠物');
     assert.equal(await ev(`(${field('name')}).value`),'高级配置宠物'); assert.equal(await ev(`(${field('size')}).value`),'315'); assert.equal(await ev(`(${field('fontSize')}).value`),'37'); assert.equal(await ev(`(${field('persona')}).value`),'高级配置人设');
+  });
+  await check('advanced-config-cannot-start-another-companion', async () => {
+    const main=(await state()).config.main; main.pets.push({...main.pets[0],id:'legacy-extra'});
+    await page.fill(jsonc,JSON.stringify(main)); await click(button('saveConfig'));
+    assert.equal((await state()).config.main.pets.length,1);
+    assert.equal(await ev(`(${group('instances')}).querySelectorAll('input[type="number"]').length`),3);
   });
   await check('reset-updates-edited-inputs', async () => { await click(button('reset')); assert.equal((await state()).config.main.pets[0].name,defaults.pets[0].name); assert.equal(await ev(`(${field('name')}).value`),defaults.pets[0].name); assert.equal(await ev(`(${field('size')}).value`),String(defaults.pets[0].size)); assert.equal(await ev(`(${field('fontSize')}).value`),String(defaults.font.size)); });
   await check('reset-failure-preserves-jsonc-draft', async () => {

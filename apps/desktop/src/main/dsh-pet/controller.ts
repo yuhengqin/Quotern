@@ -33,17 +33,29 @@ export class DshPetController {
   private quotaSource: string | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   constructor(private readonly options: Options) {
-    this.config = new DshPetConfigStore(options.root, options.runtimeRoot);
-    this.models = this.createModels();
     const preferences = path.join(options.root, 'preferences.json');
-    if (existsSync(preferences)) { const raw = JSON.parse(readFileSync(preferences, 'utf8')) as { enabled?: unknown; quotaSource?: unknown }; this.enabled = raw.enabled === true; this.quotaSource = typeof raw.quotaSource === 'string' ? raw.quotaSource : null; }
+    const raw = existsSync(preferences) ? JSON.parse(readFileSync(preferences, 'utf8')) as { enabled?: unknown; quotaSource?: unknown; petId?: unknown } : {};
+    this.config = new DshPetConfigStore(options.root, options.runtimeRoot, typeof raw.petId === 'string' ? raw.petId : undefined);
+    this.models = this.createModels();
+    this.enabled = raw.enabled === true; this.quotaSource = typeof raw.quotaSource === 'string' ? raw.quotaSource : null;
   }
   private createModels(): DshPetModelService { return new DshPetModelService(this.options.root, this.options.secrets, { fetch: this.options.fetch }); }
-  async initialize(): Promise<void> { if (this.enabled) await this.enqueue(() => this.start()); }
+  async initialize(): Promise<void> { if (this.enabled) await this.enqueue(async () => { await this.persist(); await this.start(); }); }
   getState(): DshPetState { return { enabled: this.enabled, status: this.status, error: this.error, config: this.config.read(), models: this.models.publicState(), quotaSource: this.quotaSource, sources: this.monitor?.capabilities() ?? ['codex', 'claude', 'dsh'].map(source => ({ source, states: [], reason: '宠物未运行；尚未监听', lastEventAt: null })) }; }
   private changed(): void { if (!this.disposed) this.options.onChanged?.(this.getState()); }
   private enqueue<T>(operation: () => Promise<T>): Promise<T> { const run = this.queue.then(operation); this.queue = run.catch(() => {}); return run; }
-  private persist(): Promise<void> { return atomicPrivateFile(path.join(this.options.root, 'preferences.json'), JSON.stringify({ enabled: this.enabled, quotaSource: this.quotaSource })); }
+  private persist(): Promise<void> { return atomicPrivateFile(path.join(this.options.root, 'preferences.json'), JSON.stringify({ enabled: this.enabled, quotaSource: this.quotaSource, petId: this.config.petId() })); }
+  private async setEnabled(enabled: boolean): Promise<void> {
+    if (enabled) {
+      const pet = this.config.vendor.flattenPetList(this.config.read())[0];
+      if (pet && pet.display !== 'desktop' && pet.display !== 'both') {
+        await this.config.setDisplay(String(pet.id), pet.display === 'web' ? 'both' : 'desktop');
+        await this.stop();
+      }
+    }
+    this.enabled = enabled; await this.persist();
+    if (enabled && !this.paused) await this.start(); else await this.stop();
+  }
   dispatch(action: DshPetAction): Promise<unknown> {
     if (!action || typeof action !== 'object' || this.disposed) return Promise.reject(new Error('宠物操作无效'));
     if (action.type === 'read-config') return Promise.resolve(this.config.readText());
@@ -55,10 +67,24 @@ export class DshPetController {
       switch (action.type) {
         case 'set-enabled':
           if (typeof action.enabled !== 'boolean') throw new Error('开关无效');
-          this.enabled = action.enabled; await this.persist(); if (this.enabled && !this.paused) await this.start(); else await this.stop(); break;
+          await this.setEnabled(action.enabled); break;
         case 'retry': if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
         case 'save-config': await this.config.saveText(action.text); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
         case 'patch-config': if (!action.patch || typeof action.patch !== 'object' || Array.isArray(action.patch)) throw new Error('配置无效'); await this.config.patchMain(action.patch); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
+        case 'patch-pet':
+          if (typeof action.petId !== 'string' || !action.patch || typeof action.patch !== 'object' || Array.isArray(action.patch) || !this.config.vendor.findPetInstance(this.config.read(), action.petId)) throw new Error('宠物设置无效');
+          await this.config.patchPet(action.petId, action.patch); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
+        case 'set-desktop-visible': {
+          if (typeof action.petId !== 'string' || typeof action.visible !== 'boolean') throw new Error('显示设置无效');
+          const found = this.config.vendor.findPetInstance(this.config.read(), action.petId);
+          if (!found) throw new Error('没有这只宠物');
+          // Read inside the controller queue so rapid toggles preserve the latest web bit.
+          const web = found.pet.display === 'web' || found.pet.display === 'both';
+          const display = action.visible ? (web ? 'both' : 'desktop') : (web ? 'web' : 'none');
+          if (found.pet.display !== display) { await this.config.setDisplay(action.petId, display); await this.stop(); }
+          await this.setEnabled(action.visible);
+          break;
+        }
         case 'reset-config': await this.config.reset(); if (this.enabled && !this.paused) { await this.stop(); await this.start(); } break;
         case 'save-provider': await this.models.setProviders(action.provider); break;
         case 'remove-provider': if (typeof action.id !== 'string') throw new Error('服务商无效'); await this.models.removeProvider(action.id); break;
@@ -75,13 +101,14 @@ export class DshPetController {
     if (this.service || this.disposed || this.paused) return;
     this.status = 'starting'; this.error = null; this.changed();
     try {
+      const pets = this.config.vendor.flattenPetList(this.config.read()).filter(pet => pet.display === 'desktop' || pet.display === 'both');
+      if (!pets.length) { this.enabled = false; await this.persist(); this.status = 'disabled'; this.changed(); return; }
       this.models = this.createModels();
       const service = new DshPetService({ config: this.config, models: this.models, memory: new DshPetMemoryStore(this.options.root), assets: new DshPetAssetStore(this.options.root, this.options.runtimeRoot), getQuota: this.options.getQuota, quotaSource: () => this.quotaSource, refreshQuota: this.options.refreshQuota, reload: () => this.enqueue(async () => { await this.stop(); if (this.enabled && !this.paused) await this.start(); this.changed(); }), showMainWindow: this.options.showMainWindow, isMainWindowVisible: this.options.isMainWindowVisible, notify: this.options.notify, onChanged: () => this.changed() });
       this.service = service;
       const pipe = new DshPetRpcServer(); this.pipe = pipe; const address = await pipe.start((request, signal) => service.handle(request, signal));
       this.monitor = new DshPetActivityMonitor({ roots: this.options.roots ?? [], onEvent: event => service.onActivity(event) });
       await this.monitor.start();
-      const pets = this.config.vendor.flattenPetList(this.config.read()).filter(pet => pet.display === 'desktop' || pet.display === 'both');
       if (pets.length) {
         const env = { ...process.env };
         for (const key of Object.keys(env)) if (key.startsWith('DSH_PET_')) delete env[key];

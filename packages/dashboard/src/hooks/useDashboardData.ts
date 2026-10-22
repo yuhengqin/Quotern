@@ -1,4 +1,4 @@
-import { dashboardNow } from '../lib/demo-runtime.ts';
+import { dashboardNow, isDemoMode } from '../lib/demo-runtime.ts';
 import { dashboardRangeCacheKey, dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -21,7 +21,7 @@ import {
 import { isMockDataEnabled } from '@/lib/env';
 import { fingerprintUsageDataset } from '@/lib/usage-dataset-fingerprint';
 import { rememberRangeValue } from '@/lib/range-query-cache';
-import { DASHBOARD_POLL_MS } from '@/lib/dashboard-refresh';
+import { subscribeAutomaticRefresh } from '@/lib/dashboard-refresh';
 
 export type DashboardDataSource = 'api' | 'sample';
 
@@ -318,21 +318,7 @@ export function useDashboardData(
       if (rangeFetchInFlightRef.current) return;
       reload();
     };
-    const timer = window.setInterval(poll, DASHBOARD_POLL_MS);
-
-    const onFocus = () => {
-      if (document.visibilityState === 'hidden') return;
-      if (rangeFetchInFlightRef.current) return;
-      reload();
-    };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
-    };
+    return subscribeAutomaticRefresh(poll, { readOnly: isDemoMode() });
   }, [reload]);
 
   const rangeChanged = lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey;

@@ -41,6 +41,8 @@
 
 浏览器只读演示由 HTML 的 `#quotern-demo` 元数据显式启用，`lib/demo-runtime.ts` 提供参考时钟与独立偏好键；普通浏览器默认实时、Desktop 适配器固定正常模式。AppShell 复用 StatusBanner 展示只读与参考日期；演示保留筛选、详情及内置分享卡下载，隐藏同步和在线额度，成就/服务器图库修改禁用。共享 AchievementProvider 的 `readOnly` 参数默认 false，分享组件的演示检查默认关闭，普通 Desktop 的 IPC、图库迁移和成就写操作保持原行为。只读是服务器 API 的强约束，不能仅靠隐藏按钮。日期包装仅改 Dashboard；独立 Desktop 日期副本继续使用实时时钟。
 
+固定演示关闭统计、成就及图库的定时和 focus/visibility 自动刷新；初次加载、筛选变化、重试和显式同步事件继续读取。两端 `lib/dashboard-refresh.ts` 的 `subscribeAutomaticRefresh` 只管理自动订阅，初载与 `DATA_SYNCED_EVENT` 由调用方保留。Desktop 正常模式保持轮询与原有 IPC 新鲜度探测。
+
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动展开已有会话；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史；缺记录时保留目标等待常规同步。Dashboard 与 Desktop 使用同一页面和详情行，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与展开行为保留。
 
 | 能力 | 入口与使用点 | 适用边界及共享方式 |

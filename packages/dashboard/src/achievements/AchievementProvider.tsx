@@ -4,6 +4,7 @@ import { normalizeLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
+import { subscribeAutomaticRefresh } from '../lib/dashboard-refresh';
 import { dismissTransientOverlays } from '../lib/overlay-dismiss';
 import type { AchievementShareSelection } from './share-model';
 import { createAchievementRequestQueue } from './request-queue';
@@ -80,12 +81,10 @@ export function AchievementProvider({ request, children, readOnly = false }: { r
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onSync = () => { clearTimeout(timer); timer = setTimeout(() => void refresh(), 400); };
     const onFocus = () => { if (document.visibilityState === 'visible') void refresh(); };
-    const calendar = setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, 60000);
+    const stopAutomatic = subscribeAutomaticRefresh(onFocus, { readOnly, intervalMs: 60000 });
     window.addEventListener(DATA_SYNCED_EVENT, onSync);
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-    return () => { alive.current = false; clearTimeout(timer); clearInterval(calendar); window.removeEventListener(DATA_SYNCED_EVENT, onSync); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
-  }, [refresh]);
+    return () => { alive.current = false; clearTimeout(timer); stopAutomatic(); window.removeEventListener(DATA_SYNCED_EVENT, onSync); };
+  }, [refresh, readOnly]);
   const updatePreferences = useCallback(async (preferences: Partial<AchievementPreferences>) => {
     setBusy(true);
     try { await apply({ operation: 'preferences', ...preferences }); }

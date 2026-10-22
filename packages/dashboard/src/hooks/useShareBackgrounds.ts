@@ -58,6 +58,7 @@ export function useShareBackgrounds() {
   }, [reload]);
 
   useEffect(() => {
+    if (isDemoMode()) return;
     const refresh = () => { if (!document.hidden && !editing.current) void reload(); };
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);

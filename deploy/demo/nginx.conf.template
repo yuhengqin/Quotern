@@ -1,0 +1,67 @@
+# Included from nginx.conf's http block. Render __CACHE_VERSION__ with the
+# deployed commit + snapshot SHA-256; change it for EVERY code/snapshot update.
+proxy_cache_path /var/cache/nginx/quotern-demo levels=1:2 keys_zone=quotern_demo:10m
+                 max_size=256m inactive=24h use_temp_path=off;
+
+map $request_method $quotern_demo_skip_method {
+    default 1;
+    GET 0;
+    HEAD 0;
+}
+map $upstream_status $quotern_demo_skip_status {
+    default 1;
+    200 0;
+}
+
+server {
+    listen 8123 default_server;
+    listen [::]:8123 default_server;
+    server_name _;
+    access_log /var/log/nginx/quotern-demo.access.log main;
+    error_log /var/log/nginx/quotern-demo.error.log warn;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Port $server_port;
+    proxy_set_header Connection "";
+
+    # Append assets from each build here; retain older hashes for open tabs.
+    # Direct file serving makes missing assets 404 instead of caching SPA HTML.
+    location /assets/ {
+        root /opt/quotern-demo/public;
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # This exception is ONLY for the public, immutable demo's read API.
+    # Keep the upstream no-store header downstream: browsers never retain API
+    # responses across a deployment, while NGINX reuses versioned results.
+    location /functions/ {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_cache quotern_demo;
+        proxy_cache_methods GET HEAD;
+        proxy_cache_key "$scheme|$http_host|__CACHE_VERSION__|$http_origin|$request_uri";
+        proxy_cache_valid 200 24h;
+        proxy_cache_bypass $quotern_demo_skip_method;
+        proxy_no_cache $quotern_demo_skip_method $quotern_demo_skip_status;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 10s;
+        proxy_ignore_headers Cache-Control Expires X-Accel-Expires;
+        add_header X-Demo-Cache $upstream_cache_status always;
+    }
+
+    # HTML bootstrap stays fresh; /health and unknown routes are not cached.
+    location / {
+        proxy_pass http://127.0.0.1:8001;
+    }
+}

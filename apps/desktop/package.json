@@ -1,6 +1,6 @@
 {
   "name": "quotern-desktop",
-  "version": "0.1.13",
+  "version": "1.0.0",
   "private": true,
   "license": "MIT",
   "description": "Quotern 统计客户端：Token 用量明细追踪，本地采集与统计面板。",

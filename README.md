@@ -67,7 +67,15 @@ Release 的 **Source code** 为对应 tag 的源码快照，编译方法见[源�
 
 ## ⌨️ CLI 使用
 
-需要 Node.js >= 20.10。macOS / Windows / Linux 安装后后台启动即可打开本地面板：
+需要 Node.js >= 20.10。macOS / Windows / Linux 可通过 `npx` 直接前台启动，无需预先全局安装：
+
+```bash
+npx quotern
+# 面板: http://127.0.0.1:8252
+# Ctrl+C 停止
+```
+
+长期使用可全局安装，并通过后台服务启动（支持系统自启）：
 
 ```bash
 npm i -g quotern

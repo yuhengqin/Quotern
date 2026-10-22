@@ -1,9 +1,23 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { Agent, EnvHttpProxyAgent, type Dispatcher } from 'undici';
 
 const context = new AsyncLocalStorage<{ retryAfter: number | null }>();
 const metadata = new WeakMap<object, number>();
+let proxyAgent: EnvHttpProxyAgent | undefined;
+let directAgent: Agent | undefined;
+
+function quotaDispatcher(input: RequestInfo | URL): Dispatcher | undefined {
+  if (!(process.env.http_proxy || process.env.HTTP_PROXY || process.env.https_proxy || process.env.HTTPS_PROXY)) return;
+  const hostname = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).hostname;
+  // Local readers carry process-specific credentials and must stay on loopback.
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || hostname.startsWith('127.')) return directAgent ??= new Agent();
+  // Reuse connections; closing here would race readers consuming response bodies.
+  return proxyAgent ??= new EnvHttpProxyAgent();
+}
+
 export const quotaNodeFetch: typeof fetch = async (input, init) => {
-  const response = await globalThis.fetch(input, init);
+  const dispatcher = quotaDispatcher(input);
+  const response = await globalThis.fetch(input, dispatcher ? { ...init, dispatcher } as RequestInit : init);
   observeQuotaResponse(response);
   return response;
 };

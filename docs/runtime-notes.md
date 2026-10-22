@@ -92,4 +92,6 @@ node scripts/migrate-state.mjs --from "/原状态目录" --to "/Quotern状态目
 
 GUI 启动环境的 PATH 可能缺少 Node 或 Agent CLI。Claude reader 使用 [cli-runtime.ts](../apps/desktop/src/main/cli-runtime.ts) 补齐运行环境，在临时目录以受限参数执行 `/usage`；Codex reader 直接读取本机登录状态并请求额度，不以 Codex CLI 是否存在作为前提。
 
+CLI 的 Node 额度及服务状态请求通过 `quotaNodeFetch` 显式使用 `HTTP_PROXY` / `HTTPS_PROXY`（也支持小写形式），遵守 `NO_PROXY`，无需设置 `NODE_USE_ENV_PROXY`；localhost 和回环 IP 始终直连，避免将本机 language server 请求交给代理。仅配置系统代理而没有环境代理变量时，Node 请求仍按原行为直连。Desktop 为 Codex 额度及服务状态注入独立 Electron session 网络，继续沿用系统代理及已有网络恢复流程。
+
 同一账号的临时失败可以保留最近读数，退出、认证失败或账号变化应清除不再匹配的快照。并发请求返回时再次检查身份或 generation，避免把前一账号的结果发布到当前界面。具体字段和订阅来源差异见[订阅数据说明](./subscription-plan-design.md)，不要假设所有 reader 都有相同缓存与状态枚举。

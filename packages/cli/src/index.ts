@@ -323,6 +323,9 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
       await releaseRuntimeOwner(dir);
       ownedPid = false;
     }
+    if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+      throw userError(activeLocale, 'start.portInUse', { host, port });
+    }
     throw err;
   }
   server = httpServer;

@@ -1,5 +1,19 @@
 # 常见问题
 
+### CLI 启动提示端口被占用（`EADDRINUSE`）？
+
+启动端口按 `--port`、`~/.quotern/config.json` 中的 `serverPort`、默认值 `8252` 的顺序选取。升级默认端口不会覆盖已有配置；旧配置可能仍保存 `8452`。
+
+确认要使用的端口空闲后，可显式启动并保存新端口：
+
+```bash
+quotern start --port 8252
+# 从源码运行
+corepack pnpm --filter quotern start --port 8252
+```
+
+也可在正式实例退出后修改 `serverPort`，再重新启动。遇到开发实例占用时，保留其服务并为正式实例选择其他空闲端口；开发模式的端口设置见 [worktree 开发规范](./docs/worktree-development.md#开发入口与端口)。`EnvHttpProxyAgent is experimental` 是代理库警告；实际端口冲突由 `EADDRINUSE` 标识。
+
 ### 客户端提示 `LOCAL_RUNTIME_NOT_READY` 怎么办？
 
 关窗口不会退出（会留在托盘）。先从托盘点 **退出**，再按下面的 case 排查。

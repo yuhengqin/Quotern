@@ -3,7 +3,7 @@ import type { QuotaServiceStatus } from './shared/quota.js';
 import { QuotaManager, type QuotaReader, type QuotaNotification } from './readers/quota-manager.js';
 import type { QuotaState, QuotaProfile } from './shared/quota.js';
 import { openQuotaStore } from './readers/quota-store.js';
-import { captureQuotaRead } from './readers/quota-fetch-state.js';
+import { captureQuotaRead, quotaNodeFetch } from './readers/quota-fetch-state.js';
 import { createDefaultCodexSubscriptionReader } from './readers/codex-subscription.js';
 import { createDefaultClaudeSubscriptionReader } from './readers/claude-subscription.js';
 import { readCursorSubscription } from './readers/cursor-subscription.js';
@@ -96,7 +96,7 @@ export async function createQuotaRuntime(options: {
     notify: options.notify ?? (() => {}), onChanged: options.onChanged,
     fetchStatus: async url => {
       if (!Object.values(STATUS_URLS).includes(url)) throw new Error('unsupported status source');
-      const response = await (options.fetch ?? fetch)(new URL('api/v2/status.json', url).toString(), { signal: AbortSignal.timeout(15000), credentials: 'omit', redirect: 'error', cache: 'no-store' });
+      const response = await (options.fetch ?? quotaNodeFetch)(new URL('api/v2/status.json', url).toString(), { signal: AbortSignal.timeout(15000), credentials: 'omit', redirect: 'error', cache: 'no-store' });
       if (!response.ok) throw new Error('status unavailable');
       const body = await response.text();
       if (body.length > 256 * 1024) throw new Error('status response too large');

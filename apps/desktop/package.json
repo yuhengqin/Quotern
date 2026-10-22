@@ -58,7 +58,7 @@
     "@types/yauzl": "^3.4.0",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "35.4.0",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "0.25.12",
     "typescript": "^5.9.3",

@@ -26,6 +26,19 @@ pnpm build:desktop:mac
 pnpm build:desktop:win
 ```
 
+### Windows 安装包与架构
+
+`corepack pnpm build:desktop:win` 一次构建 x64 和 ARM64 的安装版、便携版，输出到 `apps/desktop/release/<version>/`；`corepack pnpm release:desktop:win` 构建相同产物并上传 GitHub Release。
+
+| 架构 | 安装版 | 便携版 |
+| --- | --- | --- |
+| x64 | `Quotern-<version>-win-x64-setup.exe` | `Quotern-<version>-win-x64-portable.exe` |
+| ARM64 | `Quotern-<version>-win-arm64-setup.exe` | `Quotern-<version>-win-arm64-portable.exe` |
+
+安装版和便携版都显式带架构与类型，避免汇总到同一 Release 时重名。两种 target 分别设置 `buildUniversalInstaller: false`，使用 electron-builder 26 生成独立架构产物。安装版各自生成 `.blockmap`，同一次双架构构建生成的 `latest.yml` 同时包含两个安装版；便携版不进入自动更新清单。不要分别执行两次单架构发布并覆盖同一个 `latest.yml`。
+
+发版验收需检查四个 EXE 齐全、文件名唯一、两份安装版 blockmap 和更新清单中的文件大小及 SHA-512 一致，并确认两份解包目录的 Electron、Sharp 原生模块与 DLL 架构分别为 x64 / ARM64。交叉打包成功不等于 ARM64 实机运行验收。
+
 ### Windows 安装向导
 
 NSIS 安装包提供安装范围、安装目录和桌面快捷方式选项。首次安装默认选择「当前用户」；默认目录为 Windows 当前用户的程序目录（通常是 `%LOCALAPPDATA%\Programs\Quotern`），选择「所有用户」后默认为 `%ProgramFiles%\Quotern`，需要管理员权限。用户可以修改目录；升级优先沿用原安装范围与目录。

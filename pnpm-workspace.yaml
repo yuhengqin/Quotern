@@ -23,5 +23,7 @@ overrides:
   tailwind-variants: 3.3.1
 allowBuilds:
   electron: true
+  # Squirrel.Windows is unused by our NSIS and portable targets.
+  electron-winstaller: false
   esbuild: true
   protobufjs: false

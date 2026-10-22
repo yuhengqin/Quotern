@@ -129,7 +129,8 @@ emoji 与 [PR 模板](.github/PULL_REQUEST_TEMPLATE.md)的分类保持一致：�
 | --- | --- |
 | macOS (Apple Silicon) | 见下方附件 `*-arm64.dmg` |
 | macOS (Intel) | 见下方附件 `*.dmg` |
-| Windows | 见下方附件 `*-setup.exe` |
+| Windows x64 | 安装版 `*-win-x64-setup.exe` / 便携版 `*-win-x64-portable.exe` |
+| Windows ARM64 | 安装版 `*-win-arm64-setup.exe` / 便携版 `*-win-arm64-portable.exe` |
 | CLI | `npm i -g quotern` |
 
 **Full Changelog**: https://github.com/yuhengqin/Quotern/compare/v0.1.6...v0.2.0

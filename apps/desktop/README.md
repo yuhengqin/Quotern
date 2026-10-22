@@ -28,7 +28,7 @@ pnpm build:desktop:win
 
 ### Windows 安装包与架构
 
-`corepack pnpm build:desktop:win` 一次构建 x64 和 ARM64 的安装版、便携版，输出到 `apps/desktop/release/<version>/`；`corepack pnpm release:desktop:win` 构建相同产物并上传 GitHub Release。
+`corepack pnpm build:desktop:win` 一次构建 x64 和 ARM64 的安装版、便携版，输出到 `apps/desktop/release/<version>/`；`corepack pnpm release:desktop:win` 构建相同产物并验证清单。所有打包命令使用 `--publish never`，不上传 GitHub Release。
 
 | 架构 | 安装版 | 便携版 |
 | --- | --- | --- |
@@ -37,7 +37,15 @@ pnpm build:desktop:win
 
 安装版和便携版都显式带架构与类型，避免汇总到同一 Release 时重名。两种 target 分别设置 `buildUniversalInstaller: false`，使用 electron-builder 26 生成独立架构产物。安装版各自生成 `.blockmap`，同一次双架构构建生成的 `latest.yml` 同时包含两个安装版；便携版不进入自动更新清单。不要分别执行两次单架构发布并覆盖同一个 `latest.yml`。
 
+客户端在同步的 `update-available` 回调内按运行架构筛选安装版，然后由更新库下载；私有 GitHub 的附件 API URL 不带 `.exe` 后缀，不能依赖该 URL 的默认选包规则。缺少目标架构时拒绝下载其他架构，旧未标注架构的安装清单继续兼容。
+
 发版验收需检查四个 EXE 齐全、文件名唯一、两份安装版 blockmap 和更新清单中的文件大小及 SHA-512 一致，并确认两份解包目录的 Electron、Sharp 原生模块与 DLL 架构分别为 x64 / ARM64。交叉打包成功不等于 ARM64 实机运行验收。
+
+### macOS 分架构产物
+
+保留 ARM64 / x64 分包，每种架构输出 `Quotern-<version>-mac-<arch>.dmg` 和同名 `.zip`；ZIP 同时供自动更新使用。`corepack pnpm release:desktop:mac` 在 macOS 一次构建两种架构并完成签名、公证与验收，缺少凭据时失败。
+
+验收原应用、ZIP 内的应用、只读挂载 DMG 内的应用和 DMG 本身，检查 Developer ID / Team ID、hardened runtime、Gatekeeper、公证装订、版本及 Electron / Sharp 原生库架构。全部装订完成后重建 blockmap 与更新清单，生成 `macos-verification.json` 和 `mac-artifacts.json`。凭据、统一流程及实机验收边界见 [发布规范](../../RELEASE.md#desktop-统一构建与验收)；无密钥源码构建见 [CONTRIBUTING](../../CONTRIBUTING.md#从-source-code-归档构建)。
 
 ### Windows 安装向导
 
@@ -232,25 +240,19 @@ Windows 实机验收建议：
 
 私有仓库预发布更新存在依赖限制：当前 `electron-updater` 6.8.9 会优先选择列表中的预发布 Release，即使正式版版本更高。beta 客户端可能因此错过正式版升级；发布时需单独验收这一路径，受影响用户可从 Release 页面手动安装正式版。正式版客户端只读取正式 Release。
 
-设置具备 GitHub Releases 写权限的 `GH_TOKEN` 后，在对应系统执行：
+在对应系统执行以下命令只构建并验证，不需要 GitHub 写入 token：
 
 ```bash
-# macOS：构建、签名、公证并上传 dmg/zip、blockmap 和 latest-mac.yml
-pnpm release:desktop:mac
+# macOS：构建、签名、公证并验证 dmg/zip、blockmap 和更新清单
+corepack pnpm release:desktop:mac
 
-# Windows：构建并上传 NSIS/portable、blockmap 和 latest.yml
-pnpm release:desktop:win
+# Windows：构建并验证 NSIS/portable、blockmap 和更新清单
+corepack pnpm release:desktop:win
 ```
 
-`electron-builder.yml` 的 `publish` 指向 `yuhengqin/Quotern`。上述命令将
-dmg/zip/exe、blockmap 和对应平台、通道的更新 yml 上传到 GitHub Release；客户端直接读取这些 Release 附件。
-无需在源码仓库维护 `releases/*.yml`。发布前核对更新清单的版本、文件大小和 SHA-512 校验和与实际附件一致。
+`electron-builder.yml` 的 `publish` 指向 `yuhengqin/Quotern`，继续生成运行时 `app-update.yml`；客户端读取 Release 附件。无需在源码仓库维护 `releases/*.yml`。
 
-两个平台可以向同一个版本的 GitHub Release 追加产物。GitHub Release 上的安装包及
-`.blockmap` 和更新 yml 需要保留，保证已发布版本仍能正常下载与更新。
-electron-builder 默认先创建 Draft；两个平台上传并验收完成后，再到 GitHub 将 Draft
-发布。beta 版本应勾选为 Pre-release，稳定版本发布为普通 Release，避免客户端看到
-产物不完整的版本。
+统一入口是 `.github/workflows/release-desktop.yml`，等待 Windows、macOS 和无 `.git` 的源码归档构建全部通过，再校验最终文件和相同版本/commit，汇总为 `desktop-release-verified` artifact。默认与 tag push 均不创建 Release。需要上传时，手动选择匹配版本的 tag 并勾选 `publish`，只新建 Draft；不覆盖已有 Release。人工完成实机验收和正文后再公开发布。beta 草稿标记 Pre-release，稳定版本为普通 Release。详细凭据与步骤见 [发布规范](../../RELEASE.md#desktop-统一构建与验收)。已发布安装包、blockmap 和更新清单均需保留，以保证下载与更新。
 发布 Windows 安装版自动更新前应补齐代码签名；便携版用户手动下载 portable 包，安装版更新使用 NSIS 产物。
 
 ## 已知环境差异

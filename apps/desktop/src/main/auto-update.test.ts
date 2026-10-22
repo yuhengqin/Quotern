@@ -120,6 +120,13 @@ test('packaged startup enables automatic downloading and only supported IPC', as
   assert.equal(getState().percent, undefined);
 });
 
+test('Windows update events narrow metadata before automatic download selection', { skip: process.platform !== 'win32' }, async () => {
+  await initializeAutoUpdate({ beforeInstall: async () => {}, onInstallFailed: async () => {} });
+  const info = { version: '0.1.9', files: ['x64', 'arm64'].map(arch => ({ url: `Quotern-0.1.9-win-${arch}-setup.exe`, sha512: 'fixture' })) };
+  updater.emit('update-available', info);
+  assert.deepEqual(info.files.map(file => file.url), [`Quotern-0.1.9-win-${process.arch}-setup.exe`]);
+});
+
 test('development never checks for updates or starts an installation', async () => {
   app.isPackaged = false;
   await initializeAutoUpdate({ beforeInstall: async () => {}, onInstallFailed: async () => {} });

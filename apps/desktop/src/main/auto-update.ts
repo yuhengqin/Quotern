@@ -4,6 +4,7 @@ import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SupportedLocale } from 'quotern-i18n';
 import { NATIVE_MESSAGES, nativeText, type NativeMessageKey } from './native-messages';
+import { restrictWindowsUpdateFiles } from './windows-update-files';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
@@ -341,6 +342,9 @@ export async function initializeAutoUpdate(options: {
     });
   });
   autoUpdater.on('update-available', (info) => {
+    // AppUpdater emits this synchronously before downloadUpdate. Private asset URLs lose the
+    // filename/extension, so NSIS's normal architecture selection otherwise falls back to x64.
+    if (process.platform === 'win32') restrictWindowsUpdateFiles(info, process.arch);
     const checkedAt = new Date().toISOString();
     setState({
       status: isPortableExecutable ? 'available' : 'downloading',

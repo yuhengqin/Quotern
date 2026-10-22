@@ -1,0 +1,225 @@
+name: Desktop release validation
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Create a draft Release after all verification passes (select a matching version tag)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
+      tag: ${{ steps.source.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: corepack pnpm install --frozen-lockfile --prefer-offline
+      - name: Validate source version and requested publication
+        id: source
+        env:
+          PUBLISH_DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+        shell: bash
+        run: |
+          args=()
+          if [[ "$PUBLISH_DRAFT" == true ]]; then args+=(--publish); fi
+          node scripts/release-artifacts.mjs preflight --github-output "$GITHUB_OUTPUT" "${args[@]}"
+
+  windows:
+    needs: preflight
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: corepack pnpm install --frozen-lockfile --prefer-offline
+      - name: Build and verify x64 and ARM64 Windows assets without uploading
+        run: corepack pnpm release:desktop:win
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-win
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-win-*.exe
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-win-*-setup.exe.blockmap
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/latest.yml
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/beta.yml
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/win-artifacts.json
+
+  macos:
+    needs: preflight
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: corepack pnpm install --frozen-lockfile --prefer-offline
+      - name: Import Developer ID certificate into a temporary keychain
+        env:
+          MAC_CERTIFICATE_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${MAC_CERTIFICATE_BASE64:?Missing MAC_CERTIFICATE_BASE64}" "${APPLE_ID:?Missing APPLE_ID}" "${APPLE_APP_SPECIFIC_PASSWORD:?Missing APPLE_APP_SPECIFIC_PASSWORD}" "${APPLE_TEAM_ID:?Missing APPLE_TEAM_ID}"
+          keychain="$RUNNER_TEMP/quotern-signing.keychain-db"
+          certificate="$RUNNER_TEMP/quotern-certificate.p12"
+          security list-keychains -d user > "$RUNNER_TEMP/quotern-original-keychains.txt"
+          printf '%s' "$MAC_CERTIFICATE_BASE64" | base64 --decode > "$certificate"
+          password="$(openssl rand -hex 32)"
+          echo "::add-mask::$password"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$MAC_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          xcrun notarytool store-credentials quotern-release --keychain "$keychain" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID"
+          printf 'CSC_KEYCHAIN=%s\nAPPLE_KEYCHAIN=%s\nAPPLE_KEYCHAIN_PROFILE=quotern-release\nAPPLE_TEAM_ID=%s\n' "$keychain" "$keychain" "$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          rm -f "$certificate"
+      - name: Build and verify signed, notarized ARM64 and x64 macOS assets
+        run: corepack pnpm release:desktop:mac
+      - name: Remove signing keychain
+        if: always()
+        shell: bash
+        run: |
+          # Delete credentials before restoring the search list, even if restoration fails.
+          trap 'rm -f "$RUNNER_TEMP/quotern-certificate.p12" "$RUNNER_TEMP/quotern-original-keychains.txt"' EXIT
+          keychain="$RUNNER_TEMP/quotern-signing.keychain-db"
+          if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const saved = `${process.env.RUNNER_TEMP}/quotern-original-keychains.txt`;
+          if (existsSync(saved)) {
+            const paths = [...readFileSync(saved, 'utf8').matchAll(/"([^"]+)"/g)].map(match => match[1]);
+            execFileSync('security', ['list-keychains', '-d', 'user', '-s', ...paths]);
+          }
+          NODE
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-mac
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-mac-*.dmg
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-mac-*.zip
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-mac-*.blockmap
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/latest-mac.yml
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/beta-mac.yml
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/macos-verification.json
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-artifacts.json
+
+  source:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # The checker uses only Node builtins; the verified installation/build happen in the extracted archive.
+      - name: Install and build the exact committed source archive without .git
+        run: corepack pnpm check:source-archive --ref HEAD --output "$RUNNER_TEMP/source-archive.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: source-archive
+          if-no-files-found: error
+          path: ${{ runner.temp }}/source-archive.json
+
+  assemble:
+    needs: [preflight, windows, macos, source]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: corepack pnpm install --frozen-lockfile --prefer-offline
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*
+          path: ${{ runner.temp }}/release-input
+      - uses: actions/download-artifact@v8
+        with:
+          name: source-archive
+          path: ${{ runner.temp }}/release-input/source-archive
+      - name: Revalidate final bytes and assemble matching commits only
+        run: corepack pnpm assemble:desktop --input "$RUNNER_TEMP/release-input" --output "$RUNNER_TEMP/release-ready"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-release-verified
+          if-no-files-found: error
+          compression-level: 0
+          path: ${{ runner.temp }}/release-ready/*
+
+  draft:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && startsWith(github.ref, 'refs/tags/')
+    needs: [preflight, assemble]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-release-verified
+          path: ${{ runner.temp }}/release-ready
+      - name: Create a new draft Release with the complete verified inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.preflight.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$RELEASE_COMMIT"
+          cd "$RUNNER_TEMP/release-ready"
+          sha256sum --check checksums-sha256.txt
+          args=(--draft --verify-tag --title "Quotern $RELEASE_VERSION" --generate-notes)
+          if [[ "$RELEASE_VERSION" == *-* ]]; then args+=(--prerelease); fi
+          # Existing Releases are never overwritten; gh release create fails if this tag already has one.
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "${args[@]}" ./*

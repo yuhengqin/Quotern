@@ -58,6 +58,9 @@ jobs:
       - name: 测试上游协议检查器（离线）
         run: pnpm test:upstream-contracts
 
+      - name: 测试发布校验与源码归档契约（离线）
+        run: corepack pnpm test:release
+
       - name: 测试 Vite 开发时 Core 重建
         run: pnpm test:vite-core-source
 

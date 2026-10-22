@@ -3,7 +3,7 @@
 源码仓库：[yuhengqin/Quotern](https://github.com/yuhengqin/Quotern)。
 
 ## 安装依赖的注意事项
-发布产物需要 Node.js >= 20.10；仓库开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `pnpm install`，pnpm 版本以根 `package.json` 为准。
+已发布 CLI 的运行时需要 Node.js >= 20.10；从源码构建、开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `corepack pnpm install --frozen-lockfile --prefer-offline`，pnpm 版本以根 `package.json` 的 `packageManager` 为准。
 
 如 `pnpm install` 卡在 electron postinstall
 
@@ -15,19 +15,51 @@ Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
 # Git Bash / macOS / Linux
 export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-pnpm install
+corepack pnpm install --frozen-lockfile --prefer-offline
 ```
 
 ```powershell
 # PowerShell
 $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 $env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-pnpm install
+corepack pnpm install --frozen-lockfile --prefer-offline
 ```
 
 从 `main` 拉分支，PR 回 `main`。
 
 多 worktree 并行开发及服务归属见 [worktree 开发规范](./docs/worktree-development.md)。Codex 独立任务分支使用 `codex/<short-desc>`；不要切换其他会话的工作区或停止其开发服务。
+
+## 从 Source code 归档构建
+
+GitHub Release 底部的 `Source code (zip)` / `Source code (tar.gz)` 是对应 tag 的源码快照，包含工作区各包和完整 `vendor/dsh-pet`，不包含 `.git`、依赖或编译结果。解压后在含根 `package.json` 的目录执行：
+
+```bash
+corepack enable
+corepack pnpm install --frozen-lockfile --prefer-offline
+corepack pnpm build
+corepack pnpm --filter quotern-desktop typecheck
+```
+
+安装包含 Electron 下载，需要网络或上面的镜像设置。`build` 会构建 core、i18n、Dashboard、CLI（含面板静态文件）和 Desktop，无需 Git 历史或 Apple 签名密钥。CLI 输出在 `packages/cli/dist/`，Desktop 输出在 `apps/desktop/out/`；在支持的桌面系统上可用 `corepack pnpm --filter quotern-desktop start` 预览已构建应用。Linux 可构建源码与 CLI，目前不提供 Linux 桌面安装包。
+
+生成安装包需要对应系统的打包工具；macOS 正式产物还需要 Developer ID 证书与公证凭据，见 [发布验收](./RELEASE.md#desktop-统一构建与验收)。仅做本机 macOS 无签名打包时，可在完成 `build` 后执行以下显式覆盖；这类产物不能通过正式发布验收：
+
+```bash
+corepack pnpm --filter quotern-desktop exec electron-builder --mac --publish never -c.mac.forceCodeSigning=false -c.mac.identity=null -c.mac.notarize=false -c.dmg.sign=false
+```
+
+维护者可从 Git checkout 验证与 GitHub 源码归档等价的构建：
+
+```bash
+# 精确检查已提交的 HEAD（也可传 --ref v<version>）
+corepack pnpm check:source-archive
+# 本地检查当前未提交源码，包含新增文件，排除依赖与旧构建结果
+corepack pnpm check:source-archive --working-tree
+# 共享依赖存储损坏或需隔离下载缓存时，可额外使用全新临时 pnpm store
+corepack pnpm check:source-archive --working-tree --isolated-store
+```
+
+检查器将源码打成 tar，在系统临时目录的全新位置解压，确认没有 `.git` 和旧产物，再重新安装冻结依赖、检查 `workspace:*` 链接、执行完整构建与 Desktop 类型检查。外部依赖允许使用 pnpm 全局存储，工作区包必须指向解压目录内。终端会输出报告和保留的临时目录，供验收后按归属清理。归档接收者直接执行上面的构建命令即可，无需运行依赖 Git 的归档生成检查器。
 
 ## 提 Issue
 

@@ -43,6 +43,9 @@ extraResources:
       - icon-512.png
     to: resources
 mac:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  forceCodeSigning: true
+  type: distribution
   icon: resources/icon.png
   electronLanguages:
     - zh-CN
@@ -59,6 +62,7 @@ mac:
   notarize: true
 dmg:
   format: UDBZ
+  sign: true
 nsis:
   # Keep the installed application's upgrade identity while changing its product name/appId.
   guid: 77c89c13-52a6-5b46-b7b1-f5b025d10759

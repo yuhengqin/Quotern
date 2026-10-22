@@ -16,7 +16,12 @@
     "build": "pnpm -r build",
     "build:packages": "pnpm --filter \"./packages/**\" -r build",
     "build:cli": "pnpm --filter quotern... build",
-    "test": "pnpm test:upstream-contracts && pnpm test:state-migration && pnpm test:run-parallel && pnpm test:dev-instance && pnpm test:localization-catalogs && pnpm build && pnpm test:dev-runtime && pnpm test:vite-core-source && pnpm -r --if-present test",
+    "test": "pnpm test:release && pnpm test:upstream-contracts && pnpm test:state-migration && pnpm test:run-parallel && pnpm test:dev-instance && pnpm test:localization-catalogs && pnpm build && pnpm test:dev-runtime && pnpm test:vite-core-source && pnpm -r --if-present test",
+    "test:release": "node --test scripts/release-artifacts.test.mjs scripts/release-macos.test.mjs scripts/check-source-archive.test.mjs scripts/release-workflow.test.mjs",
+    "check:source-archive": "node scripts/check-source-archive.mjs",
+    "verify:desktop:win": "node scripts/release-artifacts.mjs verify --platform win",
+    "verify:desktop:mac": "node scripts/release-macos.mjs --skip-build",
+    "assemble:desktop": "node scripts/release-artifacts.mjs assemble",
     "test:upstream-contracts": "node --test scripts/check-upstream-contracts.test.mjs",
     "check:upstream-contracts": "node scripts/check-upstream-contracts.mjs",
     "test:state-migration": "node --test scripts/migrate-state.test.mjs",
@@ -61,6 +66,7 @@
     "@changesets/cli": "^2.31.1",
     "@types/node": "^22.20.1",
     "cross-env": "^10.1.0",
+    "js-yaml": "4.1.1",
     "typescript": "^5.9.3"
   }
 }

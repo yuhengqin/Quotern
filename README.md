@@ -42,9 +42,18 @@ Quotern 提供 macOS / Windows 桌面客户端，安装即用，无需额外配�
 
 ### 下载安装
 
-前往 [Releases](https://github.com/yuhengqin/Quotern/releases) 页面下载对应系统的安装包（macOS 按芯片选 `.dmg`，Windows 选 `.exe`），安装即用。
+前往 [Releases](https://github.com/yuhengqin/Quotern/releases) 页面下载对应系统与架构的安装包：
 
-> 💡 macOS 提示「已损坏」？在终端执行 `sudo xattr -dr com.apple.quarantine` 后把应用拖入终端窗口即可。
+| 系统 / 芯片 | 安装包 | 其他下载 |
+| --- | --- | --- |
+| macOS Apple Silicon | `Quotern-<version>-mac-arm64.dmg` | 同名 `.zip`（也用于自动更新） |
+| macOS Intel | `Quotern-<version>-mac-x64.dmg` | 同名 `.zip`（也用于自动更新） |
+| Windows x64 | `Quotern-<version>-win-x64-setup.exe` | `*-win-x64-portable.exe` 便携版 |
+| Windows ARM64 | `Quotern-<version>-win-arm64-setup.exe` | `*-win-arm64-portable.exe` 便携版 |
+
+以上是新发布流程的命名规则；旧版本附件名称可能不同。macOS 新流程要求 Developer ID 签名、公证和 Gatekeeper 验收。若系统拦截下载的应用，请记录版本与系统提示并反馈，核对 Release 校验文件，避免跳过系统校验。
+
+Release 的 **Source code** 为对应 tag 的源码快照，编译方法见[源码归档构建说明](./CONTRIBUTING.md#从-source-code-归档构建)。
 
 ### 首次启动
 

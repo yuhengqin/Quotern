@@ -46,12 +46,12 @@ Quotern 提供 macOS / Windows 桌面客户端，安装即用，无需额外配�
 
 | 系统 / 芯片 | 安装包 | 其他下载 |
 | --- | --- | --- |
-| macOS Apple Silicon | `Quotern-<version>-mac-arm64.dmg` | 同名 `.zip`（也用于自动更新） |
-| macOS Intel | `Quotern-<version>-mac-x64.dmg` | 同名 `.zip`（也用于自动更新） |
+| macOS Apple Silicon | `Quotern-<version>-mac-arm64.dmg` | 同名 `.zip` |
+| macOS Intel | `Quotern-<version>-mac-x64.dmg` | 同名 `.zip` |
 | Windows x64 | `Quotern-<version>-win-x64-setup.exe` | `*-win-x64-portable.exe` 便携版 |
 | Windows ARM64 | `Quotern-<version>-win-arm64-setup.exe` | `*-win-arm64-portable.exe` 便携版 |
 
-以上是新发布流程的命名规则；旧版本附件名称可能不同。macOS 新流程要求 Developer ID 签名、公证和 Gatekeeper 验收。若系统拦截下载的应用，请记录版本与系统提示并反馈，核对 Release 校验文件，避免跳过系统校验。
+以上是新发布流程的命名规则；旧版本附件名称可能不同。macOS 当前默认采用 ad-hoc 签名、跳过 Apple 公证，应用内提供下载页入口，需手动下载新版并替换应用。首次打开可能受到 Gatekeeper 拦截；确认来自本项目并核对 Release 校验文件后，可按 [Apple 官方说明](https://support.apple.com/en-us/102445)在“系统设置 → 隐私与安全性”中查看“仍要打开”选项。正式 Developer ID 签名、公证模式仍保留，具体构建模式以 Release 说明及验证报告为准。
 
 Release 的 **Source code** 为对应 tag 的源码快照，编译方法见[源码归档构建说明](./CONTRIBUTING.md#从-source-code-归档构建)。
 

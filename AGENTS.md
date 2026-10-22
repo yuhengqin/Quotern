@@ -81,7 +81,7 @@ CLI 构建固定 `VITE_BASE=/`。子路径在构建环境注入 `PUBLIC_PATH` / 
 
 ## Desktop 发版
 
-`corepack pnpm release:desktop:mac|win` 仅构建与验证，所有打包命令禁用上传。统一入口为 `.github/workflows/release-desktop.yml`：默认仅保留 Actions artifacts；显式手动选择发布且 tag 匹配 Desktop 版本时，验证全部平台和无 `.git` 源码构建后创建 Draft Release。签名凭据与验收见 `RELEASE.md`。`electron-builder.yml` 的 `publish` 指向 `yuhengqin/Quotern`，用于生成运行时 `app-update.yml`。私有仓库更新需客户端环境提供 `GH_TOKEN` / `GITHUB_TOKEN`。Electron 二进制走 `apps/desktop/.npmrc` 国内镜像；根 `pnpm.onlyBuiltDependencies` 已含 `electron`。
+`corepack pnpm release:desktop:mac|win` 仅构建与验证，所有打包命令禁用上传。macOS 默认 ad-hoc 签名和手动更新，无需 Apple 凭据；`:mac:signed` 保留正式签名、公证及自动更新。统一入口为 `.github/workflows/release-desktop.yml`，`macos_signing` 显式选择 `adhoc` / `signed`，默认仅保留 Actions artifacts；显式手动选择发布且 tag 匹配 Desktop 版本时，验证全部平台、构建模式和无 `.git` 源码构建后创建 Draft Release。签名凭据与验收见 `RELEASE.md`。`electron-builder.yml` 的 `publish` 指向 `yuhengqin/Quotern`，用于生成运行时 `app-update.yml`。私有仓库自动更新需客户端环境提供 `GH_TOKEN` / `GITHUB_TOKEN`。Electron 二进制走 `apps/desktop/.npmrc` 国内镜像；根 `pnpm.onlyBuiltDependencies` 已含 `electron`。
 
 ---
 

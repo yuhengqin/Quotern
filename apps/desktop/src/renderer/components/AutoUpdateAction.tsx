@@ -42,7 +42,9 @@ export function AutoUpdateAction({ className }: { className: string }) {
   const action = getUpdateToolbarAction(state);
   if (!action) return null;
 
-  const label = state?.status === 'available'
+  const label = state?.status === 'manual'
+    ? t('desktop.update.manual')
+    : state?.status === 'available'
     ? t('desktop.update.available')
     : state?.status === 'downloading'
       ? state.percent == null

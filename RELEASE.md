@@ -89,7 +89,8 @@ tag 与里程碑同名。
 
 ```bash
 corepack pnpm release                 # 单独发布 CLI / core 到 npm
-corepack pnpm release:desktop:mac     # 在 macOS 构建、签名、公证与验证；不上传
+corepack pnpm release:desktop:mac     # 在 macOS 以 ad-hoc 构建、验证；不上传
+corepack pnpm release:desktop:mac:signed # Developer ID 签名、公证与验证；不上传
 corepack pnpm release:desktop:win     # 在 Windows 构建与验证；不上传
 ```
 
@@ -103,17 +104,29 @@ Desktop 使用下方统一流程。平台命令只在本地生成产物；`elect
 
 Desktop 使用 [electron-builder.yml](./apps/desktop/electron-builder.yml) 的 GitHub `publish` 配置作为发布与运行时更新目标；构建生成的 `app-update.yml` 随安装包分发。
 
-检查 GitHub Release 附件中对应平台与通道的更新 yml，确认版本、`files.url`、文件大小、SHA-512 校验和与实际附件一致。私有仓库还需验证客户端凭据能读取 Release 和附件。按平台分别验收；便携版应提示手动下载，不能安装 NSIS 包。具体操作见 [Desktop 自动更新发布](./apps/desktop/README.md#自动更新发布)。
+对支持自动更新的产物，检查 GitHub Release 附件中对应平台与通道的更新 yml，确认版本、`files.url`、文件大小、SHA-512 校验和与实际附件一致。macOS ad-hoc 版本仅手动更新，不上传 macOS 更新 yml / blockmap。私有仓库还需验证客户端凭据能读取 Release 和附件。按平台分别验收；Windows 便携版应提示手动下载，不能安装 NSIS 包。具体操作见 [Desktop 自动更新发布](./apps/desktop/README.md#自动更新发布)。
 
 ## Desktop 统一构建与验收
 
 入口为 [release-desktop.yml](./.github/workflows/release-desktop.yml)。`v*` tag push 和 Actions 手动运行默认只验证，不上传 GitHub Release。Windows、macOS、源码归档三个任务全部成功后，汇总任务再次校验实际文件、更新清单、blockmap、版本和 commit，生成 `desktop-release-verified` artifact 及 `checksums-sha256.txt`。
 
+macOS 使用明确的 `macos_signing` 选项：默认 `adhoc`，手动选择 `signed` 才启用 Developer ID 证书与公证。tag push 默认 `adhoc`；准备正式签名版时手动选择相同 tag 和 `signed`。模式不会根据 Secrets 是否存在自动切换。两种模式各自输出到 `apps/desktop/release/<version>/mac-adhoc/` 或 `mac-signed/`，文件名仍为 `Quotern-<version>-mac-<arch>.dmg/.zip`。单架构开发快捷命令 `build:desktop:mac:arm` 仅生成 ARM64 ad-hoc 测试包，不生成发布证明。
+
 需要创建草稿时，在 Actions 手动运行该 workflow，选择与 `apps/desktop/package.json` 一致的 `v<version>` tag，显式勾选 `publish`。预检要求该 tag 的源码中存在非空的 `docs/release-notes/<tag>.md`，缺失或空白会在平台构建前失败；普通构建验证不强制要求说明文件。仅最后的 draft job 具有 `contents: write` 权限；它用 `--notes-file` 导入版本说明，只新建 Draft，不覆盖已有 Release，也不公开发布。预发布版本自动标记 Pre-release。普通分支不能创建草稿；任何平台或源码验证失败都会阻止汇总与上传。CLI 的 npm 发布仍通过独立的 `corepack pnpm release` 执行。
 
-### macOS 证书和公证
+### macOS ad-hoc 模式
 
-在 GitHub 仓库 Secrets 配置以下内容（默认验证运行同样需要这些凭据）：
+无需 Apple Developer 会员及下表中的 Apple Secrets。脚本创建并清理自有空 keychain，隔离已有证书和签名环境变量，显式采用 `identity=-`，关闭 hardened runtime、公证和 DMG 外壳签名。内部 `.app` 及嵌套原生代码仍需有效的 ad-hoc 签名。
+
+验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用：`codesign --verify --deep --strict`、实际 `Signature=adhoc`、嵌套代码签名身份、bundle 版本、Electron / Sharp / libvips 架构和包内 `quoternMacosReleaseMode=adhoc` 标记；DMG 仍执行 `hdiutil verify`。不要求 Gatekeeper 放行或公证装订，也不会在报告中把这些步骤标记为已通过。验证报告明确记录 `mode=adhoc`、`updatePolicy=manual`、`notarized=false`。
+
+此模式保留四份 DMG/ZIP 和最终文件哈希，但清理并拒绝 macOS 自动更新 yml / blockmap。应用设置和顶部入口显示手动下载，不请求自动更新服务、不下载或安装更新。正式签名的旧版本、Windows 安装版和 Windows 便携版保持各自原有行为。发布说明应明确该版本未公证、需要手动更新及首次启动限制；可引用 [Apple 的打开应用说明](https://support.apple.com/en-us/102445)。
+
+本机复核已有完整目录使用 `corepack pnpm verify:desktop:mac --dir <目录>`。汇总 ad-hoc 产物时使用 `corepack pnpm assemble:desktop --macos-mode adhoc --input <输入目录> --output <新输出目录>`；传错模式会失败。
+
+### macOS 正式签名和公证
+
+选择 `signed` 模式时，在 GitHub 仓库 Secrets 配置以下内容；该模式的构建验证同样需要凭据，缺失会失败，不会回退 ad-hoc：
 
 | Secret | 内容 |
 | --- | --- |
@@ -127,9 +140,9 @@ workflow 将证书导入临时 keychain，将公证凭据存入该 keychain 的 
 
 本机可使用已解锁 keychain 中的证书，并设置 `APPLE_TEAM_ID` 与以下任意一组公证凭据（只选一组）：`APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD`；`APPLE_API_KEY`（文件路径）+ `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`；或 `APPLE_KEYCHAIN_PROFILE`（可另设 `APPLE_KEYCHAIN`）。证书在非默认 keychain 时设置 `CSC_KEYCHAIN`。缺少凭据、临时签名、开发证书或错误团队均不能通过正式验收。
 
-`release:desktop:mac` 一次打包 ARM64 和 x64，保持独立 `.dmg` / `.zip`。应用要求 distribution 签名、hardened runtime 和公证；DMG 也单独签名、公证与装订。验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用，执行 `codesign`、`spctl`、`stapler`，检查 bundle 版本、Electron 与原生解码库的架构，并校验 DMG。失败即停止。Apple 返回已知 submission ID 后，临时等待错误只对该 ID 重试，拒绝结果不重试。
+`release:desktop:mac:signed` 一次打包 ARM64 和 x64，保持独立 `.dmg` / `.zip`。应用要求 distribution 签名、hardened runtime 和公证；DMG 也单独签名、公证与装订。验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用，执行 `codesign`、`spctl`、`stapler`，检查 bundle 版本、Electron 与原生解码库的架构，并校验包内 `quoternMacosReleaseMode=signed` 与自动更新策略。失败即停止。Apple 返回已知 submission ID 后，临时等待错误只对该 ID 重试，拒绝结果不重试。
 
-DMG 装订会修改文件；脚本在全部验收后重建四份 blockmap 和 `latest-mac.yml`，预发布同时生成内容一致的 `beta-mac.yml` 与 `latest-mac.yml`，兼容当前客户端及私有 GitHub provider。Windows 预发布同样保留 `beta.yml` / `latest.yml`。随后校验最终大小、SHA-512，生成绑定文件哈希的 `macos-verification.json` 与 `mac-artifacts.json`。禁止验收后重新签名、装订或改包而沿用旧清单。已有完整打包目录可用 `corepack pnpm verify:desktop:mac --dir <目录>` 重新执行 Apple 验收；此命令仍需要 macOS 和凭据。
+DMG 装订会修改文件；脚本在全部验收后重建四份 blockmap 和 `latest-mac.yml`，预发布同时生成内容一致的 `beta-mac.yml` 与 `latest-mac.yml`，兼容当前客户端及私有 GitHub provider。Windows 预发布同样保留 `beta.yml` / `latest.yml`。随后校验最终大小、SHA-512，生成绑定文件哈希和 `mode=signed` 的 `macos-verification.json` 与 `mac-artifacts.json`。禁止验收后重新签名、装订或改包而沿用旧清单。已有完整打包目录可用 `corepack pnpm verify:desktop:mac:signed --dir <目录>` 重新执行 Apple 验收；此命令仍需要 macOS 和凭据。汇总 signed 产物时显式传 `--macos-mode signed`。
 
 ### Windows 与源码归档
 

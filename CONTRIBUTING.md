@@ -42,13 +42,13 @@ corepack pnpm --filter quotern-desktop typecheck
 
 安装包含 Electron 下载，需要网络或上面的镜像设置。`build` 会构建 core、i18n、Dashboard、CLI（含面板静态文件）和 Desktop，无需 Git 历史或 Apple 签名密钥。CLI 输出在 `packages/cli/dist/`，Desktop 输出在 `apps/desktop/out/`；在支持的桌面系统上可用 `corepack pnpm --filter quotern-desktop start` 预览已构建应用。Linux 可构建源码与 CLI，目前不提供 Linux 桌面安装包。
 
-生成安装包需要对应系统的打包工具；macOS 正式产物还需要 Developer ID 证书与公证凭据，见 [发布验收](./RELEASE.md#desktop-统一构建与验收)。仅做本机 macOS 无签名打包时，可在完成 `build` 后执行以下显式覆盖；这类产物不能通过正式发布验收：
+生成安装包需要对应系统的打包工具。macOS 默认 `adhoc` 模式无需 Apple 会员或凭据，同时生成 ARM64/x64 的 DMG、ZIP，并采用手动更新；`signed` 模式需要 Developer ID 证书与公证凭据，保留自动更新，见 [发布验收](./RELEASE.md#desktop-统一构建与验收)。在 Git checkout 中使用 `corepack pnpm build:desktop:mac` 或 `corepack pnpm build:desktop:mac:signed` 构建并验证。源码归档没有 Git commit 可供发布证明，在完成上面的根 `build` 后，可只生成本机测试包：
 
 ```bash
-corepack pnpm --filter quotern-desktop exec electron-builder --mac --publish never -c.mac.forceCodeSigning=false -c.mac.identity=null -c.mac.notarize=false -c.dmg.sign=false
+corepack pnpm --filter quotern-desktop exec node ../../scripts/release-macos.mjs --mode adhoc --build-only
 ```
 
-维护者可从 Git checkout 验证与 GitHub 源码归档等价的构建：
+`--build-only` 包含 ad-hoc 签名与手动更新标记，但不生成可用于 Release 汇总的验证报告。不要使用 `identity=null` 替代 ad-hoc，ARM64 原生代码仍需有效签名。维护者可从 Git checkout 验证与 GitHub 源码归档等价的构建：
 
 ```bash
 # 精确检查已提交的 HEAD（也可传 --ref v<version>）

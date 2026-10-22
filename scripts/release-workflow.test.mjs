@@ -35,9 +35,28 @@ test('platform jobs verify before uploading and macOS always removes its tempora
     assert(!steps[upload].with.path.trim().endsWith('/'), 'Upload explicit assets, not the entire unpacked directory');
   }
   const cleanup = workflow.jobs.macos.steps.find(step => step.name === 'Remove signing keychain');
-  assert.equal(cleanup.if, 'always()');
+  assert(cleanup.if.includes('always()'));
   assert.match(cleanup.run, /delete-keychain/);
   assert(workflow.jobs.source.steps.some(step => step.run?.includes('check:source-archive')));
+});
+
+test('ad-hoc workflow runs without Apple secrets and keeps signed selection explicit through assembly', async () => {
+  const workflow = yaml.load(await read('.github/workflows/release-desktop.yml'));
+  const selection = workflow.on.workflow_dispatch.inputs.macos_signing;
+  assert.equal(selection.default, 'adhoc');
+  assert.deepEqual(selection.options, ['adhoc', 'signed']);
+  const signing = workflow.jobs.macos.steps.find(step => step.name === 'Import Developer ID certificate into a temporary keychain');
+  assert(signing.if.includes("== 'signed'"));
+  const cleanup = workflow.jobs.macos.steps.find(step => step.name === 'Remove signing keychain');
+  assert(cleanup.if.includes("== 'signed'"));
+  const preflight = workflow.jobs.preflight.steps.find(step => step.id === 'source');
+  assert.equal(preflight.env.MACOS_MODE, "${{ inputs.macos_signing || 'adhoc' }}");
+  assert.match(preflight.run, /--macos-mode/);
+  const assemble = workflow.jobs.assemble.steps.find(step => step.name?.startsWith('Revalidate'));
+  assert.match(assemble.run, /--macos-mode/);
+  const mac = JSON.parse(await read('apps/desktop/package.json'));
+  assert.match(mac.scripts['build:mac'], /--mode adhoc/);
+  assert.match(mac.scripts['build:mac:signed'], /--mode signed/);
 });
 
 test('all desktop packaging entries disable direct electron-builder publication', async () => {

@@ -5,6 +5,11 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      macos_signing:
+        description: macOS signing mode (adhoc needs no Apple credentials; signed requires Developer ID and notarization)
+        type: choice
+        default: adhoc
+        options: [adhoc, signed]
       publish:
         description: Create a draft Release after all verification passes (select a matching version tag)
         type: boolean
@@ -25,6 +30,7 @@ jobs:
       version: ${{ steps.source.outputs.version }}
       commit: ${{ steps.source.outputs.commit }}
       tag: ${{ steps.source.outputs.tag }}
+      macos-mode: ${{ steps.source.outputs.macos-mode }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,11 +45,12 @@ jobs:
         id: source
         env:
           PUBLISH_DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          MACOS_MODE: ${{ inputs.macos_signing || 'adhoc' }}
         shell: bash
         run: |
           args=()
           if [[ "$PUBLISH_DRAFT" == true ]]; then args+=(--publish); fi
-          node scripts/release-artifacts.mjs preflight --github-output "$GITHUB_OUTPUT" "${args[@]}"
+          node scripts/release-artifacts.mjs preflight --macos-mode "$MACOS_MODE" --github-output "$GITHUB_OUTPUT" "${args[@]}"
 
   windows:
     needs: preflight
@@ -84,6 +91,7 @@ jobs:
           cache: pnpm
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
       - name: Import Developer ID certificate into a temporary keychain
+        if: needs.preflight.outputs.macos-mode == 'signed'
         env:
           MAC_CERTIFICATE_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
           MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
@@ -109,10 +117,18 @@ jobs:
           xcrun notarytool store-credentials quotern-release --keychain "$keychain" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID"
           printf 'CSC_KEYCHAIN=%s\nAPPLE_KEYCHAIN=%s\nAPPLE_KEYCHAIN_PROFILE=quotern-release\nAPPLE_TEAM_ID=%s\n' "$keychain" "$keychain" "$APPLE_TEAM_ID" >> "$GITHUB_ENV"
           rm -f "$certificate"
-      - name: Build and verify signed, notarized ARM64 and x64 macOS assets
-        run: corepack pnpm release:desktop:mac
+      - name: Build and verify ARM64 and x64 macOS assets in the selected mode
+        env:
+          MACOS_MODE: ${{ needs.preflight.outputs.macos-mode }}
+        shell: bash
+        run: |
+          case "$MACOS_MODE" in
+            adhoc) corepack pnpm release:desktop:mac ;;
+            signed) corepack pnpm release:desktop:mac:signed ;;
+            *) exit 1 ;;
+          esac
       - name: Remove signing keychain
-        if: always()
+        if: always() && needs.preflight.outputs.macos-mode == 'signed'
         shell: bash
         run: |
           # Delete credentials before restoring the search list, even if restoration fails.
@@ -134,13 +150,13 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           path: |
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-mac-*.dmg
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-mac-*.zip
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-mac-*.blockmap
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/latest-mac.yml
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/beta-mac.yml
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/macos-verification.json
-            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-artifacts.json
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/Quotern-*-mac-*.dmg
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/Quotern-*-mac-*.zip
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/Quotern-*-mac-*.blockmap
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/latest-mac.yml
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/beta-mac.yml
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/macos-verification.json
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/mac-artifacts.json
 
   source:
     needs: preflight
@@ -182,7 +198,9 @@ jobs:
           name: source-archive
           path: ${{ runner.temp }}/release-input/source-archive
       - name: Revalidate final bytes and assemble matching commits only
-        run: corepack pnpm assemble:desktop --input "$RUNNER_TEMP/release-input" --output "$RUNNER_TEMP/release-ready"
+        env:
+          MACOS_MODE: ${{ needs.preflight.outputs.macos-mode }}
+        run: corepack pnpm assemble:desktop --macos-mode "$MACOS_MODE" --input "$RUNNER_TEMP/release-input" --output "$RUNNER_TEMP/release-ready"
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-release-verified

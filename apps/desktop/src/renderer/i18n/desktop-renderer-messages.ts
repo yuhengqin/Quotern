@@ -108,6 +108,9 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'desktop.quota.disableAll': ['全部关闭', 'Turn all off', 'すべてオフ', '모두 끄기'],
 
   'desktop.update.available': ['发现新版本', 'New version available', '新しいバージョンがあります', '새 버전 사용 가능'],
+  'desktop.update.manual': ['手动更新', 'Manual update', '手動更新', '수동 업데이트'],
+  'desktop.update.openDownloads': ['前往下载页', 'Open downloads', 'ダウンロードページを開く', '다운로드 페이지 열기'],
+  'desktop.update.manualHint': ['此版本采用手动更新，请从下载页获取新版并替换应用。', 'Updates are manual for this build. Download the latest version and replace the app.', 'このバージョンは手動更新です。最新版をダウンロードしてアプリを置き換えてください。', '이 버전은 수동으로 업데이트합니다. 최신 버전을 다운로드하여 앱을 교체하세요.'],
   'desktop.update.downloading': ['正在下载…', 'Downloading…', 'ダウンロード中…', '다운로드 중…'],
   'desktop.update.downloadPercent': ['下载 {{percent}}%', 'Downloading {{percent}}%', 'ダウンロード {{percent}}%', '다운로드 {{percent}}%'],
   'desktop.update.install': ['更新并重启', 'Update and restart', '更新して再起動', '업데이트 후 다시 시작'],

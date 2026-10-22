@@ -21,6 +21,7 @@ const UPDATE_MARKER_FILENAME = 'auto-update.json';
 
 let currentLocale: SupportedLocale = 'zh-CN';
 const UPDATE_MESSAGE_KEYS: readonly NativeMessageKey[] = [
+  'native.update.manual',
   'native.update.portable',
   'native.update.unsupported',
   'native.update.checkFailed',
@@ -132,7 +133,7 @@ function clearInstallExitTimer(): void {
 }
 
 async function checkForUpdates(): Promise<AutoUpdateState> {
-  if (!app.isPackaged) return state;
+  if (!app.isPackaged || state.status === 'manual') return state;
   // Window may open before initializeAutoUpdate configures the feed.
   if (!updaterReady) return state;
   if (
@@ -301,15 +302,17 @@ export async function initializeAutoUpdate(options: {
   beforeInstall = options.beforeInstall;
   onInstallFailed = options.onInstallFailed;
   registerAutoUpdateIpc();
+  const manualMacosBuild = app.isPackaged && process.platform === 'darwin' && await requiresManualMacosUpdates();
   const isPortableExecutable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE);
-  const automaticInstallationSupported = app.isPackaged && !isPortableExecutable;
+  const automaticInstallationSupported = app.isPackaged && !isPortableExecutable && !manualMacosBuild;
   const completedVersion = automaticInstallationSupported
     ? await readCompletedVersion()
     : undefined;
   state = {
-    status: app.isPackaged ? 'idle' : 'unsupported',
+    status: manualMacosBuild ? 'manual' : app.isPackaged ? 'idle' : 'unsupported',
     currentVersion: app.getVersion(),
     ...(completedVersion ? { completedVersion } : {}),
+    ...(manualMacosBuild ? { message: nativeText(currentLocale, 'native.update.manual') } : {}),
     ...(!app.isPackaged
       ? { message: nativeText(currentLocale, 'native.update.unsupported') }
       : {}),
@@ -320,6 +323,13 @@ export async function initializeAutoUpdate(options: {
   if (!app.isPackaged) {
     updaterReady = true;
     return;
+  }
+  if (manualMacosBuild) {
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.autoRunAppAfterInstall = false;
+    updaterReady = true;
+    return; // Do not start feed checks, periodic checks or download/install handlers.
   }
 
   // electron-builder writes the GitHub publish configuration into app-update.yml.
@@ -413,6 +423,17 @@ export async function initializeAutoUpdate(options: {
     void checkForUpdates();
   }, PERIODIC_CHECK_INTERVAL_MS);
   periodicTimer.unref();
+}
+
+async function requiresManualMacosUpdates(): Promise<boolean> {
+  try {
+    // Read the packaged marker rather than a launch-time environment variable.
+    const metadata = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'));
+    // Unmarked older builds retain their existing updater behavior.
+    return metadata.quoternMacosReleaseMode !== undefined && metadata.quoternMacosReleaseMode !== 'signed';
+  } catch {
+    return true;
+  }
 }
 
 export function disposeAutoUpdate(): void {

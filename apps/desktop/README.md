@@ -43,9 +43,9 @@ pnpm build:desktop:win
 
 ### macOS 分架构产物
 
-保留 ARM64 / x64 分包，每种架构输出 `Quotern-<version>-mac-<arch>.dmg` 和同名 `.zip`；ZIP 同时供自动更新使用。`corepack pnpm release:desktop:mac` 在 macOS 一次构建两种架构并完成签名、公证与验收，缺少凭据时失败。
+保留 ARM64 / x64 分包，每种架构输出 `Quotern-<version>-mac-<arch>.dmg` 和同名 `.zip`。`corepack pnpm build:desktop:mac` / `release:desktop:mac` 默认在 macOS 以 `adhoc` 模式构建并验证，不需要 Apple 会员或凭据；输出到 `release/<version>/mac-adhoc/`，内部应用和原生代码用 ad-hoc 签名，跳过公证，ZIP 仅供手动下载安装。包内标记决定手动更新行为，运行时环境变量不会覆盖它。
 
-验收原应用、ZIP 内的应用、只读挂载 DMG 内的应用和 DMG 本身，检查 Developer ID / Team ID、hardened runtime、Gatekeeper、公证装订、版本及 Electron / Sharp 原生库架构。全部装订完成后重建 blockmap 与更新清单，生成 `macos-verification.json` 和 `mac-artifacts.json`。凭据、统一流程及实机验收边界见 [发布规范](../../RELEASE.md#desktop-统一构建与验收)；无密钥源码构建见 [CONTRIBUTING](../../CONTRIBUTING.md#从-source-code-归档构建)。
+`corepack pnpm build:desktop:mac:signed` / `release:desktop:mac:signed` 保留 Developer ID / Team ID、hardened runtime、Gatekeeper、公证装订和自动更新验收，输出到 `release/<version>/mac-signed/`。两种模式均检查原应用、ZIP 内应用、只读挂载 DMG 内应用的签名、包内模式、版本及 Electron / Sharp 原生库架构，执行 DMG 完整性检查，生成明确标注模式的 `macos-verification.json` 和 `mac-artifacts.json`。仅 signed 模式在装订后重建 macOS blockmap / 更新清单；adhoc 模式拒绝这些自动更新文件。凭据、统一流程及实机验收边界见 [发布规范](../../RELEASE.md#desktop-统一构建与验收)；无密钥源码构建见 [CONTRIBUTING](../../CONTRIBUTING.md#从-source-code-归档构建)。
 
 ### Windows 安装向导
 
@@ -243,14 +243,18 @@ Windows 实机验收建议：
 在对应系统执行以下命令只构建并验证，不需要 GitHub 写入 token：
 
 ```bash
-# macOS：构建、签名、公证并验证 dmg/zip、blockmap 和更新清单
+# macOS：默认 ad-hoc，两架构 DMG/ZIP，手动更新
 corepack pnpm release:desktop:mac
+# macOS：正式签名、公证与自动更新，需要 Apple 凭据
+corepack pnpm release:desktop:mac:signed
 
 # Windows：构建并验证 NSIS/portable、blockmap 和更新清单
 corepack pnpm release:desktop:win
 ```
 
 `electron-builder.yml` 的 `publish` 指向 `yuhengqin/Quotern`，继续生成运行时 `app-update.yml`；客户端读取 Release 附件。无需在源码仓库维护 `releases/*.yml`。
+
+macOS ad-hoc 包通过设置中的「前往下载页」及顶部「手动更新」打开 Releases，不检查或下载自动更新，也不会执行安装 IPC。正式签名模式继续原有自动更新流程。workflow 的 `macos_signing` 默认 `adhoc`，选择 `signed` 才会导入 Apple 凭据；缺少凭据不会自动降级。
 
 统一入口是 `.github/workflows/release-desktop.yml`，等待 Windows、macOS 和无 `.git` 的源码归档构建全部通过，再校验最终文件和相同版本/commit，汇总为 `desktop-release-verified` artifact。默认与 tag push 均不创建 Release。需要上传时，手动选择匹配版本的 tag 并勾选 `publish`，只新建 Draft；不覆盖已有 Release。人工完成实机验收和正文后再公开发布。beta 草稿标记 Pre-release，稳定版本为普通 Release。详细凭据与步骤见 [发布规范](../../RELEASE.md#desktop-统一构建与验收)。已发布安装包、blockmap 和更新清单均需保留，以保证下载与更新。
 发布 Windows 安装版自动更新前应补齐代码签名；便携版用户手动下载 portable 包，安装版更新使用 NSIS 产物。

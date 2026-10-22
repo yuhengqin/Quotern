@@ -144,3 +144,11 @@ test('toolbar stays hidden when no update action is needed', () => {
     assert.equal(getUpdateToolbarAction({ status, currentVersion: '0.1.8' }), null);
   }
 });
+
+test('manual update builds offer downloads without claiming a new version or restart', () => {
+  const state = { status: 'manual' as AutoUpdateStatus, currentVersion: '0.1.13' };
+  assert.deepEqual(getUpdateToolbarAction(state), { label: '手动更新', request: 'open-releases' });
+  assert.equal(getLatestUpdateVersion(state), null);
+  assert.equal(shouldOfferUpdateRestart(state.status), false);
+  assert.equal(isUpdateDownloadInProgress(state.status), false);
+});

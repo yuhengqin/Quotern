@@ -1,11 +1,78 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appleCredentials, assertAppIdentity, assertArchitecture, notarizeDmg, verifyNativeArchitecture } from './release-macos.mjs';
+import { appleCredentials, assertAppIdentity, assertAdhocIdentity, assertArchitecture, notarizeDmg, verifyNativeArchitecture, verifyMacosArtifacts } from './release-macos.mjs';
 
 const team = 'ABCDE12345';
+test('ad-hoc acceptance rejects unsigned or certificate-signed code', () => {
+  assertAdhocIdentity('Signature=adhoc\nTeamIdentifier=not set');
+  for (const details of ['code object is not signed at all', `Authority=Developer ID Application: Test (${team})\nTeamIdentifier=${team}`, `Signature=adhoc\nTeamIdentifier=${team}`]) assert.throws(() => assertAdhocIdentity(details), /ad.hoc|team/i);
+});
+
+for (const mode of ['adhoc', 'signed']) test(`${mode} verification checks ZIP/DMG mode and only notarizes signed packages`, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'quotern adhoc verification '));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
+  const builder = createRequire(require.resolve('electron-builder/package.json'));
+  const lib = createRequire(builder.resolve('app-builder-lib/package.json'));
+  const { createPackage } = lib('@electron/asar');
+  const version = '0.1.13';
+  const commit = 'a'.repeat(40);
+  for (const arch of ['x64', 'arm64']) {
+    const app = join(directory, arch === 'x64' ? 'mac/Quotern.app' : 'mac-arm64/Quotern.app');
+    const resources = join(app, 'Contents/Resources');
+    await mkdir(join(app, 'Contents/MacOS'), { recursive: true });
+    await writeFile(join(app, 'Contents/MacOS/Quotern'), Buffer.from('cffaedfe00000000', 'hex'));
+    for (const [name, file] of [[`sharp-darwin-${arch}`, 'sharp.node'], [`sharp-libvips-darwin-${arch}`, 'libvips.dylib']]) {
+      const libDirectory = join(resources, 'app.asar.unpacked/node_modules/@img', name, 'lib');
+      await mkdir(libDirectory, { recursive: true });
+      await writeFile(join(libDirectory, file), Buffer.from('cffaedfe00000000', 'hex'));
+    }
+    const source = join(directory, `asar-${arch}`);
+    await mkdir(source);
+    await writeFile(join(source, 'package.json'), JSON.stringify({ version, quoternMacosReleaseMode: mode }));
+    await createPackage(source, join(resources, 'app.asar'));
+    for (const extension of ['zip', 'dmg']) await writeFile(join(directory, `Quotern-${version}-mac-${arch}.${extension}`), `fixture ${arch} ${extension}`);
+  }
+  const calls = [];
+  const command = async (name, args) => {
+    calls.push([name, ...args]);
+    if (name === 'codesign') return { stdout: '', stderr: args.includes('--display') ? mode === 'adhoc' ? 'Signature=adhoc\nTeamIdentifier=not set' : `Authority=Developer ID Application: Test (${team})\nTeamIdentifier=${team}\nCodeDirectory flags=0x10000(runtime)` : '' };
+    if (name === '/usr/libexec/PlistBuddy') return { stdout: args[1].includes('CFBundleExecutable') ? 'Quotern' : version };
+    if (name === 'lipo') return { stdout: args.at(-1).includes('arm64') ? 'arm64' : 'x86_64' };
+    if (name === 'spctl') return { stdout: '', stderr: '' };
+    if (name === 'xcrun') {
+      if (args.includes('submit')) return { stdout: '{"id":"fixture-submission","status":"Accepted"}' };
+      if (args.includes('staple')) await writeFile(args.at(-1), `${await readFile(args.at(-1), 'utf8')}\nstapled fixture ticket`);
+      return { stdout: '', stderr: '' };
+    }
+    if (name === 'ditto' || (name === 'hdiutil' && args.includes('attach'))) {
+      const arch = args.join(' ').includes('arm64') ? 'arm64' : 'x64';
+      const target = name === 'ditto' ? args.at(-1) : args[args.indexOf('-mountpoint') + 1];
+      await cp(join(directory, arch === 'x64' ? 'mac/Quotern.app' : 'mac-arm64/Quotern.app'), join(target, 'Quotern.app'), { recursive: true });
+    } else if (name !== 'hdiutil') throw new Error(`Unexpected command: ${name}`);
+    return { stdout: '', stderr: '' };
+  };
+  const credentials = mode === 'signed' ? { teamId: team, args: ['--keychain-profile', 'fixture'] } : undefined;
+  await verifyMacosArtifacts({ dir: directory, mode, version, commit, command, credentials });
+  if (mode === 'adhoc') assert(!calls.some(call => ['xcrun', 'spctl', 'security'].includes(call[0])));
+  else assert.equal(calls.filter(call => call.includes('submit')).length, 2);
+  assert.equal(calls.filter(call => call.includes('attach')).length, 2);
+  const proof = JSON.parse(await readFile(join(directory, 'macos-verification.json'), 'utf8'));
+  assert.equal(proof.notarized, mode === 'signed');
+  assert.equal(proof.updatePolicy, mode === 'signed' ? 'automatic' : 'manual');
+  assert.equal(proof.checks.includes('stapler'), mode === 'signed');
+  const manifest = JSON.parse(await readFile(join(directory, 'mac-artifacts.json'), 'utf8'));
+  assert.equal(manifest.files.length, mode === 'signed' ? 10 : 5);
+  // A valid signature must not make a mismatched app package mode acceptable.
+  const source = join(directory, 'asar-x64');
+  await writeFile(join(source, 'package.json'), JSON.stringify({ version, quoternMacosReleaseMode: mode === 'signed' ? 'adhoc' : 'signed' }));
+  await createPackage(source, join(directory, 'mac/Quotern.app/Contents/Resources/app.asar'));
+  await assert.rejects(verifyMacosArtifacts({ dir: directory, mode, version, commit, command, credentials }), /mode|marker/i);
+});
 test('release signing requires an expected team and one complete notarization identity', () => {
   assert.throws(() => appleCredentials({}), /TEAM/);
   assert.throws(() => appleCredentials({ APPLE_TEAM_ID: team }), /credentials/i);

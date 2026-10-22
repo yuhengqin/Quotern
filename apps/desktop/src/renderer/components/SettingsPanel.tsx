@@ -558,6 +558,7 @@ function AutoUpdateSettings() {
     status === 'downloaded' ||
     status === 'installing';
   const messageKey = !state ? 'settings.update.loading'
+    : status === 'manual' ? 'desktop.update.manualHint'
     : status === 'unsupported' ? 'settings.update.unsupported'
     : status === 'checking' ? 'settings.update.checking'
     : status === 'available' ? 'settings.update.available'
@@ -569,7 +570,8 @@ function AutoUpdateSettings() {
   const error = actionError ? t(actionError) : status === 'error' ? t('settings.update.retry') : null;
   // Check failures can be retried with the persistent check button.
   const updateAction = status === 'error' ? null : getUpdateToolbarAction(state);
-  const updateActionLabel = status === 'available' ? t('settings.update.available')
+  const updateActionLabel = status === 'manual' ? t('desktop.update.openDownloads')
+    : status === 'available' ? t('settings.update.available')
     : status === 'downloading' ? state?.percent == null
       ? t('settings.update.downloading')
       : t('settings.update.downloadPercent', { percent: updateDownloadPercent(state?.percent) })
@@ -583,7 +585,7 @@ function AutoUpdateSettings() {
         <div className="flex w-full items-center justify-between gap-4">
           <Card.Title>{t('settings.update.title')}</Card.Title>
           <div className="flex shrink-0 items-center gap-2">
-            <Button
+            {status !== 'manual' && <Button
               className="shrink-0"
               isDisabled={!state || status === 'unsupported' || busy || installPending}
               isPending={status === 'checking'}
@@ -594,7 +596,7 @@ function AutoUpdateSettings() {
               variant="outline"
             >
               {t('settings.update.check')}
-            </Button>
+            </Button>}
             {updateAction && (
               <Button
                 aria-busy={installPending || updateAction.request === null}

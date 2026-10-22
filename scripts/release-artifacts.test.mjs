@@ -19,10 +19,10 @@ async function fixture(t, platform) {
   return dir;
 }
 
-async function macProof(dir) {
+async function macProof(dir, mode = 'signed') {
   await writeFile(join(dir, 'macos-verification.json'), JSON.stringify({
-    schemaVersion: 1, platform: 'darwin', version, commit, teamId: 'TEAM123456', passed: true,
-    checks: ['codesign', 'spctl', 'stapler', 'architecture', 'version', 'zip-extracted', 'dmg-mounted'],
+    schemaVersion: 2, platform: 'darwin', version, commit, mode, updatePolicy: mode === 'signed' ? 'automatic' : 'manual', notarized: mode === 'signed', teamId: mode === 'signed' ? 'TEAM123456' : null, passed: true,
+    checks: ['codesign', 'architecture', 'version', 'update-policy', 'zip-extracted', 'dmg-mounted', ...(mode === 'signed' ? ['spctl', 'stapler'] : ['adhoc-signature'])],
     files: await Promise.all(macFiles.map(async name => ({ name, sha512: createHash('sha512').update(await readFile(join(dir, name))).digest('base64') }))),
   }));
 }
@@ -37,6 +37,23 @@ test('writes one update channel containing both installers and excludes portable
   assert.equal(result.files.length, 7);
   assert.equal(result.commit, commit);
   assert.equal((await readFile(join(dir, 'win-artifacts.json'), 'utf8')).includes('portable.exe'), true);
+});
+
+test('ad-hoc releases retain both DMG/ZIP pairs but never offer an automatic update feed', async t => {
+  const dir = await fixture(t, 'mac');
+  await macProof(dir, 'adhoc');
+  const options = { dir, platform: 'mac', version, commit, macosMode: 'adhoc' };
+  const manifest = await verifyPlatform({ ...options, writeManifest: true });
+  assert.equal(manifest.macosMode, 'adhoc');
+  assert.equal(manifest.updatePolicy, 'manual');
+  assert.deepEqual(manifest.files.map(file => file.name), [...macFiles, 'macos-verification.json']);
+  await writeFile(join(dir, 'latest-mac.yml'), 'stale signed feed');
+  await assert.rejects(verifyPlatform(options), /automatic|manual|feed/i);
+  await refreshMetadata(options);
+  await verifyPlatform(options);
+  await assert.rejects(verifyPlatform({ ...options, macosMode: 'signed' }), /ENOENT|mode/i);
+  await writeFile(join(dir, macFiles[1]), 'changed ZIP after verification');
+  await assert.rejects(verifyPlatform(options), /proof|verified/i);
 });
 
 test('rejects missing architecture, unexpected installers and stale update hashes', async t => {
@@ -96,16 +113,16 @@ test('refuses path traversal in update metadata and uses the prerelease channel'
   await assert.rejects(verifyPlatform({ dir: beta, platform: 'win', version: '0.1.14-beta.1', commit }), /alias|channel/i);
 });
 
-test('assembly requires both platforms and a committed source archive from the same commit', async t => {
+for (const macosMode of ['signed', 'adhoc']) test(`${macosMode} assembly requires both platforms and source at the same commit`, async t => {
   const input = await mkdtemp(join(tmpdir(), 'quotern release assembly '));
   t.after(() => rm(input, { recursive: true, force: true }));
   const win = await fixture(t, 'win');
   const mac = await fixture(t, 'mac');
   await refreshMetadata({ dir: win, platform: 'win', version });
-  await refreshMetadata({ dir: mac, platform: 'mac', version });
-  await macProof(mac);
+  await refreshMetadata({ dir: mac, platform: 'mac', version, macosMode });
+  await macProof(mac, macosMode);
   const w = await verifyPlatform({ dir: win, platform: 'win', version, commit, writeManifest: true });
-  const m = await verifyPlatform({ dir: mac, platform: 'mac', version, commit, writeManifest: true });
+  const m = await verifyPlatform({ dir: mac, platform: 'mac', version, commit, macosMode, writeManifest: true });
   for (const [source, manifest] of [[win, w], [mac, m]]) {
     const target = join(input, manifest.platform);
     await mkdir(target);
@@ -113,15 +130,16 @@ test('assembly requires both platforms and a committed source archive from the s
     await copyFile(join(source, `${manifest.platform}-artifacts.json`), join(target, `${manifest.platform}-artifacts.json`));
   }
   const output = join(input, 'assembled');
-  await assert.rejects(assembleRelease({ input, output, version, commit }), /source/i);
+  await assert.rejects(assembleRelease({ input, output, version, commit, macosMode }), /source/i);
   await writeFile(join(input, 'source-archive.json'), JSON.stringify({ status: 'passed', mode: 'ref', version, commit: 'b'.repeat(40), archiveSha256: 'c'.repeat(64) }));
-  await assert.rejects(assembleRelease({ input, output, version, commit }), /commit/i);
+  await assert.rejects(assembleRelease({ input, output, version, commit, macosMode }), /commit/i);
   await writeFile(join(input, 'source-archive.json'), JSON.stringify({ status: 'passed', mode: 'ref', version, commit, archiveSha256: 'c'.repeat(64) }));
-  const result = await assembleRelease({ input, output, version, commit });
+  await assert.rejects(assembleRelease({ input, output, version, commit, macosMode: macosMode === 'signed' ? 'adhoc' : 'signed' }), /mode/i);
+  const result = await assembleRelease({ input, output, version, commit, macosMode });
   assert.equal(result.assets.filter(name => /\.(exe|dmg|zip)$/.test(name)).length, 8);
   assert.ok(result.assets.includes('checksums-sha256.txt'));
   await writeFile(join(input, 'win', winFiles[0]), 'changed after platform verification');
-  await assert.rejects(assembleRelease({ input, output: join(input, 'another'), version, commit }), /hash|size/i);
+  await assert.rejects(assembleRelease({ input, output: join(input, 'another'), version, commit, macosMode }), /hash|size/i);
 });
 
 test('publishing is explicit, requires a matching version tag, and rejects a dirty checkout', () => {

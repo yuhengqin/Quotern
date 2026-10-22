@@ -1,5 +1,6 @@
 export type AutoUpdateStatus =
   | 'unsupported'
+  | 'manual'
   | 'idle'
   | 'checking'
   | 'available'
@@ -22,7 +23,7 @@ export type AutoUpdateState = {
   completedVersion?: string;
 };
 
-/** Portable builds cannot use the shared NSIS feed; send users to GitHub assets. */
+/** Manual macOS builds and Windows portable users download from GitHub assets. */
 export const PORTABLE_RELEASES_URL =
   'https://github.com/yuhengqin/Quotern/releases';
 
@@ -51,6 +52,8 @@ export function getUpdateToolbarAction(state: AutoUpdateState | null): {
   request: 'install' | 'check' | 'open-releases' | null;
 } | null {
   switch (state?.status) {
+    case 'manual':
+      return { label: '手动更新', request: 'open-releases' };
     case 'available':
       // Only portable builds enter `available`; click opens GitHub for the Portable asset.
       return { label: '发现新版本', request: 'open-releases' };
@@ -84,6 +87,8 @@ export function updateStatusMessage(state: AutoUpdateState | null): string {
   switch (state.status) {
     case 'unsupported':
       return state.message ?? '开发环境不支持自动更新';
+    case 'manual':
+      return state.message ?? '请前往下载页手动更新';
     case 'checking':
       return '正在检查新版本…';
     case 'available':

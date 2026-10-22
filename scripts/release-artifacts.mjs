@@ -9,13 +9,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import yaml from 'js-yaml';
+import { assertMacosProof, macosReleasePolicy } from './macos-release-policy.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const MAC_CHECKS = ['codesign', 'spctl', 'stapler', 'architecture', 'version', 'zip-extracted', 'dmg-mounted'];
 const readJson = async file => JSON.parse(await readFile(file, 'utf8'));
 const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
 
-export function releaseLayout(version, platform) {
+export function releaseLayout(version, platform, macosMode = 'signed') {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`Invalid release version: ${version}`);
   if (!['win', 'mac'].includes(platform)) throw new Error(`Unsupported release platform: ${platform}`);
   // Current clients use beta for all prereleases. The private GitHub provider always asks for latest.
@@ -26,6 +26,7 @@ export function releaseLayout(version, platform) {
     : ['zip', 'dmg'].flatMap(ext => ['x64', 'arm64'].map(arch => `${prefix}-mac-${arch}.${ext}`));
   const downloads = platform === 'win' ? [...updates, ...['x64', 'arm64'].map(arch => `${prefix}-win-${arch}-portable.exe`)] : updates;
   const suffix = `${platform === 'mac' ? '-mac' : ''}.yml`;
+  if (platform === 'mac' && macosReleasePolicy(macosMode).updatePolicy === 'manual') return { updates: [], downloads, metadata: null, metadataFiles: [] };
   return { updates, downloads, metadata: `${channel}${suffix}`, metadataFiles: [...new Set([`${channel}${suffix}`, `latest${suffix}`])] };
 }
 
@@ -51,8 +52,17 @@ async function requiredFile(dir, name) {
   return { name, size: info.size, sha512: await hashFile(file), sha256: await hashFile(file, 'sha256', 'hex') };
 }
 
-export async function refreshMetadata({ dir, platform, version }) {
-  const layout = releaseLayout(version, platform);
+function isMacUpdaterFile(name) {
+  return /-mac\.yml$/.test(name) || /^Quotern-.*-mac-.*\.(zip|dmg)\.blockmap$/.test(name);
+}
+
+export async function refreshMetadata({ dir, platform, version, macosMode = 'signed' }) {
+  const layout = releaseLayout(version, platform, macosMode);
+  if (platform === 'mac' && macosMode === 'adhoc') {
+    // Builder may emit automatic-update files even with publishing disabled. Never ship these.
+    for (const name of await readdir(dir)) if (isMacUpdaterFile(name)) await rm(join(dir, name));
+    return;
+  }
   const files = [];
   for (const name of layout.updates) {
     await requiredFile(dir, name);
@@ -64,12 +74,9 @@ export async function refreshMetadata({ dir, platform, version }) {
   for (const name of layout.metadataFiles) await writeFile(join(dir, name), metadata);
 }
 
-async function checkMacProof(dir, version, commit, downloads) {
+async function checkMacProof(dir, version, commit, downloads, mode) {
   const proof = await readJson(join(dir, 'macos-verification.json')).catch(() => { throw new Error('Missing macos-verification.json Apple verification evidence'); });
-  if (proof.schemaVersion !== 1 || proof.platform !== 'darwin' || proof.passed !== true || proof.version !== version || proof.commit !== commit || !/^[A-Z0-9]{10}$/.test(proof.teamId ?? '')) {
-    throw new Error('Invalid macOS verification evidence or mismatched version/commit');
-  }
-  if (!MAC_CHECKS.every(check => proof.checks?.includes(check))) throw new Error('Incomplete Apple verification evidence');
+  assertMacosProof(proof, { mode, version, commit });
   if (!Array.isArray(proof.files) || proof.files.length !== downloads.length || new Set(proof.files.map(f => f.name)).size !== downloads.length) throw new Error('Incomplete macOS verified file inventory');
   for (const name of downloads) {
     const file = await requiredFile(dir, name);
@@ -77,38 +84,41 @@ async function checkMacProof(dir, version, commit, downloads) {
   }
 }
 
-export async function verifyPlatform({ dir, platform, version, commit, writeManifest = false }) {
+export async function verifyPlatform({ dir, platform, version, commit, macosMode = 'signed', writeManifest = false }) {
   if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('Release commit must be a full Git commit ID');
-  const layout = releaseLayout(version, platform);
+  const layout = releaseLayout(version, platform, macosMode);
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isFile() && /^Quotern-.*\.(exe|zip|dmg)$/.test(entry.name) && !layout.downloads.includes(entry.name)) throw new Error(`Unexpected release artifact: ${entry.name}`);
+    if (platform === 'mac' && macosMode === 'adhoc' && isMacUpdaterFile(entry.name)) throw new Error('Manual macOS releases must not contain an automatic update feed/blockmap');
   }
   const downloadInfo = await Promise.all(layout.downloads.map(name => requiredFile(dir, name)));
-  const metadata = await readFile(join(dir, layout.metadata), 'utf8');
-  for (const name of layout.metadataFiles) {
-    if (await readFile(join(dir, name), 'utf8') !== metadata) throw new Error(`Stale private updater channel alias: ${name}`);
-  }
-  const info = yaml.load(metadata);
-  const urls = info?.files?.map(file => file.url);
-  if (info?.version !== version || !Array.isArray(urls) || urls.length !== layout.updates.length || new Set(urls).size !== urls.length || urls.some(url => !layout.updates.includes(url))) throw new Error('Unexpected update metadata version, inventory or URL');
-  const temporary = await mkdtemp(join(tmpdir(), 'quotern-blockmap-verify-'));
-  try {
-    for (const file of info.files) {
-      const actual = downloadInfo.find(f => f.name === file.url);
-      if (file.size !== actual.size || file.sha512 !== actual.sha512) throw new Error(`Update size/hash mismatch: ${file.url}`);
-      const expected = join(temporary, `${file.url}.blockmap`);
-      await buildBlockmap(join(dir, file.url), expected);
-      const recorded = await readFile(join(dir, `${file.url}.blockmap`));
-      if (!recorded.equals(await readFile(expected))) throw new Error(`Stale blockmap: ${file.url}`);
+  if (layout.metadataFiles.length) {
+    const metadata = await readFile(join(dir, layout.metadata), 'utf8');
+    for (const name of layout.metadataFiles) {
+      if (await readFile(join(dir, name), 'utf8') !== metadata) throw new Error(`Stale private updater channel alias: ${name}`);
     }
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
+    const info = yaml.load(metadata);
+    const urls = info?.files?.map(file => file.url);
+    if (info?.version !== version || !Array.isArray(urls) || urls.length !== layout.updates.length || new Set(urls).size !== urls.length || urls.some(url => !layout.updates.includes(url))) throw new Error('Unexpected update metadata version, inventory or URL');
+    const temporary = await mkdtemp(join(tmpdir(), 'quotern-blockmap-verify-'));
+    try {
+      for (const file of info.files) {
+        const actual = downloadInfo.find(f => f.name === file.url);
+        if (file.size !== actual.size || file.sha512 !== actual.sha512) throw new Error(`Update size/hash mismatch: ${file.url}`);
+        const expected = join(temporary, `${file.url}.blockmap`);
+        await buildBlockmap(join(dir, file.url), expected);
+        const recorded = await readFile(join(dir, `${file.url}.blockmap`));
+        if (!recorded.equals(await readFile(expected))) throw new Error(`Stale blockmap: ${file.url}`);
+      }
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+    const legacy = downloadInfo.find(f => f.name === info.path);
+    if (!layout.updates.includes(info.path) || info.sha512 !== legacy?.sha512) throw new Error('Invalid legacy update path/hash');
   }
-  const legacy = downloadInfo.find(f => f.name === info.path);
-  if (!layout.updates.includes(info.path) || info.sha512 !== legacy?.sha512) throw new Error('Invalid legacy update path/hash');
-  if (platform === 'mac') await checkMacProof(dir, version, commit, layout.downloads);
+  if (platform === 'mac') await checkMacProof(dir, version, commit, layout.downloads, macosMode);
   const names = [...layout.downloads, ...layout.updates.map(name => `${name}.blockmap`), ...layout.metadataFiles, ...(platform === 'mac' ? ['macos-verification.json'] : [])];
-  const manifest = { schemaVersion: 1, platform, version, commit, files: await Promise.all(names.map(name => requiredFile(dir, name))) };
+  const manifest = { schemaVersion: 1, platform, version, commit, ...(platform === 'mac' ? { macosMode, updatePolicy: macosReleasePolicy(macosMode).updatePolicy } : {}), files: await Promise.all(names.map(name => requiredFile(dir, name))) };
   if (writeManifest) await writeFile(join(dir, `${platform}-artifacts.json`), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
 }
@@ -123,13 +133,15 @@ async function findInput(input, filename, folders) {
   return found[0];
 }
 
-export async function assembleRelease({ input, output, version, commit }) {
+export async function assembleRelease({ input, output, version, commit, macosMode = 'signed' }) {
+  const policy = macosReleasePolicy(macosMode);
   const verified = [];
   for (const platform of ['win', 'mac']) {
     const manifestPath = await findInput(input, `${platform}-artifacts.json`, [platform, `desktop-${platform}`]);
     const manifest = await readJson(manifestPath);
     if (manifest.schemaVersion !== 1 || manifest.platform !== platform || manifest.version !== version || manifest.commit !== commit) throw new Error(`${platform} version/commit mismatch`);
-    const current = await verifyPlatform({ dir: dirname(manifestPath), platform, version, commit });
+    if (platform === 'mac' && (manifest.macosMode !== macosMode || manifest.updatePolicy !== policy.updatePolicy)) throw new Error('macOS manifest release mode/policy mismatch');
+    const current = await verifyPlatform({ dir: dirname(manifestPath), platform, version, commit, macosMode });
     if (!Array.isArray(manifest.files) || JSON.stringify(manifest.files) !== JSON.stringify(current.files)) throw new Error(`${platform} manifest file size/hash mismatch`);
     verified.push({ dir: dirname(manifestPath), manifest });
   }
@@ -153,7 +165,7 @@ export async function assembleRelease({ input, output, version, commit }) {
   const checksums = await Promise.all(names.sort().map(async name => `${await hashFile(join(output, name), 'sha256', 'hex')}  ${name}`));
   await writeFile(join(output, 'checksums-sha256.txt'), `${checksums.join('\n')}\n`);
   names.push('checksums-sha256.txt');
-  return { version, commit, assets: names };
+  return { version, commit, macosMode, assets: names };
 }
 
 export function assertReleaseRequest({ version, commit, ref, publish = false, dirty = false }) {
@@ -179,9 +191,12 @@ async function main() {
     dir: { type: 'string' }, platform: { type: 'string' }, input: { type: 'string' }, output: { type: 'string' },
     version: { type: 'string' }, commit: { type: 'string' }, ref: { type: 'string' }, publish: { type: 'boolean', default: false },
     'github-output': { type: 'string' },
+    'macos-mode': { type: 'string' },
   } });
   const version = values.version ?? (await readJson(join(ROOT, 'apps/desktop/package.json'))).version;
   const commit = values.commit ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  const macosMode = values['macos-mode'] ?? (positionals[0] === 'preflight' ? 'adhoc' : 'signed');
+  macosReleasePolicy(macosMode);
   if (positionals[0] === 'preflight') {
     const ref = values.ref ?? process.env.GITHUB_REF ?? '';
     const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).trim() !== '';
@@ -191,16 +206,16 @@ async function main() {
       if (taggedCommit !== commit) throw new Error('Tag does not point at the checked-out source commit');
       await requireReleaseNotes({ version });
     }
-    if (values['github-output']) await writeFile(values['github-output'], `version=${version}\ncommit=${commit}\ntag=v${version}\n`, { flag: 'a' });
-    console.log(JSON.stringify({ version, commit, ref, publish: values.publish }));
+    if (values['github-output']) await writeFile(values['github-output'], `version=${version}\ncommit=${commit}\ntag=v${version}\nmacos-mode=${macosMode}\n`, { flag: 'a' });
+    console.log(JSON.stringify({ version, commit, ref, macosMode, publish: values.publish }));
   } else if (positionals[0] === 'refresh') {
-    await refreshMetadata({ dir: resolve(values.dir ?? join(ROOT, 'apps/desktop/release', version)), platform: values.platform, version });
+    await refreshMetadata({ dir: resolve(values.dir ?? join(ROOT, 'apps/desktop/release', version)), platform: values.platform, version, macosMode });
   } else if (positionals[0] === 'verify') {
     const dir = resolve(values.dir ?? join(ROOT, 'apps/desktop/release', version));
-    const result = await verifyPlatform({ dir, platform: values.platform, version, commit, writeManifest: true });
+    const result = await verifyPlatform({ dir, platform: values.platform, version, commit, macosMode, writeManifest: true });
     console.log(`Verified ${result.files.length} ${values.platform} release files at ${commit}`);
   } else if (positionals[0] === 'assemble') {
-    console.log(JSON.stringify(await assembleRelease({ input: resolve(values.input), output: resolve(values.output), version, commit }), null, 2));
+    console.log(JSON.stringify(await assembleRelease({ input: resolve(values.input), output: resolve(values.output), version, commit, macosMode }), null, 2));
   } else {
     throw new Error('Usage: release-artifacts.mjs <preflight|refresh|verify|assemble> [--platform win|mac] [--dir path]');
   }

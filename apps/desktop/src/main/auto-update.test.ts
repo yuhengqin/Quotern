@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, mock, test } from 'node:test';
@@ -15,8 +15,9 @@ import {
 // Exercise the actual main-process module with an Electron boundary double.
 // No Electron process, network, user data, or installer is touched by these tests.
 let userData: string;
+let applicationPath: string;
 const handlers = new Map<string, () => unknown>();
-const app = { isPackaged: true, getVersion: () => '0.1.8', getPath: () => userData };
+const app = { isPackaged: true, getVersion: () => '0.1.8', getPath: () => userData, getAppPath: () => applicationPath };
 const updater = Object.assign(new EventEmitter(), {
   autoDownload: false,
   autoInstallOnAppQuit: true,
@@ -74,6 +75,8 @@ async function until(condition: () => boolean) {
 
 beforeEach(async () => {
   userData = await mkdtemp(join(tmpdir(), 'quotern-auto-update-test-'));
+  applicationPath = await mkdtemp(join(tmpdir(), 'quotern-update-build-'));
+  await writeFile(join(applicationPath, 'package.json'), JSON.stringify({ quoternMacosReleaseMode: 'signed' }));
   delete process.env.PORTABLE_EXECUTABLE_FILE;
   sentStates.length = 0;
   app.isPackaged = true;
@@ -89,7 +92,76 @@ afterEach(async () => {
   disposeAutoUpdate();
   delete process.env.PORTABLE_EXECUTABLE_FILE;
   await rm(userData, { recursive: true, force: true });
+  await rm(applicationPath, { recursive: true, force: true });
 });
+
+async function onMac(run: () => Promise<void>) {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  Object.defineProperty(process, 'platform', { ...original, value: 'darwin' });
+  try { await run(); } finally { Object.defineProperty(process, 'platform', original); }
+}
+
+test('ad-hoc macOS builds never check, download, install, or stop runtime', async () => {
+  await onMac(async () => {
+    await writeFile(join(applicationPath, 'package.json'), JSON.stringify({ quoternMacosReleaseMode: 'adhoc' }));
+    const beforeInstall = mock.fn(async () => {});
+    const initializing = initializeAutoUpdate({ beforeInstall, onInstallFailed: async () => {} });
+    assert.equal(getState().status, 'idle');
+    await check(); // An IPC request while package metadata is being read must not start the updater.
+    assert.equal(updater.checkForUpdates.mock.callCount(), 0);
+    await initializing;
+    assert.equal(getState().status, 'manual');
+    assert.equal(getState().version, undefined);
+    assert.equal(updater.autoDownload, false);
+    await check();
+    updater.emit('download-progress', { percent: 50 });
+    downloaded();
+    install();
+    assert.equal(getState().status, 'manual');
+    assert.equal(updater.checkForUpdates.mock.callCount(), 0);
+    assert.equal(updater.quitAndInstall.mock.callCount(), 0);
+    assert.equal(beforeInstall.mock.callCount(), 0);
+    assert.deepEqual(await readdir(userData), []);
+  });
+});
+
+test('signed and legacy macOS builds retain automatic updates', async () => {
+  await onMac(async () => {
+    for (const metadata of [{ quoternMacosReleaseMode: 'signed' }, {}]) {
+      await writeFile(join(applicationPath, 'package.json'), JSON.stringify(metadata));
+      const calls = updater.checkForUpdates.mock.callCount();
+      await initializeAutoUpdate({ beforeInstall: async () => {}, onInstallFailed: async () => {} });
+      assert.equal(updater.autoDownload, true);
+      assert.equal(updater.checkForUpdates.mock.callCount(), calls + 1);
+      disposeAutoUpdate();
+    }
+  });
+});
+
+test('unknown macOS build policy fails closed to manual download', async () => {
+  await onMac(async () => {
+    await writeFile(join(applicationPath, 'package.json'), JSON.stringify({ quoternMacosReleaseMode: 'unexpected' }));
+    await initializeAutoUpdate({ beforeInstall: async () => {}, onInstallFailed: async () => {} });
+    assert.equal(getState().status, 'manual');
+    assert.equal(updater.checkForUpdates.mock.callCount(), 0);
+  });
+});
+
+for (const scenario of ['missing', 'malformed'] as const) {
+  test(`${scenario} macOS package metadata falls back to manual updates`, async () => {
+    await onMac(async () => {
+      const file = join(applicationPath, 'package.json');
+      if (scenario === 'missing') await rm(file);
+      else await writeFile(file, '{invalid');
+      await initializeAutoUpdate({ beforeInstall: async () => {}, onInstallFailed: async () => {} });
+      assert.equal(getState().status, 'manual');
+      await check();
+      install();
+      assert.equal(updater.checkForUpdates.mock.callCount(), 0);
+      assert.equal(updater.quitAndInstall.mock.callCount(), 0);
+    });
+  });
+}
 
 test('early IPC answers get-state without starting an update check', async () => {
   registerAutoUpdateIpc();

@@ -6,12 +6,13 @@
 
 ## 版本策略
 
-四个包由 [Changesets](https://github.com/changesets/changesets) 管理，各自独立升版，不强制对齐：
+五个包由 [Changesets](https://github.com/changesets/changesets) 管理，各自独立升版，不强制对齐：
 
 | 包 | 路径 | 发布方式 |
 | --- | --- | --- |
 | `quotern` | `packages/cli` | npm |
 | `quotern-core` | `packages/core` | npm |
+| `quotern-i18n` | `packages/i18n` | npm，CLI 与桌面端的共享翻译依赖 |
 | `quotern-dashboard` | `packages/dashboard` | `private`，静态产物随 CLI 分发 |
 | `quotern-desktop` | `apps/desktop` | `private`，产物为 dmg / exe |
 
@@ -88,7 +89,7 @@ tag 与里程碑同名。
 ### 3. 构建与验收产物
 
 ```bash
-corepack pnpm release                 # 单独发布 CLI / core 到 npm
+corepack pnpm release                 # 维护者单独补发 CLI / core / i18n 到 npm；正式 Release 通常自动发布
 corepack pnpm release:desktop:mac     # 在 macOS 以 ad-hoc 构建、验证；不上传
 corepack pnpm release:desktop:mac:signed # Developer ID 签名、公证与验证；不上传
 corepack pnpm release:desktop:win     # 在 Windows 构建与验证；不上传
@@ -98,13 +99,42 @@ Desktop 使用下方统一流程。平台命令只在本地生成产物；`elect
 
 ### 4. 生成与审阅 GitHub Release
 
-统一流程验证通过后，可显式创建草稿。workflow 自动将 tag 对应的 `docs/release-notes/<tag>.md` 导入正文，无需在 GitHub 页面重复粘贴。核对草稿附件、实机验收与正文后人工发布。推 tag 或默认手动运行不会创建 Release。修改仓库中的说明文件不会自动同步到已经创建的草稿或正式 Release，需显式更新其正文。
+统一流程验证通过后，可显式创建草稿。workflow 自动将 tag 对应的 `docs/release-notes/<tag>.md` 导入正文，无需在 GitHub 页面重复粘贴。核对草稿附件、实机验收与正文后人工发布；发布 GitHub Release 会自动触发下方的 npm 发布工作流。推 tag 或默认手动运行不会创建 Release，也不会发布 npm 包。修改仓库中的说明文件不会自动同步到已经创建的草稿或正式 Release，需显式更新其正文。
 
-### 5. 确认自动更新源
+### 5. 确认 npm 发布
+
+检查 Actions 中 `npm release publication` 的结果，确认三个 npm 包的目标版本均可公开安装。GitHub Release 发布成功不代表 npm 上传成功；任一包上传或安装验收失败时，该工作流会失败，应按下方说明处理。
+
+### 6. 确认自动更新源
 
 Desktop 使用 [electron-builder.yml](./apps/desktop/electron-builder.yml) 的 GitHub `publish` 配置作为发布与运行时更新目标；构建生成的 `app-update.yml` 随安装包分发。
 
 对支持自动更新的产物，检查 GitHub Release 附件中对应平台与通道的更新 yml，确认版本、`files.url`、文件大小、SHA-512 校验和与实际附件一致。macOS ad-hoc 版本仅手动更新，不上传 macOS 更新 yml / blockmap。私有仓库还需验证客户端凭据能读取 Release 和附件。按平台分别验收；Windows 便携版应提示手动下载，不能安装 NSIS 包。具体操作见 [Desktop 自动更新发布](./apps/desktop/README.md#自动更新发布)。
+
+## npm 发布与验收
+
+入口为 [release-npm.yml](./.github/workflows/release-npm.yml)，只订阅 GitHub Release 的 `published` 事件。创建草稿、推 tag 和普通构建不会触发 npm 发布；人工发布正式版或 Pre-release 后，工作流固定检出该事件的 commit，核对 tag、Desktop 源码版本与 commit，再构建并发布 npm 包。[GitHub 事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)。
+
+工作流只处理 `quotern-core`、`quotern-i18n`、`quotern`，继续使用 Changesets 管理的各包独立版本。正式版使用 `latest`；带预发布版本号且在 GitHub 标记为 Pre-release 的版本使用 `next`，不更新 `latest`。正式版拒绝包含预发布 npm 版本。发布使用 pnpm 的递归发布能力，自动跳过已经存在的同名同版本包，因此只有 Desktop 变化时不必额外升 npm 版本；失败后重新运行工作流可补发尚未成功的包，不覆盖已有版本。[pnpm 发布行为](https://pnpm.io/cli/publish)。
+
+正式发布会在上传前检查 registry 的 `latest`，拒绝将其回退到较旧的包版本；上传后为此前只在 `next` 的稳定版本补齐 `latest`，无需重复上传。重新运行历史 Release 若会回退通道，将失败并保留当前线上版本。
+
+首次使用前，在 npm 网站头像菜单的 **Access Tokens → Generate New Token** 创建 granular access token，权限选择 **Read and write (publish and stage)**，启用 **Bypass two-factor authentication**，授权范围覆盖这三个包，设置有效期后生成。首次发布的账号还须能创建对应包。将完整 Token 直接存入 GitHub 仓库 **Settings → Secrets and variables → Actions** 的 `NPM_TOKEN` Secret。Token 仅在上传步骤注入 `NODE_AUTH_TOKEN`，不提供给依赖安装、构建或测试步骤；需要在过期前更新 Secret。[npm Token 创建说明](https://docs.npmjs.com/creating-and-viewing-access-tokens/)、[CI/CD 认证说明](https://docs.npmjs.com/using-private-packages-in-a-ci-cd-workflow/)。
+
+截至 2026-10-22，npm 已公告计划于 **2027 年 1 月**移除 granular access token 的直接发布能力；当前流程仍可使用上述 Token，此后需迁移到 trusted publishing（OIDC），或改为 staged publishing 并由维护者审批。更新发布认证时以 [npm 官方政策](https://docs.npmjs.com/about-access-tokens/#direct-publishing-is-being-deprecated)为准。
+
+发布前执行发版回归测试、CLI / core / i18n 测试和 CLI 构建（包含 Dashboard），再用 `pnpm pack` 生成三个包，检查入口、网页与 Skill 文件、版本身份和内部依赖，拒绝残留 `workspace:` / 本地路径依赖。在仓库外的临时项目安装 tarball 并调用实际生成的 `quotern help`，确认安装结果不依赖源码工作区。上传后再从公共 npm registry 安装精确版本并复查入口和文件；构建包、校验报告和发布摘要保留在 `npm-release-evidence` artifact 中。
+
+本地可先运行相同的包检查，不需要 npm 发布凭据：
+
+```bash
+corepack pnpm build:cli
+corepack pnpm check:npm-release
+```
+
+该检查会在临时目录生成 tarball、安装依赖并运行帮助命令，不发布、不启动采集、不修改用户配置。检查线上已发布版本时使用 `corepack pnpm check:npm-release --registry-smoke`。这些检查验证包的安装与文件完整性，不替代系统服务或面板交互的实机验收。
+
+npm 不支持跨包原子发布。某个包已上传而后续步骤失败时，保留已有版本并重新运行失败的工作流；若发现已发布内容有误，修复后提升包版本，不能尝试覆盖原版本。首次发布、Token 权限和真实 registry 验收须在 GitHub Actions 实际运行后确认。
 
 ## Desktop 统一构建与验收
 
@@ -112,7 +142,7 @@ Desktop 使用 [electron-builder.yml](./apps/desktop/electron-builder.yml) 的 G
 
 macOS 使用明确的 `macos_signing` 选项：默认 `adhoc`，手动选择 `signed` 才启用 Developer ID 证书与公证。tag push 默认 `adhoc`；准备正式签名版时手动选择相同 tag 和 `signed`。模式不会根据 Secrets 是否存在自动切换。两种模式各自输出到 `apps/desktop/release/<version>/mac-adhoc/` 或 `mac-signed/`，文件名仍为 `Quotern-<version>-mac-<arch>.dmg/.zip`。单架构开发快捷命令 `build:desktop:mac:arm` 仅生成 ARM64 ad-hoc 测试包，不生成发布证明。
 
-需要创建草稿时，在 Actions 手动运行该 workflow，选择与 `apps/desktop/package.json` 一致的 `v<version>` tag，显式勾选 `publish`。预检要求该 tag 的源码中存在非空的 `docs/release-notes/<tag>.md`，缺失或空白会在平台构建前失败；普通构建验证不强制要求说明文件。仅最后的 draft job 具有 `contents: write` 权限；它用 `--notes-file` 导入版本说明，只新建 Draft，不覆盖已有 Release，也不公开发布。预发布版本自动标记 Pre-release。普通分支不能创建草稿；任何平台或源码验证失败都会阻止汇总与上传。CLI 的 npm 发布仍通过独立的 `corepack pnpm release` 执行。
+需要创建草稿时，在 Actions 手动运行该 workflow，选择与 `apps/desktop/package.json` 一致的 `v<version>` tag，显式勾选 `publish`。预检要求该 tag 的源码中存在非空的 `docs/release-notes/<tag>.md`，缺失或空白会在平台构建前失败；普通构建验证不强制要求说明文件。仅最后的 draft job 具有 `contents: write` 权限；它用 `--notes-file` 导入版本说明，只新建 Draft，不覆盖已有 Release，也不公开发布。预发布版本自动标记 Pre-release。普通分支不能创建草稿；任何平台或源码验证失败都会阻止汇总与上传。草稿经人工发布后，由 `release-npm.yml` 自动执行 npm 发布与安装验收。
 
 ### macOS ad-hoc 模式
 

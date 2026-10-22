@@ -1,0 +1,63 @@
+name: npm release publication
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+# Serialize registry writes across versions, including retries after a partial publish.
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+env:
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+      - name: Verify published Release source and select npm channel
+        id: source
+        run: node scripts/npm-release.mjs --preflight
+      - uses: pnpm/action-setup@v6
+      - run: corepack pnpm install --frozen-lockfile --prefer-offline
+      - name: Test release guards and build CLI with its Dashboard
+        run: |
+          corepack pnpm test:release
+          corepack pnpm build:cli
+          corepack pnpm --filter quotern-core --filter quotern-i18n --filter quotern -r test
+      - name: Verify packed files and install them outside the workspace
+        run: corepack pnpm check:npm-release --output "$RUNNER_TEMP/npm-packages"
+      - name: Publish new npm package versions
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_DIST_TAG: ${{ steps.source.outputs.npm-tag }}
+        run: |
+          set -euo pipefail
+          : "${NODE_AUTH_TOKEN:?Configure the repository NPM_TOKEN secret with npm publication permission}"
+          corepack pnpm check:npm-release --check-latest
+          corepack pnpm --filter quotern-core --filter quotern-i18n --filter quotern -r publish --no-git-checks --access public --tag "$NPM_DIST_TAG" --report-summary
+          corepack pnpm check:npm-release --promote-latest
+      - name: Verify exact published versions from the public registry
+        run: corepack pnpm check:npm-release --registry-smoke
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: npm-release-evidence
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/npm-packages/*
+            pnpm-publish-summary.json

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'quotern-i18n/react';
 import { Button, Switch } from '@heroui/react';
 import dshPetLogo from '../../../vendor/dsh-pet/assets/logo.png';
@@ -33,6 +33,7 @@ const COLORS = [
 ] as const;
 
 type PetFeedback = { key: string; options?: Record<string, string> };
+type PetCatalogFeedback = { action: PetCatalogRequest['action']; message: PetFeedback; failed: boolean; detail?: string };
 
 function spriteUrl(path: string): string {
   return `quotern-pet://builtin/${path}`;
@@ -100,7 +101,8 @@ export function PetSettingsCard() {
   const [autoRotatePreview, setAutoRotatePreview] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<PetFeedback | null>(null);
-  const [notice, setNotice] = useState<PetFeedback | null>(null);
+  const [catalogFeedback, setCatalogFeedback] = useState<PetCatalogFeedback | null>(null);
+  const catalogFeedbackId = useId();
   const [url, setUrl] = useState('');
   const [codexPets, setCodexPets] = useState<PetCatalogEntry[] | null>(null);
   const [selectedCodex, setSelectedCodex] = useState<string[]>([]);
@@ -158,14 +160,14 @@ export function PetSettingsCard() {
   const previewIsCurrent = activation?.currentKind === (showDshSettings ? 'dsh' : 'builtin') && (showDshSettings || state?.settings.character === selected?.id);
 
   const applySelection = async (target: PetSelection) => {
-    setBusy(true); setError(null); setNotice(null);
+    setBusy(true); setError(null); setCatalogFeedback(null);
     try { setActivation(await window.tud.pet.select(target)); }
     catch { setError({ key: 'desktop.pet.saveFailed' }); }
     finally { setBusy(false); }
   };
 
   const setEnabled = async (value: boolean) => {
-    setBusy(true); setError(null); setNotice(null);
+    setBusy(true); setError(null); setCatalogFeedback(null);
     try { setActivation(await window.tud.pet.setEnabled(value)); }
     catch { setError({ key: 'desktop.pet.saveFailed' }); }
     finally { setBusy(false); }
@@ -176,22 +178,24 @@ export function PetSettingsCard() {
     : <Button size="sm" variant="secondary" isDisabled={busy || !activation || !(target.kind === 'dsh' ? dshState : state)} onPress={() => { void applySelection(target); }}>{t('desktop.pet.setCurrent')}</Button>;
 
   const update = async (patch: PetSettingPatch) => {
-    setBusy(true); setError(null); setNotice(null);
+    setBusy(true); setError(null); setCatalogFeedback(null);
     try { setState(await window.tud.pet.setSettings(patch)); }
     catch { setError({ key: 'desktop.pet.saveFailed' }); }
     finally { setBusy(false); }
   };
 
   const catalog = async (request: PetCatalogRequest, success: PetFeedback) => {
-    setBusy(true); setError(null); setNotice(null);
+    setBusy(true); setError(null); setCatalogFeedback(null);
     try {
       const result = await window.tud.pet.catalog(request);
-      if (!result.ok) throw new Error(result.error || 'Pet action failed');
+      if (!result.ok) {
+        setCatalogFeedback({ action: request.action, message: { key: 'desktop.pet.operationFailed' }, failed: true, detail: result.error });
+        return;
+      }
       if (request.action === 'list-codex') {
         setCodexPets(Array.isArray(result.data) ? result.data as PetCatalogEntry[] : []);
         setSelectedCodex([]);
       } else if (!(result.data && typeof result.data === 'object' && 'canceled' in result.data)) {
-        setNotice(success);
         setCodexPets(null);
         setSelectedCodex([]);
         const imported = result.data && typeof result.data === 'object' && 'pet' in result.data
@@ -199,10 +203,17 @@ export function PetSettingsCard() {
           : undefined;
         setState(await window.tud.pet.getState());
         if (imported?.id) { setUrl(''); setPreviewTarget({ kind: 'builtin', character: imported.id }); }
+        setCatalogFeedback({ action: request.action, message: success, failed: false });
       }
-    } catch { setError({ key: 'desktop.pet.operationFailed' }); }
+    } catch { setCatalogFeedback({ action: request.action, message: { key: 'desktop.pet.operationFailed' }, failed: true }); }
     finally { setBusy(false); }
   };
+
+  const feedbackFor = (...actions: PetCatalogRequest['action'][]) => catalogFeedback && actions.includes(catalogFeedback.action) ? (
+    <p id={catalogFeedbackId} role={catalogFeedback.failed ? 'alert' : 'status'} className={`mt-2 break-words text-xs ${catalogFeedback.failed ? 'text-danger' : 'text-success'}`}>
+      {catalogFeedback.detail || t(catalogFeedback.message.key, catalogFeedback.message.options)}
+    </p>
+  ) : null;
 
   return (
     <section className="rounded-xl border border-default-200 bg-content1 p-4 text-left dark:border-default-100/20" aria-label={t('desktop.pet.settings')}>
@@ -214,7 +225,6 @@ export function PetSettingsCard() {
       </div>
       {currentName && <p role="status" className="mt-2 text-xs text-foreground">{t('desktop.pet.currentName', { name: currentName })}<span className="text-muted"> · {t(enabled ? 'desktop.pet.enabled' : 'desktop.pet.disabled')}</span></p>}
       {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
-      {notice && <p role="status" className="mt-3 text-xs text-success">{t(notice.key, notice.options)}</p>}
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
         <button
@@ -253,6 +263,7 @@ export function PetSettingsCard() {
           </div>
         ))}
       </div>
+      {feedbackFor('remove', 'restore-builtins')}
 
       {/* Keep both editors mounted so changing the selected tile preserves drafts. */}
       <div hidden={showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
@@ -311,9 +322,13 @@ export function PetSettingsCard() {
           <button type="button" disabled={busy} onClick={() => void catalog({ action: 'import-zip' }, { key: 'desktop.pet.imported' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.importZip')}</button>
           <button type="button" disabled={busy} onClick={() => void catalog({ action: 'list-codex' }, { key: 'desktop.pet.codexImported' })} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent dark:border-default-100/20">{t('desktop.pet.importCodex')}</button>
         </div>
-        <form className="mt-3 flex gap-2" onSubmit={event => { event.preventDefault(); if (url.trim()) void catalog({ action: 'install-url', url: url.trim() }, { key: 'desktop.pet.imported' }); }}>
-          <input type="text" aria-label={t('desktop.pet.url')} placeholder={t('desktop.pet.url')} value={url} disabled={busy} onChange={event => setUrl(event.target.value)} className="min-w-0 flex-1 rounded-md border border-default-200 bg-content1 px-2 py-1.5 text-xs dark:border-default-100/20" />
+        {feedbackFor('import-zip', 'list-codex', ...(!codexPets ? ['import-codex' as const] : []))}
+        <form className="mt-3" onSubmit={event => { event.preventDefault(); if (url.trim()) void catalog({ action: 'install-url', url: url.trim() }, { key: 'desktop.pet.imported' }); }}>
+          <div className="flex gap-2">
+          <input type="text" aria-label={t('desktop.pet.url')} aria-describedby={catalogFeedback?.action === 'install-url' ? catalogFeedbackId : undefined} placeholder={t('desktop.pet.url')} value={url} disabled={busy} onChange={event => { setUrl(event.target.value); setCatalogFeedback(current => current?.action === 'install-url' ? null : current); }} className="min-w-0 flex-1 rounded-md border border-default-200 bg-content1 px-2 py-1.5 text-xs dark:border-default-100/20" />
           <button type="submit" disabled={busy || !url.trim()} className="rounded-md border border-default-200 px-3 py-1.5 text-xs hover:bg-default-100 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50 dark:border-default-100/20">{t('desktop.pet.importLink')}</button>
+          </div>
+          {feedbackFor('install-url')}
         </form>
         {codexPets && (
           <div className="mt-3 rounded-lg border border-default-200 p-3 text-xs dark:border-default-100/20">
@@ -330,6 +345,7 @@ export function PetSettingsCard() {
                   ))}
                 </div>
                 <button type="button" disabled={busy || selectedCodex.length === 0} onClick={() => void catalog({ action: 'import-codex', ids: selectedCodex }, { key: 'desktop.pet.codexImported' })} className="mt-3 rounded-md bg-accent px-3 py-1.5 text-accent-foreground disabled:opacity-50">{t('desktop.pet.importSelected')}</button>
+                {feedbackFor('import-codex')}
               </>
             )}
           </div>

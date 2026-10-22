@@ -1,10 +1,11 @@
-import { app, protocol } from 'electron';
-import { randomBytes } from 'node:crypto';
+import { app, net, protocol } from 'electron';
+import { createHash, randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { lstat, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import yauzl from 'yauzl';
 import { BUILTIN_PETS, PET_ID_RE, type PetCatalogEntry } from './pet-core';
+import { PetCatalogError } from './pet-catalog-errors';
 
 const MAX_PACKAGE = 12 * 1024 * 1024;
 const MAX_MANIFEST = 16 * 1024;
@@ -93,7 +94,7 @@ export function validatePetPackage(manifestBuffer: Buffer, atlas: Buffer): PetMa
   const description = typeof raw.description === 'string' ? raw.description.trim() : '';
   const kind = typeof raw.kind === 'string' ? raw.kind.trim() : '';
   const spriteVersionNumber = raw.spriteVersionNumber === undefined ? 1 : raw.spriteVersionNumber;
-  if (!PET_ID_RE.test(id) || BUILTIN_IDS.has(id)) throw new Error('pet.json 的 id 无效或与内置角色重复');
+  if (!PET_ID_RE.test(id)) throw new Error('pet.json 的 id 无效');
   if (!displayName || displayName.length > 80 || !description || description.length > 280) throw new Error('pet.json 的名称或描述无效');
   if (raw.spritesheetPath !== 'spritesheet.webp') throw new Error('pet.json 的 spritesheetPath 必须是 spritesheet.webp');
   if (spriteVersionNumber !== 1 && spriteVersionNumber !== 2) throw new Error('不支持的宠物图集版本');
@@ -159,8 +160,9 @@ export class PetCatalog {
   private readonly root: string;
   private readonly hiddenPath: string;
   private readonly codexRoot: string;
+  private installationQueue: Promise<unknown> = Promise.resolve();
 
-  constructor(root?: string, codexRoot?: string) {
+  constructor(root?: string, codexRoot?: string, private readonly options: { fetch?: (url: string, init: RequestInit) => Promise<Response> } = {}) {
     this.root = root ?? path.join(app.getPath('userData'), 'pets');
     this.hiddenPath = path.join(this.root, '.hidden-builtins.json');
     this.codexRoot = codexRoot ?? path.join(homedir(), '.codex', 'pets');
@@ -210,12 +212,66 @@ export class PetCatalog {
     return [...builtins, ...customs.filter((pet): pet is NonNullable<typeof pet> => pet !== null)];
   }
 
-  async installBuffers(manifestBuffer: Buffer, atlas: Buffer): Promise<PetCatalogEntry> {
-    const manifest = validatePetPackage(manifestBuffer, atlas);
+  private entry(manifest: PetManifest): PetCatalogEntry {
+    return { ...manifest, custom: true, assetUrl: `${PET_ASSET_SCHEME}://asset/${manifest.id}/spritesheet.webp` };
+  }
+
+  private async importTarget(manifest: PetManifest, atlas: Buffer): Promise<{ manifest: PetManifest; existing: boolean }> {
+    const hash = createHash('sha256').update(JSON.stringify(manifest)).update(atlas).digest('hex').slice(0, 12);
+    let occupied: Set<string>;
+    try { occupied = new Set(await readdir(this.root)); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      occupied = new Set();
+    }
+    let available: PetManifest | undefined;
+    const reserved = BUILTIN_IDS.has(manifest.id);
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const variant = attempt - (reserved ? 0 : 1);
+      const suffix = `-imported-${hash}${variant > 0 ? `-${variant + 1}` : ''}`;
+      const id = variant < 0
+        ? manifest.id
+        : `${manifest.id.slice(0, 64 - suffix.length).replace(/-+$/, '')}${suffix}`;
+      const candidate = { ...manifest, id };
+      if (!occupied.has(id)) {
+        available ??= candidate;
+        continue;
+      }
+      const target = this.petPath(id);
+      try {
+        await this.checkedPetDirectory(target);
+        const [currentManifest, currentAtlas] = await Promise.all([readFile(path.join(target, 'pet.json')), readFile(path.join(target, 'spritesheet.webp'))]);
+        if (JSON.stringify(validatePetPackage(currentManifest, currentAtlas)) === JSON.stringify(candidate) && currentAtlas.equals(atlas)) {
+          return { manifest: candidate, existing: true };
+        }
+      } catch (error) {
+        // Occupied or invalid directories are never overwritten or followed.
+        if (['EACCES', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+      }
+    }
+    if (available) return { manifest: available, existing: false };
+    throw new Error('无法分配独立的宠物 ID');
+  }
+
+  installBuffers(manifestBuffer: Buffer, atlas: Buffer): Promise<PetCatalogEntry> {
+    const operation = this.installationQueue.then(() => this.installPackage(manifestBuffer, atlas));
+    this.installationQueue = operation.catch(() => {});
+    return operation;
+  }
+
+  private async installPackage(manifestBuffer: Buffer, atlas: Buffer): Promise<PetCatalogEntry> {
+    let source: PetManifest;
+    try { source = validatePetPackage(manifestBuffer, atlas); }
+    catch (cause) { throw new PetCatalogError('PET_PACKAGE_INVALID', 'validation', (cause as Error).message, { cause }); }
+    try { return await this.savePackage(source, atlas); }
+    catch (cause) { throw new PetCatalogError('PET_INSTALL_FAILED', 'install', '宠物文件保存失败，请检查磁盘空间和目录权限。', { cause, petId: source.id }); }
+  }
+
+  private async savePackage(source: PetManifest, atlas: Buffer): Promise<PetCatalogEntry> {
     await mkdir(this.root, { recursive: true });
+    const { manifest, existing } = await this.importTarget(source, atlas);
+    if (existing) return this.entry(manifest);
     const target = this.petPath(manifest.id);
-    try { await stat(target); throw new Error('该宠物已导入'); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     const stage = path.join(this.root, `.stage-${randomBytes(8).toString('hex')}`);
     await mkdir(stage);
     try {
@@ -225,14 +281,16 @@ export class PetCatalog {
       ]);
       await rename(stage, target);
     } catch (error) {
-      await rm(stage, { recursive: true, force: true });
+      await rm(stage, { recursive: true, force: true }).catch(() => {});
       throw error;
     }
-    return { ...manifest, custom: true, assetUrl: `${PET_ASSET_SCHEME}://asset/${manifest.id}/spritesheet.webp` };
+    return this.entry(manifest);
   }
 
   async installZip(buffer: Buffer): Promise<PetCatalogEntry> {
-    const files = await readZip(buffer);
+    let files: { manifest: Buffer; atlas: Buffer };
+    try { files = await readZip(buffer); }
+    catch (cause) { throw new PetCatalogError('PET_ARCHIVE_INVALID', 'archive', (cause as Error).message, { cause }); }
     return this.installBuffers(files.manifest, files.atlas);
   }
 
@@ -255,13 +313,13 @@ export class PetCatalog {
   async listCodex(): Promise<PetCatalogEntry[]> {
     let ids: string[];
     try { ids = await readdir(this.codexRoot); } catch { return []; }
-    const installed = new Set((await this.list()).map(pet => pet.id));
-    const candidates = await Promise.all(ids.filter(id => PET_ID_RE.test(id) && !installed.has(id)).map(async id => {
+    const candidates = await Promise.all(ids.filter(id => PET_ID_RE.test(id)).map(async id => {
       try {
         const dir = await this.safeCodexPath(id);
         const [manifestBuffer, atlas] = await Promise.all([readFile(path.join(dir, 'pet.json')), readFile(path.join(dir, 'spritesheet.webp'))]);
         const manifest = validatePetPackage(manifestBuffer, atlas);
-        return manifest.id === id
+        const target = await this.importTarget(manifest, atlas);
+        return manifest.id === id && !target.existing
           ? { ...manifest, custom: true, assetUrl: `${PET_ASSET_SCHEME}://codex/${id}/spritesheet.webp` }
           : null;
       } catch { return null; }
@@ -283,26 +341,42 @@ export class PetCatalog {
   }
 
   async installFromUrl(input: string): Promise<PetCatalogEntry> {
-    const id = petIdFromCodexPetsUrl(input);
-    const response = await fetch(`https://codex-pets.net/api/pets/${encodeURIComponent(id)}/download`, {
-      signal: AbortSignal.timeout(30_000),
-      redirect: 'follow',
-      headers: { accept: 'application/zip', 'user-agent': 'Quotern Pet Importer' },
-    });
-    if (!response.ok || !response.body) throw new Error(`下载宠物包失败（${response.status}）`);
-    if (Number(response.headers.get('content-length') || 0) > MAX_PACKAGE) throw new Error('宠物包超过 12 MB');
+    let id: string;
+    try { id = petIdFromCodexPetsUrl(input); }
+    catch (cause) { throw new PetCatalogError('PET_URL_INVALID', 'url', (cause as Error).message, { cause }); }
+    const signal = AbortSignal.timeout(30_000);
+    let response: Response | undefined;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     const chunks: Buffer[] = [];
     let size = 0;
-    const reader = response.body.getReader();
     try {
+      // Catalog IPC is registered after app.ready. Electron uses the default
+      // session's system proxy/PAC configuration rather than Node's DNS path.
+      const fetcher = this.options.fetch ?? ((url, init) => net.fetch(url, init));
+      response = await fetcher(`https://codex-pets.net/api/pets/${encodeURIComponent(id)}/download`, {
+        signal, redirect: 'follow', credentials: 'omit', cache: 'no-store',
+        headers: { accept: 'application/zip', 'user-agent': 'Quotern Pet Importer' },
+      });
+      if (!response.ok || !response.body) throw new PetCatalogError('PET_DOWNLOAD_HTTP', 'download', `下载宠物包失败（${response.status}）`, { httpStatus: response.status, petId: id });
+      if (Number(response.headers.get('content-length') || 0) > MAX_PACKAGE) throw new PetCatalogError('PET_PACKAGE_TOO_LARGE', 'download', '宠物包超过 12 MB', { petId: id });
+      reader = response.body.getReader();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         size += value.length;
-        if (size > MAX_PACKAGE) throw new Error('宠物包超过 12 MB');
+        if (size > MAX_PACKAGE) throw new PetCatalogError('PET_PACKAGE_TOO_LARGE', 'download', '宠物包超过 12 MB', { petId: id });
         chunks.push(Buffer.from(value));
       }
-    } finally { await reader.cancel(); }
+    } catch (cause) {
+      if (cause instanceof PetCatalogError) throw cause;
+      const timeout = signal.aborted || (cause instanceof Error && cause.name === 'TimeoutError');
+      throw new PetCatalogError(timeout ? 'PET_DOWNLOAD_TIMEOUT' : 'PET_DOWNLOAD_NETWORK', 'download',
+        timeout ? '下载宠物包超时，请检查网络后重试。' : '下载宠物包失败，请检查系统代理或网络后重试。', { cause, petId: id });
+    } finally {
+      // Cleanup must not replace the download's original diagnostic cause.
+      if (reader) await reader.cancel().catch(() => {});
+      else await response?.body?.cancel().catch(() => {});
+    }
     return this.installZip(Buffer.concat(chunks));
   }
 

@@ -54,6 +54,14 @@ worker 的启动请求合并，每代进程仅处理自己的消息与等待请�
 
 证据：[auto-update.ts](../apps/desktop/src/main/auto-update.ts)、[自动更新测试](../apps/desktop/src/main/auto-update.test.ts)。发布步骤见 [Desktop README](../apps/desktop/README.md#自动更新发布)，历史实机记录见[自动更新验证](../apps/desktop/docs/auto-update-validation.md)，其中旧版本结果不代表当前包已完成实机验收。
 
+## 宠物导入与失败日志
+
+Windows Desktop 的宠物下载使用 Electron `net.fetch`，遵循默认 session 的系统代理/PAC 配置；不使用 Node 全局 `fetch`。请求不携带 session 凭据、不使用缓存，超时覆盖响应流读取，压缩包与解压后文件继续受大小和目录校验限制。
+
+内置角色 ID 保留给内置实现。ZIP、链接和本地 Codex 导入遇到 ID 冲突时，使用 `原ID-imported-内容摘要` 形式的独立 ID（必要时截短原 ID 并加序号），不覆盖原目录或修改 Codex 的源文件。相同内容重复导入会复用已安装角色，保留原有的预览、应用和移除行为。
+
+宠物目录操作的 IPC 失败写入当前数据目录的 `logs/pet-import.log`：正式运行位于 `~/.quotern/logs/`，隔离开发位于当前 worktree 的 `.quotern-dev/data/logs/`。JSONL 条目包含 `ts`、`action`、`phase`、分类 `code`、底层 `diagnosticCode`、错误类型、安全的角色 ID，以及适用时的 HTTP 状态；不记录完整 URL、请求头、原始异常文本或本地文件路径。`phase` 区分 `url/download/archive/validation/install`，其他目录操作失败使用 `catalog`；例如 `ENOTFOUND` 是 DNS 解析失败，`ERR_PROXY_CONNECTION_FAILED` 是代理连接失败。日志沿用 1 MB 轮转及一个 `.1` 备份；写日志失败不会使宠物操作再次失败，取消选择 ZIP 不记失败。
+
 ## 自启注册与恢复
 
 - Linux：需要 systemd 用户实例；unit 文件存在不代表 enabled。写入、reload 或 enable 失败要撤销残留，见 [service-linux.ts](../packages/cli/src/service-linux.ts)。

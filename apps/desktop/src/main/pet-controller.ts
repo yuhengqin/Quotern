@@ -4,9 +4,11 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localDateNow } from 'quotern-core/timezone';
+import { appendJsonLog, logsDir, resolveDataDir } from 'quotern-core';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
 import { isLocalRuntimeSyncing, localApiRequest, onLocalRuntimeSyncActivity, onLocalRuntimeSynced } from './local-runtime';
 import { PetCatalog } from './pet-catalog';
+import { petCatalogFailure, petCatalogMessageKey } from './pet-catalog-errors';
 import { createPetCursorSampler } from './pet-pointer';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
@@ -608,8 +610,12 @@ export class PetController {
     ipcMain.handle(PET_CATALOG_CHANNEL, async (_event, request: PetCatalogRequest) => {
       try { return { ok: true, data: await this.handleCatalog(request) }; }
       catch (error) {
+        const diagnostic = petCatalogFailure(request, error);
+        await appendJsonLog(path.join(logsDir(resolveDataDir()), 'pet-import.log'), diagnostic);
         const message = error instanceof Error ? error.message : '';
         const locale = this.options.getLocale();
+        const messageKey = petCatalogMessageKey(error);
+        if (messageKey) return { ok: false, error: nativeText(locale, messageKey, { status: String(diagnostic.httpStatus ?? '') }) };
         // Catalog validation still throws some diagnostic Chinese messages.
         // Do not expose those raw strings when another language is selected.
         return { ok: false, error: locale === 'zh-CN' || Object.values(NATIVE_MESSAGES[locale]).includes(message)

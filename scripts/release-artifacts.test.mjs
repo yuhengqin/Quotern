@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile, mkdir, copyFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import yaml from 'js-yaml';
 import { refreshMetadata, verifyPlatform, assembleRelease, assertReleaseRequest, requireReleaseNotes } from './release-artifacts.mjs';
 
@@ -80,6 +81,31 @@ test('detects stale blockmaps even when the update hash is refreshed independent
   await assert.rejects(verifyPlatform({ dir, platform: 'win', version, commit }), /blockmap/i);
 });
 
+test('accepts equivalent blockmaps with different gzip headers and compression', async t => {
+  const dir = await fixture(t, 'win');
+  await refreshMetadata({ dir, platform: 'win', version });
+  for (const name of winFiles.slice(0, 2)) {
+    const file = join(dir, `${name}.blockmap`);
+    const original = await readFile(file);
+    const encoded = gzipSync(gunzipSync(original), { level: 0 });
+    // zlib's gzip OS byte can differ on the Windows producer and Linux verifier.
+    encoded[9] = original[9] === 3 ? 10 : 3;
+    assert.notDeepEqual(encoded, original);
+    assert.deepEqual(gunzipSync(encoded), gunzipSync(original));
+    await writeFile(file, encoded);
+  }
+  await verifyPlatform({ dir, platform: 'win', version, commit });
+});
+
+for (const invalid of [Buffer.from('not gzip'), gzipSync(Buffer.from('{invalid JSON'))]) {
+  test('rejects a blockmap that cannot be decompressed and parsed', async t => {
+    const dir = await fixture(t, 'win');
+    await refreshMetadata({ dir, platform: 'win', version });
+    await writeFile(join(dir, `${winFiles[0]}.blockmap`), invalid);
+    await assert.rejects(verifyPlatform({ dir, platform: 'win', version, commit }), /blockmap/i);
+  });
+}
+
 test('macOS metadata describes final bytes and requires matching Apple verification evidence', async t => {
   const dir = await fixture(t, 'mac');
   await refreshMetadata({ dir, platform: 'mac', version });
@@ -138,6 +164,12 @@ for (const macosMode of ['signed', 'adhoc']) test(`${macosMode} assembly require
   const result = await assembleRelease({ input, output, version, commit, macosMode });
   assert.equal(result.assets.filter(name => /\.(exe|dmg|zip)$/.test(name)).length, 8);
   assert.ok(result.assets.includes('checksums-sha256.txt'));
+  const blockmapFile = join(input, 'win', `${winFiles[0]}.blockmap`);
+  const originalBlockmap = await readFile(blockmapFile);
+  await writeFile(blockmapFile, gzipSync(gunzipSync(originalBlockmap), { level: 0 }));
+  // Semantic verification must not weaken the manifest's exact final-byte hash binding.
+  await assert.rejects(assembleRelease({ input, output: join(input, 'changed-map'), version, commit, macosMode }), /manifest.*hash/i);
+  await writeFile(blockmapFile, originalBlockmap);
   await writeFile(join(input, 'win', winFiles[0]), 'changed after platform verification');
   await assert.rejects(assembleRelease({ input, output: join(input, 'another'), version, commit, macosMode }), /hash|size/i);
 });

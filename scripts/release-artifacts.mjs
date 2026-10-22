@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { parseArgs } from 'node:util';
+import { isDeepStrictEqual, parseArgs } from 'node:util';
+import { gunzipSync } from 'node:zlib';
 import yaml from 'js-yaml';
 import { assertMacosProof, macosReleasePolicy } from './macos-release-policy.mjs';
 
@@ -108,7 +109,17 @@ export async function verifyPlatform({ dir, platform, version, commit, macosMode
         const expected = join(temporary, `${file.url}.blockmap`);
         await buildBlockmap(join(dir, file.url), expected);
         const recorded = await readFile(join(dir, `${file.url}.blockmap`));
-        if (!recorded.equals(await readFile(expected))) throw new Error(`Stale blockmap: ${file.url}`);
+        let recordedMap;
+        let expectedMap;
+        try {
+          // Match the updater's gzip/JSON decoder. zlib writes a platform-specific
+          // OS byte, so Windows and Linux can encode the same map differently.
+          recordedMap = JSON.parse(gunzipSync(recorded).toString('utf8'));
+          expectedMap = JSON.parse(gunzipSync(await readFile(expected)).toString('utf8'));
+        } catch {
+          throw new Error(`Invalid blockmap: ${file.url}`);
+        }
+        if (!isDeepStrictEqual(recordedMap, expectedMap)) throw new Error(`Stale blockmap: ${file.url}`);
       }
     } finally {
       await rm(temporary, { recursive: true, force: true });

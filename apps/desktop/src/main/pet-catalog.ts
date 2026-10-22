@@ -295,7 +295,15 @@ export class PetCatalog {
   }
 
   async remove(id: string): Promise<void> {
-    const target = await this.safeInstalledPath(id);
+    const target = this.petPath(id);
+    try { await this.checkedPetDirectory(target); }
+    catch (error) {
+      const failure = error as NodeJS.ErrnoException;
+      // A stale catalog entry is already removed. Missing files within an
+      // existing directory still fail validation and preserve that directory.
+      if (failure.code === 'ENOENT' && failure.path === target) return;
+      throw error;
+    }
     const files = await readdir(target);
     if (files.some(name => name !== 'pet.json' && name !== 'spritesheet.webp')) {
       throw new Error('宠物目录包含其他文件，已保留原目录');

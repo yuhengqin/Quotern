@@ -582,7 +582,9 @@ export class PetController {
     } else {
       throw new Error(this.t('native.pet.unsupportedOperation'));
     }
-    this.state.catalog = await this.catalog.list();
+    const catalog = await this.catalog.list();
+    // Broadcasts replace state while the directory read is pending.
+    this.state.catalog = catalog;
     if (!this.state.catalog.some(pet => pet.id === this.settings.character)) await this.setSettings({ character: 'clawd' });
     this.broadcast();
     return { catalog: this.state.catalog, pet: importedPet };
@@ -596,7 +598,8 @@ export class PetController {
     this.state.dark = this.options.getDark();
     this.state.locale = this.options.getLocale();
     this.state.syncing = isLocalRuntimeSyncing();
-    this.state.catalog = await this.catalog.list();
+    const catalog = await this.catalog.list();
+    this.state.catalog = catalog;
     if (!this.state.catalog.some(pet => pet.id === this.settings.character)) this.settings.character = 'clawd';
     this.basePosition = this.settings.position;
     this.docked = this.settings.docked;

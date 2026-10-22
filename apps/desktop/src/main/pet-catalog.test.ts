@@ -69,6 +69,34 @@ for (const id of ['custom-sprout', 'sprout', 'byte', 'ember']) {
   });
 }
 
+test('removing an already deleted pet succeeds without affecting built-ins or other pets', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-remove-'));
+  try {
+    const catalog = new PetCatalog(root);
+    const atlas = readFileSync('src/main/fixtures/pet-atlas-v1.webp');
+    const manifest = (id: string) => Buffer.from(JSON.stringify({ id, displayName: 'Custom Pet', description: 'Test', spritesheetPath: 'spritesheet.webp' }));
+    const imported = await catalog.installBuffers(manifest('clawd'), atlas);
+    await catalog.installBuffers(manifest('keep-pet'), atlas);
+    await catalog.remove(imported.id);
+    await catalog.remove(imported.id);
+    await catalog.remove('absent-pet');
+    assert.deepEqual((await catalog.list()).map(pet => pet.id), ['clawd', 'bot', 'keep-pet']);
+    await assert.rejects(catalog.remove('clawd'));
+    await assert.rejects(catalog.remove('../outside'));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('removing an invalid pet directory still reports missing assets and preserves unrelated files', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-invalid-remove-'));
+  try {
+    const target = path.join(root, 'invalid-pet');
+    await mkdir(target);
+    await writeFile(path.join(target, 'unrelated.txt'), 'keep');
+    await assert.rejects(new PetCatalog(root).remove('invalid-pet'), { code: 'ENOENT' });
+    assert.equal(await readFile(path.join(target, 'unrelated.txt'), 'utf8'), 'keep');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('importable Codex pets expose a preview atlas and can be imported', async () => {
   const temp = await mkdtemp(path.join(tmpdir(), 'quotern-codex-pet-'));
   try {

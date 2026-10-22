@@ -1,6 +1,10 @@
 <h1 align="center">Quotern</h1>
 
 <p align="center">
+  <a href="./README.en.md">English</a> · <strong>简体中文</strong> · <a href="./README.ja.md">日本語</a> · <a href="./README.ko.md">한국어</a>
+</p>
+
+<p align="center">
   <img src="./apps/desktop/resources/icon.png" alt="Quotern logo" width="200">
 </p>
 

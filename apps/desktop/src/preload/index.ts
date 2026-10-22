@@ -3,7 +3,7 @@
  *
  * Exposes a small, audited surface to the renderer via `contextBridge`:
  *  - window controls (minimize / maximize / close)
- *  - tud.api.request → in-process local-api (same contract as CLI :8452)
+ *  - tud.api.request → in-process local-api (same contract as CLI :8252)
  *  - tud.onDataSynced → Core poll / sync watcher refresh
  */
 import { contextBridge, ipcRenderer } from 'electron';

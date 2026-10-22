@@ -7,6 +7,7 @@ import { lock } from 'proper-lockfile';
 
 import type { TudConfig } from './types.js';
 import {
+  DEFAULT_PORT,
   configPath,
   resolveDataDir,
   stableDeviceIdPath,
@@ -183,7 +184,7 @@ function defaultConfig(dir: string, deviceId: string = randomUUID()): TudConfig 
     hostname: hostname(),
     dataDir: dir,
     pricing: bakedPricingConfig(),
-    serverPort: 8452,
+    serverPort: DEFAULT_PORT,
     lastSyncAt: null,
   };
 }

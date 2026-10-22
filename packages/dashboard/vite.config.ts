@@ -61,10 +61,10 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/functions': {
-          target: env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8452',
+          target: env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8252',
           changeOrigin: false,
         },
-        '/health': env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8452',
+        '/health': env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8252',
       },
     },
     build: {

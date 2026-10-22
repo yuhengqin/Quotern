@@ -33,7 +33,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 
 ## 本地接口
 
-路由定义以 [local-api.ts](../packages/core/src/server/local-api.ts) 为准。CLI 默认监听 `127.0.0.1:8452`；Desktop 直接调用内存 app，不监听该端口。
+路由定义以 [local-api.ts](../packages/core/src/server/local-api.ts) 为准。CLI 默认监听 `127.0.0.1:8252`；Desktop 直接调用内存 app，不监听该端口。
 
 | 方法与路径 | 用途 |
 | --- | --- |

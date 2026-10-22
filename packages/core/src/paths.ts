@@ -28,7 +28,7 @@ function defaultDataDir(): string {
 }
 
 export const DEFAULT_DATA_DIR = defaultDataDir();
-export const DEFAULT_PORT = 8452;
+export const DEFAULT_PORT = 8252;
 /** Background syncAll interval for all sources (including Claude/Codex when hooks fail). */
 export const POLL_INTERVAL_MS = 60_000;
 /** Pause between scanning each channel during staggered poll/startup sync. */

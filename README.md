@@ -72,7 +72,7 @@ Release 的 **Source code** 为对应 tag 的源码快照，编译方法见[源�
 ```bash
 npm i -g quotern
 quotern service start
-# 面板: http://127.0.0.1:8452
+# 面板: http://127.0.0.1:8252
 ```
 
 国内网络较慢可用 `npm i -g quotern --registry=https://registry.npmmirror.com/`。完整命令、选项与数据说明见 [CLI 使用说明](./CLI.md)。

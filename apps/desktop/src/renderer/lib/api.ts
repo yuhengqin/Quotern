@@ -54,7 +54,7 @@ export interface ModelUsageRow {
 
 /**
  * Unified response envelope used by both the cloud API and the
- * CLI local-api (8452):
+ * CLI local-api (8252):
  *
  *   { success: true,  message: 'ok',        data: T }
  *   { success: false, message: 'CODE_NAME', data: null }

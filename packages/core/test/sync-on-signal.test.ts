@@ -25,7 +25,7 @@ function baseConfig(dataDir: string): TudConfig {
     statsSince: '2026-01-01T00:00:00.000Z',
     hostname: 'test',
     dataDir,
-    serverPort: 8452,
+    serverPort: 8252,
     lastSyncAt: null,
   };
 }

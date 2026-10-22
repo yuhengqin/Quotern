@@ -10,7 +10,7 @@ const entries: Record<string, [string, string, string, string]> = {
   'arg.hostEmpty': ['--host 不能为空，例如 0.0.0.0 或 127.0.0.1', '--host cannot be empty; use 0.0.0.0 or 127.0.0.1', '--host を空にできません。例: 0.0.0.0 または 127.0.0.1', '--host는 비워 둘 수 없습니다. 예: 0.0.0.0 또는 127.0.0.1'],
   'arg.hostInvalid': ['无效的 --host: {{value}}', 'Invalid --host: {{value}}', '無効な --host: {{value}}', '잘못된 --host: {{value}}'],
   'arg.portInvalid': ['无效的 --port: {{value}}，请输入 1 到 65535 之间的整数', 'Invalid --port: {{value}}; enter an integer from 1 to 65535', '無効な --port: {{value}}。1 から 65535 の整数を入力してください', '잘못된 --port: {{value}}. 1부터 65535까지의 정수를 입력하세요'],
-  'arg.portMissing': ['--port 需要端口号，例如 8452', '--port needs a port number, for example 8452', '--port にはポート番号が必要です。例: 8452', '--port에 포트 번호가 필요합니다. 예: 8452'],
+  'arg.portMissing': ['--port 需要端口号，例如 8252', '--port needs a port number, for example 8252', '--port にはポート番号が必要です。例: 8252', '--port에 포트 번호가 필요합니다. 예: 8252'],
   'arg.hostMissing': ['--host 需要地址，例如 0.0.0.0 或 127.0.0.1', '--host needs an address, for example 0.0.0.0 or 127.0.0.1', '--host にはアドレスが必要です。例: 0.0.0.0 または 127.0.0.1', '--host에 주소가 필요합니다. 예: 0.0.0.0 또는 127.0.0.1'],
   'arg.sourceMissing': ['--source 需要数据源名称', '--source requires a value', '--source にデータソース名が必要です', '--source에 데이터 소스 이름이 필요합니다'],
   'arg.daysMissing': ['--days 需要天数', '--days requires a value', '--days に日数が必要です', '--days에 일수가 필요합니다'],
@@ -221,7 +221,7 @@ Options:
 
 Examples:
   quotern
-  quotern start --port 8452
+  quotern start --port 8252
   quotern start --host 0.0.0.0
   quotern status
   quotern usage
@@ -265,7 +265,7 @@ Options:
 
 Examples:
   quotern
-  quotern start --port 8452
+  quotern start --port 8252
   quotern start --host 0.0.0.0
   quotern status
   quotern usage
@@ -309,7 +309,7 @@ Examples:
 
 例:
   quotern
-  quotern start --port 8452
+  quotern start --port 8252
   quotern start --host 0.0.0.0
   quotern status
   quotern usage
@@ -353,7 +353,7 @@ Examples:
 
 예:
   quotern
-  quotern start --port 8452
+  quotern start --port 8252
   quotern start --host 0.0.0.0
   quotern status
   quotern usage

@@ -25,9 +25,9 @@ test('parseArgs accepts --host= form and IPv6', () => {
 });
 
 test('parseArgs recognizes doctor command', () => {
-  const parsed = parseArgs(['node', 'quotern', 'doctor', '--port', '8452']);
+  const parsed = parseArgs(['node', 'quotern', 'doctor', '--port', '8252']);
   assert.equal(parsed.command, 'doctor');
-  assert.equal(parsed.port, 8452);
+  assert.equal(parsed.port, 8252);
 });
 
 test('parseArgs leaves host/port unset when omitted', () => {
@@ -66,7 +66,7 @@ test('parseArgs throws when --host has no value', () => {
 });
 
 test('normalizeListenPort accepts only valid TCP port integers', () => {
-  assert.equal(normalizeListenPort('8452'), 8452);
+  assert.equal(normalizeListenPort('8252'), 8252);
   assert.throws(() => normalizeListenPort('abc', 'zh-CN'), /无效的 --port/);
   assert.throws(() => normalizeListenPort('1.5', 'zh-CN'), /无效的 --port/);
   assert.throws(() => normalizeListenPort('0', 'zh-CN'), /无效的 --port/);
@@ -81,8 +81,8 @@ test('parseArgs rejects a missing --port value without consuming the next flag',
 });
 
 test('formatListenUrl maps wildcard bind to loopback', () => {
-  assert.equal(formatListenUrl('0.0.0.0', 8452), 'http://127.0.0.1:8452');
-  assert.equal(formatListenUrl('::1', 8452), 'http://[::1]:8452');
+  assert.equal(formatListenUrl('0.0.0.0', 8252), 'http://127.0.0.1:8252');
+  assert.equal(formatListenUrl('::1', 8252), 'http://[::1]:8252');
 });
 
 test('parseArgs reads --source in both forms', () => {

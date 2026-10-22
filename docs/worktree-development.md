@@ -47,7 +47,9 @@ CLI 与浏览器 Vite 也可分开启动：先 `pnpm dev:cli:api`，待 API 就�
 
 Dashboard 和 Desktop renderer 的 Vite 开发服务通过 `scripts/vite-core-source.mjs` 将浏览器可用的 Core 入口解析到源码，避免 Core 构建清空 `dist` 时中断热更新。新增浏览器运行时入口时同步维护该插件及回归测试。正式构建、CLI 和 Desktop 主进程继续使用 Core 包的 `dist` 导出；此规则不负责重启运行中的采集进程。`pnpm test:vite-core-source` 在临时目录清空 Core 构建文件，验证两端开发服务仍能加载依赖，并检查正式构建仍读取编译产物。
 
-默认优先使用 API `8452`、浏览器 Vite `5194`、Desktop renderer `5195`。已有服务占用默认 / 保存端口时，启动器寻找其他空闲端口，并保存实际选择；Vite 及 CLI 监听仍严格检查端口，检查后发生竞争时退出报错，绝不停止占用者。打开启动输出中的实际地址，不凭分支名猜端口。
+默认优先使用 API `8252`、浏览器 Vite `5194`、Desktop renderer `5195`。已有服务占用默认 / 保存端口时，启动器寻找其他空闲端口，并保存实际选择；Vite 及 CLI 监听仍严格检查端口，检查后发生竞争时退出报错，绝不停止占用者。打开启动输出中的实际地址，不凭分支名猜端口。
+
+已有 `.quotern-dev/instance.json` 会保留保存的端口；需要将该 worktree 的 API 切换到 `8252` 时，先退出所属 API / UI，再通过下述 `QUOTERN_DEV_API_PORT` 显式指定 `8252` 启动，新端口会保存到实例配置中。
 
 需要固定端口时，在当前命令的环境中指定；显式端口被占用则失败，不自动替换。例如 PowerShell：
 
@@ -62,7 +64,7 @@ Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。CLI API、浏览器 Vite 和 D
 只改 UI 时可明确复用已有 API：
 
 ```powershell
-$env:VITE_CLI_API_ORIGIN = 'http://127.0.0.1:8452'
+$env:VITE_CLI_API_ORIGIN = 'http://127.0.0.1:8252'
 corepack pnpm dev:cli:ui
 ```
 

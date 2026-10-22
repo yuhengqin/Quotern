@@ -125,7 +125,7 @@ PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Window
 
 数据目录：`~/.quotern/`。Desktop 启动会接管 runtime 并停止 CLI；Desktop 已运行时再执行 `quotern start`，CLI 以观察模式提供浏览器面板，采集仍由 Desktop 负责。
 
-本地 CLI 用量页（`http://127.0.0.1:8452`）来自 `packages/dashboard`；桌面端使用独立的 renderer 源码副本。
+本地 CLI 用量页（`http://127.0.0.1:8252`）来自 `packages/dashboard`；桌面端使用独立的 renderer 源码副本。
 
 ### Desktop
 
@@ -145,7 +145,7 @@ pnpm start:desktop
 
 ```bash
 pnpm install
-pnpm start:cli        # 构建后启动，面板 http://127.0.0.1:8452
+pnpm start:cli        # 构建后启动，面板 http://127.0.0.1:8252
 pnpm dev:cli          # 独立 CLI API + Vite HMR（实际地址见启动输出）
 pnpm dev:status       # 只读查看当前 worktree 的端口与会话归属
 ```

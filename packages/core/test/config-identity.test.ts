@@ -28,7 +28,7 @@ function baseConfig(partial?: Partial<TudConfig>): TudConfig {
     hostname: 'test',
     dataDir: '/tmp',
     pricing: bakedPricingConfig(),
-    serverPort: 8452,
+    serverPort: 8252,
     lastSyncAt: null,
     ...partial,
   };

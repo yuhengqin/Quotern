@@ -53,9 +53,9 @@ const app = createLocalApiApp({
 const server = createHttpServer({
   honoApp: app,
   staticDir: './dashboard',
-  port: 8452,
+  port: 8252,
 });
-await listenServer(server, '127.0.0.1', 8452);
+await listenServer(server, '127.0.0.1', 8252);
 ```
 
 ## License

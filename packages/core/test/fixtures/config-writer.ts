@@ -1,4 +1,5 @@
 import { loadConfig, saveConfig, setLastSyncAt } from '../../src/config.js';
+import { DEFAULT_PORT } from '../../src/paths.js';
 
 const dir = process.argv[2]!;
 const operation = process.argv[3]!;
@@ -14,7 +15,7 @@ process.once('message', async () => {
         await setLastSyncAt(dir, config);
 
       } else {
-        config.serverPort = 8452 + i;
+        config.serverPort = DEFAULT_PORT + i;
         await saveConfig(dir, config);
       }
     }

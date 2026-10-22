@@ -7,7 +7,7 @@ import net from 'node:net';
 import { sessionEndEvidence } from './dev-processes.mjs';
 
 const MODES = { cli: ['runtime', 'ui'], api: ['runtime'], ui: ['ui'], desktop: ['runtime', 'desktop-ui'] };
-const PORTS = { apiPort: ['QUOTERN_DEV_API_PORT', 8452], uiPort: ['QUOTERN_DEV_UI_PORT', 5194], desktopPort: ['QUOTERN_DEV_DESKTOP_PORT', 5195] };
+const PORTS = { apiPort: ['QUOTERN_DEV_API_PORT', 8252], uiPort: ['QUOTERN_DEV_UI_PORT', 5194], desktopPort: ['QUOTERN_DEV_DESKTOP_PORT', 5195] };
 
 function portValue(value) {
   const port = Number(value);

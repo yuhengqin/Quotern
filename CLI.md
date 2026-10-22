@@ -23,7 +23,7 @@ npx quotern service start
 # 前台运行（当前终端占用，方便看日志，Ctrl+C 停止）
 npx quotern start
 
-# 面板: http://127.0.0.1:8452
+# 面板: http://127.0.0.1:8252
 ```
 
 ## 快速开始
@@ -32,7 +32,7 @@ npx quotern start
 
 ```bash
 quotern service start
-# 面板: http://127.0.0.1:8452
+# 面板: http://127.0.0.1:8252
 ```
 
 Linux 后台服务依赖 systemd 用户实例（`systemctl --user`）。无 systemd 时改用 `quotern start` 前台运行。
@@ -73,10 +73,12 @@ quotern start
 ## 常用选项
 
 ```bash
-quotern start --port 8452
+quotern start --port 8252
 quotern start --host 0.0.0.0          # 局域网可访问；默认 127.0.0.1
 quotern sync --source=claude          # claude | codex | cursor | all
 ```
+
+默认端口为 `8252`。已有 `~/.quotern/config.json` 中的 `serverPort` 会继续生效；显式 `--port` 优先于已保存配置。需要切换已有实例时，先退出前台实例或运行 `quotern service stop`，再执行 `quotern start --port 8252` 或 `quotern service start --port 8252`，新端口会保存到配置中。
 
 ## 用量报表与 Agent 查询
 

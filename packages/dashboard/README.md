@@ -17,7 +17,7 @@ pnpm --filter quotern-dashboard build
 ## 开发
 
 ```bash
-# 仓库根一键：API（CLI :8452）+ Vite HMR（:5194）
+# 仓库根一键：API（CLI :8252）+ Vite HMR（:5194）
 pnpm dev:cli
 
 # 或单独起面板（dev:cli:ui 等价）
@@ -25,4 +25,4 @@ pnpm --filter quotern-dashboard dev
 
 ```
 
-独立启动 Vite 时需已有 CLI 在 `:8452` 提供 API。修改共享 UI 或数据层时同时核对 `apps/desktop/src/renderer` 的同名副本，见[架构注意事项](../../docs/architecture-notes.md)。
+独立启动 Vite 时需已有 CLI 在 `:8252` 提供 API。修改共享 UI 或数据层时同时核对 `apps/desktop/src/renderer` 的同名副本，见[架构注意事项](../../docs/architecture-notes.md)。

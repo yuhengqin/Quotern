@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 
 import { loadConfig, saveConfig, setLastSyncAt } from '../src/config.js';
-import { configPath } from '../src/paths.js';
+import { DEFAULT_PORT, configPath } from '../src/paths.js';
 import type { TudConfig } from '../src/types.js';
 
 async function fixture(t: TestContext) {
@@ -114,7 +114,7 @@ test('concurrent settings and sync writers retain local settings and completion 
     await completed;
   }
   const saved = await f.readSaved();
-  assert.equal(saved.serverPort, 8463);
+  assert.equal(saved.serverPort, DEFAULT_PORT + 11);
   assert.ok(saved.lastSyncAt);
   assert.ok(!(await readdir(f.dir)).some((name) => name.endsWith('.lock') || name.endsWith('.tmp')));
 });

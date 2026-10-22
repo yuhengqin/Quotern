@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import type { Hono } from 'hono';
 
 import { isApiPath, serveStatic } from './static.js';
+import { DEFAULT_PORT } from '../paths.js';
 import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
 
 export interface HttpServerOptions {
@@ -14,7 +15,7 @@ export interface HttpServerOptions {
 
 export function createHttpServer(opts: HttpServerOptions): Server {
   const host = opts.host ?? '127.0.0.1';
-  const port = opts.port ?? 8452;
+  const port = opts.port ?? DEFAULT_PORT;
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? '/';

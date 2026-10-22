@@ -9,7 +9,7 @@ Electron 桌面客户端：与 CLI 共用 `~/.quotern` 数据。主进程管理�
 - 启动时优先清掉 CLI（含 launchd / Windows 计划任务自启）并强制抢占 runtime，不再降级为 observer
 - 心跳文件 `~/.quotern/tud.heartbeat`：运行中续期；runtime 挂掉会自动拉起。对端桌面心跳过期时，新实例会 kill 旧进程再启动
 - `config.json` 损坏时尝试备份为 `config.json.bak.<ts>` 并重建，优先保留设备标识
-- 通过 **内存 Hono local-api**（不占 :8452）经 IPC 向渲染层提供与 CLI 相同的 `/functions/tud-*` 契约
+- 通过 **内存 Hono local-api**（不占 :8252）经 IPC 向渲染层提供与 CLI 相同的 `/functions/tud-*` 契约
 - Dashboard / 设置读同一本地 queue
 
 ## 启动
@@ -94,7 +94,7 @@ Windows 主托盘仅保留一个「独立桌宠」复选项，控制唯一桌宠
 |--|--|--|
 | 数据目录 | `~/.quotern` | 同左 |
 | Hook | 同一组平台信号脚本 | 同左（启动时自动注册） |
-| 读数方式 | HTTP `:8452` | 主进程 Core + IPC |
+| 读数方式 | HTTP `:8252` | 主进程 Core + IPC |
 | Sync / poll | owner 时有；遇桌面 owner 则观察模式 | 启动即 owner：先停 CLI 再独占 sync |
 
 同一时刻只有一个常驻 owner 通过 `tud.pid`（JSON：`{pid,kind}`，`kind` 为 `cli` | `desktop`）调度本地采集。打开桌面端会停止 CLI 并接管；macOS / Windows 同时撤销对应的 CLI 自启，Linux 尚无该撤销分支。之后若再手动 `quotern start`，CLI 只开面板读数（观察模式），不创建常驻采集调度。

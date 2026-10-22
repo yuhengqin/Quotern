@@ -39,19 +39,19 @@ test('achievement origins use the requested LAN host while preserving local and 
   t.after(() => rm(dataDir, { recursive: true, force: true }));
   const app = createLocalApiApp({ dataDir, bucketStore: new BucketStore(), getConfig: () => ({ deviceId: 'test' } as TudConfig) });
   const path = '/functions/tud-achievements';
-  const post = (origin: string | undefined, host?: string, url = `http://0.0.0.0:8452${path}`) => app.request(url, {
+  const post = (origin: string | undefined, host?: string, url = `http://0.0.0.0:8252${path}`) => app.request(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}), ...(host ? { Host: host } : {}) },
     body: JSON.stringify({ operation: 'preferences', celebrationsEnabled: false }),
   });
-  assert.equal((await post('http://192.168.0.50:5194', '192.168.0.50:8452')).status, 200);
+  assert.equal((await post('http://192.168.0.50:5194', '192.168.0.50:8252')).status, 200);
   for (const origin of ['https://evil.example', 'http://192.168.0.51:5194', 'null', 'ftp://192.168.0.50']) {
-    assert.equal((await post(origin, '192.168.0.50:8452')).status, 403, origin);
+    assert.equal((await post(origin, '192.168.0.50:8252')).status, 403, origin);
   }
-  assert.equal((await post('http://127.0.0.1:5194', '192.168.0.50:8452')).status, 200);
-  assert.equal((await post(undefined, '192.168.0.50:8452')).status, 200);
-  assert.equal((await post('http://192.168.0.50:5194', undefined, `http://192.168.0.50:8452${path}`)).status, 200);
+  assert.equal((await post('http://127.0.0.1:5194', '192.168.0.50:8252')).status, 200);
+  assert.equal((await post(undefined, '192.168.0.50:8252')).status, 200);
+  assert.equal((await post('http://192.168.0.50:5194', undefined, `http://192.168.0.50:8252${path}`)).status, 200);
   for (const listenHost of ['0.0.0.0', '127.0.0.1']) {
-    assert.equal((await post('http://evil.example:8452', 'evil.example:8452', `http://${listenHost}:8452${path}`)).status, 403);
+    assert.equal((await post('http://evil.example:8252', 'evil.example:8252', `http://${listenHost}:8252${path}`)).status, 403);
   }
 });

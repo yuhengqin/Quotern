@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync, readFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -28,6 +28,7 @@ export function serveStatic(
   rootDir: string,
   req: IncomingMessage,
   res: ServerResponse,
+  htmlHead?: string,
 ): boolean {
   if (!existsSync(rootDir)) {
     res.statusCode = 503;
@@ -56,6 +57,12 @@ export function serveStatic(
   const ext = extname(target);
   res.statusCode = 200;
   res.setHeader('Content-Type', MIME[ext] ?? 'application/octet-stream');
+  if (htmlHead && ext === '.html') {
+    res.setHeader('Cache-Control', 'no-store');
+    const html = readFileSync(target, 'utf8').replace(/<head(?:\s[^>]*)?>/i, match => match + htmlHead);
+    res.end(req.method === 'HEAD' ? undefined : html);
+    return true;
+  }
   createReadStream(target).pipe(res);
   return true;
 }

@@ -87,6 +87,8 @@ export class BucketStore {
 }
 
 export interface LocalApiDeps {
+  /** Explicit opt-in; demo startup supplies only this immutable in-memory snapshot. */
+  demo?: import('../demo/types.js').DemoSnapshot;
   quota?: LocalQuotaRuntime;
   /** Electron exposes quota through IPC while sharing account labels locally. */
   getQuotaState?(): QuotaState | null;

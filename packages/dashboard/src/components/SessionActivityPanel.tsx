@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
+import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
 import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
 import { ArrowDown, ArrowDownUp, ArrowUp, ChevronUp, X } from 'lucide-react';
@@ -31,7 +32,7 @@ const costLabel = (value: string, locale: SupportedLocale) => translate(locale, 
   mixed: 'usage.activity.costMixed', unknown: 'usage.activity.amountUnknown',
 } as Record<string, string>)[value] ?? 'usage.activity.amountUnknown');
 function age(stamp: string, locale: SupportedLocale) {
-  const seconds = Math.max(0, (Date.now() - Date.parse(stamp)) / 1000);
+  const seconds = Math.max(0, (dashboardNow().getTime() - Date.parse(stamp)) / 1000);
   return seconds < 60 ? translate(locale, 'usage.activity.justNow')
     : seconds < 3600 ? translate(locale, 'usage.activity.minutesAgo', { count: Math.floor(seconds / 60) })
       : seconds < 86400 ? translate(locale, 'usage.activity.hoursAgo', { count: Math.floor(seconds / 3600) })

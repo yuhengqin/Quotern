@@ -2,6 +2,8 @@ import type { SupportedLocale } from 'quotern-i18n';
 
 export const shellUiMessages: Record<SupportedLocale, Record<string, string>> = {
   'zh-CN': {
+    'shell.demo.title': '只读演示',
+    'shell.demo.description': '匿名化历史数据，参考日期 {{date}}。可浏览、筛选和导出分享卡；采集、在线额度及服务器数据修改已关闭。',
     'shell.quickActions': '快捷操作',
     'shell.openQuickActions': '打开快捷操作',
     'shell.collapseQuickActions': '收起快捷操作',
@@ -68,6 +70,8 @@ export const shellUiMessages: Record<SupportedLocale, Record<string, string>> = 
     'install.targets.windows.menu': 'Windows',
   },
   en: {
+    'shell.demo.title': 'Read-only demo',
+    'shell.demo.description': 'Anonymized history as of {{date}}. Browse, filter and export share cards; collection, live quotas and server changes are disabled.',
     'shell.quickActions': 'Quick actions',
     'shell.openQuickActions': 'Open quick actions',
     'shell.collapseQuickActions': 'Collapse quick actions',
@@ -134,6 +138,8 @@ export const shellUiMessages: Record<SupportedLocale, Record<string, string>> = 
     'install.targets.windows.menu': 'Windows',
   },
   ja: {
+    'shell.demo.title': '読み取り専用デモ',
+    'shell.demo.description': '{{date}} 時点の匿名化された履歴です。閲覧・絞り込み・共有画像の保存が可能です。収集・オンライン割当量・サーバー変更は無効です。',
     'shell.quickActions': 'クイック操作',
     'shell.openQuickActions': 'クイック操作を開く',
     'shell.collapseQuickActions': 'クイック操作を閉じる',
@@ -200,6 +206,8 @@ export const shellUiMessages: Record<SupportedLocale, Record<string, string>> = 
     'install.targets.windows.menu': 'Windows',
   },
   ko: {
+    'shell.demo.title': '읽기 전용 데모',
+    'shell.demo.description': '{{date}} 기준 익명화된 기록입니다. 탐색, 필터 및 공유 카드 내보내기를 사용할 수 있으며 수집, 실시간 할당량 및 서버 변경은 비활성화됩니다.',
     'shell.quickActions': '빠른 작업',
     'shell.openQuickActions': '빠른 작업 열기',
     'shell.collapseQuickActions': '빠른 작업 접기',

@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { i18n, normalizeLocale, type SupportedLocale } from 'quotern-i18n';
+import { demoStorageKey } from './demo-runtime.ts';
 
 const TOKEN_COUNT_UNITS = [
   { value: 1_000_000_000_000, suffix: 'T' },
@@ -41,7 +42,7 @@ export function usesEastAsianTokenUnits(): boolean {
 
 export function getTokenUnitMode(): TokenUnitMode {
   try {
-    const saved = localStorage.getItem(TOKEN_UNIT_STORAGE_KEY);
+    const saved = localStorage.getItem(demoStorageKey(TOKEN_UNIT_STORAGE_KEY));
     if (saved === 'international') return 'international';
     // Keep the former Chinese choice, but let it follow the current language.
     return 'localized';
@@ -52,7 +53,7 @@ export function getTokenUnitMode(): TokenUnitMode {
 
 export function setTokenUnitMode(mode: TokenUnitMode): void {
   try {
-    localStorage.setItem(TOKEN_UNIT_STORAGE_KEY, mode);
+    localStorage.setItem(demoStorageKey(TOKEN_UNIT_STORAGE_KEY), mode);
   } catch {
     // Private browsing can block storage; the display follows the current language.
   }

@@ -4,10 +4,14 @@ import {
   useContext,
   useMemo,
   useRef,
+  useLayoutEffect,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { useTheme as useHeroUITheme } from '@heroui/react';
 import { isThemeMode, type Theme, type ThemeMode } from '@/lib/theme';
+import { isDemoMode } from '../lib/demo-runtime';
+import { useLocalStorage } from './useLocalStorage';
 
 interface ThemeContextValue {
   /** Resolved theme actually rendered (follows the OS when mode is `system`). */
@@ -42,6 +46,20 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
  *   light/dark under the old two-state toggle keep their pinned choice.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  return isDemoMode() ? <DemoThemeProvider>{children}</DemoThemeProvider> : <LocalThemeProvider>{children}</LocalThemeProvider>;
+}
+function DemoThemeProvider({ children }: { children: ReactNode }) {
+  const [themeMode, setThemeMode] = useLocalStorage<ThemeMode>('heroui-theme', 'system', isThemeMode);
+  const media = useMemo(() => window.matchMedia('(prefers-color-scheme: dark)'), []);
+  const dark = useSyncExternalStore(callback => { media.addEventListener('change', callback); return () => media.removeEventListener('change', callback); }, () => media.matches);
+  const theme: Theme = themeMode === 'system' ? dark ? 'dark' : 'light' : themeMode;
+  useLayoutEffect(() => {
+    document.documentElement.classList.remove('light', 'dark'); document.documentElement.classList.add(theme);
+    document.documentElement.setAttribute('data-theme', theme); document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+  return <ThemeContext.Provider value={{ theme, themeMode, setThemeMode, toggleTheme: () => setThemeMode(THEME_MODE_CYCLE[themeMode]) }}>{children}</ThemeContext.Provider>;
+}
+function LocalThemeProvider({ children }: { children: ReactNode }) {
   const {
     theme: heroUIThemeIntent,
     resolvedTheme,

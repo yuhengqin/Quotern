@@ -13,7 +13,8 @@ import { AchievementSeriesModal } from './AchievementSeriesModal';
 export function AchievementOverlays() {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
-  const { snapshot, detailIds, closeDetails, shareSelection, closeShare, share, familyDetail, openFamily, closeFamily, busy, updatePreferences } = useAchievements();
+  const { snapshot, detailIds, closeDetails, shareSelection, closeShare, share, familyDetail, openFamily, closeFamily, busy: updating, updatePreferences, readOnly } = useAchievements();
+  const busy = updating || readOnly;
   const [activeIndex, setActiveIndex] = useState(0);
   useEffect(() => setActiveIndex(0), [detailIds]);
   const items = detailIds.map(id => snapshot?.progress.find(item => item.id === id)).filter(item => item !== undefined);

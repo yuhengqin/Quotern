@@ -13,6 +13,7 @@ import {
 } from '@/lib/shell-events';
 import { cn } from '@/lib/utils';
 import { createSessionPageSearch, type SessionScope } from '../lib/session-page';
+import { isDemoMode } from '../lib/demo-runtime';
 
 /**
  * Page actions and an always-available settings entry for browser preferences.
@@ -92,7 +93,7 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
           void shareCurrentPage();
         }}
       />
-      {cliBackend ? (
+      {cliBackend && !isDemoMode() ? (
         <ChromeAction
           disabled={busy}
           icon={

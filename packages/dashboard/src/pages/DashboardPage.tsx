@@ -341,7 +341,7 @@ export function DashboardPage() {
         <div className="relative min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            belowMetrics={<SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />}
+            belowMetrics={isDemoMode() ? undefined : <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />}
             costReport={costExplanation.report}
             costExplanationLoading={costExplanation.loading}
             costExplanationError={costExplanation.error}
@@ -402,3 +402,4 @@ function formatFilterDayLabel(date: string, locale: SupportedLocale): string {
     new Date(`${date.slice(0, 10)}T00:00:00Z`),
   );
 }
+import { isDemoMode } from '../lib/demo-runtime';

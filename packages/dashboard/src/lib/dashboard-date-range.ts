@@ -1,3 +1,4 @@
+import { dashboardNow } from './demo-runtime.ts';
 import { localDateDaysAgo, localDateNow } from './stats-timezone.ts';
 import { dashboardRangeScopeKey } from './dashboard-range-scope.ts';
 export { dashboardRangeKey } from './dashboard-range-scope.ts';
@@ -5,7 +6,7 @@ export { dashboardRangeKey } from './dashboard-range-scope.ts';
 export interface DashboardDateRange { start: string; end: string; fromTime?: string; toTime?: string }
 export const CUSTOM_RANGE_LOOKBACK_DAYS = 365;
 
-export function rollingDayRange(now = new Date()): DashboardDateRange {
+export function rollingDayRange(now = dashboardNow()): DashboardDateRange {
   const from = new Date(now.getTime() - 86_400_000);
   return { start: localDateNow(undefined, from), end: localDateNow(undefined, now), fromTime: from.toISOString(), toTime: now.toISOString() };
 }
@@ -27,11 +28,11 @@ export function dateRangeDays(range: DashboardDateRange): number {
   return Math.round((Date.parse(`${range.end}T00:00:00Z`) - Date.parse(`${range.start}T00:00:00Z`)) / 86_400_000) + 1;
 }
 
-export function dateRangeLookback(range: DashboardDateRange, now = new Date()): number {
+export function dateRangeLookback(range: DashboardDateRange, now = dashboardNow()): number {
   return dateRangeDays({ start: range.start, end: localDateNow(undefined, now) });
 }
 
-export function isDashboardDateRange(value: unknown, now = new Date()): value is DashboardDateRange {
+export function isDashboardDateRange(value: unknown, now = dashboardNow()): value is DashboardDateRange {
   if (!value || typeof value !== 'object') return false;
   // Instant windows are transient and must not become a saved custom date range.
   if ('fromTime' in value || 'toTime' in value) return false;
@@ -50,7 +51,7 @@ export function formatDashboardDateRange(range: DashboardDateRange): string {
 }
 
 /** A moving 24-hour view can display its previous reading while fetching new bounds. */
-export function dashboardRangeCacheKey(days: number, range?: DashboardDateRange | null, now = new Date()): string {
+export function dashboardRangeCacheKey(days: number, range?: DashboardDateRange | null, now = dashboardNow()): string {
   const scope = dashboardRangeScopeKey(days, range);
   return range ? scope : `${localDateNow(undefined, now)}|${scope}`;
 }

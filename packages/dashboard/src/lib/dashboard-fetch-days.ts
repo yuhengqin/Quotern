@@ -1,3 +1,4 @@
+import { dashboardNow } from './demo-runtime.ts';
 import { HEATMAP_LOOKBACK_DAYS } from './dashboard-mock-data.ts';
 import { localDateNow } from './stats-timezone.ts';
 import { addLocalDays } from 'quotern-core/timezone';
@@ -11,7 +12,7 @@ function calendarDate(value: string): string {
 /** Shanghai-calendar span from the day before `date` through today. */
 export function hourlyDaysForSelectedDate(
   selectedDate: string | null | undefined,
-  now = new Date(),
+  now = dashboardNow(),
 ): number {
   const date = calendarDate(selectedDate ?? '');
   if (!date) return 1;
@@ -26,7 +27,7 @@ export function hourlyDaysForSelectedDate(
 export function resolveDashboardFetchDays(
   rangeDays: number,
   selectedDate?: string | null,
-  now = new Date(),
+  now = dashboardNow(),
   dateRange?: DashboardDateRange | null,
 ): {
   dailyDays: number;

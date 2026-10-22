@@ -13,7 +13,8 @@ import { AchievementProjectManager } from './AchievementProjectManager';
 export function AchievementSeriesModal() {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
-  const { snapshot, familyDetail, detailIds, shareSelection, closeFamily, openDetails, busy, updatePreferences } = useAchievements();
+  const { snapshot, familyDetail, detailIds, shareSelection, closeFamily, openDetails, busy: updating, updatePreferences, readOnly } = useAchievements();
+  const busy = updating || readOnly;
   const [query, setQuery] = useState(''), [status, setStatus] = useState('all'), [managing, setManaging] = useState(false);
   const scrollTop = useRef(0);
   const restoreScroll = useCallback((node: HTMLDivElement | null) => { if (node) node.scrollTop = scrollTop.current; }, []);

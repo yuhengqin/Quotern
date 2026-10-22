@@ -135,7 +135,7 @@ function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
           deletingId={deletingId} onCancelDelete={() => setDeletingId(null)}>
           {(onUpload, onAdjust) => <div className="relative w-full" aria-busy={loading}>
             <ShareCardCarousel activeIndex={currentIndex} selectionRevision={selectionRevision} onActiveIndexChange={selectVariant} variants={variants} disabled={backgrounds.loading || backgrounds.busy}
-              onAddBackground={onUpload} addBackgroundDisabled={!backgrounds.ready}
+              onAddBackground={onUpload} addBackgroundDisabled={!backgrounds.ready || backgrounds.readOnly}
               onAdjustBackground={onAdjust} onDeleteBackground={() => setDeletingId(currentVariant.id)}
               replaceBackground={backgrounds.items.length >= MAX_SHARE_BACKGROUNDS}
               rangeLabel={rangeLabel} reservedHeight={300} summary={preview?.summary ?? null}

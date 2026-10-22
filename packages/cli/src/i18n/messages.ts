@@ -3,6 +3,7 @@ import type { SupportedLocale } from 'quotern-i18n';
 // Every CLI key has all four offline translations. Keep identifiers, API values,
 // model names and JSON/CSV fields outside this catalog.
 const entries: Record<string, [string, string, string, string]> = {
+  'help.demo': ['演示：quotern demo export --out <snapshot.json>；quotern demo start --file <snapshot.json>（详情：quotern demo --help）', 'Demo: quotern demo export --out <snapshot.json>; quotern demo start --file <snapshot.json> (details: quotern demo --help)', 'デモ: quotern demo export --out <snapshot.json>; quotern demo start --file <snapshot.json> (詳細: quotern demo --help)', '데모: quotern demo export --out <snapshot.json>; quotern demo start --file <snapshot.json> (자세히: quotern demo --help)'],
   'lang.missing': ['--lang 需要语言代码：zh-CN | en | ja | ko', '--lang needs a language code: zh-CN | en | ja | ko', '--lang には言語コードが必要です: zh-CN | en | ja | ko', '--lang에 언어 코드가 필요합니다: zh-CN | en | ja | ko'],
   'lang.invalid': ['不支持的 --lang: {{value}}；可用值：zh-CN | en | ja | ko', 'Unsupported --lang: {{value}}; use zh-CN | en | ja | ko', '未対応の --lang: {{value}}。使用可能: zh-CN | en | ja | ko', '지원하지 않는 --lang: {{value}}. 사용 가능: zh-CN | en | ja | ko'],
   'lang.duplicate': ['--lang 参数重复', '--lang was specified more than once', '--lang が重複しています', '--lang 옵션이 중복되었습니다'],

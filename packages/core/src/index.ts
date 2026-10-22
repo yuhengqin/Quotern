@@ -72,3 +72,6 @@ export * from './share-backgrounds.js';
 export type { SessionMetrics, SessionMessage } from './session-metrics.js';
 export type { SessionActivity, SessionActivitySnapshot, SessionModelUsage, SessionBilling, SessionContextObservation } from './session-observation.js';
 export * from './achievements/public.js';
+export { exportDemoSnapshot, loadDemoSnapshot } from './demo/snapshot.js';
+export { demoMetadata } from './demo/types.js';
+export type { DemoSnapshot, DemoMetadata, DemoHistory } from './demo/types.js';

@@ -5,20 +5,27 @@ import type { Hono } from 'hono';
 import { isApiPath, serveStatic } from './static.js';
 import { DEFAULT_PORT } from '../paths.js';
 import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
+import { demoMetadata, type DemoMetadata } from '../demo/types.js';
 
 export interface HttpServerOptions {
   honoApp: Hono;
   staticDir: string;
   host?: string;
   port?: number;
+  demo?: DemoMetadata;
 }
 
 export function createHttpServer(opts: HttpServerOptions): Server {
   const host = opts.host ?? '127.0.0.1';
   const port = opts.port ?? DEFAULT_PORT;
+  const demoHead = opts.demo ? `<script id="quotern-demo" type="application/json">${JSON.stringify(demoMetadata(opts.demo)).replace(/</g, '\\u003c')}</script>` : undefined;
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? '/';
+    if (opts.demo && !['GET', 'HEAD'].includes(req.method ?? 'GET')) {
+      res.statusCode = 403; res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify({ success: false, message: 'DEMO_READ_ONLY', data: null })); req.resume(); return;
+    }
 
     if (isApiPath(url)) {
       try {
@@ -64,7 +71,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
     }
 
     if (req.method === 'GET' || req.method === 'HEAD') {
-      serveStatic(opts.staticDir, req, res);
+      serveStatic(opts.staticDir, req, res, demoHead);
       return;
     }
 

@@ -5,7 +5,8 @@ import { useAchievements } from './AchievementProvider';
 
 export function AchievementProjectManager() {
   const { t } = useTranslation();
-  const { snapshot, busy, updateProject } = useAchievements();
+  const { snapshot, busy: updating, updateProject, readOnly } = useAchievements();
+  const busy = updating || readOnly;
   const [query, setQuery] = useState(''), [filter, setFilter] = useState('all'), [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState(''), [mergeInto, setMergeInto] = useState(''), [error, setError] = useState<string | null>(null);
   if (!snapshot) return null;

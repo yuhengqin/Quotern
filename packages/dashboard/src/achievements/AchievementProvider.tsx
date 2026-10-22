@@ -11,6 +11,7 @@ import { achievementDisplayName } from './view-model';
 
 type AchievementRequest = (operation: AchievementOperation) => Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }>;
 interface AchievementContextValue {
+  readOnly: boolean;
   snapshot: AchievementSnapshot | null; loading: boolean; busy: boolean; error: string | null;
   refresh: () => Promise<void>; openDetails: (id: string) => void; openCelebration: (ids: string[]) => void;
   updatePreferences: (preferences: Partial<AchievementPreferences>) => Promise<void>;
@@ -25,7 +26,7 @@ export function useAchievements(): AchievementContextValue {
   if (!value) throw new Error('AchievementProvider is required');
   return value;
 }
-export function AchievementProvider({ request, children }: { request: AchievementRequest; children: ReactNode }) {
+export function AchievementProvider({ request, children, readOnly = false }: { request: AchievementRequest; children: ReactNode; readOnly?: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
   const queue = useAppToastQueue();
@@ -39,17 +40,18 @@ export function AchievementProvider({ request, children }: { request: Achievemen
   const inFlight = useRef<Promise<void> | null>(null);
   const snapshotRef = useRef(snapshot); snapshotRef.current = snapshot;
   const apply = useCallback(async (operation: AchievementOperation) => {
+    if (readOnly && !['claim-notice', 'seen'].includes(operation.operation)) throw new Error('DEMO_READ_ONLY');
     const result = await requestInOrder(operation);
     if (alive.current) setSnapshot(result.snapshot);
     return result;
-  }, [requestInOrder]);
+  }, [requestInOrder, readOnly]);
   const openCelebration = useCallback((ids: string[], keepFamily = false) => {
     dismissTransientOverlays();
     if (!keepFamily) setFamilyDetail(null);
     setDetailIds(ids);
     const owned = ids.filter(id => snapshotRef.current?.earned.some(item => item.id === id));
-    if (owned.length) void apply({ operation: 'seen', ids: owned }).catch(() => queue.add({ title: t('achievement.notice.seenFailed'), variant: 'warning' }));
-  }, [apply, queue, t]);
+    if (owned.length && !readOnly) void apply({ operation: 'seen', ids: owned }).catch(() => queue.add({ title: t('achievement.notice.seenFailed'), variant: 'warning' }));
+  }, [apply, queue, t, readOnly]);
   const refresh = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current;
     const pending = (async () => {
@@ -97,10 +99,10 @@ export function AchievementProvider({ request, children }: { request: Achievemen
     finally { if (alive.current) setBusy(false); }
   }, [apply, queue, t]);
   const value = useMemo<AchievementContextValue>(() => ({
-    snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, familyDetail,
+    snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, familyDetail, readOnly,
     openFamily: family => { setShareSelection(null); setDetailIds([]); setFamilyDetail(family); }, closeFamily: () => setFamilyDetail(null),
     openDetails: id => openCelebration([id], true), closeDetails: () => setDetailIds([]), shareSelection,
     share: selection => { setFamilyDetail(null); setDetailIds([]); setShareSelection(selection); }, closeShare: () => setShareSelection(null),
-  }), [snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, shareSelection, familyDetail]);
+  }), [snapshot, loading, busy, error, refresh, updatePreferences, updateProject, detailIds, openCelebration, shareSelection, familyDetail, readOnly]);
   return <AchievementContext.Provider value={value}>{children}</AchievementContext.Provider>;
 }

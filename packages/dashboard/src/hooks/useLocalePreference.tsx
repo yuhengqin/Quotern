@@ -30,7 +30,7 @@ const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function readBrowserLocalePreference(): LocalePreference {
   try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
+    const value = window.localStorage.getItem(demoStorageKey(STORAGE_KEY));
     return isLocalePreference(value) ? value : 'system';
   } catch {
     return 'system';
@@ -74,7 +74,7 @@ export function BrowserLocaleProvider({ children }: { children: ReactNode }) {
   const setPreference = useCallback((next: LocalePreference) => {
     setPreferenceState(next);
     try {
-      window.localStorage.setItem(STORAGE_KEY, next);
+      window.localStorage.setItem(demoStorageKey(STORAGE_KEY), next);
     } catch {
       // Browsers with disabled storage still retain this choice for the tab.
     }
@@ -97,3 +97,4 @@ export function useLocalePreference(): LocaleContextValue {
   if (!value) throw new Error('useLocalePreference must be used within BrowserLocaleProvider');
   return value;
 }
+import { demoStorageKey } from '../lib/demo-runtime';

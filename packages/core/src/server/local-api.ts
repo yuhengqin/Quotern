@@ -11,6 +11,7 @@ import {
   aggregateDaily,
   aggregateHourly,
   aggregateModelBreakdown,
+  aggregateUsageSummary,
   resolveAggregateWindow,
 } from '../aggregate.js';
 import { readSessionMetrics, readSessionHistory } from '../session-collector.js';
@@ -22,7 +23,9 @@ import { computeTokens, getEffectivePricingData, getPricingStatus } from '../pri
 import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
-import { localDateNow } from '../timezone.js';
+import { localDateNow, localDateDaysAgo } from '../timezone.js';
+import { demoMetadata } from '../demo/types.js';
+import { sessionTitleKey } from '../session-titles.js';
 import { buildUsageReport, type UsageReportPeriod } from '../usage-report.js';
 import { aggregateUsageTrend, type TrendGranularity } from '../usage-trend.js';
 import {
@@ -37,7 +40,7 @@ function ok<T>(data: T) {
   return { success: true as const, message: 'ok', data };
 }
 
-function readDateBounds(c: Context): UsageBounds | null | undefined {
+function readDateBounds(c: Context, now?: Date): UsageBounds | null | undefined {
   const fromDate = c.req.query('fromDate');
   const toDate = c.req.query('toDate');
   const fromTime = c.req.query('fromTime'), toTime = c.req.query('toTime');
@@ -50,12 +53,26 @@ function readDateBounds(c: Context): UsageBounds | null | undefined {
     const stamp = Date.parse(`${date}T00:00:00Z`);
     return Number.isFinite(stamp) && new Date(stamp).toISOString().slice(0, 10) === date;
   };
-  if (!valid(fromDate) || !valid(toDate) || fromDate > toDate || toDate > localDateNow()) return null;
+  if (!valid(fromDate) || !valid(toDate) || fromDate > toDate || toDate > localDateNow(undefined, now)) return null;
   return { fromDate, toDate };
 }
 
 export function createLocalApiApp(deps: LocalApiDeps): Hono {
   const app = new Hono();
+  const demoNow = deps.demo ? new Date(deps.demo.referenceTime) : undefined;
+  const readBounds = (c: Context, defaultDays: number) => {
+    const bounds = readDateBounds(c, demoNow);
+    if (bounds !== undefined || !demoNow) return bounds;
+    const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || defaultDays));
+    return { fromDate: localDateDaysAgo(days, undefined, demoNow), toDate: localDateNow(undefined, demoNow) };
+  };
+  const readHistory: typeof readSessionHistory = async (dir, sources, options = {}) => {
+    if (!deps.demo) return readSessionHistory(dir, sources, options);
+    const history = deps.demo.history;
+    const selected = (source: string) => !options.sources?.length || options.sources.includes(source);
+    return { messages: history.messages.filter(row => selected(row.source)), timingEvents: history.timingEvents.filter(row => selected(row.source)),
+      observations: history.observations.filter(row => selected(row.source)), titles: new Map(history.titles), codexParents: new Map(history.codexParents), missingSources: history.missingSources.filter(selected) };
+  };
   const readConfigView = () => {
     const config = deps.getConfig();
     return {
@@ -63,12 +80,24 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       statsSince: config.statsSince,
       localCollectSince: resolveLocalCollectSince(config),
       lastSyncAt: config.lastSyncAt ?? null,
+      ...(deps.demo ? { demo: demoMetadata(deps.demo) } : {}),
     };
   };
+  if (deps.demo) app.use('*', async (c, next) => {
+    c.header('Cache-Control', 'no-store');
+    if (!['GET', 'HEAD'].includes(c.req.method)) return c.json({ success: false, message: 'DEMO_READ_ONLY', data: null }, 403);
+    await next();
+  });
   app.use('*', cors());
-  registerShareBackgroundApi(app, deps.dataDir);
-  registerAchievementsApi(app, deps.dataDir);
-  registerQuotaApi(app, deps.quota);
+  if (deps.demo) {
+    app.get('/functions/tud-share-backgrounds', c => c.json(ok([])));
+    app.get('/functions/tud-achievements', c => c.json(ok(deps.demo!.achievements)));
+    app.get('/functions/tud-quota', c => c.json({ success: false, message: 'DEMO_QUOTA_UNAVAILABLE', data: null }, 503));
+  } else {
+    registerShareBackgroundApi(app, deps.dataDir);
+    registerAchievementsApi(app, deps.dataDir);
+    registerQuotaApi(app, deps.quota);
+  }
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {
@@ -81,6 +110,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const statsSince = resolveLocalCollectSince(config);
+    if (deps.demo) return c.json(ok(aggregateUsageSummary(rows, statsSince, undefined, demoNow)));
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
       return c.json(ok(deps.aggregateCache.getUsageSummary(rows, statsSince)));
@@ -95,7 +125,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     c.header('Cache-Control', 'no-store');
     const { hasOverlay, updatedAt, refreshing } = getPricingStatus();
     // Custom source URLs can embed credentials; the panel needs only table state.
-    return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt, refreshing } }));
+    return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt: deps.demo?.exportedAt ?? updatedAt, refreshing: deps.demo ? false : refreshing } }));
   });
 
   app.get('/functions/tud-usage-report', (c) => {
@@ -117,7 +147,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
         sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
         model: params.get('model') ?? undefined,
         project: params.get('project') ?? undefined,
-      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' })));
+      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime', now: demoNow })));
     } catch (error) {
       return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_USAGE_QUERY', data: null }, 400);
     }
@@ -138,14 +168,14 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
         fromTime: params.get('fromTime') ?? undefined, toTime: params.get('toTime') ?? undefined,
         sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
         model: params.get('model') ?? undefined, project: params.get('project') ?? undefined,
-      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' })));
+      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime', now: demoNow })));
     } catch (error) {
       return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_TREND_QUERY', data: null }, 400);
     }
   });
 
   app.get('/functions/tud-usage-sessions', async (c) => {
-    const bounds = readDateBounds(c);
+    const bounds = readBounds(c, 90);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const rawSources = c.req.query('sources');
     const sources = rawSources?.split(',').map((source) => normalizeSyncSource(source));
@@ -157,10 +187,13 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       const date = localDateAndHour(row.hour_start).date;
       return date >= fromDate && date <= window.toDate && inTimeBounds(row.hour_start, bounds) && (row.total_tokens > 0 || row.conversation_count > 0);
     }).map((row) => row.source))];
-    return c.json(ok(await readSessionMetrics(deps.dataDir, usageSources, {
+    const options = {
       ...bounds, fromDate, toDate: window.toDate,
       ...(sources ? { sources: sources as string[] } : {}),
-    })));
+    };
+    if (!deps.demo) return c.json(ok(await readSessionMetrics(deps.dataDir, usageSources, options)));
+    const history = await readHistory(deps.dataDir, usageSources, options);
+    return c.json(ok(aggregateSessionMetrics(history.messages, { ...options, missingSources: history.missingSources, timingEvents: history.timingEvents })));
   });
 
   app.get('/functions/tud-session-activity', async c => {
@@ -169,7 +202,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const targeted = targetSource !== undefined || targetId !== undefined;
     if (targeted && (!['codex', 'claude', 'dsh'].includes(targetSource ?? '') || !targetId || targetId.length > 512 || /[\u0000-\u001f]/.test(targetId))) return c.json({ success: false, message: 'INVALID_SESSION_TARGET', data: null }, 400);
     // Notification lookup reads already-collected history; it never starts collection or widens localCollectSince.
-    const bounds = targeted ? undefined : readDateBounds(c);
+    const bounds = targeted ? undefined : readBounds(c, 7);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const sources = targeted ? [targetSource!] : c.req.query('sources')?.split(',').map(source => normalizeSyncSource(source));
     if (sources?.some(source => !source)) return c.json({ success: false, message: 'INVALID_SOURCE', data: null }, 400);
@@ -182,12 +215,14 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     });
     const usageSources = [...new Set(rows.map(row => row.source))];
     const options = { ...bounds, fromDate, toDate: window.toDate, ...(sources ? { sources: sources as string[] } : {}) };
-    const history = await readSessionHistory(deps.dataDir, usageSources, options);
+    const history = await readHistory(deps.dataDir, usageSources, options);
     const observed = new Set(history.observations.filter(event => event.usageKnown).map(event => event.source));
     const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
     c.header('Cache-Control', 'no-store');
     const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
-    await attachSessionTitles(snapshot.sessions, history.titles);
+    if (deps.demo) {
+      for (const session of snapshot.sessions) session.sessionTitle = history.titles.get(sessionTitleKey(session.source, session.sessionId))?.title;
+    } else await attachSessionTitles(snapshot.sessions, history.titles);
     const sessionKey = (source: string, id: string) => JSON.stringify([source, id]);
     const messages = new Map<string, SessionMessage[]>(), timings = new Map<string, SessionTimingEvent[]>();
     for (const message of history.messages) { const key = sessionKey(message.source, message.sessionId); const group = messages.get(key) ?? []; group.push(message); messages.set(key, group); }
@@ -210,7 +245,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   });
 
   app.get('/functions/tud-usage-daily', async (c) => {
-    const bounds = readDateBounds(c);
+    const bounds = readBounds(c, 90);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
@@ -224,7 +259,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   });
 
   app.get('/functions/tud-usage-hourly', async (c) => {
-    const bounds = readDateBounds(c);
+    const bounds = readBounds(c, 1);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
@@ -238,7 +273,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   });
 
   app.get('/functions/tud-usage-model-breakdown', async (c) => {
-    const bounds = readDateBounds(c);
+    const bounds = readBounds(c, 30);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
@@ -255,6 +290,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.get('/functions/tud-sync-status', async (c) => {
     const config = deps.getConfig();
+    if (deps.demo) return c.json(ok({ lastSyncAt: deps.demo.lastSyncAt, statsSince: deps.demo.collectSince, sources: {}, demo: demoMetadata(deps.demo) }));
     const rows = deps.bucketStore.getRows();
     const hooks = deps.getHookStatus
       ? await deps.getHookStatus()

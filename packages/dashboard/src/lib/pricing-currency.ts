@@ -1,3 +1,5 @@
+import { demoStorageKey } from './demo-runtime.ts';
+
 export type PricingCurrency = 'USD' | 'CNY';
 
 export interface PricingExchangeRate {
@@ -63,7 +65,7 @@ export function readPricingExchangeRate(
   try {
     const target = getReadStorage(storage);
     if (!target) return null;
-    const stored = target.getItem(PRICING_EXCHANGE_RATE_STORAGE_KEY);
+    const stored = target.getItem(demoStorageKey(PRICING_EXCHANGE_RATE_STORAGE_KEY));
     if (stored === null) return null;
     const parsed: unknown = JSON.parse(stored);
     return isPricingExchangeRate(parsed) ? parsed : null;
@@ -79,7 +81,7 @@ export function writePricingExchangeRate(
   if (!isPricingExchangeRate(quote)) return;
   try {
     const target = getWriteStorage(storage);
-    target?.setItem(PRICING_EXCHANGE_RATE_STORAGE_KEY, JSON.stringify(quote));
+    target?.setItem(demoStorageKey(PRICING_EXCHANGE_RATE_STORAGE_KEY), JSON.stringify(quote));
   } catch {
     // Storage can be disabled or full; callers keep the in-memory quote.
   }

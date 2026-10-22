@@ -4,6 +4,8 @@
 
 ## Runtime owner 与 CLI 服务
 
+只读演示 `quotern demo start --file <snapshot.json>` 是独立入口，默认监听 `127.0.0.1:8253`，不参与下述正常 runtime owner、Hook、采集、自启和额度调度。它可以与正常客户端并行；停止演示只关闭自己持有的 HTTP server。开发验收使用本 worktree 私有快照和独立端口，不用正常 `start` 代替演示入口。完整步骤见 [CLI 演示说明](../CLI.md#演示快照与只读面板)。
+
 正式运行统一使用 `~/.quotern/`，不提供其他目录名称的识别、自动迁移或兼容入口。隔离开发继续使用当前 worktree 的 `.quotern-dev/data`。
 
 同一数据目录的常驻采集由一个 owner 管理，`tud.pid` 记录 `{ pid, kind }`。Desktop 启动时先处理 CLI 自启，再停止 CLI 并接管；macOS / Windows 有对应的 CLI 自启撤销实现。Linux 的撤销分支没有实现，不能据其他平台行为作保证。

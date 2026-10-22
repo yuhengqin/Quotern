@@ -1,3 +1,4 @@
+import { dashboardNow } from '../lib/demo-runtime.ts';
 import { dashboardRangeCacheKey, dashboardRangeKey, dateRangeLookback, type DashboardDateRange } from '@/lib/dashboard-date-range';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -91,7 +92,7 @@ export function useDashboardData(
 
   useEffect(() => {
     let cancelled = false;
-    const fetchDays = resolveDashboardFetchDays(rangeDays, selectedDate, new Date(), dateRange);
+    const fetchDays = resolveDashboardFetchDays(rangeDays, selectedDate, dashboardNow(), dateRange);
 
     const needsEnsure = cliBackend && collectDays > ensuredMaxDaysRef.current;
     const isEmpty = (data: DashboardMockData) => data === emptyDashboardData;

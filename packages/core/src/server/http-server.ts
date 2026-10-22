@@ -1,11 +1,14 @@
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import type { Hono } from 'hono';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { isApiPath, serveStatic } from './static.js';
 import { DEFAULT_PORT } from '../paths.js';
 import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
 import { demoMetadata, type DemoMetadata } from '../demo/types.js';
+import type { DemoBootstrap } from '../demo/bootstrap.js';
 
 export interface HttpServerOptions {
   honoApp: Hono;
@@ -13,12 +16,28 @@ export interface HttpServerOptions {
   host?: string;
   port?: number;
   demo?: DemoMetadata;
+  demoBootstrap?: DemoBootstrap;
 }
 
 export function createHttpServer(opts: HttpServerOptions): Server {
   const host = opts.host ?? '127.0.0.1';
   const port = opts.port ?? DEFAULT_PORT;
   const demoHead = opts.demo ? `<script id="quotern-demo" type="application/json">${JSON.stringify(demoMetadata(opts.demo)).replace(/</g, '\\u003c')}</script>` : undefined;
+  let dashboardHead = demoHead;
+  if (opts.demo) {
+    let preloads = '';
+    try {
+      const manifest = JSON.parse(readFileSync(join(opts.staticDir, 'demo-preload.json'), 'utf8'));
+      if (manifest.schemaVersion === 1 && Array.isArray(manifest.modules) && Array.isArray(manifest.styles)) {
+        preloads = [...manifest.modules.filter((p: unknown) => typeof p === 'string' && /^assets\/[\w.-]+\.js$/.test(p)).map((p: string) => `<link rel="modulepreload" crossorigin href="/${p}">`),
+          ...manifest.styles.filter((p: unknown) => typeof p === 'string' && /^assets\/[\w.-]+\.css$/.test(p)).map((p: string) => `<link rel="preload" as="style" crossorigin href="/${p}">`)].join('');
+      }
+    } catch { /* Older builds still work without resource hints. */ }
+    const bootstrap = opts.demoBootstrap;
+    const data = bootstrap && bootstrap.schemaVersion === 1 && bootstrap.exportedAt === opts.demo.exportedAt && bootstrap.referenceTime === opts.demo.referenceTime
+      ? `<script id="quotern-demo-bootstrap" type="application/json">${JSON.stringify(bootstrap).replace(/</g, '\\u003c')}</script>` : '';
+    dashboardHead = preloads + demoHead + data;
+  }
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? '/';
@@ -71,7 +90,8 @@ export function createHttpServer(opts: HttpServerOptions): Server {
     }
 
     if (req.method === 'GET' || req.method === 'HEAD') {
-      serveStatic(opts.staticDir, req, res, demoHead);
+      const path = url.split('?')[0];
+      serveStatic(opts.staticDir, req, res, path === '/' || path === '/dashboard' ? dashboardHead : demoHead);
       return;
     }
 

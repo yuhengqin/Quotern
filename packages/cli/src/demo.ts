@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 import { resolve } from 'node:path';
 import { BucketStore, createHttpServer, createLocalApiApp, demoMetadata, exportDemoSnapshot, listenServer, loadDemoSnapshot, resolveDataDir, type TudConfig } from 'quotern-core';
 import { applyPricingSnapshot } from 'quotern-core';
+import { prepareDemoBootstrap } from 'quotern-core';
 import { normalizeListenHost, normalizeListenPort } from './args.js';
 
 type DemoArgs = { action: 'export'; out: string; dataDir?: string } | { action: 'start'; file: string; host: string; port: number } | { action: 'help' };
@@ -38,7 +39,8 @@ export async function runDemoCommand(args: readonly string[], staticDir: string)
   const bucketStore = new BucketStore(); bucketStore.apply(snapshot.buckets);
   const config = { deviceId: 'demo', statsSince: snapshot.collectSince, localCollectSince: snapshot.collectSince, lastSyncAt: snapshot.lastSyncAt } as TudConfig;
   const app = createLocalApiApp({ dataDir: '', getConfig: () => config, bucketStore, demo: snapshot });
-  const server = createHttpServer({ honoApp: app, staticDir, host: parsed.host, port: parsed.port, demo: demoMetadata(snapshot) });
+  const demoBootstrap = await prepareDemoBootstrap(app, snapshot);
+  const server = createHttpServer({ honoApp: app, staticDir, host: parsed.host, port: parsed.port, demo: demoMetadata(snapshot), demoBootstrap });
   await listenServer(server, parsed.host, parsed.port);
   const host = parsed.host.includes(':') ? `[${parsed.host}]` : parsed.host;
   console.log(`只读演示：http://${host}:${parsed.port}\n快照：${snapshot.exportedAt}；参考时间：${snapshot.referenceTime}\nCtrl+C 停止演示；正常客户端和数据不受影响。`);

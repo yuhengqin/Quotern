@@ -200,6 +200,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);
     const targetSource = c.req.query('sessionSource'), targetId = c.req.query('sessionId');
     const targeted = targetSource !== undefined || targetId !== undefined;
+    const preview = Boolean(deps.demo && !targeted && c.req.query('preview') === '6');
     if (targeted && (!['codex', 'claude', 'dsh'].includes(targetSource ?? '') || !targetId || targetId.length > 512 || /[\u0000-\u001f]/.test(targetId))) return c.json({ success: false, message: 'INVALID_SESSION_TARGET', data: null }, 400);
     // Notification lookup reads already-collected history; it never starts collection or widens localCollectSince.
     const bounds = targeted ? undefined : readBounds(c, 7);
@@ -220,6 +221,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
     c.header('Cache-Control', 'no-store');
     const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
+    const previewSessions = preview ? [...snapshot.sessions].sort((a,b) => b.lastActivityAt.localeCompare(a.lastActivityAt)).slice(0,6) : undefined;
     if (deps.demo) {
       for (const session of snapshot.sessions) session.sessionTitle = history.titles.get(sessionTitleKey(session.source, session.sessionId))?.title;
     } else await attachSessionTitles(snapshot.sessions, history.titles);
@@ -227,7 +229,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const messages = new Map<string, SessionMessage[]>(), timings = new Map<string, SessionTimingEvent[]>();
     for (const message of history.messages) { const key = sessionKey(message.source, message.sessionId); const group = messages.get(key) ?? []; group.push(message); messages.set(key, group); }
     for (const event of attributeTaskTimingEvents(history.timingEvents, history.codexParents)) { const key = sessionKey(event.source, event.sessionId); const group = timings.get(key) ?? []; group.push(event); timings.set(key, group); }
-    for (const session of snapshot.sessions) {
+    for (const session of previewSessions ?? snapshot.sessions) {
       const key = sessionKey(session.source, session.sessionId);
       const metric = aggregateSessionMetrics(messages.get(key) ?? [], { ...options, timingEvents: timings.get(key) ?? [] });
       session.taskSeconds = metric.taskSeconds; session.taskTimingKind = metric.taskTimingKind;
@@ -241,6 +243,12 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       if (row.accountRef && labels.has(row.accountRef)) row.accountLabel = [...labels.get(row.accountRef)!].join(' / ');
     }
     if (targeted) snapshot.sessions = snapshot.sessions.filter(session => session.source === targetSource && session.sessionId === targetId);
+    if (previewSessions) {
+      const keys = new Set(snapshot.sessions.map(s => sessionKey(s.source,s.sessionId)));
+      snapshot.sessionCount = snapshot.sessions.length;
+      snapshot.billing = snapshot.billing.map(({sessionRefs, ...row}) => ({...row, sessionCount:sessionRefs?.filter(s=>keys.has(sessionKey(s.source,s.sessionId))).length ?? 0}));
+      snapshot.sessions = previewSessions;
+    }
     return c.json(ok(snapshot));
   });
 

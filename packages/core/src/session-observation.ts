@@ -243,11 +243,14 @@ export interface SessionActivity {
   context: SessionContextObservation | null; profileId?: string;
 }
 export interface SessionActivitySnapshot {
+  /** Present only on explicit lightweight previews; totals still describe the full scope. */
+  sessionCount?: number;
   sessions: SessionActivity[]; totalTokens: number; attributedTokens: number; otherTokens: number;
   tokenTotalMismatch: boolean; missingSources: string[]; observedAt: string;
   billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'];
     /** Exact contributing sessions; absent only in responses from older runtimes. */
-    sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[] }[];
+    sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[];
+    sessionCount?: number }[];
 }
 export interface SessionModelUsage {
   model: string; tokens: number; requests: number | null;

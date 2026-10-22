@@ -8,6 +8,8 @@
 
 公网固定演示的 gzip、静态资源长期缓存与版本化 API 响应缓存见 [NGINX 演示部署配置](../deploy/demo/README.md)。该缓存例外只作用于演示站点；更新代码或快照必须更换缓存版本键，HTML 与 API 浏览器缓存不跨部署保留。
 
+演示启动在监听端口前经同一套只读 API 预生成默认首页响应，仅注入 `/`、`/dashboard` 的 HTML；浏览器只复用快照元数据匹配且 URL 完全相同的 GET，其他范围、筛选和完整会话页照常请求 API。演示首页 `session-activity?days=7&preview=6` 只返回最近六条详情，但保留完整 Token/费用、会话总数和每个账单组的会话计数；定向查询和普通模式忽略预览参数。构建的 `demo-preload.json` 记录真实入口、Dashboard 及静态依赖，演示 HTML 提前发出资源提示；旧构建缺少清单时仍可加载。普通 CLI 和 Desktop 不注入预生成数据或资源提示。
+
 正式运行统一使用 `~/.quotern/`，不提供其他目录名称的识别、自动迁移或兼容入口。隔离开发继续使用当前 worktree 的 `.quotern-dev/data`。
 
 同一数据目录的常驻采集由一个 owner 管理，`tud.pid` 记录 `{ pid, kind }`。Desktop 启动时先处理 CLI 自启，再停止 CLI 并接管；macOS / Windows 有对应的 CLI 自启撤销实现。Linux 的撤销分支没有实现，不能据其他平台行为作保证。

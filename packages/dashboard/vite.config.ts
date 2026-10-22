@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { coreSourcePlugin } from '../../scripts/vite-core-source.mjs';
+import { demoPreloadPlugin } from '../../scripts/demo-preload.mjs';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
@@ -49,6 +50,7 @@ export default defineConfig(({ mode }) => {
       }),
       react(),
       tailwindcss(),
+      demoPreloadPlugin(),
     ],
     resolve: {
       alias: {

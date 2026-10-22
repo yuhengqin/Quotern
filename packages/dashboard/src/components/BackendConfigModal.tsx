@@ -7,12 +7,14 @@ import {
   useEffect,
   useState,
 } from "react";
-import { SettingsPanel } from "@/components/SettingsPanel";
+import { DeferredContent } from './DeferredContent';
 import {
   OPEN_SETTINGS_EVENT,
   type OpenSettingsDetail,
   type SettingsTabId,
 } from "@/lib/shell-events";
+
+const loadSettings = () => import('./SettingsPanel').then(module => module.SettingsPanel);
 
 interface BackendConfigModalProps {
   /** Custom trigger; when omitted and uncontrolled, renders a default tertiary button. */
@@ -105,7 +107,7 @@ export function BackendConfigModal({
               <Modal.Heading>{t('shell.settings')}</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="min-h-0 flex-1 overflow-hidden p-0">
-              <SettingsPanel activeTab={activeTab} onTabChange={setTab} />
+              {isOpen && <DeferredContent load={loadSettings} componentProps={{ activeTab, onTabChange: setTab }} />}
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>

@@ -50,7 +50,7 @@ function accountLabel(row: Pick<SessionActivity['billing'], 'accountRef' | 'acco
 
 export function SessionActivityPanel(props: { days: number; selectedDate: string | null; dateRange: DashboardDateRange | null; sources: readonly string[]; enabled: boolean }) {
   const { t } = useTranslation();
-  const { data, error, scopeKey } = useSessionActivity(props.days, props.selectedDate, props.dateRange, props.sources, props.enabled);
+  const { data, error, scopeKey } = useSessionActivity(props.days, props.selectedDate, props.dateRange, props.sources, props.enabled, undefined, true);
   if (!isCliBackend()) return null;
   return <Card className="mt-4 min-w-0 overflow-hidden" aria-label={t('usage.activity.aria')}>
     <Card.Header className="pb-0"><Card.Title>{t('usage.activity.heading')}</Card.Title></Card.Header>
@@ -69,7 +69,7 @@ export function SessionActivityViews({ snapshot, scope }: { snapshot: SessionAct
       <Tabs.Tab id="sessions">{t('usage.activity.sessions')}<Tabs.Indicator /></Tabs.Tab>
       <Tabs.Tab id="billing">{t('usage.activity.billing')}<Tabs.Indicator /></Tabs.Tab>
     </Tabs.List></Tabs.ListContainer>
-    <Tabs.Panel id="sessions" className="pt-3"><SessionList rows={recent} scope={scope} /></Tabs.Panel>
+    <Tabs.Panel id="sessions" className="pt-3"><SessionList rows={recent} total={snapshot.sessionCount ?? recent.length} scope={scope} /></Tabs.Panel>
     <Tabs.Panel id="billing" className="pt-3">
       <UsageAttribution snapshot={snapshot} scope={scope} />
       <p className="mt-3 text-[11px] text-muted">{t('usage.activity.billingNote')}</p>
@@ -93,31 +93,31 @@ export function SessionAttributionSummary({ row }: { row: SessionActivitySnapsho
 function UsageAttribution({ snapshot, scope }: { snapshot: SessionActivitySnapshot; scope: SessionScope }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  const groups = useMemo(() => snapshot.billing.map(row => ({ row, sessions: relatedSessionActivity(snapshot.sessions, row) })), [snapshot]);
+  const groups = useMemo(() => snapshot.billing.map(row => ({ row, count: row.sessionCount ?? relatedSessionActivity(snapshot.sessions, row).length })), [snapshot]);
   return <>
     <p className="mb-1 text-xs text-muted">{t('usage.activity.attributionSummary')}</p>
-    {groups.some(({ row }) => !row.sessionRefs) && <p role="status" className="mt-2 text-xs text-muted">{t('usage.activity.sessionLinksUnavailable')}</p>}
+    {groups.some(({ row }) => !row.sessionRefs && row.sessionCount === undefined) && <p role="status" className="mt-2 text-xs text-muted">{t('usage.activity.sessionLinksUnavailable')}</p>}
     <div className="flex flex-col divide-y divide-separator">
-      {groups.map(({ row, sessions }) => <div key={sessionAttributionKey(row)} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+      {groups.map(({ row, count }) => <div key={sessionAttributionKey(row)} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
         <div className="min-w-0 flex-1 basis-48">
           <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{serviceLabel(row.service, locale)}</p><span className={`rounded-md px-2 py-0.5 text-[11px] ${row.mode === 'unknown' ? 'bg-warning/10 text-warning' : 'bg-surface-secondary text-muted'}`}>{modeLabel(row.mode, locale)}</span></div>
           <p className="mt-1 break-words text-xs text-muted" title={row.accountRef ? t('usage.activity.accountRef', { ref: row.accountRef }) : undefined}>{accountLabel(row, locale)}</p>
           {row.service === 'unknown' && row.mode === 'unknown' && !row.accountRef && snapshot.otherTokens > 0 && <p className="mt-1 text-[11px] text-muted">{t('usage.activity.unlinkedTokens', { tokens: number(snapshot.otherTokens, locale) })}</p>}
         </div>
         <div className="shrink-0 text-right text-xs tabular-nums"><p>{number(row.tokens, locale)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
-        {sessions.length ? <Link to="/sessions" search={{ ...createSessionPageSearch(scope), group: sessionAttributionKey(row) }} className="button button--sm button--secondary !h-7 !min-h-7 text-xs" aria-label={`${t('usage.activity.viewRelatedSessions', { count: sessions.length })} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`}>{t('usage.activity.viewRelatedSessions', { count: sessions.length })}</Link>
-          : <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: 0 }) : t('usage.activity.viewRelatedSessionsAction')}</Button>}
+        {count ? <Link to="/sessions" search={{ ...createSessionPageSearch(scope), group: sessionAttributionKey(row) }} className="button button--sm button--secondary !h-7 !min-h-7 text-xs" aria-label={`${t('usage.activity.viewRelatedSessions', { count })} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`}>{t('usage.activity.viewRelatedSessions', { count })}</Link>
+          : <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled>{row.sessionRefs || row.sessionCount !== undefined ? t('usage.activity.viewRelatedSessions', { count: 0 }) : t('usage.activity.viewRelatedSessionsAction')}</Button>}
       </div>)}
       {!groups.length && <p className="py-4 text-sm text-muted">{t('usage.activity.noBilling')}</p>}
     </div>
   </>;
 }
 
-function SessionList({ rows, scope }: { rows: SessionActivity[]; scope: SessionScope }) {
+function SessionList({ rows, total, scope }: { rows: SessionActivity[]; total: number; scope: SessionScope }) {
   const { t } = useTranslation();
   return <>
     {rows.length ? <SessionRows rows={rows.slice(0, 6)} showTokenShare={false} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
-    <Link to="/sessions" search={createSessionPageSearch(scope)} className="button button--sm button--ghost mt-2 h-7 text-xs">{t('usage.activity.viewAllSessions', { count: rows.length })}</Link>
+    <Link to="/sessions" search={createSessionPageSearch(scope)} className="button button--sm button--ghost mt-2 h-7 text-xs">{t('usage.activity.viewAllSessions', { count: total })}</Link>
   </>;
 }
 

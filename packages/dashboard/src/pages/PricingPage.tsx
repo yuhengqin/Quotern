@@ -4,7 +4,9 @@ import { Xmark } from '@gravity-ui/icons';
 import { Check, Columns2, Info } from 'lucide-react';
 import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
+import { registerMessages } from 'quotern-i18n';
 import { PricingList } from '../components/PricingList';
+import { pricingMessages } from '../i18n/pricing-messages';
 import { BackToUsageLink } from '../components/BackToUsageLink';
 import { PricingCalculator, PricingProviderFilter, PricingSortSelect, PricingScenarioSummary } from '../components/PricingTools';
 import { PricingComparison } from '../components/PricingComparison';
@@ -25,6 +27,8 @@ import {
   type PricingSortDescriptor,
 } from '../lib/pricing-catalog';
 import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingComparison } from '../lib/pricing-workbench';
+
+registerMessages(pricingMessages);
 
 function ActiveFilter({ children, onRemove, label }: { children: ReactNode; onRemove: () => void; label: string }) {
   const { t } = useTranslation();

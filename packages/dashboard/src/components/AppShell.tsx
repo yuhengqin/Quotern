@@ -8,7 +8,7 @@ import { ShareActivityModal } from './ShareActivityModal';
 import { ShareSnapshotProvider } from '@/hooks/ShareSnapshotContext';
 import { cn } from '@/lib/utils';
 import { AchievementProvider } from '../achievements/AchievementProvider';
-import { AchievementOverlays } from '../achievements/AchievementOverlays';
+import { DeferredAchievementOverlays } from '../achievements/DeferredAchievementOverlays';
 import { updateAchievements } from '@/lib/api';
 import { getDemoMetadata, isDemoMode } from '../lib/demo-runtime';
 import { StatusBanner } from './StatusBanner';
@@ -46,7 +46,7 @@ export function AppShell() {
             <ShareActivityModal />
           </div>
         </div>
-        <AchievementOverlays />
+        <DeferredAchievementOverlays />
         </AchievementProvider>
       </ShareSnapshotProvider>
     </AppToastProvider>

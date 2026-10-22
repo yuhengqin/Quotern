@@ -7,8 +7,10 @@ import {
   useEffect,
   useState,
 } from 'react';
-import { AboutContent } from '@/components/AboutContent';
+import { DeferredContent } from './DeferredContent';
 import { OPEN_ABOUT_EVENT } from '@/lib/shell-events';
+
+const loadAbout = () => import('./AboutContent').then(module => module.AboutContent);
 
 interface AboutModalProps {
   trigger?: ReactNode;
@@ -72,7 +74,7 @@ export function AboutModal({
               <Modal.Heading>{t('shell.about')}</Modal.Heading>
             </Modal.Header>
             <Modal.Body className="pt-2">
-              <AboutContent />
+              {isOpen && <DeferredContent load={loadAbout} componentProps={{}} />}
             </Modal.Body>
           </Modal.Dialog>
         </Modal.Container>

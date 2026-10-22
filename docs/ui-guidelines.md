@@ -43,6 +43,8 @@
 
 固定演示关闭统计、成就及图库的定时和 focus/visibility 自动刷新；初次加载、筛选变化、重试和显式同步事件继续读取。两端 `lib/dashboard-refresh.ts` 的 `subscribeAutomaticRefresh` 只管理自动订阅，初载与 `DATA_SYNCED_EVENT` 由调用方保留。Desktop 正常模式保持轮询与原有 IPC 新鲜度探测。
 
+浏览器初始入口只注册 shell、usage 和 achievement 翻译；设置、价格和分享的四语言文案在功能模块加载时同步注册，必须先于首次渲染。Desktop 保留完整入口注册。浏览器的设置、关于、成就弹层内容，以及两端共享的分享内容经 `components/DeferredContent` 按需下载，失败提供刷新页面操作（浏览器可能缓存失败的模块导入）；成就加载/错误提示由可关闭的轻量 Modal 承载。轻量宿主始终保留打开事件、选中页签与分享快照，不能延迟订阅而丢失第一次点击。分享内容实现为 `ShareActivityModalContent`，宿主 `ShareActivityModal` 保持原入口。演示总览请求最近六条预览，用完整 `sessionCount` 与账单组计数显示跳转入口；完整会话页和 Desktop 正常模式保持全量读取。
+
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动展开已有会话；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史；缺记录时保留目标等待常规同步。Dashboard 与 Desktop 使用同一页面和详情行，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与展开行为保留。
 
 | 能力 | 入口与使用点 | 适用边界及共享方式 |

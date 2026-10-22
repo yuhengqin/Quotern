@@ -2,6 +2,8 @@
 
 `nginx.conf.template` 只用于公开的固定快照演示：外部 `8123` → `127.0.0.1:8001`。不要把此缓存例外用于正常客户端或实时采集服务。
 
+公网 IP 的 HTTP/1 演示可在本地设置 `QUOTERN_DEMO_BUILD=1` 后执行 `corepack pnpm build:cli`，把已验证的 core/i18n/CLI dist 上传到服务器的新提交目录。该构建仅把入口和 Dashboard 的静态依赖合为 `demo-initial`，减少小模块请求；分享、设置、价格等动态依赖继续按需加载。未设置此变量的普通 CLI/Desktop 构建策略保持不变。保留 `packages/cli/dist/dashboard/demo-preload.json`，它与哈希资源必须来自同一次构建。不要在小内存服务器上并行运行完整前端编译和演示服务。
+
 - JS、CSS、JSON 和 SVG 开启 gzip；哈希静态资源缓存一年。
 - 将每次构建的 `packages/cli/dist/dashboard/assets/` 追加到 `/opt/quotern-demo/public/assets/`，目录和文件须允许 NGINX 读取。同名哈希必须对应相同内容；保留旧文件支持已经打开的页面。不存在的资源返回 404，不回退到 HTML。
 - 仅缓存 `/functions/` 下 GET/HEAD 的 HTTP 200 响应，完整 Host（含端口）、Origin 和 URI（含筛选参数）参与键，保留会话接口的来源校验。写请求继续到上游拒绝，403/503 等不写缓存。上游 `Set-Cookie`、`Vary` 的默认保护仍生效。

@@ -18,3 +18,24 @@ export function demoPreloadPlugin() {
     this.emitFile({ type: 'asset', fileName: 'demo-preload.json', source: JSON.stringify(demoPreloadManifest(bundle)) });
   } };
 }
+
+/** Optional demo-only build: avoid many tiny HTTP/1 requests on the public IP. */
+export function createDemoInitialChunk() {
+  let initial;
+  return (id, { getModuleIds, getModuleInfo }) => {
+    if (!initial) {
+      initial = new Set();
+      const visit = name => {
+        if (initial.has(name)) return;
+        const info = getModuleInfo(name);
+        if (!info || info.isExternal) return;
+        initial.add(name);
+        for (const dependency of info.importedIds) visit(dependency);
+      };
+      for (const name of getModuleIds()) {
+        if (getModuleInfo(name)?.isEntry || name.replaceAll('\\', '/').endsWith('/src/pages/DashboardPage.tsx')) visit(name);
+      }
+    }
+    return initial.has(id) ? 'demo-initial' : undefined;
+  };
+}

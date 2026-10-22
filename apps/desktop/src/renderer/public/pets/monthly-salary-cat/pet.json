@@ -1,0 +1,8 @@
+{
+  "id": "monthly-salary-cat",
+  "displayName": "Monthly salary cat（月薪猫）",
+  "description": "A 1:1 restored animated pet version of the uploaded white-and-brown teary character, named Monthly salary cat（月薪猫）.",
+  "spritesheetPath": "spritesheet.webp",
+  "spriteVersionNumber": 1,
+  "kind": "animal"
+}

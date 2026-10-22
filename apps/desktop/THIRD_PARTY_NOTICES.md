@@ -13,7 +13,7 @@ Code: MIT License, Copyright (c) 2026 PC2005-cloud. The full MIT license is reta
 The Windows desktop pet uses adapted source code and assets from [TokenTracker](https://github.com/xiufengsun/TokenTracker):
 `src/renderer/pet.jsx`, `src/renderer/lib/pet-*`, `src/renderer/lib/bot-appearance.js`,
 `src/renderer/ui/foundation/{BotAnimated,PetAtlasAnimated}.jsx`, and
-`src/renderer/public/{clawd,pets}`. The code is adapted to Quotern's Electron host and
+`src/renderer/public/clawd`. The code is adapted to Quotern's Electron host and
 local usage data contract.
 
 MIT License
@@ -37,6 +37,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Additional bundled atlas pets
+
+`src/renderer/public/pets/` contains the six pet packages supplied through the
+user's existing imports: Doro (`doro`), 咕嘎 (`guga`), 鸡哥ikun (`ikun`),
+罗小黑 (`luoxiaohei2d`), Monthly salary cat（月薪猫） (`monthly-salary-cat`),
+and 小八 (`xiaoba`). Their `pet.json` manifests and `spritesheet.webp` atlases
+are retained unchanged. The imported manifests do not record authors or license
+terms; the TokenTracker code and asset license above does not establish a license
+for these additional character images.
 
 ## Bot companion morphing engine
 

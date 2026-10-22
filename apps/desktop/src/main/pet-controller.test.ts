@@ -8,6 +8,7 @@ import test from 'node:test';
 import { transformSync } from 'esbuild';
 import { PetCatalogError } from './pet-catalog-errors.js';
 import { PetCatalog } from './pet-catalog.js';
+import { BUILTIN_PETS } from './pet-core.js';
 import { PET_CATALOG_CHANNEL, PET_GET_CHANNEL, PET_STATE_CHANNEL, type PetCatalogRequest, type PetState } from '../shared/pet.js';
 
 test('catalog IPC persists a sanitized failure before returning its localized message', { skip: process.platform !== 'win32' }, async () => {
@@ -101,9 +102,9 @@ for (const selected of [false, true]) {
       assert.equal(result.ok, true);
       assert.ok(!result.data.catalog.some(pet => pet.id === imported.id));
       const state = await handlers.get(PET_GET_CHANNEL)!(null) as PetState;
-      assert.deepEqual(state.catalog.map(pet => pet.id), ['clawd', 'bot']);
+      assert.deepEqual(state.catalog.map(pet => pet.id), BUILTIN_PETS.map(pet => pet.id));
       assert.equal(state.settings.character, 'clawd');
-      assert.deepEqual(broadcasts.at(-1)?.catalog.map(pet => pet.id), ['clawd', 'bot']);
+      assert.deepEqual(broadcasts.at(-1)?.catalog.map(pet => pet.id), BUILTIN_PETS.map(pet => pet.id));
       if (selected) assert.equal(JSON.parse(await readFile(path.join(root, 'pet-settings.json'), 'utf8')).character, 'clawd');
     } finally { releaseList(); controller.dispose(); await rm(root, { recursive: true, force: true }); }
   });

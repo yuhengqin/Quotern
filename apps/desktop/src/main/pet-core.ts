@@ -24,6 +24,12 @@ export const DEFAULT_PET_SETTINGS: PetSettings = {
 export const BUILTIN_PETS = [
   { id: 'clawd', displayName: 'Clawd', spriteVersionNumber: 1, custom: false },
   { id: 'bot', displayName: 'Bot', spriteVersionNumber: 1, custom: false },
+  { id: 'doro', displayName: 'Doro', spriteVersionNumber: 1, custom: false, assetUrl: 'quotern-pet://builtin/pets/doro/spritesheet.webp' },
+  { id: 'guga', displayName: '咕嘎', spriteVersionNumber: 1, custom: false, assetUrl: 'quotern-pet://builtin/pets/guga/spritesheet.webp' },
+  { id: 'ikun', displayName: '鸡哥ikun', spriteVersionNumber: 1, custom: false, assetUrl: 'quotern-pet://builtin/pets/ikun/spritesheet.webp' },
+  { id: 'luoxiaohei2d', displayName: '罗小黑', spriteVersionNumber: 1, custom: false, assetUrl: 'quotern-pet://builtin/pets/luoxiaohei2d/spritesheet.webp' },
+  { id: 'monthly-salary-cat', displayName: 'Monthly salary cat（月薪猫）', spriteVersionNumber: 1, custom: false, assetUrl: 'quotern-pet://builtin/pets/monthly-salary-cat/spritesheet.webp' },
+  { id: 'xiaoba', displayName: '小八', spriteVersionNumber: 1, custom: false, assetUrl: 'quotern-pet://builtin/pets/xiaoba/spritesheet.webp' },
 ] as const;
 
 export interface PetCatalogEntry {

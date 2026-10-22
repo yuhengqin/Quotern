@@ -5,6 +5,39 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PetCatalog, petIdFromCodexPetsUrl, readWebpDimensions, validatePetPackage } from './pet-catalog.js';
+import { BUILTIN_PETS } from './pet-core.js';
+
+test('a fresh profile offers the six bundled atlas pets without installing files', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-bundled-pets-'));
+  try {
+    const catalog = new PetCatalog(path.join(root, 'not-installed'));
+    const pets = await catalog.list();
+    for (const id of ['doro', 'guga', 'ikun', 'luoxiaohei2d', 'monthly-salary-cat', 'xiaoba']) {
+      const pet = pets.find(entry => entry.id === id);
+      assert.ok(pet, `${id} is available without an import`);
+      assert.equal(pet.custom, false);
+      assert.equal(pet.assetUrl, `quotern-pet://builtin/pets/${id}/spritesheet.webp`);
+      await assert.rejects(catalog.remove(id));
+    }
+    await assert.rejects(readFile(path.join(root, 'not-installed', 'doro', 'pet.json')), { code: 'ENOENT' });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('upgrading an already imported atlas pet keeps its files and lists a single built-in', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-bundled-upgrade-'));
+  try {
+    const dir = path.join(root, 'doro');
+    await mkdir(dir);
+    const manifest = Buffer.from(JSON.stringify({ id: 'doro', displayName: 'Doro', description: 'Existing import', spritesheetPath: 'spritesheet.webp' }));
+    const atlas = readFileSync('src/main/fixtures/pet-atlas-v1.webp');
+    await Promise.all([writeFile(path.join(dir, 'pet.json'), manifest), writeFile(path.join(dir, 'spritesheet.webp'), atlas)]);
+    const pets = (await new PetCatalog(root).list()).filter(pet => pet.id === 'doro');
+    assert.equal(pets.length, 1);
+    assert.equal(pets[0]?.custom, false);
+    assert.deepEqual(await readFile(path.join(dir, 'pet.json')), manifest);
+    assert.deepEqual(await readFile(path.join(dir, 'spritesheet.webp')), atlas);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 function packageZip(id = 'clawd'): Buffer {
   const manifest = Buffer.from(JSON.stringify({ id, displayName: 'Downloaded Pet', description: 'Test', spritesheetPath: 'spritesheet.webp' }));
@@ -80,7 +113,7 @@ test('removing an already deleted pet succeeds without affecting built-ins or ot
     await catalog.remove(imported.id);
     await catalog.remove(imported.id);
     await catalog.remove('absent-pet');
-    assert.deepEqual((await catalog.list()).map(pet => pet.id), ['clawd', 'bot', 'keep-pet']);
+    assert.deepEqual((await catalog.list()).map(pet => pet.id), [...BUILTIN_PETS.map(pet => pet.id), 'keep-pet']);
     await assert.rejects(catalog.remove('clawd'));
     await assert.rejects(catalog.remove('../outside'));
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -119,7 +152,7 @@ test('importable Codex pets expose a preview atlas and can be imported', async (
   }
 });
 
-for (const id of ['clawd', 'bot']) {
+for (const id of ['clawd', 'bot', 'doro']) {
   test(`importing ${id} preserves the built-in and reuses an identical imported package`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-reserved-'));
     try {

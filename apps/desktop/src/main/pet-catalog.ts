@@ -20,6 +20,10 @@ function bundledAsset(pathname: string): { file: string; contentType: string } |
     : path.join(app.getAppPath(), 'src', 'renderer', 'public');
   const clawd = /^\/clawd\/((?:[a-z0-9-]+\/)*[a-z0-9-]+\.svg)$/.exec(pathname);
   if (clawd) return { file: path.join(root, 'clawd', clawd[1]!), contentType: 'image/svg+xml' };
+  const atlas = /^\/pets\/([a-z0-9-]+)\/spritesheet\.webp$/.exec(pathname);
+  if (atlas && BUILTIN_IDS.has(atlas[1]!)) {
+    return { file: path.join(root, 'pets', atlas[1]!, 'spritesheet.webp'), contentType: 'image/webp' };
+  }
   return null;
 }
 

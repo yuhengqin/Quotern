@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  你的 AI 用量，一处看清。统一查看 Coding Agent 的用量、额度与费用。
+  <strong>你的 AI 用量，一处看清。</strong><br>
+  统一查看 Coding Agent 的 Token、订阅额度、预估费用与会话记录。
 </p>
 
 <p align="center">
@@ -29,6 +30,10 @@
 <p align="center">
   <a href="https://github.com/yuhengqin/Quotern/releases">下载安装包</a>
   ·
+  <a href="#-快速开始">快速开始</a>
+  ·
+  <a href="#-功能预览">功能预览</a>
+  ·
   <a href="./FAQ.md">常见问题</a>
   ·
   <a href="#agent-自动发现与调用">Agent 自动发现与调用</a>
@@ -36,11 +41,19 @@
   <a href="#本地数据">本地数据</a>
 </p>
 
-## 🖥️ 客户端使用
+汇总 Claude Code、Codex、Cursor、Gemini CLI 等多种 AI 编码工具的用量，在一个面板里查看趋势、模型和项目分布。支持 macOS / Windows 桌面客户端，也可通过 CLI 在 macOS / Windows / Linux 上打开本地浏览器面板。
+
+<p align="center">
+  <img src="./assets/usage-dashboard.png" alt="Quotern 用量总览：Token、预估费用、订阅额度和活跃热力图" width="960">
+</p>
+
+## ⚡ 快速开始
+
+### 🖥️ 客户端使用
 
 Quotern 提供 macOS / Windows 桌面客户端，安装即用，无需额外配置。
 
-### 下载安装
+#### 下载安装
 
 前往 [Releases](https://github.com/yuhengqin/Quotern/releases) 页面下载对应系统与架构的安装包：
 
@@ -55,7 +68,7 @@ Quotern 提供 macOS / Windows 桌面客户端，安装即用，无需额外配�
 
 Release 的 **Source code** 为对应 tag 的源码快照，编译方法见[源码归档构建说明](./CONTRIBUTING.md#从-source-code-归档构建)。
 
-### 首次启动
+#### 首次启动
 
 1. 打开 **Quotern** 应用
 2. 首次运行会自动尝试注册 Claude / Codex Hook 并同步本地用量
@@ -65,7 +78,7 @@ Release 的 **Source code** 为对应 tag 的源码快照，编译方法见[源�
 
 用量数据保存在本机，面板直接读取本地统计。
 
-## ⌨️ CLI 使用
+### ⌨️ CLI 使用
 
 需要 Node.js >= 20.10。macOS / Windows / Linux 可通过 `npx` 直接前台启动，无需预先全局安装：
 
@@ -84,6 +97,97 @@ quotern service start
 ```
 
 国内网络较慢可用 `npm i -g quotern --registry=https://registry.npmmirror.com/`。完整命令、选项与数据说明见 [CLI 使用说明](./CLI.md)。
+
+常用命令：
+
+```bash
+quotern status           # 查看运行状态
+quotern sync             # 手动同步本地用量
+quotern doctor           # 检查环境与数据源
+quotern usage --days 7   # 查询最近 7 天的用量
+```
+
+Windows 首次注册开机自启需要管理员权限；Linux 后台服务需要 systemd 用户实例。可用 `quotern start` 前台运行，具体见 [CLI 快速开始](./CLI.md#快速开始)。
+
+## ✨ 特性
+
+- **多 Agent 统一统计**：汇总多种编码工具的本地日志或数据库，按 Agent、模型和项目查看消耗。
+- **用量趋势与活跃热力图**：切换今天、最近 24 小时、7 / 30 / 90 天或自定义范围，查看输入、输出、缓存与费用趋势。
+- **订阅额度监控**：集中查看已接入渠道的剩余额度、使用窗口和重置时间，展示登录失效等读取状态。
+- **会话追溯**：搜索、筛选和排序已采集会话，展开查看模型用量、缓存、费用依据与任务时长。
+- **模型价格查询**：查询模型费率，按使用场景估算费用并对比模型；价格目录从 [models.dev](https://models.dev) 更新。
+- **成就与分享卡**：记录活跃天数、连续使用与个人成就，将所选时段的用量制作成可下载或复制的分享卡。
+- **桌面概览与宠物**：在紧凑概览中查看核心读数，在设置中挑选、预览桌面宠物并调整大小。
+- **Agent 直接查询**：通过 `quotern-usage` Skill 用自然语言查询本地统计，支持 JSON / CSV 报表与 HTML 用量概览。
+
+费用会区分来源报告金额、按模型费率估算和价格未知的情况，不能直接当作实际付款账单。会话、消息与任务时长的覆盖范围也因数据源而异，以界面的覆盖提示为准。
+
+## 🖼️ 功能预览
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>会话与用量趋势</strong><br>
+      从最近会话追踪使用记录，按时间查看 Token 总量与输入、缓存、输出的变化。<br><br>
+      <img src="./assets/sessions-and-usage-trends.png" alt="最近会话列表、Token 总量折线图和用量组成柱状图" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <strong>Agent、模型与项目分布</strong><br>
+      查看用量排行与分布，找到主要消耗来自哪个工具、模型和项目。<br><br>
+      <img src="./assets/usage-breakdown.png" alt="Agent 与模型用量排行，以及项目、Agent 和模型分布图" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <strong>会话浏览器</strong><br>
+      按 Agent 和项目筛选，搜索会话并切换排序；展开查看模型、输入 / 输出 Token、缓存和费用明细。<br><br>
+      <img src="./assets/session-browser.png" alt="带搜索、筛选、分页和展开明细的会话浏览器" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>成就展示架</strong><br>
+      用徽章、连续活跃记录和逐步解锁的目标留存使用足迹。<br><br>
+      <img src="./assets/achievements.png" alt="成就展示架、累计活跃天数、已解锁徽章和接近完成的目标" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <strong>用量分享卡</strong><br>
+      选择时间范围与 Agent，生成包含 Token、预估费用和模型排行的分享卡。<br><br>
+      <img src="./assets/usage-share-card.png" alt="用量分享卡预览，包含时间筛选、模型排行、下载和复制入口" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>紧凑用量概览</strong><br>
+      在小窗口中快速查看配额、核心用量和最近同步状态。<br><br>
+      <img src="./assets/compact-usage-overview.png" alt="深色紧凑概览窗口，展示订阅配额、用量与同步状态" width="300">
+    </td>
+    <td width="50%" valign="top">
+      <strong>桌面宠物</strong><br>
+      选择角色、预览外观并调整大小，确认后设为当前宠物。<br><br>
+      <img src="./assets/desktop-pet-settings.png" alt="宠物设置：当前宠物为 Clawd，正在预览大肥鱼，可调整大小或应用选择" width="100%">
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary>查看宽屏用量总览</summary>
+
+![宽屏用量总览，包含统计卡片、订阅额度、年度活跃热力图和最近会话](./assets/usage-dashboard-wide.png)
+
+</details>
+
+## 🔌 数据源与能力范围
+
+| 能力 | 已接入来源示例 | 使用说明 |
+| --- | --- | --- |
+| Token 与费用统计 | Claude Code、Codex、Cursor、Gemini CLI、OpenCode、GitHub Copilot、DeepSeek Harness、ZCode 等 | 基于各工具提供的日志、数据库或账单数据；可取得的字段与历史范围因来源而异 |
+| 订阅额度 | Codex、Claude、Cursor、Copilot、Grok、Kimi、ZCode、Antigravity、Qoder、MiniMax、OpenCode、DeepSeek | 需要对应渠道的有效登录状态或配置；可显示的额度窗口与账户套餐有关 |
+| 会话与任务统计 | Claude Code、Codex、Gemini CLI、OpenCode、Copilot、pi、OMP、DeepSeek Harness、Antigravity、ZCode、Kimi | 会话与 Token 采集范围分别计算；缺失或不完整的来源会显示覆盖提示 |
+
+更多用量来源包括 OpenClaw、AutoClaw、Hermes、Roo Code、Droid、Kiro、Cline、Amp、Qwen Code、CodeBuddy、WorkBuddy、Grok Build、Mimo、Every Code、Kilo CLI、Kilo Code、Goose、Zed、Warp、WPS Comate、Command Code、MiniMax Code 和 KinetAios。完整工具目录见 [Core 数据源定义](./packages/core/src/tool-catalog.ts)。
+
+用量采集、订阅额度和会话明细各有独立的数据覆盖范围。配置与口径见 [数据采集与统计](./docs/data-notes.md)、[订阅数据说明](./docs/subscription-plan-design.md)及 [额度管理](./docs/quota-management.md)。
 
 ## Agent 自动发现与调用
 
@@ -167,29 +271,38 @@ quotern usage models --source codex,claude --days 30 --json --compact
 
 部分来源需要读取 Agent 登录状态以获取账单或订阅额度；价格目录和桌面更新也会访问各自的服务。订阅凭据由主进程处理，界面接收展示快照。数据流与文件用途见[架构注意事项](./docs/architecture-notes.md)。
 
+用量数据在本机完成解析、聚合与查询，桌面端和 CLI 面板读取同一套本地统计。首次使用无需注册 Quotern 账号；供应商额度等在线读数仍需要对应服务可访问。
+
 ## 🛠️ 开发注意事项
 
-仓库开发和测试使用 Node.js 22.13+，pnpm 版本以根 `package.json` 为准。克隆后先在仓库根执行 `pnpm install`。
+仓库开发和测试使用 Node.js 22.13+，pnpm 版本以根 `package.json` 为准。在仓库根安装依赖：
 
-如 `pnpm install` 卡在 electron postinstall
+```bash
+corepack pnpm install --frozen-lockfile --prefer-offline
+```
 
-Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
+本地开发使用 `corepack pnpm dev:desktop` 或 `corepack pnpm dev:cli`。启动前请阅读 [worktree 开发规范](./docs/worktree-development.md)，实际面板地址以启动输出为准。
 
-请在安装前设置环境变量：
+<details>
+<summary>Electron 下载缓慢时配置镜像</summary>
+
+Electron 二进制默认从 GitHub Releases 下载，国内网络可能会超时。可在安装前设置镜像环境变量：
 
 ```bash
 # Git Bash / macOS / Linux
 export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-pnpm install
+corepack pnpm install --frozen-lockfile --prefer-offline
 ```
 
 ```powershell
 # PowerShell
 $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
 $env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-pnpm install
+corepack pnpm install --frozen-lockfile --prefer-offline
 ```
+
+</details>
 
 ## 🤝 贡献指南
 
@@ -211,7 +324,7 @@ pnpm install
 ## 📚 参考项目
 
 - [dsh-pet](https://github.com/PC2005-cloud/dsh-pet): 一只住在 DSH 里的桌面宠物：一百余个透明动画随时无缝衔接；还能跟随 DSH 会话事件切换工作状态动画。
-- [Token Tracker](https://github.com/xiufengsun/TokenTracker): 自动采集 30 款 AI 编码工具 的 token 用量，用一套漂亮的 Dashboard 看真实成本与趋势。
+- [Token Tracker](https://github.com/xiufengsun/TokenTracker): 多工具 Token 用量追踪与 Dashboard；本 README 的功能介绍与截图编排参考其[中文说明](https://github.com/xiufengsun/TokenTracker/blob/main/README.zh-CN.md)。
 - [vibe-usage](https://github.com/vibe-cafe/vibe-usage): Token 使用量统计工具（CLI）
 - [OpenUsage](https://github.com/robinebers/openusage): The Only AI Usage Tracker That's Truly Yours
 - [agent-usage](https://github.com/briqt/agent-usage): 统一采集 Agent 的本地会话数据，通过 Web 仪表板展示 token 用量、费用趋势和会话明细。

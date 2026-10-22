@@ -89,14 +89,25 @@ async function handleBridgeRequest(request) {
   sprite = replaceRequired(sprite, 'window.petBridge.openDshSite(ORIGIN)', 'window.petBridge.openHost()');
   sprite = patchDshPetMotion(sprite);
   sprite = withoutPetChat(sprite);
+  sprite = replaceRequired(sprite, "    tools.push({ label: '查看余额', action: 'show-balance' });", `    tools.push({ label: this.companionData?.labels?.sync || '立即同步', action: 'quotern-sync' });
+    tools.push({ label: this.companionData?.labels?.settings || '宠物设置', action: 'quotern-settings' });
+    tools.push({ label: '查看余额', action: 'show-balance' });`);
   ({ helper, preload, sprite } = patchDshPetPointer({ helper, preload, sprite }));
+  helper = replaceRequired(helper, 'let hostBridge;', `let hostBridge;
+require('./position-store.cjs').installPositionStore({ app, ipcMain, getWindow: id => windows.get(id) });`);
+  preload = replaceRequired(preload, '  setInteractive(interactive) {', `  readCompanionPosition(id) { return ipcRenderer.sendSync('pet:read-companion-position', id); },
+  saveCompanionPosition(id, state) { return ipcRenderer.sendSync('pet:save-companion-position', id, state); },
+  setInteractive(interactive) {`);
   await writeFile(runtimeFile, helper);
   await writeFile(preloadFile, preload);
   await writeFile(spriteFile, sprite);
   await cp(path.join(desktopRoot, 'scripts/dsh-pet-controls-runtime.js'), path.join(output, 'runtime/controls.js'));
+  await cp(path.join(desktopRoot, 'scripts/dsh-pet-interactions-runtime.js'), path.join(output, 'runtime/interactions.js'));
+  await cp(path.join(desktopRoot, 'scripts/dsh-pet-position-store.cjs'), path.join(output, 'runtime/position-store.cjs'));
   const htmlFile = path.join(output, 'runtime/index.html');
   const html = await readFile(htmlFile, 'utf8');
-  await writeFile(htmlFile, replaceRequired(html, '<script src="./renderer.js"></script>', '<script src="./controls.js"></script>\n    <script src="./renderer.js"></script>'));
+  const interactionHtml = replaceRequired(html, '</style>', `.pet-bubble.is-companion-below::after { top: -5px; bottom: auto; border: 5px solid transparent; border-top: none; border-bottom-color: rgba(255,255,255,.92); }\n    </style>`);
+  await writeFile(htmlFile, replaceRequired(interactionHtml, '<script src="./renderer.js"></script>', '<script src="./controls.js"></script>\n    <script src="./interactions.js"></script>\n    <script src="./renderer.js"></script>'));
   await build({ entryPoints: [path.join(desktopRoot, 'src/main/dsh-pet/helper-adapter.ts')], outfile: path.join(output, 'runtime/quotern-adapter.cjs'), bundle: true, format: 'cjs', platform: 'node', target: 'node22', logLevel: 'warning' });
   await build({ entryPoints: [path.join(vendor, 'src/shared/index.ts')], outfile: path.join(output, 'runtime/shared-core.js'), bundle: true, format: 'iife', globalName: 'PetShared', platform: 'browser', target: 'chrome134', logLevel: 'warning',
     plugins: [{ name: 'quotern-window-label', setup(bundle) {

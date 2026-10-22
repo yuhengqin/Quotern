@@ -9,10 +9,12 @@ import { DshPetRpcServer } from './rpc.js';
 import { DshPetService } from './service.js';
 import { DshPetActivityMonitor, type ActivityRoot } from './activity.js';
 import { atomicPrivateFile } from './storage.js';
+import type { DshPetCompanion } from './companion.js';
 
 interface Options {
   root: string; runtimeRoot: string; executable: string; appPath: string; packaged: boolean;
   getQuota(): QuotaState | null; refreshQuota?(): Promise<void>; showMainWindow(): void; openDirectory(directory: string): Promise<void>;
+  getCompanion?(): DshPetCompanion; sync?(): Promise<void>; openSettings?(): void;
   coordinateVisibility?<T>(visible: boolean, operation: () => Promise<T>): Promise<T>; isMainWindowVisible?(): boolean; notify?(title: string, body: string, target?: SessionNavigationTarget): void;
   onChanged?(state: DshPetState): void; roots?: ActivityRoot[] | (() => Promise<ActivityRoot[]>); spawn?: (exe: string, args: string[], options: SpawnOptions) => ChildProcess;
 }
@@ -119,7 +121,7 @@ export class DshPetController {
     try {
       const pets = this.config.vendor.flattenPetList(this.config.read()).filter(pet => pet.display === 'desktop' || pet.display === 'both');
       if (!pets.length) { this.enabled = false; await this.persist(); this.status = 'disabled'; this.changed(); return; }
-      const service = new DshPetService({ config: this.config, assets: new DshPetAssetStore(this.options.root, this.options.runtimeRoot), getQuota: this.options.getQuota, quotaSource: () => this.quotaSource, refreshQuota: this.options.refreshQuota, reload: () => this.enqueue(async () => { await this.stop(); if (this.enabled && !this.paused) await this.start(); this.changed(); }), showMainWindow: this.options.showMainWindow, isMainWindowVisible: this.options.isMainWindowVisible, notify: this.options.notify, onChanged: () => this.changed() });
+      const service = new DshPetService({ config: this.config, assets: new DshPetAssetStore(this.options.root, this.options.runtimeRoot), getQuota: this.options.getQuota, quotaSource: () => this.quotaSource, refreshQuota: this.options.refreshQuota, reload: () => this.enqueue(async () => { await this.stop(); if (this.enabled && !this.paused) await this.start(); this.changed(); }), showMainWindow: this.options.showMainWindow, isMainWindowVisible: this.options.isMainWindowVisible, notify: this.options.notify, onChanged: () => this.changed(), getCompanion: this.options.getCompanion, sync: this.options.sync, openSettings: this.options.openSettings });
       this.service = service;
       const pipe = new DshPetRpcServer(); this.pipe = pipe; const address = await pipe.start((request, signal) => service.handle(request, signal));
       this.monitor = new DshPetActivityMonitor({ roots: this.options.roots ?? [], onEvent: event => service.onActivity(event) });

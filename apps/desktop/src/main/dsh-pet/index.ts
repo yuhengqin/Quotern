@@ -8,8 +8,9 @@ import { NotificationNavigation } from './notification-navigation.js';
 import { DSH_PET_PREVIEW_SCHEME } from '../../shared/dsh-pet-preview.js';
 import { DshPetAssetStore } from './asset-store.js';
 import { createDshPetPreviewHandler } from './preview.js';
+import type { DshPetCompanion } from './companion.js';
 
-export function initializeDshPet(options: { getMainWindow(): BrowserWindow | null; getQuota(): QuotaState | null; refreshQuota(): Promise<void>; showMainWindow(): void; coordinateVisibility<T>(visible: boolean, operation: () => Promise<T>): Promise<T>; onStateChanged?(): void }) {
+export function initializeDshPet(options: { getMainWindow(): BrowserWindow | null; getQuota(): QuotaState | null; refreshQuota(): Promise<void>; showMainWindow(): void; getCompanion?(): DshPetCompanion; sync?(): Promise<void>; openSettings?(): void; coordinateVisibility<T>(visible: boolean, operation: () => Promise<T>): Promise<T>; onStateChanged?(): void }) {
   const notifications = new Set<Notification>();
   const navigation = new NotificationNavigation();
   const root = path.join(app.getPath('userData'), 'dsh-pet');
@@ -19,6 +20,7 @@ export function initializeDshPet(options: { getMainWindow(): BrowserWindow | nul
     root, runtimeRoot,
     executable: process.execPath, appPath: app.getAppPath(), packaged: app.isPackaged, coordinateVisibility: options.coordinateVisibility,
     getQuota: options.getQuota, refreshQuota: options.refreshQuota, showMainWindow: options.showMainWindow,
+    getCompanion: options.getCompanion, sync: options.sync, openSettings: options.openSettings,
     isMainWindowVisible: () => Boolean(options.getMainWindow()?.isFocused()),
     openDirectory: async directory => { const error = await shell.openPath(directory); if (error) throw new Error(error); },
     roots: discoverDshPetActivityRoots,

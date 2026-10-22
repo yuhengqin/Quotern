@@ -3,6 +3,21 @@ import { test } from 'node:test';
 import { connect } from 'node:net';
 import { once } from 'node:events';
 import { DshPetRpcServer } from './rpc.js';
+import { connectHost } from './helper-adapter.js';
+
+test('companion menu actions cross the authenticated pipe and leave subsequent state reads usable', async () => {
+  const server = new DshPetRpcServer();
+  const { endpoint, token } = await server.start(async request => ({ status: 200, body: JSON.stringify({ route: request.url }) }));
+  const client = connectHost(endpoint, token, () => {});
+  try {
+    await client.ready;
+    for (const [method, route] of [['POST', 'sync'], ['POST', 'open-settings'], ['GET', 'state']]) {
+      const result = await client.request(method!, `/dsh-pet-7340/${route}`);
+      assert.equal(result.status, 200);
+      assert.equal(JSON.parse(result.body!).route, `/dsh-pet-7340/${route}`);
+    }
+  } finally { client.close(); await server.close(); }
+});
 
 test('authenticates private pipe requests and aborts handlers when their client disconnects', async () => {
   const server = new DshPetRpcServer();

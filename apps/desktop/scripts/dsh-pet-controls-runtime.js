@@ -186,6 +186,7 @@
         await releaseBarrier;
         if (epoch !== inputEpoch) return;
         const state = await S.fetchState(STATE_URL); if (!state || epoch !== inputEpoch) return;
+        for (const pet of sprites) pet.onCompanionSnapshot?.(state.sections?.companion?.data);
         const first = stateBaseline === null;
         const changed = first ? sprites.flatMap(pet => Object.entries(state.pets?.[pet.pet.id] || {})
           .filter(([key]) => ['anim', 'position', 'throw'].includes(key))

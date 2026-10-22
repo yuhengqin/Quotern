@@ -5,12 +5,14 @@ import type { DshPetAssetStore } from './asset-store.js';
 import type { MemeEntry, PetInstance } from './vendor.js';
 import { toDshPetBalance } from './balance.js';
 import { DshPetControls, motionCue, type PlaybackStatus } from './controls.js';
+import type { DshPetCompanion } from './companion.js';
 
 interface Options {
   config: DshPetConfigStore; assets: DshPetAssetStore;
   getQuota(): QuotaState | null; quotaSource(): string | null; refreshQuota?(): Promise<void>;
   reload(): Promise<void>; showMainWindow(): void; now?(): number; onChanged?(): void;
   notify?(title: string, body: string, target?: SessionNavigationTarget): void; isMainWindowVisible?(): boolean;
+  getCompanion?(): DshPetCompanion; sync?(): Promise<void>; openSettings?(): void;
 }
 const json = (body: unknown, status = 200): RpcResponse => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const failure = (reason: string, message?: string) => ({ ok: false, reason, ...(message ? { message } : {}) });
@@ -28,6 +30,7 @@ export class DshPetService {
   private balanceRun: Promise<void> | null = null;
   private seq = 0;
   private workSignature = '';
+  private companionSignature = '';
   private timer: ReturnType<typeof setInterval> | null = null;
   private reloadTimer: ReturnType<typeof setTimeout> | null = null;
   constructor(private readonly options: Options) {
@@ -61,6 +64,11 @@ export class DshPetService {
     }
     if (method === 'GET' && /^\/(thumb|pic|font)\//.test(route)) { const asset = await this.options.assets.resolve(rawRoute); return asset ? { status: 200, ...asset } : json(failure('not-found'), 404); }
     if (method === 'POST' && route === '/open-host') { this.options.showMainWindow(); return json({ ok: true }); }
+    if (method === 'POST' && route === '/open-settings') { this.options.openSettings?.(); return json({ ok: Boolean(this.options.openSettings) }); }
+    if (method === 'POST' && route === '/sync') {
+      try { if (!this.options.sync) return json(failure('unavailable'), 503); await this.options.sync(); await this.refreshAutomatic(); return json({ ok: true }); }
+      catch { return json(failure('sync-failed'), 503); }
+    }
     if (method === 'POST' && route === '/reload') { this.scheduleReload(); return json({ reloading: true }); }
     if (method === 'POST' && route === '/balance') { await this.refreshBalance(true); return json({ ok: true }); }
     if (method === 'POST' && route === '/pet-display') {
@@ -138,6 +146,10 @@ export class DshPetService {
   async refreshAutomatic(): Promise<void> {
     if (this.lifetime.signal.aborted) return;
     const now = this.now(); let expired = false;
+    if (this.options.getCompanion) {
+      const data = this.options.getCompanion(), signature = JSON.stringify(data);
+      if (signature !== this.companionSignature) { this.companionSignature = signature; this.poll.writeSection('companion', data); }
+    }
     for (const [key, entry] of this.activity) if (entry.expires <= now) { this.work.clear(key); this.activity.delete(key); expired = true; }
     if (expired) this.publishWork();
     const cfg = this.options.config.read(), vendor = this.options.config.vendor, pets = vendor.flattenPetList(cfg);

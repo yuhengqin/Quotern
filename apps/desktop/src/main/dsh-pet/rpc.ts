@@ -9,7 +9,7 @@ const allowed = (method: string, url: string): boolean => {
   const route = url.split('?')[0];
   return method === 'GET'
     ? /^\/dsh-pet-7340\/(?:config|state|playback\/[a-zA-Z0-9-]+)$/.test(route!) || /^\/dsh-pet-7340\/(?:thumb|pic|font)\//.test(route!)
-    : method === 'POST' && /^\/dsh-pet-7340\/(?:balance|reload|pet-display|anim|broadcast|open-host|position|throw|lock|lock\/release|playback\/[a-zA-Z0-9-]+\/report)$/.test(route!);
+    : method === 'POST' && /^\/dsh-pet-7340\/(?:balance|reload|pet-display|anim|broadcast|open-host|open-settings|sync|position|throw|lock|lock\/release|playback\/[a-zA-Z0-9-]+\/report)$/.test(route!);
 };
 
 export class DshPetRpcServer {

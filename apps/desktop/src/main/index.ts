@@ -73,6 +73,7 @@ import { PetActivation } from './pet-activation';
 import path from 'node:path';
 import { PET_SELECT_CHANNEL, PET_ENABLE_CHANNEL, PET_SELECTION_GET_CHANNEL, PET_SELECTION_STATE_CHANNEL, type PetSelection } from '../shared/pet';
 import { initializeDshPet } from './dsh-pet';
+import { buildDshPetCompanion } from './dsh-pet/companion';
 import { DSH_PET_PREVIEW_PROTOCOL } from '../shared/dsh-pet-preview';
 import { buildDshPetTrayMenu } from './dsh-pet/tray-menu';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
@@ -569,7 +570,11 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       }
       // Restore dsh-pet last: old configurations with both enabled converge to one pet.
       try {
-        dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow, coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation), onStateChanged: broadcastSelection });
+        dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow,
+          getCompanion: () => buildDshPetCompanion(petController?.getState(), getQuotaRuntimeState()),
+          sync: async () => { const result = await localApiRequest('/functions/tud-trigger-sync', { method: 'POST', body: '{}' }); if (result.status !== 200) throw new Error('Sync unavailable'); },
+          openSettings: () => void openSettings({ tab: 'pet' }),
+          coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation), onStateChanged: broadcastSelection });
         await dshPet.controller.initialize();
       }
       catch (error) {

@@ -34,6 +34,8 @@
 
 宠物角色列表固定先展示大肥鱼，再展示 Clawd、Bot 和导入角色；不再内置 Sprout、Byte、Ember，也不提供恢复这三项内置角色的按钮。导入角色仍可预览、应用和移除。
 
+大肥鱼独立 helper 的交互与数据入口为 `apps/desktop/scripts/dsh-pet-interactions-runtime.js` 和 `apps/desktop/src/main/dsh-pet/companion.ts`；保留原视频播放器、右键动作菜单、身体命中及鼠标穿透。该经典 DOM 页面没有 React Provider，提示气泡和菜单沿用 helper 实现，不使用 FilterMenu。交互边界：悬停显示今日用量、参考 USD 费用和额度窗口，点击轮换回应动作与本机统计短句，右侧屏幕边缘收起并在悬停后展开（多屏接缝不收边），全画面倾斜遵守 reduced-motion；不增加独立眼神交互，也不使用 mini 素材。
+
 ### 业务内复用入口
 
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动展开已有会话；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史；缺记录时保留目标等待常规同步。Dashboard 与 Desktop 使用同一页面和详情行，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与展开行为保留。

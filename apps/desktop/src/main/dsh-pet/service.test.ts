@@ -10,14 +10,33 @@ import { DshPetAssetStore } from './asset-store.js';
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-service-'));
   const config = new DshPetConfigStore(root, path.resolve('out/dsh-pet'));
-  let reloads = 0, now = Date.now(), focused = false; const notifications: string[] = [], targets: unknown[] = [];
-  const service = new DshPetService({ config, assets: new DshPetAssetStore(root, path.resolve('out/dsh-pet')), getQuota: () => null, quotaSource: () => null, reload: async () => { reloads++; }, showMainWindow: () => {}, now: () => now, notify: (title, _body, target) => { notifications.push(title); targets.push(target); }, isMainWindowVisible: () => focused });
+  let reloads = 0, syncs = 0, settings = 0, now = Date.now(), focused = false; const notifications: string[] = [], targets: unknown[] = [];
+  const companion = { connected: true, syncing: false, hoverText: 'Today: 42 tokens', quips: ['Today: 42 tokens', 'Hello'] };
+  const service = new DshPetService({ config, assets: new DshPetAssetStore(root, path.resolve('out/dsh-pet')), getQuota: () => null, quotaSource: () => null, reload: async () => { reloads++; }, showMainWindow: () => {}, now: () => now, notify: (title, _body, target) => { notifications.push(title); targets.push(target); }, isMainWindowVisible: () => focused,
+    ...{ getCompanion: () => companion, sync: async () => { syncs++; }, openSettings: () => { settings++; } } });
   const call = async (method: string, route: string, body?: unknown, signal?: AbortSignal) => {
     const result = await service.handle({ id: 1, method, url: `/dsh-pet-7340/${route}`, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, signal);
     return { status: result.status, body: JSON.parse(result.body ?? '{}') };
   };
-  return { root, config, service, call, notifications, targets, focus: (value: boolean) => { focused = value; }, get reloads() { return reloads; }, advance: (ms: number) => { now += ms; }, close: async () => { service.dispose(); await rm(root, { recursive: true, force: true }); } };
+  return { root, config, service, call, notifications, targets, companion, focus: (value: boolean) => { focused = value; }, get reloads() { return reloads; }, get syncs() { return syncs; }, get settings() { return settings; }, advance: (ms: number) => { now += ms; }, close: async () => { service.dispose(); await rm(root, { recursive: true, force: true }); } };
 }
+
+test('companion publishes changed snapshots and routes sync and pet settings through the host', async () => {
+  const f = await fixture();
+  try {
+    await f.service.refreshAutomatic();
+    const first = (await f.call('GET', 'state')).body.sections.companion;
+    assert.deepEqual(first?.data, f.companion);
+    await f.service.refreshAutomatic();
+    assert.equal((await f.call('GET', 'state')).body.sections.companion.counter, first.counter);
+    f.companion.syncing = true;
+    await f.service.refreshAutomatic();
+    assert.equal((await f.call('GET', 'state')).body.sections.companion.data.syncing, true);
+    assert.equal((await f.call('POST', 'sync')).body.ok, true);
+    assert.equal((await f.call('POST', 'open-settings')).body.ok, true);
+    assert.equal(f.syncs, 1); assert.equal(f.settings, 1);
+  } finally { await f.close(); }
+});
 
 test('preserves runtime state/action contracts and validates every built-in animation', async () => {
   const f = await fixture();

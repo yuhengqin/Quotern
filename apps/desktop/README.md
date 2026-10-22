@@ -26,6 +26,16 @@ pnpm build:desktop:mac
 pnpm build:desktop:win
 ```
 
+### Windows 安装向导
+
+NSIS 安装包提供安装范围、安装目录和桌面快捷方式选项。首次安装默认选择「当前用户」；默认目录为 Windows 当前用户的程序目录（通常是 `%LOCALAPPDATA%\Programs\Quotern`），选择「所有用户」后默认为 `%ProgramFiles%\Quotern`，需要管理员权限。用户可以修改目录；升级优先沿用原安装范围与目录。
+
+「创建桌面快捷方式」默认勾选，可取消；完成页的「运行 Quotern」默认勾选，点击完成后启动应用。自动更新不显示自定义快捷方式选项，不重新创建用户已删除的图标。开始菜单快捷方式和卸载入口继续由 electron-builder 管理。
+
+安装器支持英语、简体中文、日语、韩语，语言选择框默认匹配系统语言，其他语言回退英语。安装器语言与应用设置中的语言偏好独立；`nsis.installerLanguages` 控制安装器翻译，`win.electronLanguages` 控制 Electron 运行时语言资源。便携版不经过安装向导。
+
+安装器配置位于 `electron-builder.yml`，桌面快捷方式选项页通过 `scripts/installer.nsh` 扩展默认 NSIS 模板；修改时保留既有 `guid`，以识别旧安装。验证应覆盖四语言、两种安装范围、修改目录、快捷方式勾选/取消及安装后启动；自动更新还需检查原目录与已删除图标的保留。
+
 ## 测试
 
 ### 订阅卡片 Desktop mock 预览

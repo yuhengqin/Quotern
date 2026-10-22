@@ -62,6 +62,20 @@ dmg:
 nsis:
   # Keep the installed application's upgrade identity while changing its product name/appId.
   guid: 77c89c13-52a6-5b46-b7b1-f5b025d10759
+  oneClick: false
+  perMachine: false
+  selectPerMachineByDefault: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  runAfterFinish: true
+  include: scripts/installer.nsh
+  installerLanguages:
+    - en_US
+    - zh_CN
+    - ja_JP
+    - ko_KR
+  displayLanguageSelector: true
 win:
   icon: resources/icon.png
   electronLanguages:

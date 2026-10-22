@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from
 import { Button } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { DshPetAction, DshPetState } from '../../shared/dsh-pet';
-import { DSH_PET_WIDTHS, dshPetSize } from '../../shared/dsh-pet-size';
 import { DSH_PET_PREVIEW_ACTIONS, dshPetPreviewUrl } from '../../shared/dsh-pet-preview';
 import type { QuotaState } from '../../shared/quota';
 
@@ -119,10 +118,6 @@ export function DshPetSettingsCard({ active = true, headerAction }: { active?: b
     </Section>
     <Section title={text('instances')}>
       {pets.map((pet, index) => <div key={String(pet.id)} className="space-y-3 rounded-lg bg-default-100/40 p-3"><Field label={text('name')}><SavedInput revision={configRevision} className={inputClass} value={String(pet.name ?? pet.id)} maxLength={100} disabled={busy} onSave={value => { return updatePet(index, { name: value }, true); }} /></Field>
-        <div className="flex flex-wrap items-center gap-2 text-xs" role="group" aria-label={t('desktop.pet.size')}>
-          <span className="mr-1 text-muted">{t('desktop.pet.size')}</span>
-          {(['small', 'medium', 'large'] as const).map(size => <button type="button" key={size} disabled={busy} aria-pressed={dshPetSize(pet.size) === size} onClick={() => { void updatePet(index, { size: DSH_PET_WIDTHS[size] }); }} className={`rounded-md border px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-accent ${dshPetSize(pet.size) === size ? 'border-accent bg-accent/10' : 'border-default-200 dark:border-default-100/20'}`}>{t(`desktop.pet.size.${size}`)}</button>)}
-        </div>
         <div className="flex flex-wrap gap-3">{(['balanceEnabled', 'workStatusEnabled', 'fixedEnabled'] as const).map(field => <span key={field}>{toggle(text(field), Boolean(pet[field]), value => { void updatePet(index, { [field]: value }); })}</span>)}</div>
       </div>)}
     </Section>
@@ -133,6 +128,5 @@ export function DshPetSettingsCard({ active = true, headerAction }: { active?: b
     </Group>
     <Group title={text('activity')}><p className="text-xs text-muted">{text('activityHelp')}</p>{state.sources.map(source => <div key={source.source} className="text-xs"><strong>{source.source}</strong><span> · {source.states.join(', ') || text('unconnected')}</span><p className="mt-1 text-muted">{source.reason}{source.lastEventAt ? ` · ${new Date(source.lastEventAt).toLocaleTimeString()}` : ''}</p></div>)}</Group>
     <Group title={text('advanced')}><div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'read-config' }).then(value => { if (typeof value === 'string') setRaw(value); }); }}>{text('loadConfig')}</Button><Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'open-directory' }); }}>{text('openDirectory')}</Button><Button size="sm" variant="secondary" isDisabled={busy} onPress={() => { void run({ type: 'reset-config' }).then(result => { if (result) setRaw(''); }); }}>{text('reset')}</Button></div><p className="text-xs text-muted">{text('advancedHelp')}</p>{raw && <form method="post" onSubmit={e => { e.preventDefault(); void run({ type: 'save-config', text: raw }); }} className="space-y-2"><Field label="JSONC"><textarea name="jsonc" className={`${inputClass} font-mono text-xs`} rows={14} value={raw} spellCheck={false} onChange={e => setRaw(e.target.value)} /></Field><Button size="sm" type="submit" isDisabled={busy}>{text('saveConfig')}</Button></form>}</Group>
-    <p className="text-xs text-muted"><button className="underline" onClick={() => { void window.tud.openExternal('https://github.com/PC2005-cloud/dsh-pet'); }}>dsh-pet · PC2005-cloud</button> · {text('license')}</p>
   </div>;
 }

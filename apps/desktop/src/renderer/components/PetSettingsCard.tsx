@@ -7,6 +7,7 @@ import { SettingsHelpPopover } from './SettingsHelpPopover';
 import type { PetCatalogEntry } from '../../main/pet-core';
 import type { PetActivationState, PetCatalogRequest, PetSelection, PetSettingPatch, PetState } from '../../shared/pet';
 import type { DshPetState } from '../../shared/dsh-pet';
+import { DSH_PET_WIDTHS, dshPetSize } from '../../shared/dsh-pet-size';
 // These two renderers are shared with the standalone pet page copied from TokenTracker.
 // @ts-expect-error The upstream JSX module has no TypeScript declarations.
 import { BotAnimated } from '../ui/foundation/BotAnimated.jsx';
@@ -158,6 +159,8 @@ export function PetSettingsCard() {
   const enabled = activation?.enabled ?? false;
   const currentAvailable = activation?.currentKind === 'dsh' ? Boolean(dshState) : Boolean(state);
   const previewIsCurrent = activation?.currentKind === (showDshSettings ? 'dsh' : 'builtin') && (showDshSettings || state?.settings.character === selected?.id);
+  const currentDshPet = dshState && Object.values(dshState.config).flatMap(config => Array.isArray(config.pets) ? config.pets as { id?: unknown; size?: unknown }[] : [])[0];
+  const currentSize = activation?.currentKind === 'dsh' ? (currentDshPet ? dshPetSize(currentDshPet.size) : undefined) : state?.settings.size;
 
   const applySelection = async (target: PetSelection) => {
     setBusy(true); setError(null); setCatalogFeedback(null);
@@ -181,6 +184,18 @@ export function PetSettingsCard() {
     setBusy(true); setError(null); setCatalogFeedback(null);
     try { setState(await window.tud.pet.setSettings(patch)); }
     catch { setError({ key: 'desktop.pet.saveFailed' }); }
+    finally { setBusy(false); }
+  };
+
+  const updateSize = async (size: NonNullable<PetSettingPatch['size']>) => {
+    if (!activation) return;
+    if (activation.currentKind === 'builtin') return update({ size });
+    if (!currentDshPet) return;
+    setBusy(true); setError(null); setCatalogFeedback(null);
+    try {
+      await window.tud.dshPet.dispatch({ type: 'patch-pet', petId: String(currentDshPet.id), patch: { size: DSH_PET_WIDTHS[size] } });
+      setDshState(await window.tud.dshPet.getState());
+    } catch { setError({ key: 'desktop.pet.saveFailed' }); }
     finally { setBusy(false); }
   };
 
@@ -224,6 +239,13 @@ export function PetSettingsCard() {
         </Switch>
       </div>
       {currentName && <p role="status" className="mt-2 text-xs text-foreground">{t('desktop.pet.currentName', { name: currentName })}<span className="text-muted"> · {t(enabled ? 'desktop.pet.enabled' : 'desktop.pet.disabled')}</span></p>}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" role="group" aria-label={t('desktop.pet.size')}>
+        <span className="mr-1 text-muted">{t('desktop.pet.size')}</span>
+        {(['small', 'medium', 'large'] as const).map(size => (
+          <button type="button" key={size} disabled={busy || !activation || !currentSize} aria-pressed={currentSize === size} onClick={() => void updateSize(size)}
+            className={`rounded-md border px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50 ${currentSize === size ? 'border-accent bg-accent/10' : 'border-default-200 dark:border-default-100/20'}`}>{t(`desktop.pet.size.${size}`)}</button>
+        ))}
+      </div>
       {error && <p role="alert" className="mt-3 text-xs text-danger">{t(error.key, error.options)}</p>}
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -291,14 +313,6 @@ export function PetSettingsCard() {
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-        <span className="mr-1 text-muted">{t('desktop.pet.size')}</span>
-        {([['small', 'desktop.pet.size.small'], ['medium', 'desktop.pet.size.medium'], ['large', 'desktop.pet.size.large']] as const).map(([value, labelKey]) => (
-          <button type="button" key={value} disabled={busy} aria-pressed={state.settings.size === value} onClick={() => void update({ size: value })}
-            className={`rounded-md border px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-accent ${state.settings.size === value ? 'border-accent bg-accent/10' : 'border-default-200 dark:border-default-100/20'}`}>{t(labelKey)}</button>
-        ))}
-      </div>
-
       {selected?.id === 'bot' && (
         <div className="mt-4 flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t('desktop.pet.botColor')}>
           <span className="mr-1 text-xs text-muted">{t('desktop.pet.botColor')}</span>
@@ -310,6 +324,12 @@ export function PetSettingsCard() {
           ))}
         </div>
       )}
+
+      </>}
+      </div>
+      <div hidden={!showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
+        <DshPetSettingsCard active={showDshSettings} headerAction={selectionAction({ kind: 'dsh' })} />
+      </div>
 
       <div className="mt-5 border-t border-default-200 pt-4 dark:border-default-100/20">
         <div className="flex items-center gap-1">
@@ -339,7 +359,7 @@ export function PetSettingsCard() {
                   {codexPets.map(pet => (
                     <label key={pet.id} className="flex items-center gap-2 rounded-lg border border-default-200 p-2 dark:border-default-100/20">
                       <input type="checkbox" checked={selectedCodex.includes(pet.id)} disabled={busy} onChange={() => setSelectedCodex(current => current.includes(pet.id) ? current.filter(id => id !== pet.id) : [...current, pet.id])} />
-                      <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden"><PetCardSprite pet={pet} color={state.settings.botColor} /></span>
+                      <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden"><PetCardSprite pet={pet} color={state?.settings.botColor ?? 'auto'} /></span>
                       <span className="truncate">{pet.displayName}</span>
                     </label>
                   ))}
@@ -350,11 +370,6 @@ export function PetSettingsCard() {
             )}
           </div>
         )}
-      </div>
-      </>}
-      </div>
-      <div hidden={!showDshSettings} className="mt-4 border-t border-default-200 pt-4 dark:border-default-100/20">
-        <DshPetSettingsCard active={showDshSettings} headerAction={selectionAction({ kind: 'dsh' })} />
       </div>
     </section>
   );

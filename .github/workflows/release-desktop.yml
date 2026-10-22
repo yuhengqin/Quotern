@@ -23,6 +23,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Validate fresh installs: restored pnpm global-store graphs can omit platform
+  # optional binaries (for example @esbuild/win32-x64). Keep store caching off.
   preflight:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -39,7 +41,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
       - name: Validate source version and requested publication
         id: source
@@ -62,7 +63,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
       - name: Build and verify x64 and ARM64 Windows assets without uploading
         run: corepack pnpm release:desktop:win
@@ -88,7 +88,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
       - name: Import Developer ID certificate into a temporary keychain
         if: needs.preflight.outputs.macos-mode == 'signed'
@@ -187,7 +186,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: pnpm
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
       - uses: actions/download-artifact@v8
         with:

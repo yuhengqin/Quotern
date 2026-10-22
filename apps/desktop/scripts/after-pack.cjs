@@ -1,5 +1,6 @@
 const { access, readFile, readdir, rm } = require('node:fs/promises');
 const path = require('node:path');
+const { sharpTargetPackages } = require('./prepare-native-runtime.cjs');
 
 const MACOS_SIMPLIFIED_CHINESE_LOCALE = 'zh_CN.lproj';
 
@@ -52,16 +53,23 @@ async function verifySharpResources(context) {
     resources = path.join(context.appOutDir, app, 'Contents/Resources');
   }
   const modules = path.join(resources, 'app.asar.unpacked/node_modules');
+  const nativePackages = sharpTargetPackages(platform, arch);
+  const expected = new Set(nativePackages);
+  for (const name of await readdir(path.join(modules, '@img'))) {
+    if (name.startsWith('sharp-') && !expected.has(`@img/${name}`)) {
+      throw new Error(`Unexpected Sharp native package for ${platform}-${arch}: @img/${name}`);
+    }
+  }
   const sharpDirectory = path.join(modules, 'sharp');
   const manifest = JSON.parse(await readFile(path.join(sharpDirectory, 'package.json'), 'utf8'));
   await access(path.join(sharpDirectory, manifest.main));
-  const binary = path.join(modules, `@img/sharp-${platform}-${arch}/lib`);
+  const binary = path.join(modules, nativePackages[0], 'lib');
   const entries = await readdir(binary);
   if (!entries.some((name) => name.endsWith('.node'))) throw new Error(`Packaged Sharp native module is missing: ${binary}`);
   if (platform === 'win32') {
     if (!entries.some((name) => name.endsWith('.dll'))) throw new Error(`Packaged Sharp DLLs are missing: ${binary}`);
   } else {
-    const vips = path.join(modules, `@img/sharp-libvips-${platform}-${arch}/lib`);
+    const vips = path.join(modules, nativePackages[1], 'lib');
     if (!(await readdir(vips)).some((name) => /\.(dylib|so(?:\..*)?)$/.test(name))) throw new Error(`Packaged libvips is missing: ${vips}`);
   }
 }

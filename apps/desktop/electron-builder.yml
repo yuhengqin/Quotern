@@ -5,6 +5,7 @@ publish:
   owner: yuhengqin
   repo: Quotern
   private: true
+beforePack: ./scripts/prepare-native-runtime.cjs
 afterPack: ./scripts/after-pack.cjs
 # Sharp uses prebuilt Node-API binaries; preserve its complete platform package instead of ABI rebuilding.
 # Other JS dependencies are bundled by electron-vite; the decoder closure is staged separately.
@@ -22,13 +23,14 @@ files:
   - package.json
   - THIRD_PARTY_NOTICES.md
   - resources/**/*
-  - from: out/native-runtime
+  - from: out/native-runtime/${os}-${arch}
     to: node_modules
     filter:
       - "**/*"
 asar: true
 asarUnpack:
   - out/main/sync-worker*.js
+  # Custom files mappings match their source paths before being renamed to node_modules.
   - out/native-runtime/**
 extraResources:
   - from: out/dsh-pet

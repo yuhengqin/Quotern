@@ -163,6 +163,17 @@ export function assertReleaseRequest({ version, commit, ref, publish = false, di
   if (publish && dirty) throw new Error('Draft publication requires a clean checkout');
 }
 
+export async function requireReleaseNotes({ root = ROOT, version }) {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`Invalid release version: ${version}`);
+  const file = join(root, 'docs', 'release-notes', `v${version}.md`);
+  const notes = await readFile(file, 'utf8').catch(error => {
+    if (error.code === 'ENOENT') throw new Error(`Missing release notes: docs/release-notes/v${version}.md`);
+    throw error;
+  });
+  if (!notes.trim()) throw new Error(`Release notes are empty: ${file}`);
+  return file;
+}
+
 async function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     dir: { type: 'string' }, platform: { type: 'string' }, input: { type: 'string' }, output: { type: 'string' },
@@ -178,6 +189,7 @@ async function main() {
     if (values.publish) {
       const taggedCommit = execFileSync('git', ['rev-parse', `${ref}^{commit}`], { cwd: ROOT, encoding: 'utf8' }).trim();
       if (taggedCommit !== commit) throw new Error('Tag does not point at the checked-out source commit');
+      await requireReleaseNotes({ version });
     }
     if (values['github-output']) await writeFile(values['github-output'], `version=${version}\ncommit=${commit}\ntag=v${version}\n`, { flag: 'a' });
     console.log(JSON.stringify({ version, commit, ref, publish: values.publish }));

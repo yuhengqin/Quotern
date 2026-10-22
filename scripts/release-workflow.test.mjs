@@ -16,6 +16,10 @@ test('desktop releases default to verification and limit write access to explici
   assert.deepEqual(job.needs, ['preflight', 'assemble']);
   const commands = job.steps.map(step => step.run ?? '').join('\n');
   assert.match(commands, /--draft/);
+  assert.match(commands, /--notes-file "\$notes_file"/);
+  assert.match(commands, /notes_file="\$GITHUB_WORKSPACE\/docs\/release-notes\/\$RELEASE_TAG\.md"/);
+  assert.match(commands, /test -s "\$notes_file"/);
+  assert.doesNotMatch(commands, /--generate-notes/);
   assert.doesNotMatch(commands, /--clobber|--draft=false|--draft false/);
   assert.deepEqual(workflow.jobs.assemble.needs, ['preflight', 'windows', 'macos', 'source']);
 });

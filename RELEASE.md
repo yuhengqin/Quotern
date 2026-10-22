@@ -66,14 +66,16 @@ pnpm changeset
 ### 1. 生成版本号与 changelog
 
 ```bash
-pnpm version-packages   # changeset version：消费 .changeset/*，更新各包 package.json 与 CHANGELOG.md
+corepack pnpm version-packages   # changeset version：消费 .changeset/*，更新各包 package.json 与 CHANGELOG.md
 ```
 
 **必须人工 review 生成的 `CHANGELOG.md`。** changesets 会原样搬运 changeset 描述，措辞问题在这一步改掉，不要等发布后再返工。
 
 核对条目时检查提交 diff、目标版本源码及测试，不把提交标题当作功能已生效的证据。平台、来源目录、参数格式和费用口径应有明确限定；尚未发布的修改保留在 changeset 中。
 
-以 `chore(release): version packages` 提交，走 PR 合入 `main`。
+同时按[下方模板](#release-正文模板)整理 `docs/release-notes/v<Desktop版本>.md`，例如 `v0.2.0.md` 或 `v0.2.0-beta.1.md`。版本文件面向用户说明本次发布重点、升级事项和下载方式，各包 CHANGELOG 继续保留完整历史。文件名与稍后创建的 tag 一致，内容必须对应这一版本的真实变更。
+
+将版本号、CHANGELOG 和发布说明一起以 `chore(release): version packages` 提交，走 PR 合入 `main`；发布说明必须已经包含在被打 tag 的提交中。
 
 ### 2. 打 tag
 
@@ -93,9 +95,9 @@ corepack pnpm release:desktop:win     # 在 Windows 构建与验证；不上传
 
 Desktop 使用下方统一流程。平台命令只在本地生成产物；`electron-builder.yml` 的 `publish` 保留为运行时更新源配置，不负责直接上传。
 
-### 4. 撰写 GitHub Release
+### 4. 生成与审阅 GitHub Release
 
-按下方模板填写正文。统一流程验证通过后，可显式创建草稿；核对草稿附件、实机验收与正文后人工发布。推 tag 或默认手动运行不会创建 Release。
+统一流程验证通过后，可显式创建草稿。workflow 自动将 tag 对应的 `docs/release-notes/<tag>.md` 导入正文，无需在 GitHub 页面重复粘贴。核对草稿附件、实机验收与正文后人工发布。推 tag 或默认手动运行不会创建 Release。修改仓库中的说明文件不会自动同步到已经创建的草稿或正式 Release，需显式更新其正文。
 
 ### 5. 确认自动更新源
 
@@ -107,7 +109,7 @@ Desktop 使用 [electron-builder.yml](./apps/desktop/electron-builder.yml) 的 G
 
 入口为 [release-desktop.yml](./.github/workflows/release-desktop.yml)。`v*` tag push 和 Actions 手动运行默认只验证，不上传 GitHub Release。Windows、macOS、源码归档三个任务全部成功后，汇总任务再次校验实际文件、更新清单、blockmap、版本和 commit，生成 `desktop-release-verified` artifact 及 `checksums-sha256.txt`。
 
-需要创建草稿时，在 Actions 手动运行该 workflow，选择与 `apps/desktop/package.json` 一致的 `v<version>` tag，显式勾选 `publish`。仅最后的 draft job 具有 `contents: write` 权限；它只新建 Draft，不覆盖已有 Release，也不公开发布。预发布版本自动标记 Pre-release。普通分支不能创建草稿；任何平台或源码验证失败都会阻止汇总与上传。CLI 的 npm 发布仍通过独立的 `corepack pnpm release` 执行。
+需要创建草稿时，在 Actions 手动运行该 workflow，选择与 `apps/desktop/package.json` 一致的 `v<version>` tag，显式勾选 `publish`。预检要求该 tag 的源码中存在非空的 `docs/release-notes/<tag>.md`，缺失或空白会在平台构建前失败；普通构建验证不强制要求说明文件。仅最后的 draft job 具有 `contents: write` 权限；它用 `--notes-file` 导入版本说明，只新建 Draft，不覆盖已有 Release，也不公开发布。预发布版本自动标记 Pre-release。普通分支不能创建草稿；任何平台或源码验证失败都会阻止汇总与上传。CLI 的 npm 发布仍通过独立的 `corepack pnpm release` 执行。
 
 ### macOS 证书和公证
 
@@ -144,6 +146,8 @@ Windows 同时生成 x64 / ARM64 的 NSIS 安装版、便携版，安装器语�
 emoji 与 [PR 模板](.github/PULL_REQUEST_TEMPLATE.md)的分类保持一致：🆕 新功能、🐞 修复、🔌 数据源、💄 样式交互、⚡️ 性能、🛠 重构、🤖 类型、📝 文档、📦 构建、🔒 安全。
 
 ```markdown
+# Quotern v0.2.0
+
 ## 🖥️ Desktop
 
 - 🆕 新增 xxx。[#123](https://github.com/yuhengqin/Quotern/pull/123) [@someone](https://github.com/someone)

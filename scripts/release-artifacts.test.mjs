@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import yaml from 'js-yaml';
-import { refreshMetadata, verifyPlatform, assembleRelease, assertReleaseRequest } from './release-artifacts.mjs';
+import { refreshMetadata, verifyPlatform, assembleRelease, assertReleaseRequest, requireReleaseNotes } from './release-artifacts.mjs';
 
 const version = '0.1.13';
 const commit = 'a'.repeat(40);
@@ -130,4 +130,19 @@ test('publishing is explicit, requires a matching version tag, and rejects a dir
   assert.throws(() => assertReleaseRequest({ version, commit, ref: 'refs/tags/v0.1.12', publish: true, dirty: false }), /version|tag/i);
   assert.throws(() => assertReleaseRequest({ version, commit, ref: 'refs/tags/v0.1.13', publish: true, dirty: true }), /clean|dirty/i);
   assert.doesNotThrow(() => assertReleaseRequest({ version, commit, ref: 'refs/tags/v0.1.13', publish: true, dirty: false }));
+});
+
+test('draft publication requires nonempty release notes for the exact version', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'quotern release notes '));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const directory = join(root, 'docs', 'release-notes');
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, 'v0.1.12.md'), '# Quotern v0.1.12\n\nPrevious release.\n');
+  await assert.rejects(requireReleaseNotes({ root, version }), /Missing.*v0\.1\.13\.md/i);
+  const file = join(directory, `v${version}.md`);
+  await writeFile(file, '\n  \n');
+  await assert.rejects(requireReleaseNotes({ root, version }), /empty/i);
+  await writeFile(file, `# Quotern v${version}\n\n- 修复便携版更新行为。\n`);
+  assert.equal(await requireReleaseNotes({ root, version }), file);
+  await assert.rejects(requireReleaseNotes({ root, version: '../outside' }), /version/i);
 });

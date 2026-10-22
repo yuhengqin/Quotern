@@ -217,9 +217,11 @@ jobs:
           test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
           test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
           test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$RELEASE_COMMIT"
+          notes_file="$GITHUB_WORKSPACE/docs/release-notes/$RELEASE_TAG.md"
+          test -s "$notes_file"
           cd "$RUNNER_TEMP/release-ready"
           sha256sum --check checksums-sha256.txt
-          args=(--draft --verify-tag --title "Quotern $RELEASE_VERSION" --generate-notes)
+          args=(--draft --verify-tag --title "Quotern $RELEASE_VERSION" --notes-file "$notes_file")
           if [[ "$RELEASE_VERSION" == *-* ]]; then args+=(--prerelease); fi
           # Existing Releases are never overwritten; gh release create fails if this tag already has one.
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "${args[@]}" ./*

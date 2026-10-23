@@ -3,6 +3,12 @@ name: npm release publication
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing published GitHub Release tag to publish or retry
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -20,18 +26,64 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org/
+      - name: Resolve an existing published Release for manual publication
+        id: manual
+        if: github.event_name == 'workflow_dispatch'
+        shell: node {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          const { appendFileSync, writeFileSync } = require('node:fs');
+          const { join } = require('node:path');
+          async function main() {
+            const tag = process.env.REQUESTED_TAG;
+            if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(tag ?? '')) throw new Error('A versioned Release tag is required');
+            async function api(path) {
+              const response = await fetch(process.env.GITHUB_API_URL + '/repos/' + process.env.GITHUB_REPOSITORY + path, {
+                headers: { authorization: 'Bearer ' + process.env.GH_TOKEN, accept: 'application/vnd.github+json' },
+                signal: AbortSignal.timeout(30_000),
+              });
+              if (!response.ok) throw new Error('Cannot resolve published Release: GitHub HTTP ' + response.status);
+              return response.json();
+            }
+            const release = await api('/releases/tags/' + encodeURIComponent(tag));
+            if (release.tag_name !== tag || release.draft !== false || typeof release.published_at !== 'string' || !release.published_at.trim()) {
+              throw new Error('Manual npm publication requires the requested, already published GitHub Release');
+            }
+            let reference = (await api('/git/ref/tags/' + encodeURIComponent(tag))).object;
+            for (let depth = 0; reference?.type === 'tag' && depth < 8; depth++) {
+              if (!/^[a-f0-9]{40}$/i.test(reference.sha ?? '')) throw new Error('Invalid Release tag object');
+              reference = (await api('/git/tags/' + reference.sha)).object;
+            }
+            if (reference?.type !== 'commit' || !/^[a-f0-9]{40}$/i.test(reference.sha ?? '')) throw new Error('Release tag must resolve to a commit');
+            writeFileSync(join(process.env.RUNNER_TEMP, 'npm-release-event.json'), JSON.stringify({ action: 'published', release }));
+            appendFileSync(process.env.GITHUB_OUTPUT, 'tag=' + tag + '\ncommit=' + reference.sha + '\n');
+            console.log('Verified published Release ' + tag + ' at ' + reference.sha);
+          }
+          main().catch(error => { console.error(error.message); process.exitCode = 1; });
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.manual.outputs.commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - name: Verify published Release source and select npm channel
         id: source
-        run: node scripts/npm-release.mjs --preflight
+        env:
+          MANUAL_RELEASE_TAG: ${{ steps.manual.outputs.tag }}
+          MANUAL_RELEASE_COMMIT: ${{ steps.manual.outputs.commit }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            GITHUB_EVENT_NAME=release GITHUB_EVENT_PATH="$RUNNER_TEMP/npm-release-event.json" \
+              GITHUB_REF="refs/tags/$MANUAL_RELEASE_TAG" GITHUB_SHA="$MANUAL_RELEASE_COMMIT" \
+              node scripts/npm-release.mjs --preflight
+          else
+            node scripts/npm-release.mjs --preflight
+          fi
       - uses: pnpm/action-setup@v6
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
       - name: Test release guards and build CLI with its Dashboard

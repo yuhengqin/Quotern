@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -143,12 +144,14 @@ test('first-publication smoke installs internal dependencies from tarballs witho
 
 test('npm workflow publishes only after package checks and scopes credentials to publication', async () => {
   const workflow = yaml.load(await readFile(new URL('../.github/workflows/release-npm.yml', import.meta.url), 'utf8'));
-  assert.deepEqual(workflow.on, { release: { types: ['published'] } });
+  assert.deepEqual(workflow.on.release, { types: ['published'] });
+  assert.equal(workflow.on.workflow_dispatch.inputs.tag.required, true);
+  assert.equal(workflow.on.workflow_dispatch.inputs.tag.type, 'string');
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
   const steps = workflow.jobs.publish.steps;
   const checkout = steps.find(step => step.uses?.startsWith('actions/checkout@'));
-  assert.equal(checkout.with.ref, '${{ github.sha }}');
+  assert.equal(checkout.with.ref, '${{ steps.manual.outputs.commit || github.sha }}');
   assert.equal(checkout.with['persist-credentials'], false);
   const check = steps.findIndex(step => step.run?.includes('check:npm-release'));
   const publish = steps.findIndex(step => step.name === 'Publish new npm package versions');
@@ -162,4 +165,80 @@ test('npm workflow publishes only after package checks and scopes credentials to
   const promotion = steps[publish].run.indexOf('--promote-latest');
   assert(guard >= 0 && upload > guard && promotion > upload);
   assert.doesNotMatch(steps[publish].run, /--force|changeset publish/);
+});
+
+async function resolveManualRelease(t, { tag = 'v0.3.0', release = { ...request().release, published_at: '2026-10-23T00:00:00Z' }, ref = { object: { type: 'tag', sha: 'b'.repeat(40) } }, status = 200 } = {}) {
+  const workflow = yaml.load(await readFile(new URL('../.github/workflows/release-npm.yml', import.meta.url), 'utf8'));
+  const step = workflow.jobs.publish.steps.find(step => step.id === 'manual');
+  assert(step, 'manual publication must resolve an existing published Release');
+  assert.equal(step.if, "github.event_name == 'workflow_dispatch'");
+  assert.equal(step.shell, 'node {0}');
+  assert.equal(step.env.GH_TOKEN, '${{ github.token }}');
+  const directory = await mkdtemp(join(tmpdir(), 'quotern-manual-npm-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const calls = [];
+  const server = createServer((req, res) => {
+    calls.push({ path: req.url, authorization: req.headers.authorization });
+    const routes = {
+      '/repos/owner/repo/releases/tags/v0.3.0': release,
+      '/repos/owner/repo/git/ref/tags/v0.3.0': ref,
+      ['/repos/owner/repo/git/tags/' + 'b'.repeat(40)]: { object: { type: 'commit', sha: 'a'.repeat(40) } },
+    };
+    res.writeHead(status, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(routes[req.url] ?? {}));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const script = join(directory, 'resolve.cjs');
+  const output = join(directory, 'output.txt');
+  await writeFile(script, step.run);
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script], {
+      env: { ...process.env, GITHUB_REPOSITORY: 'owner/repo', GITHUB_API_URL: 'http://127.0.0.1:' + server.address().port, GH_TOKEN: 'fixture-read-token', REQUESTED_TAG: tag, RUNNER_TEMP: directory, GITHUB_OUTPUT: output },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let text = '';
+    child.stdout.on('data', chunk => { text += chunk; });
+    child.stderr.on('data', chunk => { text += chunk; });
+    child.once('error', reject);
+    child.once('exit', code => resolve({ code, text }));
+  });
+  return {
+    ...result, calls,
+    output: await readFile(output, 'utf8').catch(() => ''),
+    event: await readFile(join(directory, 'npm-release-event.json'), 'utf8').then(JSON.parse).catch(() => null),
+  };
+}
+
+test('manual publication authenticates an existing Release and pins its peeled tag commit', async t => {
+  const result = await resolveManualRelease(t);
+  assert.equal(result.code, 0, result.text);
+  assert.equal(result.output, 'tag=v0.3.0\ncommit=' + 'a'.repeat(40) + '\n');
+  assert.deepEqual(result.event, { action: 'published', release: { ...request().release, published_at: '2026-10-23T00:00:00Z' } });
+  assert.equal(result.calls.length, 3);
+  assert(result.calls.every(call => call.authorization === 'Bearer fixture-read-token'));
+  const workflow = yaml.load(await readFile(new URL('../.github/workflows/release-npm.yml', import.meta.url), 'utf8'));
+  const preflight = workflow.jobs.publish.steps.find(step => step.id === 'source');
+  assert.equal(preflight.env.MANUAL_RELEASE_TAG, '${{ steps.manual.outputs.tag }}');
+  assert.equal(preflight.env.MANUAL_RELEASE_COMMIT, '${{ steps.manual.outputs.commit }}');
+  for (const binding of ['GITHUB_EVENT_NAME=release', 'GITHUB_EVENT_PATH=', 'GITHUB_REF=', 'GITHUB_SHA=']) assert(preflight.run.includes(binding));
+  assert(preflight.run.includes('node scripts/npm-release.mjs --preflight'));
+});
+
+test('manual publication rejects invalid tags, unpublished Releases, API failures and invalid commit references', async t => {
+  for (const fixture of [
+    { tag: '../main' },
+    { release: { ...request().release, published_at: '2026-10-23T00:00:00Z', draft: true } },
+    { release: { ...request().release, published_at: null } },
+    { release: { ...request().release, published_at: '2026-10-23T00:00:00Z', tag_name: 'v9.9.9' } },
+    { status: 403 },
+    { ref: { object: { type: 'tree', sha: 'a'.repeat(40) } } },
+    { ref: { object: { type: 'commit', sha: 'not-a-commit' } } },
+  ]) {
+    const result = await resolveManualRelease(t, fixture);
+    assert.notEqual(result.code, 0, JSON.stringify(fixture));
+    assert.equal(result.output, '');
+    assert.equal(result.event, null);
+    if (fixture.tag) assert.equal(result.calls.length, 0);
+  }
 });

@@ -113,7 +113,9 @@ Desktop 使用 [electron-builder.yml](./apps/desktop/electron-builder.yml) 的 G
 
 ## npm 发布与验收
 
-入口为 [release-npm.yml](./.github/workflows/release-npm.yml)，只订阅 GitHub Release 的 `published` 事件。创建草稿、推 tag 和普通构建不会触发 npm 发布；人工发布正式版或 Pre-release 后，工作流固定检出该事件的 commit，核对 tag、Desktop 源码版本与 commit，再构建并发布 npm 包。[GitHub 事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)。
+入口为 [release-npm.yml](./.github/workflows/release-npm.yml)，订阅 GitHub Release 的 `published` 事件，并提供针对已公开 Release 的手动补发入口。创建草稿、推 tag 和普通构建不会触发 npm 发布；人工发布正式版或 Pre-release 后，工作流固定检出该事件的 commit，核对 tag、Desktop 源码版本与 commit，再构建并发布 npm 包。[GitHub 事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release)。
+
+已有 Release 在工作流停用或凭据尚未配置时发布、没有历史运行可重跑时，在 Actions 中启用 **npm release publication**，选择 **Run workflow**，使用 `main` 上的工作流并填写现有公开 Release 的 `tag`（例如 `v1.0.0`）。手动入口使用只读 GitHub 凭据验证 Release 已公开，解析并固定 tag 的 commit，再运行该 tag 自带的版本校验与完整发布验收；它不会创建或修改 GitHub Release，也不会移动 tag。已存在的失败运行仍可直接重新运行。
 
 工作流只处理 `quotern-core`、`quotern-i18n`、`quotern`，继续使用 Changesets 管理的各包独立版本。正式版使用 `latest`；带预发布版本号且在 GitHub 标记为 Pre-release 的版本使用 `next`，不更新 `latest`。正式版拒绝包含预发布 npm 版本。发布使用 pnpm 的递归发布能力，自动跳过已经存在的同名同版本包，因此只有 Desktop 变化时不必额外升 npm 版本；失败后重新运行工作流可补发尚未成功的包，不覆盖已有版本。[pnpm 发布行为](https://pnpm.io/cli/publish)。
 

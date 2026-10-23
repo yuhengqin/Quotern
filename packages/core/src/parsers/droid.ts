@@ -55,7 +55,7 @@ export function droidSessionsDirs(): string[] {
   return [join(homedir(), '.factory', 'sessions')];
 }
 
-function listDroidSettingsFiles(): string[] {
+export function listDroidSettingsFiles(): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
     let entries;

@@ -1,6 +1,6 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
+import { Button, Card, Label, ListBox, Modal, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
 import { ArrowDown, ArrowDownUp, ArrowUp, ChevronUp, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
@@ -14,6 +14,8 @@ import { filterSessionActivity, relatedSessionActivity, sessionActivityFacets, s
 import { FilterSelectPopover } from './FilterMenu';
 import { createSessionPageSearch, sessionAttributionKey, type SessionPageSearch, type SessionScope } from '../lib/session-page';
 import { getDashboardReturnState, rememberDashboardSessionView } from '../lib/dashboard-return-state';
+import { sessionThreads, sessionGroups, sessionIdentity, sessionCsv, sessionBranchRows, filterSessionBranches } from '../lib/session-insights';
+import { SessionInsightDetails, ContextAuditButton } from './SessionInsightDetails';
 
 const number = (value: number, locale: SupportedLocale) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 const sessionColumns = 'min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5';
@@ -121,13 +123,17 @@ function SessionList({ rows, scope }: { rows: SessionActivity[]; scope: SessionS
 }
 
 export function SessionBrowser({ rows, usage, value, onChange }: { rows: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { q: query, sources, page, project, sort, direction } = value;
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
   const facets = useMemo(() => sessionActivityFacets(rows, query, sources, project), [rows, query, sources, project]);
-  const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, sources, project), sort, direction), [rows, query, sources, project, sort, direction]);
-  const result = sessionActivityPage(filtered, page);
-  const hasFilters = Boolean(query.trim() || sources.length || project);
+  const filtered = useMemo(() => sortSessionActivity(filterSessionActivity(rows, query, sources, project).filter(row=>!value.model||row.model===value.model||row.models?.some(model=>model.model===value.model)), sort, direction), [rows, query, sources, project, sort, direction,value.model]);
+  const models=useMemo(()=>[...new Set(rows.flatMap(row=>row.models?.map(model=>model.model)??[row.model]))].filter(model=>model!=='unknown').sort(),[rows]);
+  const threads=useMemo(()=>sessionThreads(filtered),[filtered]);
+  const result = sessionActivityPage(threads.roots, page);
+  const groups=sessionGroups(result.rows,value.groupBy??'none',i18n.resolvedLanguage??'zh-CN');
+  const hasFilters = Boolean(query.trim() || sources.length || project || value.model);
+  const exportCsv=()=>{const url=URL.createObjectURL(new Blob(['\ufeff',sessionCsv(filtered)],{type:'text/csv;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download='quotern-sessions.csv';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   return <section aria-label={t('usage.activity.allSessions')} className="min-w-0 rounded-2xl border border-separator bg-surface p-4 sm:p-5">
     <div className="flex flex-col gap-3">
       <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 flex-wrap items-center gap-2">
@@ -169,10 +175,16 @@ export function SessionBrowser({ rows, usage, value, onChange }: { rows: Session
         {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
         {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { onChange({ sources: sources.filter(value => value !== source) }); sourceTrigger.current?.focus(); }} />)}
         {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { onChange({ project: '' }); projectTrigger.current?.focus(); }} />}
-        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '' }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
+        {value.model&&<SessionFilterChip label={value.model} onRemove={()=>onChange({model:undefined})}/>}
+        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Select aria-label={t('usage.common.model')} value={value.model??'all'} onChange={key=>onChange({model:key==='all'?undefined:String(key)})} variant="secondary" className="max-w-60"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(model=><ListBox.Item key={model} id={model} textValue={model}><span className="truncate" title={model}>{model}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
+        <Select aria-label={t('usage.insights.groupLabel')} value={value.groupBy??'none'} onChange={key=>onChange({groupBy:key as 'none'|'date'|'project'})} variant="secondary" className="max-w-44"><Label className="sr-only">{t('usage.insights.groupLabel')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox>{(['none','date','project'] as const).map(mode=><ListBox.Item key={mode} id={mode} textValue={t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}>{t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}<ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
+        <Button size="sm" variant="tertiary" onPress={exportCsv}>{t('usage.insights.exportCsv')}</Button><ContextAuditButton/>
+      </div>
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
-      {filtered.length ? <SessionRows rows={result.rows} showTokenShare={Boolean(usage)} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /> : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
+      {filtered.length ? groups.map(group=><section key={group.label}>{group.label&&<h2 className="my-3 break-words text-sm font-medium">{group.label}</h2>}<SessionRows rows={group.sessions} childrenByParent={threads.children} showTokenShare={Boolean(usage)} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /></section>) : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
     </div>
     <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => onChange({ page: result.page - 1 })}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => onChange({ page: result.page + 1 })}>{t('usage.activity.nextPage')}</Button></div></footer>
   </section>;
@@ -211,8 +223,11 @@ function SessionSortButton({ label, column, sorting }: { label: string; column: 
   </Button>;
 }
 
-function SessionRows({ rows, showTokenShare, sorting }: { rows: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting }) {
+function SessionRows({ rows, showTokenShare, sorting, childrenByParent, detailMode=false, depth=0 }: { rows: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting; childrenByParent?: Map<string,SessionActivity[]>; detailMode?:boolean; depth?:number }) {
   const { t, i18n } = useTranslation();
+  const [selected,setSelected]=useState<Pick<SessionActivity,'source'|'sessionId'>|null>(null);
+  const detailRow=rows.find(row=>selected&&row.source===selected.source&&row.sessionId===selected.sessionId);
+  useEffect(()=>{if(selected&&!detailRow)setSelected(null);},[selected,detailRow]);
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   return <div className="@container/session-list divide-y divide-separator">
       {sorting && <div role="group" aria-label={t('usage.explorer.sort')} className={`hidden rounded-lg bg-surface-secondary py-1 text-[11px] font-medium text-muted @3xl/session-list:grid ${sessionColumns}`}>
@@ -231,8 +246,8 @@ function SessionRows({ rows, showTokenShare, sorting }: { rows: SessionActivity[
       {rows.map(row => {
         const hasBilling = row.billing.service !== 'unknown' || row.billing.mode !== 'unknown' || Boolean(row.billing.accountRef);
         const share = showTokenShare && row.sharePercent != null ? row.sharePercent : null;
-        return <details key={`${row.source}:${row.sessionId}`} className="group py-1">
-        <summary className={`grid cursor-pointer list-none rounded-xl py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
+        return <div key={`${row.source}:${row.sessionId}`}><details className="group py-1" open={detailMode||undefined}>
+        <summary onClick={detailMode?undefined:event=>{event.preventDefault();setSelected(row);}} className={`grid cursor-pointer list-none rounded-xl py-2 outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
           <div className="flex min-w-0 items-center gap-2.5">
             <ProviderIcon provider={row.source} size={20} />
             <div className={sessionIdentityColumns}>
@@ -281,8 +296,19 @@ function SessionRows({ rows, showTokenShare, sorting }: { rows: SessionActivity[
           {row.unallocatedCostUsd != null && <p>{t('usage.explorer.unallocatedCost')}</p>}
           <p>{t('usage.activity.recentDetails', { date: new Date(row.lastActivityAt).toLocaleString(locale), id: row.sessionId })}</p>
         </div>
-      </details>; })}
+      </details>{!detailMode&&childrenByParent?.has(sessionIdentity(row))&&<SessionChildren rows={childrenByParent.get(sessionIdentity(row))!} childrenByParent={childrenByParent} showTokenShare={showTokenShare} depth={depth+1}/>}</div>; })}
+      {!detailMode&&<Modal isOpen={!!detailRow} onOpenChange={open=>{if(!open)setSelected(null);}}><Modal.Backdrop><Modal.Container><Modal.Dialog className="max-w-4xl"><Modal.CloseTrigger/><Modal.Header><Modal.Heading>{detailRow?.sessionTitle??t('usage.insights.detailTitle')}</Modal.Heading></Modal.Header><Modal.Body className="space-y-5">{detailRow&&<><SessionRows rows={[detailRow]} showTokenShare={showTokenShare} detailMode/><SessionInsightDetails row={detailRow}/></>}</Modal.Body></Modal.Dialog></Modal.Container></Modal.Backdrop></Modal>}
     </div>;
+}
+
+function SessionChildren({rows,childrenByParent,showTokenShare,depth}:{rows:SessionActivity[];childrenByParent:Map<string,SessionActivity[]>;showTokenShare:boolean;depth:number}){
+  const {t}=useTranslation();const [open,setOpen]=useState(false),[model,setModel]=useState('all');
+  const models=[...new Set(sessionBranchRows(rows,childrenByParent).flatMap(row=>row.models?.map(m=>m.model)??[row.model]))].sort();
+  const visible=filterSessionBranches(rows,childrenByParent,model);
+  return <div className="mb-2 ml-6 border-l border-separator pl-3"><Button variant="tertiary" size="sm" aria-expanded={open} onPress={()=>setOpen(!open)}>{t(open?'usage.insights.collapse':'usage.insights.expand')} · {rows.length}</Button>
+    {open&&<><Select aria-label={t('usage.common.model')} value={model} onChange={key=>setModel(String(key))} variant="secondary" className="my-2 max-w-56"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(value=><ListBox.Item id={value} key={value} textValue={value}><span className="truncate">{value}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
+    <SessionRows rows={visible} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth}/></>}
+  </div>;
 }
 
 function TaskTime({ row }: { row: SessionActivity }) {

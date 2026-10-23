@@ -10,6 +10,7 @@ const browserEntries = new Map([
   ['quotern-core/pricing-matcher', 'pricing/matcher.ts'],
   ['quotern-core/project-label', 'project-label.ts'],
   ['quotern-core/timezone', 'timezone.ts'],
+  ['quotern-core/session-csv', 'session-csv.ts'],
   ['quotern-core/quota/shared/quota-presentation', 'quota/shared/quota-presentation.ts'],
   ['quotern-core/quota/shared/subscription-channels', 'quota/shared/subscription-channels.ts'],
 ]);

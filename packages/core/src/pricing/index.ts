@@ -440,6 +440,11 @@ export function getModelPricing(model: string, opts?: { source?: string }): Mode
   return toModelPricing(result.value);
 }
 
+/** Display evidence retains absent rates; absence is not an explicit free rate. */
+export function getModelPricingRates(model:string,opts?:{source?:string}):ModelPricingRates|null {
+  return lookupPricingStacked(model,remoteOverlay,builtinPricing,opts?.source??null).value;
+}
+
 export function isModelPriced(model: string, source?: string): boolean {
   const result = lookupPricingStacked(model, remoteOverlay, builtinPricing, source ?? null);
   return hasNonZeroPricing(result.value);

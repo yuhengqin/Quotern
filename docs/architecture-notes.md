@@ -89,3 +89,15 @@ Agent 日志或数据库 / 需要登录状态的数据源
 - 采集进程、启动或退出：先看 [runtime-notes.md](./runtime-notes.md)，核对 owner、worker、窗口与更新的先后顺序。
 - 订阅卡：一起检查主进程 reader、shared 类型、preload、renderer 和账号缓存。
 - 打包或依赖：按 [development-notes.md](./development-notes.md) 验证消费该包的入口，发版另见 [RELEASE.md](../RELEASE.md)。
+
+## 会话诊断与导出契约
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `GET /functions/tud-session-activity?format=csv` | 导出 metadata CSV；公式单元格会转义，内容不含本地目录 |
+| `GET /functions/tud-context-audit` | 检查本机 Origin；只返回数值和相对来源名 |
+| `GET /functions/tud-session-directory?source=AGENT&sessionId=ID` | 本地详情按需读取目录；检查本机 Origin，不写入缓存或批量导出 |
+
+CLI 命令：`quotern sessions [--days N|--from DATE --to DATE] [--source AGENT] [--model MODEL] [--project NAME] [--format text|json|csv] [--data-dir DIR]`。该命令在 runtime 初始化前读取已采集缓存，不触发同步。
+
+目录查询读取最多 1 MiB 原始前缀、1 MiB 解压输出和 512 行；逐帧检查 zstd window（上限 8 MiB），支持 Codex `.jsonl.zst` 与 DSH `.jsonl.zstd`。元数据超出预算或原日志不可用时目录保持未知。

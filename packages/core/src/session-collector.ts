@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { lock } from 'proper-lockfile';
 import { createJsonlLineReader } from './parsers/jsonl-tail.js';
 import {
@@ -11,11 +11,15 @@ import {
 import { aggregateSessionMetrics, type SessionMetricOptions, type SessionMetrics } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
 import { clearProjectResolutionCache } from './session-project.js';
-import { extractSessionObservation, mergeSessionObservation, type SessionObservation } from './session-observation.js';
+import { mergeSessionObservation, type SessionObservation } from './session-observation.js';
 import { extractSessionTitle, sessionTitleKey, type SessionTitle } from './session-titles.js';
+import { extractSessionEvidence, type SessionEvidence } from './session-insights.js';
+import { extractSessionObservations } from './session-observation.js';
+import { createCodexLineReader } from './parsers/codex-log-reader.js';
 
-const VERSION = 10;
+const VERSION = 11;
 interface FileSnapshot {
+  evidence?: Record<string, SessionEvidence>;
   complete: boolean;
   size: number;
   mtimeMs: number;
@@ -44,7 +48,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
     const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, 4, 5, 6, 7, 8, 9, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+    if (![3, 4, 5, 6, 7, 8, 9, 10, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
     cache.set(path, { stamp, value });
     return value;
   } catch { return null; }
@@ -151,11 +155,14 @@ export async function syncSessionSource(
           append = old.guard === await prefixGuard(input.path, old.offset);
         }
         const context: SessionFileContext = append ? { ...old!.context } : { sessionId: input.sessionId };
+        if(source==='grok')try{const signals=JSON.parse(await readFile(join(dirname(input.path),'signals.json'),'utf8'));context.observationModel=typeof signals.primaryModelId==='string'?signals.primaryModelId:typeof signals.model==='string'?signals.model:undefined;}catch{/* Unknown model remains unknown. */}
         const messages = append ? { ...old!.messages } : {};
         const timings = append ? { ...old!.timings } : {};
-        const observations = append ? { ...old!.observations } : {};
+        const observations: Record<string,SessionObservation> = append ? { ...old!.observations } : Object.fromEntries(Object.entries(old?.observations ?? {}).filter(([,e])=>e.cumulative));
+        const evidence: Record<string,SessionEvidence> = append ? { ...old!.evidence } : {};
         const titles: Record<string, SessionTitle> = append ? { ...old!.titles } : {};
         const addObservation = (event: SessionObservation) => {
+          if(event.cumulative){const latest=Object.values(observations).filter(e=>e.cumulative&&e.sessionId===event.sessionId).sort((a,b)=>b.timestamp.localeCompare(a.timestamp))[0];if(latest?.tokens===event.tokens)return;}
           const key = JSON.stringify([event.sessionId, event.id]);
           observations[key] = mergeSessionObservation(observations[key], event);
         };
@@ -165,8 +172,8 @@ export async function syncSessionSource(
         };
         let fileComplete = true;
         let offset = st.size;
-        if (input.kind === 'jsonl') {
-          const reader = createJsonlLineReader(input.path, append ? old!.offset : 0);
+        if (input.kind === 'jsonl' || source === 'codex' && input.kind === 'zstd') {
+          const reader = source === 'codex' ? createCodexLineReader(input.path, append ? old!.offset : 0) : createJsonlLineReader(input.path, append ? old!.offset : 0);
           for await (const line of reader) {
             let record: Record<string, unknown>;
             try { record = JSON.parse(line) as Record<string, unknown>; } catch { fileComplete = false; continue; }
@@ -174,21 +181,27 @@ export async function syncSessionSource(
             const named = extractSessionTitle(source, record, context.sessionId);
             if (named && named.value.priority >= (titles[named.sessionId]?.priority ?? 0)) titles[named.sessionId] = named.value;
             if (message) messages[JSON.stringify([message.sessionId, message.id])] = message;
-            const observation = extractSessionObservation(source, record, context);
-            if (observation) addObservation(observation);
+            for (const observation of extractSessionObservations(source, record, context)) addObservation(observation);
+            for (const event of extractSessionEvidence(source, record, context)) {const {workingDirectory: _localDirectory,...safe}=event; evidence[JSON.stringify([event.sessionId,event.id])] = safe;}
             for (const event of extractSessionTimingEvents(source, record, context, message)) addTiming(event);
           }
-          offset = reader.nextOffset;
+          offset = source === 'codex' && input.kind === 'zstd' ? st.size : reader.nextOffset;
         } else {
           const snapshotTimings: SessionTimingEvent[] = [];
           const snapshotObservations: SessionObservation[] = [];
-          for (const message of readSessionSnapshot(input, source, context, snapshotTimings, snapshotObservations)) messages[JSON.stringify([message.sessionId, message.id])] = message;
+          const snapshotEvidence: SessionEvidence[] = [];
+          for (const message of readSessionSnapshot(input, source, context, snapshotTimings, snapshotObservations, snapshotEvidence)) messages[JSON.stringify([message.sessionId, message.id])] = message;
+          for (const event of snapshotEvidence) {const {workingDirectory: _localDirectory,...safe}=event;evidence[JSON.stringify([event.sessionId,event.id])] = safe;}
           for (const event of snapshotTimings) addTiming(event);
           for (const event of snapshotObservations) addObservation(event);
         }
         fileComplete = fileComplete && !context.incomplete && (source !== 'kimi' || context.kimiContext === true);
         if (source === 'codex' && context.legacyCodexMessages && !context.canonicalCodexMessages) fileComplete = false;
-        next.files[input.path] = { complete: fileComplete, size, mtimeMs, ino: st.ino, offset, guard: input.kind === 'jsonl' ? await prefixGuard(input.path, offset) : '', context, messages, timings, observations, titles };
+        if(['codex','claude'].includes(source))for(const sessionId of new Set([...Object.values(messages).map(m=>m.sessionId),...Object.values(observations).map(e=>e.sessionId)])) {
+          const clocks=[...Object.values(messages).filter(m=>m.sessionId===sessionId).map(m=>m.timestamp),...Object.values(observations).filter(e=>e.sessionId===sessionId).map(e=>e.timestamp)].sort();
+          const timestamp=clocks[clocks.length-1];if(timestamp)evidence[JSON.stringify([sessionId,'coverage'])]={source,sessionId,id:'coverage',kind:'coverage',timestamp,complete:fileComplete&&!append};
+        }
+        next.files[input.path] = { complete: fileComplete, size, mtimeMs, ino: st.ino, offset, guard: input.kind === 'jsonl' ? await prefixGuard(input.path, offset) : '', context, messages, timings, observations, titles, evidence };
         dirty = true;
       } catch {
         // A locked DB, incomplete JSON snapshot or temporary read error keeps
@@ -208,7 +221,7 @@ export async function syncSessionSource(
     const before = previous ? materialize(previous) : null;
     const after = materialize(next);
     const changed = !before || before.complete !== after.complete || JSON.stringify(before.messages) !== JSON.stringify(after.messages) || JSON.stringify(before.timings) !== JSON.stringify(after.timings)
-      || JSON.stringify(Object.values(previous?.files ?? {}).map(file => [file.observations, file.titles])) !== JSON.stringify(Object.values(next.files).map(file => [file.observations, file.titles]));
+      || JSON.stringify(Object.values(previous?.files ?? {}).map(file => [file.observations, file.titles,file.evidence])) !== JSON.stringify(Object.values(next.files).map(file => [file.observations, file.titles,file.evidence]));
     await saveSource(path, next);
     return changed;
   } finally { await release(); }
@@ -218,11 +231,12 @@ export async function readSessionHistory(
   dataDir: string,
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
-): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; titles: Map<string, SessionTitle>; missingSources: string[]; codexParents: Map<string, string> }> {
+): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; evidence: SessionEvidence[]; titles: Map<string, SessionTitle>; missingSources: string[]; codexParents: Map<string, string> }> {
   const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
   const sources = new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))]);
   const messages: CollectedSessionMessage[] = [];
   const timingEvents: SessionTimingEvent[] = [];
+  const evidence: SessionEvidence[] = [];
   const observations = new Map<string, SessionObservation>();
   const titles = new Map<string, SessionTitle>();
   const missingSources: string[] = [];
@@ -233,6 +247,9 @@ export async function readSessionHistory(
     const stored = await loadSource(sourcePath(dataDir, source), source);
     if (!stored) { if (usageSources.includes(source) || options.sources?.includes(source)) missingSources.push(source); continue; }
     const result = materialize(stored);
+    for (const file of Object.values(stored.files)) for (const event of Object.values(file.evidence??{})) {
+      evidence.push(event);
+    }
     if (source === 'codex') for (const file of Object.values(stored.files)) if (file.context.parentId && file.context.sessionId) codexParents.set(file.context.sessionId, file.context.parentId);
     messages.push(...result.messages);
     timingEvents.push(...result.timings);
@@ -241,13 +258,14 @@ export async function readSessionHistory(
       if (value.priority >= (titles.get(key)?.priority ?? 0)) titles.set(key, value);
     }
     for (const file of Object.values(stored.files)) for (const event of Object.values(file.observations ?? {})) {
+      if(source==='dsh'&&file.context.parentId&&event.seq!==undefined&&event.seq<=(file.context.inheritedThrough??-1))continue;
       const key = JSON.stringify([event.source, event.sessionId, event.id]);
       observations.set(key, mergeSessionObservation(observations.get(key), event));
     }
     const inRange = aggregateSessionMetrics(result.messages, options).sessionCount > 0;
     if ((usageSources.includes(source) || options.sources?.includes(source) || inRange) && (!result.complete || (usageSources.includes(source) && result.messages.length === 0))) missingSources.push(source);
   }
-  return { messages, timingEvents, observations: [...observations.values()], titles, missingSources, codexParents };
+  return { messages, timingEvents, observations: [...observations.values()], evidence, titles, missingSources, codexParents };
 }
 
 export async function readSessionMetrics(

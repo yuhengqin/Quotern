@@ -11,7 +11,7 @@ const source = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(join(source, 'packages/dashboard/package.json'));
 const { build, createServer, loadConfigFromFile } = await import(pathToFileURL(require.resolve('vite')).href);
 const imports = [
-  'achievements', 'daily-model-key', 'timezone', 'project-label', 'dashboard-trend',
+  'achievements', 'daily-model-key', 'timezone', 'project-label', 'dashboard-trend', 'session-csv',
   'leaderboard', 'pricing-matcher', 'local-metrics', 'quota/shared/quota-presentation',
   'quota/shared/subscription-channels',
 ];

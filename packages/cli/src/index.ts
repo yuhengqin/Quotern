@@ -33,6 +33,8 @@ import {
   startPricingRefresh,
   runDoctorDiagnostics,
   readUsageReport,
+  readSessionReport,
+  sessionsToCsv,
   resolveDataDir,
   isIsolatedDevRuntime,
   type AggregateCache,
@@ -515,6 +517,15 @@ async function main(): Promise<void> {
     const commandLine = extractCliLanguage(process.argv.slice(2));
     if (commandLine.args[0] === 'statusline') {
       await runStatusline(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
+      return;
+    }
+    if (commandLine.args[0] === 'sessions') {
+      const parsed=parseUsageArgs(commandLine.args.slice(1));
+      if(parsed.help){ console.log('quotern sessions [--days N | --from YYYY-MM-DD --to YYYY-MM-DD] [--source AGENT] [--model MODEL] [--project NAME] [--format json|csv|text] [--data-dir DIR]');return; }
+      const report=await readSessionReport(parsed.dataDir?resolve(parsed.dataDir):resolveDataDir(),parsed.query);
+      // Local directory hints are for interactive local details, never bulk reports.
+      const sessions=report.sessions.map(row=>({...row,insights:row.insights?{...row.insights,workingDirectory:null}:undefined}));
+      console.log(parsed.format==='csv'?sessionsToCsv(sessions):parsed.format==='json'?JSON.stringify({...report,sessions},null,parsed.compact?0:2):sessions.map(row=>`${row.source}\t${row.sessionId}\t${row.sessionTitle??row.projectLabel}\t${row.tokens??'?'}\t${row.costUsd??'?'}\t${row.costKind}`).join('\n'));
       return;
     }
     if (commandLine.args[0] === 'usage') {

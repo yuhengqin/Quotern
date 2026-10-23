@@ -16,6 +16,28 @@ import { DEFAULT_QUOTA_PREFERENCES } from '../src/quota/shared/quota.js';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
+test('session CSV and on-demand directory routes preserve local boundaries and model filtering', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'quotern-session-export-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const input = join(directory, 'claude.jsonl');
+  await writeFile(input, [
+    { type: 'assistant', sessionId: 's', cwd: 'C:/private-project', timestamp: '2026-10-16T04:00:00Z', message: { id: 'm', model: 'fixture', usage: { input_tokens: 10, output_tokens: 2 } } },
+    { type: 'custom-title', sessionId: 's', customTitle: '=1+1' },
+  ].map(row => JSON.stringify(row)).join('\n') + '\n');
+  await syncSessionSource(directory, 'claude', { complete: true, inputs: [{ path: input, sessionId: 's', kind: 'jsonl' }] });
+  const app = createLocalApiApp({ dataDir: directory, bucketStore: new BucketStore(), getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) });
+  const route = '/functions/tud-session-activity?fromDate=2026-10-16&toDate=2026-10-16';
+  const response = await app.request(route + '&model=fixture&format=csv');
+  assert.equal(response.status, 200); assert.match(response.headers.get('Content-Type')!, /text\/csv/);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  const csv = await response.text(); assert.ok(csv.includes("'=1+1")); assert.ok(!csv.includes('C:/private-project'));
+  const filtered = await (await app.request(route + '&model=missing')).json(); assert.equal(filtered.data.sessions.length, 0);
+  assert.deepEqual((await (await app.request('/functions/tud-session-directory?source=claude&sessionId=s')).json()).data, { directory: 'C:/private-project' });
+  assert.ok(!(await readFile(join(directory, 'sessions', 'claude.json'), 'utf8')).includes('C:/private-project'));
+  for (const path of [route, '/functions/tud-session-directory?source=claude&sessionId=s', '/functions/tud-context-audit']) assert.equal((await app.request(path, { headers: { Origin: 'https://evil.example' } })).status, 403);
+  assert.equal((await app.request('/functions/tud-session-directory?source=unknown&sessionId=s')).status, 400);
+});
+
 test('session ledger persists final call snapshots, retries safely and serves filtered local activity', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'quotern-session-observation-'));
   t.after(() => rm(directory, { recursive: true, force: true }));

@@ -102,12 +102,13 @@ export async function smokeInstall(root, packages, fromRegistry) {
     // in the registry yet. Resolve those transitive edges to this batch's tarballs.
     if (!fromRegistry) await writeFile(join(consumer, 'pnpm-workspace.yaml'), JSON.stringify({ overrides: dependencies }));
     const env = sourceBuildEnvironment(process.env, root);
-    await pnpm(['install', '--ignore-scripts', fromRegistry ? '--prefer-online' : '--prefer-offline', '--registry', REGISTRY], consumer, env);
+    await pnpm(['install', '--ignore-scripts', fromRegistry ? '--prefer-offline=false' : '--prefer-offline', '--registry', REGISTRY], consumer, env);
     for (const item of PACKAGES) {
       const installed = join(consumer, 'node_modules', item.name);
       const manifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
       if (manifest.version !== packages.find(pkg => pkg.name === item.name).version) throw new Error(`Installed wrong ${item.name} version`);
       for (const file of item.files) if (!(await stat(join(installed, file))).isFile()) throw new Error(`Installed package is missing ${file}`);
+      console.log(`Verified installed ${item.name}@${manifest.version}`);
     }
     // Exercise the installed bin without starting collection, registering hooks or touching user data.
     await pnpm(['exec', 'quotern', 'help', '--lang', 'en'], consumer, env);

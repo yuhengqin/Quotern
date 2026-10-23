@@ -167,6 +167,18 @@ test('npm workflow publishes only after package checks and scopes credentials to
   assert.doesNotMatch(steps[publish].run, /--force|changeset publish/);
 });
 
+test('registry verification uses fixed workflow tooling and versions from the tagged package report', async () => {
+  const workflow = yaml.load(await readFile(new URL('../.github/workflows/release-npm.yml', import.meta.url), 'utf8'));
+  const step = workflow.jobs.publish.steps.find(step => step.name === 'Verify exact published versions from the public registry');
+  assert.deepEqual(step.env, { RELEASE_VERIFIER_COMMIT: '${{ github.workflow_sha }}' });
+  assert.match(step.run, /git show "\$\{RELEASE_VERIFIER_COMMIT\}:scripts\/npm-release\.mjs"/);
+  assert.match(step.run, /git show "\$\{RELEASE_VERIFIER_COMMIT\}:scripts\/check-source-archive\.mjs"/);
+  assert.match(step.run, /npm-packages\/npm-release\.json/);
+  assert.match(step.run, /await smokeInstall\(process\.env\.GITHUB_WORKSPACE, report\.packages, true\)/);
+  assert.match(step.run, /corepack pnpm --dir "\$tools" run verify/);
+  assert.doesNotMatch(step.run, /publish --|--promote-latest|secrets\.|refs\/heads\/main/);
+});
+
 async function resolveManualRelease(t, { tag = 'v0.3.0', release = { ...request().release, published_at: '2026-10-23T00:00:00Z' }, ref = { object: { type: 'tag', sha: 'b'.repeat(40) } }, status = 200 } = {}) {
   const workflow = yaml.load(await readFile(new URL('../.github/workflows/release-npm.yml', import.meta.url), 'utf8'));
   const step = workflow.jobs.publish.steps.find(step => step.id === 'manual');

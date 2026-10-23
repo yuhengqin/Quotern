@@ -104,7 +104,32 @@ jobs:
           corepack pnpm --filter quotern-core --filter quotern-i18n --filter quotern -r publish --no-git-checks --access public --tag "$NPM_DIST_TAG" --report-summary
           corepack pnpm check:npm-release --promote-latest
       - name: Verify exact published versions from the public registry
-        run: corepack pnpm check:npm-release --registry-smoke
+        env:
+          RELEASE_VERIFIER_COMMIT: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERIFIER_COMMIT" =~ ^[a-fA-F0-9]{40}$ ]]
+          tools="$RUNNER_TEMP/npm-release-tools"
+          mkdir -p "$tools"
+          git show "${RELEASE_VERIFIER_COMMIT}:scripts/npm-release.mjs" > "$tools/npm-release.mjs"
+          git show "${RELEASE_VERIFIER_COMMIT}:scripts/check-source-archive.mjs" > "$tools/check-source-archive.mjs"
+          cat > "$tools/package.json" <<'JSON'
+          {"private":true,"scripts":{"verify":"node verify.mjs"}}
+          JSON
+          cat > "$tools/verify.mjs" <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { readFile } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          const report = JSON.parse(await readFile(join(process.env.RUNNER_TEMP, 'npm-packages/npm-release.json'), 'utf8'));
+          if (report.status !== 'passed') throw new Error('Tagged package verification must pass before registry verification');
+          console.log('Release source:', execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.env.GITHUB_WORKSPACE, encoding: 'utf8' }).trim());
+          console.log('Registry verifier:', process.env.RELEASE_VERIFIER_COMMIT);
+          console.log('Expected packages:', report.packages.map(pkg => `${pkg.name}@${pkg.version}`).join(', '));
+          const { smokeInstall } = await import(pathToFileURL(join(process.env.NPM_RELEASE_TOOLS, 'npm-release.mjs')));
+          await smokeInstall(process.env.GITHUB_WORKSPACE, report.packages, true);
+          NODE
+          NPM_RELEASE_TOOLS="$tools" corepack pnpm --dir "$tools" run verify
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -33,6 +33,7 @@ export interface SessionPageSearch {
   sessionSource?: string;
   sessionId?: string;
   sessionFocus?: string;
+  sessionPeriod?: 'selected';
 }
 
 const date = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -62,8 +63,15 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     sort: ['recent', 'tokens', 'cost', 'duration'].includes(String(raw.sort)) ? raw.sort as SessionSort : 'recent',
     direction: raw.direction === 'ascending' ? 'ascending' : 'descending',
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
-    ...(target ? { sessionSource: String(raw.sessionSource), sessionId: raw.sessionId as string, ...(typeof raw.sessionFocus === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.sessionFocus) ? { sessionFocus: raw.sessionFocus } : {}) } : {}),
+    ...(target ? { sessionSource: String(raw.sessionSource), sessionId: raw.sessionId as string, ...(typeof raw.sessionFocus === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.sessionFocus) ? { sessionFocus: raw.sessionFocus } : {}), ...(raw.sessionPeriod === 'selected' && calendar ? { sessionPeriod: 'selected' as const } : {}) } : {}),
   };
+}
+
+export function createSessionDetailSearch(target: { source: string; sessionId: string }, range?: SessionActivitySnapshot['range']): SessionPageSearch {
+  return parseSessionPageSearch({
+    sessionSource: target.source, sessionId: target.sessionId,
+    ...(range ? { start: range.fromDate, end: range.toDate, fromTime: range.fromTime, toTime: range.toTime, sessionPeriod: 'selected' } : {}),
+  });
 }
 
 /** Freeze the overview's range so navigation cannot silently move its denominator. */

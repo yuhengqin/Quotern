@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
-import { createSessionPageSearch, parseSessionPageSearch, selectSessionPageRange, sessionAttributionKey, sessionPageRows, sessionTimeRangeControl, updateSessionPageSearch } from './session-page.ts';
+import { createSessionDetailSearch, createSessionPageSearch, parseSessionPageSearch, selectSessionPageRange, sessionAttributionKey, sessionPageRows, sessionTimeRangeControl, updateSessionPageSearch } from './session-page.ts';
 
 test('session navigation freezes the selected day and overview Agent scope', () => {
   const search = createSessionPageSearch({ days: 30, selectedDate: '2026-10-12', dateRange: { start: '2026-10-01', end: '2026-10-19' }, sources: ['codex', 'claude'] });
@@ -17,6 +17,21 @@ test('notification session targets retain an exact source/id pair across URL res
   assert.equal(search.sessionId, 'session.一 & 2');
   assert.equal(parseSessionPageSearch({ sessionSource: 'codex' }).sessionId, undefined);
   assert.equal(parseSessionPageSearch({ sessionSource: 'arbitrary', sessionId: 'id' }).sessionId, undefined);
+});
+
+test('independent detail links preserve the exact parent period without inheriting list filters', () => {
+  const range = { fromDate: '2026-10-01', toDate: '2026-10-02', fromTime: '2026-10-01T12:00:00Z', toTime: '2026-10-02T12:00:00Z', kind: 'selected' as const };
+  const search = createSessionDetailSearch({ source: 'codex', sessionId: '子 & id' }, range);
+  const restored = parseSessionPageSearch(JSON.parse(JSON.stringify(search)));
+  assert.equal(restored.sessionPeriod, 'selected');
+  assert.equal(restored.sessionId, '子 & id');
+  assert.equal(restored.start, range.fromDate);
+  assert.equal(restored.fromTime, range.fromTime);
+  assert.equal(restored.toTime, range.toTime);
+  assert.equal(restored.group, undefined);
+  assert.equal(restored.q, '');
+  assert.equal(createSessionDetailSearch({ source: 'claude', sessionId: 'a' }).sessionPeriod, undefined);
+  assert.equal(parseSessionPageSearch({ sessionSource: 'codex', sessionId: 'a', sessionPeriod: 'selected' }).sessionPeriod, undefined, 'selected detail mode requires frozen bounds');
 });
 
 test('session navigation preserves exact rolling instants through a serialized URL state', () => {

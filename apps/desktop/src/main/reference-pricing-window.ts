@@ -1,5 +1,5 @@
 import { BrowserWindow, shell } from 'electron';
-import { isReferencePricingUrl } from './reference-pricing-url.js';
+import { isReferencePricingUrl, isReferenceSessionUrl } from './reference-pricing-url.js';
 import { WINDOW_BACKGROUND_COLORS, titleBarOverlayFor, windowChromeFor, type WindowChromeTheme } from './window-chrome.js';
 
 const referenceWindows = new WeakSet<BrowserWindow>();
@@ -14,7 +14,7 @@ export function isReferencePricingWindow(window: BrowserWindow): boolean {
 export function installReferencePricingLinks(window: BrowserWindow, options: ReferenceOptions): void {
   windowOptions.set(window, options);
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (!isReferencePricingUrl(url, window.webContents.getURL())) {
+    if (!isReferencePricingUrl(url, window.webContents.getURL()) && !isReferenceSessionUrl(url, window.webContents.getURL())) {
       void shell.openExternal(url);
       return { action: 'deny' };
     }

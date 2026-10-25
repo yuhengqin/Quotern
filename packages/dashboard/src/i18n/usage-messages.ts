@@ -3,6 +3,10 @@ import type { SupportedLocale } from 'quotern-i18n';
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  'usage.detail.backSession': ['返回上一会话', 'Back to previous session', '前のセッションに戻る', '이전 세션으로 돌아가기'],
+  'usage.detail.openSeparate': ['独立打开 {{name}}', 'Open {{name}} separately', '{{name}} を別ウィンドウで開く', '{{name}} 별도로 열기'],
+  'usage.detail.relatedMissing': ['当前期间未找到该会话', 'This session was not found in this period', 'この期間にセッションが見つかりません', '이 기간에 세션을 찾을 수 없습니다'],
+  'usage.detail.relatedError': ['会话详情读取失败', 'Could not load session details', 'セッション詳細を読み込めませんでした', '세션 세부 정보를 불러오지 못했습니다'],
   'usage.detail.incompleteDetails': ['明细不全', 'Partial details', '一部の明細なし', '일부 내역 누락'],
   'usage.detail.noModelUsage': ['未记录模型用量明细', 'No model usage details recorded', 'モデル別の使用量詳細が記録されていません', '모델 사용량 내역이 기록되지 않았습니다'],
   'usage.detail.tokenPartsNote': ['推理已包含在输出中，不重复相加。— 表示未记录或无法确定，不能当作零；总量可能另含未分类 Token。', 'Reasoning is included in output and must not be added again. — means not recorded or unknown, not zero. Totals may include unclassified tokens.', '推論は出力に含まれるため重複加算しません。— は未記録または不明で、ゼロではありません。合計には未分類 Token が含まれる場合があります。', '추론은 출력에 포함되므로 중복 합산하지 않습니다. —는 미기록 또는 미확인이며 0이 아닙니다. 합계에 미분류 Token이 포함될 수 있습니다.'],

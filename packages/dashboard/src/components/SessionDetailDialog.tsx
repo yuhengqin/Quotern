@@ -1,16 +1,17 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button, Modal, ToggleButton, ToggleButtonGroup, Tooltip } from '@heroui/react';
-import { ChevronRight, Copy } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SupportedLocale } from 'quotern-i18n';
-import type { SessionActivity } from 'quotern-core';
+import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
 import { request } from '@/lib/api';
 import { formatSessionDuration, formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
 import { sourceLabel } from '@/lib/tokens';
 import { DEFAULT_STATS_TIMEZONE } from '../lib/stats-timezone';
 import { accountLabel, costLabel, modeLabel, serviceLabel } from '../lib/session-labels';
-import { parseSessionPageSearch } from '../lib/session-page';
+import { createSessionDetailSearch } from '../lib/session-page';
+import { SessionDetailCache, sessionDetailQuery } from '../lib/session-detail-cache';
 import { buildSessionDetail, type DetailMember, type DetailRange, type DetailScope } from '../lib/session-detail';
 import { ProviderIcon } from './ProviderIcon';
 import { useAppToastQueue } from '@/components/AppToastContext';
@@ -44,8 +45,86 @@ function actionErrorKey(code: string): string {
   }
 }
 
-/** One dedicated dialog, shared by the browser and Desktop renderers. */
-export function SessionDetailDialog({ row, range, showTokenShare = false, onClose }: { row: SessionActivity; range?: DetailRange; showTokenShare?: boolean; onClose(): void }) {
+type DetailProps = { row: SessionActivity; range?: DetailRange; sessions?: readonly SessionActivity[]; showTokenShare?: boolean; onClose(): void };
+type DetailFrame = { key: number; source: string; sessionId: string; title: string; row: SessionActivity | null; error?: 'missing' | 'failed' };
+const emptySessions: readonly SessionActivity[] = [];
+
+/** One Modal and one period-scoped cache; retained frames preserve native disclosures and local state. */
+export function SessionDetailDialog(props: DetailProps) {
+  return <SessionDetailNavigator key={JSON.stringify([props.row.source, props.row.sessionId])} {...props} />;
+}
+
+function SessionDetailNavigator({ row, range, sessions = emptySessions, showTokenShare = false, onClose }: DetailProps) {
+  const { t } = useTranslation();
+  const [period] = useState(range);
+  const abort = useRef(new AbortController());
+  const [cache] = useState(() => new SessionDetailCache(async source => {
+    const snapshot = await request<SessionActivitySnapshot>(sessionDetailQuery(source, period), { signal: AbortSignal.any([abort.current.signal, AbortSignal.timeout(30_000)]) });
+    return snapshot.sessions;
+  }, [...sessions, row]));
+  const [frames, setFrames] = useState<DetailFrame[]>(() => [{ key: 0, source: row.source, sessionId: row.sessionId, title: row.sessionTitle ?? t('usage.insights.detailTitle'), row }]);
+  const sequence = useRef(0);
+  const dialog = useRef<HTMLDivElement>(null);
+  const views = useRef(new Map<number, { top: number; trigger?: HTMLElement }>());
+  const active = frames[frames.length - 1]!;
+
+  useEffect(() => {
+    if (abort.current.signal.aborted) abort.current = new AbortController();
+    return () => { abort.current.abort(); };
+  }, []);
+  useEffect(() => {
+    if (JSON.stringify(range) !== JSON.stringify(period)) return;
+    cache.seed([...sessions, row]);
+    setFrames(previous => previous.map(frame => frame.key === 0 ? { ...frame, row, title: row.sessionTitle ?? frame.title } : frame));
+  }, [cache, row, sessions, range, period]);
+
+  useLayoutEffect(() => {
+    const frame = dialog.current?.querySelector<HTMLElement>('[data-session-frame]:not([hidden])');
+    const body = frame?.querySelector<HTMLElement>('.modal__body');
+    const saved = views.current.get(active.key);
+    if (body) body.scrollTop = saved?.top ?? 0;
+    if (saved?.trigger?.isConnected) saved.trigger.focus({ preventScroll: true });
+    else if (active.key > 0) frame?.querySelector<HTMLElement>('[data-session-heading]')?.focus({ preventScroll: true });
+  }, [active.key, Boolean(active.row)]);
+
+  const saveView = (trigger?: HTMLElement) => {
+    const body = dialog.current?.querySelector<HTMLElement>('[data-session-frame]:not([hidden]) .modal__body');
+    views.current.set(active.key, { top: body?.scrollTop ?? 0, trigger });
+  };
+  const loadFrame = (frame: DetailFrame, retry = false) => {
+    void cache.load(frame, retry).then(result => {
+      if (!abort.current.signal.aborted) setFrames(previous => previous.map(item => item.key === frame.key ? { ...item, row: result, error: result ? undefined : 'missing' } : item));
+    }).catch(() => {
+      if (!abort.current.signal.aborted) setFrames(previous => previous.map(item => item.key === frame.key ? { ...item, error: 'failed' } : item));
+    });
+  };
+  const navigate = (member: DetailMember, trigger: HTMLElement) => {
+    saveView(trigger);
+    const cached = cache.get(member) ?? null;
+    const next: DetailFrame = { key: ++sequence.current, source: member.source, sessionId: member.sessionId, title: member.sessionTitle ?? member.agentNickname ?? member.sessionId, row: cached };
+    setFrames(previous => [...previous, next]);
+    if (!cached) loadFrame(next);
+  };
+  const back = () => {
+    views.current.delete(active.key);
+    setFrames(previous => previous.slice(0, -1));
+  };
+  const prefetch = (member: DetailMember) => { void cache.load(member).catch(() => {}); };
+
+  return <Modal isOpen onOpenChange={open => { if (!open) onClose(); }}>
+    <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog aria-label={active.title} className="max-w-5xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}><div ref={dialog} className="contents">
+      <Modal.CloseTrigger aria-label={t('usage.detail.close')} />
+      {frames.map((frame, index) => <div key={frame.key} data-session-frame hidden={frame.key !== active.key} inert={frame.key !== active.key} className={frame.key === active.key ? 'contents' : 'hidden'}>
+        {frame.row ? <SessionDetailContent row={frame.row} range={period} showTokenShare={index === 0 && showTokenShare} onNavigate={navigate} onPrefetch={prefetch} navigation={index > 0 && <Button size="sm" variant="tertiary" className="mb-2 max-w-full" onPress={back}><ArrowLeft className="size-3.5 shrink-0" aria-hidden />{t('usage.detail.backSession')}</Button>} /> : <>
+          <Modal.Header className="border-b border-separator pb-3 pr-9"><Button size="sm" variant="tertiary" className="mb-2" onPress={back}><ArrowLeft className="size-3.5" aria-hidden />{t('usage.detail.backSession')}</Button><h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{frame.title}</h2></Modal.Header>
+          <Modal.Body className="space-y-3 py-8 text-sm"><p role={frame.error ? 'status' : undefined}>{t(frame.error === 'failed' ? 'usage.detail.relatedError' : frame.error === 'missing' ? 'usage.detail.relatedMissing' : 'usage.activity.loading')}</p>{frame.error && <Button size="sm" variant="secondary" onPress={() => { setFrames(previous => previous.map(item => item.key === frame.key ? { ...item, error: undefined } : item)); loadFrame(frame, true); }}>{t('usage.detail.retry')}</Button>}</Modal.Body>
+        </>}
+      </div>)}
+    </div></Modal.Dialog></Modal.Container></Modal.Backdrop>
+  </Modal>;
+}
+
+function SessionDetailContent({ row, range, showTokenShare, navigation, onNavigate, onPrefetch }: { row: SessionActivity; range?: DetailRange; showTokenShare: boolean; navigation: ReactNode; onNavigate(member: DetailMember, trigger: HTMLElement): void; onPrefetch(member: DetailMember): void }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const toastQueue = useAppToastQueue();
@@ -57,6 +136,9 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
   const [actions, setActions] = useState<SessionActions | null>(null);
   const [pending, setPending] = useState<'resume' | 'open-directory' | null>(null);
   const busy = useRef(false);
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cancelPrefetch = () => { clearTimeout(prefetchTimer.current); };
+  useEffect(() => () => { clearTimeout(prefetchTimer.current); }, []);
   const sessionKey = JSON.stringify([row.source, row.sessionId]);
   const currentSession = useRef<string | null>(sessionKey);
   currentSession.current = sessionKey;
@@ -152,7 +234,7 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
       <div className="min-w-0 sm:contents">
       <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 [overflow-wrap:anywhere]">
         {relation && <span className="text-muted">{t(groupLabels[relation])} ·</span>}
-        {['codex', 'claude', 'dsh'].includes(member.source) ? <Link to="/sessions" search={previous => ({ ...parseSessionPageSearch(previous), group: undefined, sessionSource: member.source, sessionId: member.sessionId, sessionFocus: String(Date.now()) })} onClick={onClose} className="min-w-0 rounded py-0.5 text-accent underline underline-offset-2 outline-offset-2 focus-visible:outline-2">{name}</Link> : <span className="min-w-0">{name}</span>}
+        {['codex', 'claude', 'dsh'].includes(member.source) ? <span className="inline-flex min-w-0 max-w-full items-baseline gap-1"><button type="button" onClick={event => onNavigate(member, event.currentTarget)} onPointerEnter={() => { cancelPrefetch(); prefetchTimer.current = setTimeout(() => onPrefetch(member), 120); }} onPointerLeave={cancelPrefetch} onFocus={() => { cancelPrefetch(); onPrefetch(member); }} onBlur={cancelPrefetch} className="min-h-6 min-w-0 cursor-pointer rounded py-0.5 text-left text-accent underline underline-offset-2 outline-offset-2 focus-visible:outline-2">{name}</button><Link to="/sessions" search={createSessionDetailSearch(member, range)} target="_blank" rel="noopener noreferrer" aria-label={t('usage.detail.openSeparate', { name })} className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted outline-offset-2 hover:text-accent focus-visible:outline-2"><ExternalLink className="size-3" aria-hidden /></Link></span> : <span className="min-w-0">{name}</span>}
       </span>
       {member.agentRole && <span className="mt-0.5 block break-words text-muted [overflow-wrap:anywhere] sm:col-start-2 sm:mt-0">{member.agentRole}</span>}
       </div>
@@ -160,12 +242,11 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
     </li>;
   };
 
-  return <Modal isOpen onOpenChange={open => { if (!open) onClose(); }}>
-    <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog className="max-w-5xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}>
-      <Modal.CloseTrigger aria-label={t('usage.detail.close')} />
+  return <>
       <Modal.Header className="border-b border-separator pb-3">
+        {navigation}
         <div className="flex min-w-0 items-start gap-3 pr-9"><span className="mt-1 shrink-0"><ProviderIcon provider={row.source} size={22} /></span><div className="min-w-0">
-          <Modal.Heading className="break-words text-lg leading-7">{row.sessionTitle ?? t('usage.insights.detailTitle')}</Modal.Heading>
+          <h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{row.sessionTitle ?? t('usage.insights.detailTitle')}</h2>
           <p className="mt-1 break-words text-xs text-muted">{sourceLabel(row.source)} · {row.projectLabel}</p>
         </div></div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -258,6 +339,5 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
           </section>
         <div className="text-xs"><DetailDisclosure title={t('usage.detail.dataNotes')}><h4 className="font-medium">{t('usage.detail.statisticsRules')}</h4><p>{t('usage.detail.bucketNote')}</p><p>{t('usage.detail.privacy')}</p></DetailDisclosure></div>
       </Modal.Body>
-    </Modal.Dialog></Modal.Container></Modal.Backdrop>
-  </Modal>;
+  </>;
 }

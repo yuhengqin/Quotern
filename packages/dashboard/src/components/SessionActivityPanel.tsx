@@ -106,12 +106,12 @@ function UsageAttribution({ snapshot, scope }: { snapshot: SessionActivitySnapsh
 function SessionList({ rows, total, scope, range }: { rows: SessionActivity[]; total: number; scope: SessionScope; range?: DetailRange }) {
   const { t } = useTranslation();
   return <>
-    {rows.length ? <SessionRows rows={rows.slice(0, 6)} showTokenShare={false} range={range} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
+    {rows.length ? <SessionRows rows={rows.slice(0, 6)} availableSessions={rows} showTokenShare={false} range={range} /> : <p className="py-4 text-sm text-muted">{t('usage.activity.noSessions')}</p>}
     <Link to="/sessions" search={createSessionPageSearch(scope)} className="button button--sm button--ghost mt-2 h-7 text-xs">{t('usage.activity.viewAllSessions', { count: total })}</Link>
   </>;
 }
 
-export function SessionBrowser({ rows, usage, value, onChange, range }: { rows: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void; range?: DetailRange }) {
+export function SessionBrowser({ rows, availableSessions = rows, usage, value, onChange, range }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void; range?: DetailRange }) {
   const { t, i18n } = useTranslation();
   const { q: query, sources, page, project, sort, direction } = value;
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
@@ -173,7 +173,7 @@ export function SessionBrowser({ rows, usage, value, onChange, range }: { rows: 
         <Button size="sm" variant="tertiary" onPress={exportCsv}>{t('usage.insights.exportCsv')}</Button><ContextAuditButton/>
       </div>
       <p role="status" className="text-xs text-muted">{t('usage.activity.sessionCount', { count: filtered.length })}</p>
-      {filtered.length ? groups.map(group=><section key={group.label}>{group.label&&<h2 className="my-3 break-words text-sm font-medium">{group.label}</h2>}<SessionRows rows={group.sessions} childrenByParent={threads.children} showTokenShare={Boolean(usage)} range={range} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /></section>) : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
+      {filtered.length ? groups.map(group=><section key={group.label}>{group.label&&<h2 className="my-3 break-words text-sm font-medium">{group.label}</h2>}<SessionRows rows={group.sessions} availableSessions={availableSessions} childrenByParent={threads.children} showTokenShare={Boolean(usage)} range={range} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /></section>) : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
     </div>
     <footer className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4"><p className="text-xs tabular-nums text-muted">{t('usage.activity.page', { page: result.page, pages: result.pages })}</p><div className="flex gap-2"><Button size="sm" variant="secondary" isDisabled={result.page <= 1} onPress={() => onChange({ page: result.page - 1 })}>{t('usage.activity.previousPage')}</Button><Button size="sm" variant="secondary" isDisabled={result.page >= result.pages} onPress={() => onChange({ page: result.page + 1 })}>{t('usage.activity.nextPage')}</Button></div></footer>
   </section>;
@@ -184,7 +184,7 @@ export function FocusedSession({ rows, source, sessionId, focusKey, range }: { r
   const { t } = useTranslation();
   const row = rows.find(value => value.source === source && value.sessionId === sessionId);
   return <div className="rounded-2xl border border-separator bg-surface p-4">
-    {row ? <SessionRows rows={[row]} showTokenShare={false} range={range} autoOpenKey={`${source}:${sessionId}:${focusKey ?? ''}`} /> : <p role="status" className="py-6 text-sm text-muted">{t('usage.activity.notificationMissing')}</p>}
+    {row ? <SessionRows rows={[row]} availableSessions={rows} showTokenShare={false} range={range} autoOpenKey={`${source}:${sessionId}:${focusKey ?? ''}`} /> : <p role="status" className="py-6 text-sm text-muted">{t('usage.activity.notificationMissing')}</p>}
   </div>;
 }
 
@@ -204,7 +204,7 @@ function SessionSortButton({ label, column, sorting }: { label: string; column: 
   </Button>;
 }
 
-function SessionRows({ rows, showTokenShare, sorting, childrenByParent, range, autoOpenKey, depth=0 }: { rows: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting; childrenByParent?: Map<string,SessionActivity[]>; range?: DetailRange; autoOpenKey?: string; depth?:number }) {
+function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, childrenByParent, range, autoOpenKey, depth=0 }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting; childrenByParent?: Map<string,SessionActivity[]>; range?: DetailRange; autoOpenKey?: string; depth?:number }) {
   const { t, i18n } = useTranslation();
   const [selected,setSelected]=useState<Pick<SessionActivity,'source'|'sessionId'>|null>(null);
   const detailRow=rows.find(row=>selected&&row.source===selected.source&&row.sessionId===selected.sessionId);
@@ -251,18 +251,18 @@ function SessionRows({ rows, showTokenShare, sorting, childrenByParent, range, a
             <Tooltip.Content placement="top">{costLabel(row.costKind, locale)}</Tooltip.Content>
           </Tooltip></div></div>
         </button>
-        {childrenByParent?.has(sessionIdentity(row))&&<SessionChildren rows={childrenByParent.get(sessionIdentity(row))!} childrenByParent={childrenByParent} showTokenShare={showTokenShare} range={range} depth={depth+1}/>}
+        {childrenByParent?.has(sessionIdentity(row))&&<SessionChildren rows={childrenByParent.get(sessionIdentity(row))!} availableSessions={availableSessions} childrenByParent={childrenByParent} showTokenShare={showTokenShare} range={range} depth={depth+1}/>}
       </div>)}
-      {detailRow && <SessionInsightDetails key={sessionIdentity(detailRow)} row={detailRow} showTokenShare={showTokenShare} range={range} onClose={() => setSelected(null)} />}
+      {detailRow && <SessionInsightDetails key={sessionIdentity(detailRow)} row={detailRow} sessions={availableSessions} showTokenShare={showTokenShare} range={range} onClose={() => setSelected(null)} />}
     </div>;
 }
 
-function SessionChildren({rows,childrenByParent,showTokenShare,depth,range}:{rows:SessionActivity[];childrenByParent:Map<string,SessionActivity[]>;showTokenShare:boolean;depth:number;range?:DetailRange}){
+function SessionChildren({rows,availableSessions,childrenByParent,showTokenShare,depth,range}:{rows:SessionActivity[];availableSessions:SessionActivity[];childrenByParent:Map<string,SessionActivity[]>;showTokenShare:boolean;depth:number;range?:DetailRange}){
   const {t}=useTranslation();const [open,setOpen]=useState(false),[model,setModel]=useState('all');
   const models=[...new Set(sessionBranchRows(rows,childrenByParent).flatMap(row=>row.models?.map(m=>m.model)??[row.model]))].sort();
   const visible=filterSessionBranches(rows,childrenByParent,model);
   return <div className="mb-2 ml-6 border-l border-separator pl-3"><Button variant="tertiary" size="sm" aria-expanded={open} onPress={()=>setOpen(!open)}>{t(open?'usage.insights.collapse':'usage.insights.expand')} · {rows.length}</Button>
     {open&&<><Select aria-label={t('usage.common.model')} value={model} onChange={key=>setModel(String(key))} variant="secondary" className="my-2 max-w-56"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(value=><ListBox.Item id={value} key={value} textValue={value}><span className="truncate">{value}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
-    <SessionRows rows={visible} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth} range={range}/></>}
+    <SessionRows rows={visible} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth} range={range}/></>}
   </div>;
 }

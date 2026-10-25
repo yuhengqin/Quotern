@@ -25,7 +25,7 @@ export function SessionsPage() {
   } : null), [rollingRange, search.start, search.end, search.fromTime, search.toTime]);
   const timeControl = sessionTimeRangeControl(search);
   const local = isCliBackend();
-  const target = search.sessionSource && search.sessionId ? { source: search.sessionSource, sessionId: search.sessionId } : undefined;
+  const target = search.sessionSource && search.sessionId ? { source: search.sessionSource, sessionId: search.sessionId, period: search.sessionPeriod } : undefined;
   const { data, error } = useSessionActivity(search.days, null, dateRange, search.scopeSources, local, target);
   const rows = useMemo(() => data ? sessionPageRows(data, search.group) : [], [data, search.group]);
   const group = data?.billing.find(row => sessionAttributionKey(row) === search.group);
@@ -48,7 +48,7 @@ export function SessionsPage() {
       {search.scopeSources.length > 0 && <p className="mt-2 text-xs text-muted">{t('usage.activity.overviewScope', { sources: new Intl.ListFormat(i18n.resolvedLanguage).format(search.scopeSources.map(sourceLabel)) })}</p>}
     </header>
     {target ? <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <p className="text-xs text-muted">{t('usage.activity.notificationTarget')} · {sourceLabel(target.source)}</p>
+      <p className="text-xs text-muted">{t(target.period ? 'usage.detail.selectedRange' : 'usage.activity.notificationTarget')} · {sourceLabel(target.source)}</p>
       <Button size="sm" variant="tertiary" onPress={() => update({ sessionSource: undefined, sessionId: undefined })}>{t('usage.activity.allSessions')}</Button>
     </div> : <div className="mb-4">
       <DashboardTimeRangeControl value={timeControl.value} customRange={timeControl.customRange} onChange={changeTimeRange} onCustomRangeChange={changeTimeRange} />
@@ -60,7 +60,7 @@ export function SessionsPage() {
         <Button size="sm" variant="tertiary" onPress={() => update({ group: undefined })}>{t('usage.activity.allSessions')}</Button>
       </div>}
       {!data ? <p role="status" className="py-12 text-center text-sm text-muted">{t(error ? 'usage.activity.unavailable' : 'usage.activity.loading')}</p> : <>
-        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} range={data.range} /> : <SessionBrowser rows={rows} usage={search.group ? undefined : data} value={search} onChange={update} range={data.range} />}
+        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} range={data.range} /> : <SessionBrowser rows={rows} availableSessions={data.sessions} usage={search.group ? undefined : data} value={search} onChange={update} range={data.range} />}
         <SessionCoverageNote snapshot={data} />
       </>}
     </>}

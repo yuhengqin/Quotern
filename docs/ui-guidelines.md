@@ -99,6 +99,8 @@
 ### 业务内复用入口
 
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动打开详情弹窗；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史及服务端实际范围；缺记录时保留目标等待常规同步。关闭详情后焦点回到会话行，常规数据刷新不重新打开已关闭的弹窗。Dashboard 与 Desktop 使用同一页面和详情组件，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与关联展开行为保留。
+关联会话详情复用同一 `SessionDetailDialog` 内的查看栈：名字点击在当前弹窗显示完整子会话详情，顶部“返回上一会话”逐层恢复父会话的范围选择、原生折叠项、滚动和触发器焦点；关闭退出整个查看链，底层路由与列表保持。辅助独立打开链接在浏览器新标签页、Desktop 同文档 `/sessions` 精确目标窗口打开，保留 IPC；窗口 URL 携带 `sessionPeriod=selected` 和实际期间；共享 `session-activity-query` 将其转换为原有来源＋时间边界查询，再由 `FocusedSession` 按身份定位，兼容旧 runtime。原通知链接仍查询已采集历史。`session-detail-cache` 仅在本次弹窗期间缓存完整会话行，优先复用页面未被列表筛选裁剪的快照，缺失时按来源/实际期间合并读取，悬停或键盘聚焦时预取，最多并发两种来源；关联用量投影不作为完整活动或操作信息。加载、缺记录和失败仍可返回，失败/缺记录可重试；隐藏的父内容不参与焦点和可访问名称。
+
 浏览器只读演示由 HTML 的 `#quotern-demo` 元数据显式启用，`lib/demo-runtime.ts` 提供参考时钟与独立偏好键；普通浏览器默认实时、Desktop 适配器固定正常模式。AppShell 复用 StatusBanner 展示只读与参考日期；演示保留筛选、详情及内置分享卡下载，隐藏同步和在线额度，成就/服务器图库修改禁用。共享 AchievementProvider 的 `readOnly` 参数默认 false，分享组件的演示检查默认关闭，普通 Desktop 的 IPC、图库迁移和成就写操作保持原行为。只读是服务器 API 的强约束，不能仅靠隐藏按钮。日期包装仅改 Dashboard；独立 Desktop 日期副本继续使用实时时钟。
 
 固定演示关闭统计、成就及图库的定时和 focus/visibility 自动刷新；初次加载、筛选变化、重试和显式同步事件继续读取。两端 `lib/dashboard-refresh.ts` 的 `subscribeAutomaticRefresh` 只管理自动订阅，初载与 `DATA_SYNCED_EVENT` 由调用方保留。Desktop 正常模式保持轮询与原有 IPC 新鲜度探测。

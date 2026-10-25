@@ -120,7 +120,7 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - [x] 扩展 `apps/desktop/scripts/session-detail-smoke.mjs` 合成数据及断言：无模型已知/未知/已知小计、两项/单项性能缺失与零、单/多关联、无后代/旧 runtime、单/多模型价格依据及宽窄布局。先对旧构建观察预期失败。
 - [x] 修改 `SessionDetailDialog.tsx` 的空性能、关联分组、范围入口、活动和信息布局；修改 `SessionUsageBreakdown.tsx` 的空模型和价格依据；必要文案在 `i18n/usage-messages.ts` 四语言同改，正常测量与零值不丢失。
 - [x] 同步 `docs/ui-guidelines.md` 现役规则及 changeset，执行两端构建、Dashboard 测试、Desktop typecheck、diff check、实机 smoke 和独立审查，查看最终宽窄截图。
-- [ ] 仅提交本任务文件，快进合回 `codex/session-insights`，检查 5197 的服务身份、更新后的页面和两分支干净状态，不重启或推送。
+- [x] 仅提交本任务文件，快进合回 `codex/session-insights`，检查 5197 的服务身份、更新后的页面和两分支干净状态，不重启或推送。
 
 ### 六项精简验证记录
 
@@ -129,3 +129,4 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - 最终 `corepack pnpm test:session-detail-ui` 28 组通过，结果及截图位于 `.quotern-dev/session-detail-ui-1792927694559-52656/`。覆盖无模型的已知/未知/零/线程已知小计、未分配金额为零、unknown 模型行、有效 0 tok/s 与 0 s、单项缺样本、单成员链接与多成员折叠、旧 runtime 摘要、单模型多套价格证据、320/375/700 px 与短窗口、长计数完整单行、窄屏价格帮助末尾可达，以及原有操作/复制/Toast/通知/焦点/新页价格回归。
 - 小计合成场景使用实际 `relatedUsage.knownCostUsd` 契约；不向没有该字段的 SessionActivity 顶层伪造已知小计。新场景统一等待弹窗入场和视口恢复后再交互，失败会输出溢出元素信息，避免动画坐标误击。
 - 独立代码审查未发现可行动问题；之后的窄屏长标签/长值调整通过真实几何断言及截图验证。独立视觉检查四张最终宽窄截图未发现重叠、横向裁切或异常留白，零值、大数值和单价规则清晰。使用合成 HTTP/IPC 数据，未执行真实 Agent 恢复、新增屏幕阅读器或安装包验收。
+- 实现提交 `35e3b69f` 已快进合回 `codex/session-insights`。5197 健康检查返回 200、实例身份保持 `aaac6f4d-5718-4789-be33-0085b2ad82bd`，更新模块和真实会话均已核对：活动三列、会话信息双列，正常数据和零值可见。真实预览截图为同产物目录的 `live-5197-info.png`。未重启服务或推送。

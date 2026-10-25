@@ -100,7 +100,7 @@ export async function smokeInstall(root, packages, fromRegistry) {
     await writeFile(join(consumer, 'package.json'), JSON.stringify({ name: 'quotern-package-smoke', private: true, dependencies }));
     // Before the first publication the CLI's exact core/i18n versions do not exist
     // in the registry yet. Resolve those transitive edges to this batch's tarballs.
-    if (!fromRegistry) await writeFile(join(consumer, 'pnpm-workspace.yaml'), JSON.stringify({ overrides: dependencies }));
+    if (!fromRegistry) await writeFile(join(consumer, 'pnpm-workspace.yaml'), JSON.stringify({ packages: ['.'], overrides: dependencies }));
     const env = sourceBuildEnvironment(process.env, root);
     await pnpm(['install', '--ignore-scripts', fromRegistry ? '--prefer-offline=false' : '--prefer-offline', '--registry', REGISTRY], consumer, env);
     for (const item of PACKAGES) {

@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { geminiHome, kimiDesktopCodeHome, opencodeDbPath, opencodeMessagesDir } from './paths.js';
+import { geminiHome, kimiDesktopCodeHome, opencodeDbPath, opencodeMessagesDir, codexSessionsDirs } from './paths.js';
 import { listClaudeProjectFiles } from './parsers/claude.js';
-import { listCodexRolloutFiles } from './parsers/codex.js';
+import { findCodexLogFiles } from './parsers/codex-log-reader.js';
+import { resolveGrokBuildSessions } from './parsers/grok.js';
+import { listDroidSettingsFiles } from './parsers/droid.js';
+import { extractSessionEvidence, type SessionEvidence } from './session-insights.js';
+import { extractSessionObservations } from './session-observation.js';
 import { findCopilotEventFiles } from './parsers/copilot.js';
 import { findGeminiSessionFiles } from './parsers/gemini.js';
 import { findPiSessionFiles } from './parsers/pi.js';
@@ -16,7 +20,7 @@ import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
 import type { SessionMessage } from './session-metrics.js';
 import type { SessionTimingEvent } from './task-timing.js';
 import { resolveSessionProject, type ProjectKind } from './session-project.js';
-import { extractSessionObservation, type ObservationContext, type SessionObservation } from './session-observation.js';
+import { type ObservationContext, type SessionObservation } from './session-observation.js';
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value && typeof value === 'object' ? value as ObjectValue : {};
@@ -53,7 +57,7 @@ export interface SessionInput {
   kind: 'jsonl' | 'json' | 'zstd' | 'sqlite';
 }
 
-export const SESSION_SOURCES = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'pi', 'omp', 'dsh', 'antigravity', 'zcode', 'kimi']);
+export const SESSION_SOURCES = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'pi', 'omp', 'dsh', 'antigravity', 'zcode', 'kimi', 'grok', 'droid']);
 
 export function sessionTimestamp(value: unknown, milliseconds = false): string | null {
   if (value === null || value === undefined || value === '') return null;
@@ -125,6 +129,10 @@ export function extractSessionMessage(source: string, record: ObjectValue, conte
     content = body.content;
     timestamp ??= body.timestamp;
   } else if (source === 'copilot') {
+    if (['session.start','session.resume'].includes(string(record.type))) {
+      const proof=object(object(record.data).context),project=resolveSessionProject(string(proof.gitRoot??proof.cwd));
+      if(project)Object.assign(context,project);
+    }
     if (record.type !== 'user.message' && record.type !== 'assistant.message') return null;
     role = record.type === 'user.message' ? 'user' : 'assistant';
     id = record.id;
@@ -260,7 +268,9 @@ export async function discoverSessionInputs(source: string): Promise<{ inputs: S
   let paths: string[] = [];
   let complete = SESSION_SOURCES.has(source);
   if (source === 'claude') paths = await listClaudeProjectFiles();
-  else if (source === 'codex') paths = await listCodexRolloutFiles();
+  else if (source === 'codex') paths = await findCodexLogFiles(codexSessionsDirs());
+  else if (source === 'grok') return { inputs: resolveGrokBuildSessions().flatMap(s=>[...(existsSync(s.updatesPath)?[{path:s.updatesPath,sessionId:s.sessionId,kind:'jsonl' as const}]:[]),...(existsSync(s.signalsPath)?[{path:s.signalsPath,sessionId:s.sessionId,kind:'json' as const}]:[])]), complete };
+  else if (source === 'droid') paths = listDroidSettingsFiles();
   else if (source === 'gemini') paths = findGeminiSessionFiles();
   else if (source === 'pi') paths = findPiSessionFiles();
   else if (source === 'omp') paths = ompAgentDirCollidesWithPi() ? [] : findOmpSessionFiles();
@@ -286,8 +296,8 @@ export async function discoverSessionInputs(source: string): Promise<{ inputs: S
     sessionId: source === 'antigravity' && path.endsWith('.jsonl') ? antigravityProjectFromPath(path)
       : source === 'opencode' && path.endsWith('.json') ? basename(dirname(path))
         : source === 'kimi' ? basename(/[/\\]agents[/\\]/.test(path) ? path.replace(/[/\\]agents[/\\].*$/, '') : dirname(path))
-          : basename(path).replace(/\.(jsonl|json|db|sqlite|zstd)$/g, ''),
-    kind: /\.(db|sqlite)$/.test(path) ? 'sqlite' : path.endsWith('.zstd') ? 'zstd' : path.endsWith('.json') ? 'json' : 'jsonl',
+          : basename(path).replace(/(\.settings)?\.(jsonl(?:\.zst)?|json|db|sqlite|zstd)$/g, ''),
+    kind: /\.(db|sqlite)$/.test(path) ? 'sqlite' : /\.(zstd|zst)$/.test(path) ? 'zstd' : path.endsWith('.json') ? 'json' : 'jsonl',
   }));
   return { inputs, complete };
 }
@@ -305,13 +315,16 @@ function databaseMessages(path: string, source: string): ObjectValue[] {
       const fallback = columns.has('time_created') ? ', time_created' : '';
       const startClock = columns.has('time_created') ? "coalesce(json_extract(data, '$.time.created'), time_created)" : "json_extract(data, '$.time.created')";
       const provider = source === 'zcode' ? ", coalesce(json_extract(data, '$.providerID'), json_extract(data, '$.providerId')) AS providerID" : '';
-      const usage = source === 'opencode' ? ", json_object('id', id, 'sessionID', session_id, 'role', " + role + ", 'tokens', json_extract(data, '$.tokens'), 'cost', json_extract(data, '$.cost'), 'model', json_extract(data, '$.model'), 'modelID', json_extract(data, '$.modelID'), 'providerID', coalesce(json_extract(data, '$.providerID'), json_extract(data, '$.model.providerID')), 'time', json_extract(data, '$.time')) AS usageJson" : '';
+      const usage = source === 'opencode' || source === 'zcode' && !tables.has('model_usage') ? ", json_object('id', id, 'sessionID', session_id, 'role', " + role + ", 'tokens', json_extract(data, '$.tokens'), 'cost', json_extract(data, '$.cost'), 'model', json_extract(data, '$.model'), 'modelID', json_extract(data, '$.modelID'), 'providerID', coalesce(json_extract(data, '$.providerID'), json_extract(data, '$.model.providerID')), 'time', json_extract(data, '$.time')) AS usageJson" : '';
       rows.push(...queryDbJson(db, `SELECT id, session_id AS sessionId, ${role} AS role,
         ${startClock} AS startTimestamp,
         coalesce(json_extract(data, '$.time.completed'), json_extract(data, '$.time.created')${fallback}) AS timestamp${provider}${usage}
         FROM ${table} WHERE ${role} IN ('user', 'assistant', 'compaction')`));
     }
     if (!tables.has('message') && !tables.has('session_message')) throw new Error('missing_message_projection');
+    if(source==='zcode' && tables.has('model_usage'))for(const usage of queryDbJson(db,'SELECT id,session_id,model_id,started_at,completed_at,input_tokens,output_tokens,reasoning_tokens,cache_creation_input_tokens,cache_read_input_tokens,computed_total_tokens FROM model_usage WHERE computed_total_tokens > 0')) {
+      rows.push({id:`usage:${usage.id}`,sessionId:usage.session_id,role:'usage',timestamp:usage.completed_at??usage.started_at,usageJson:JSON.stringify({...usage,sessionId:usage.session_id,sessionUsage:true})});
+    }
     return rows;
   });
 }
@@ -387,7 +400,7 @@ export function antigravityStepMessage(hex: string, completedFirst = false): { r
   return null;
 }
 
-export function readSessionSnapshot(input: SessionInput, source: string, context: SessionFileContext, timings?: SessionTimingEvent[], observations?: SessionObservation[]): CollectedSessionMessage[] {
+export function readSessionSnapshot(input: SessionInput, source: string, context: SessionFileContext, timings?: SessionTimingEvent[], observations?: SessionObservation[], evidence?: SessionEvidence[]): CollectedSessionMessage[] {
   const messages: CollectedSessionMessage[] = [];
   if (input.kind === 'sqlite') {
     for (const row of databaseMessages(input.path, source)) {
@@ -406,8 +419,7 @@ export function readSessionSnapshot(input: SessionInput, source: string, context
         if (!stamp || !row.sessionId || !row.id) { context.incomplete = true; continue; }
         if (observations && typeof row.usageJson === 'string') {
           const usageRecord = object(JSON.parse(row.usageJson));
-          const observation = extractSessionObservation(source, { ...usageRecord, timestamp: stamp }, context);
-          if (observation) observations.push(observation);
+          observations.push(...extractSessionObservations(source, { ...usageRecord, timestamp: stamp }, context));
         }
         if (row.role !== 'user' && row.role !== 'assistant') continue;
         messages.push({ source, sessionId: String(row.sessionId), id: String(row.id), role: row.role as 'user' | 'assistant', timestamp: stamp });
@@ -424,6 +436,7 @@ export function readSessionSnapshot(input: SessionInput, source: string, context
   let records: ObjectValue[];
   if (input.kind === 'json') {
     const data = object(JSON.parse(raw));
+    if(source==='droid' || source==='grok')data.timestamp=data.lastActiveAt??data.updatedAt??data.lastActive??new Date(statSync(input.path).mtimeMs).toISOString();
     context.sessionId = string(data.sessionId ?? data.sessionID) || context.sessionId;
     const list = data.messages ?? data.history;
     records = Array.isArray(list) ? list.map(object) : [data];
@@ -433,8 +446,8 @@ export function readSessionSnapshot(input: SessionInput, source: string, context
   for (const record of records) {
     const message = extractSessionMessage(source, record, context);
     if (message) messages.push(message);
-    const observation = observations ? extractSessionObservation(source, record, context) : null;
-    if (observation) observations!.push(observation);
+    observations?.push(...extractSessionObservations(source, record, context));
+    evidence?.push(...extractSessionEvidence(source, record, context));
     timings?.push(...extractSessionTimingEvents(source, record, context, message));
   }
   return messages;

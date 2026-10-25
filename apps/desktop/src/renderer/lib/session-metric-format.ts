@@ -1,5 +1,6 @@
 import type { SessionMetrics } from 'quotern-core';
 import { i18n, normalizeLocale, translate, type SupportedLocale } from 'quotern-i18n';
+export { formatSessionTokens, formatSessionUsd } from '../../../../../packages/dashboard/src/lib/session-metric-format';
 
 export function formatSessionDuration(seconds: number | null, locale: SupportedLocale = normalizeLocale(i18n.resolvedLanguage)): string {
   if (seconds === null || !Number.isFinite(seconds)) return '—';

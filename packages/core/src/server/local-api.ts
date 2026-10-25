@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
+import { registerSessionActionsApi } from './session-actions-api.js';
 
 import type { LocalApiDeps } from './state.js';
 import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
@@ -69,6 +70,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   registerShareBackgroundApi(app, deps.dataDir);
   registerAchievementsApi(app, deps.dataDir);
   registerQuotaApi(app, deps.quota);
+  registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {
@@ -187,6 +189,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
     c.header('Cache-Control', 'no-store');
     const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
+    snapshot.range = { fromDate, toDate: window.toDate, ...(bounds?.fromTime ? { fromTime: bounds.fromTime } : {}), ...(bounds?.toTime ? { toTime: bounds.toTime } : {}), kind: targeted ? 'collected' : 'selected' };
     await attachSessionTitles(snapshot.sessions, history.titles);
     const sessionKey = (source: string, id: string) => JSON.stringify([source, id]);
     const messages = new Map<string, SessionMessage[]>(), timings = new Map<string, SessionTimingEvent[]>();
@@ -205,8 +208,32 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     for (const row of [...snapshot.sessions.map(session => session.billing), ...snapshot.billing]) {
       if (row.accountRef && labels.has(row.accountRef)) row.accountLabel = [...labels.get(row.accountRef)!].join(' / ');
     }
+    const { enrichSessionInsights, sessionsToCsv } = await import('../session-insights.js');
+    const inWindow = (stamp: string) => { const date = localDateAndHour(stamp).date; return date >= fromDate && date <= window.toDate && inTimeBounds(stamp,bounds); };
+    enrichSessionInsights(snapshot.sessions,history.messages.filter(m=>inWindow(m.timestamp)),history.evidence.filter(e=>e.kind==='metadata'||inWindow(e.timestamp)));
     if (targeted) snapshot.sessions = snapshot.sessions.filter(session => session.source === targetSource && session.sessionId === targetId);
+    const model=c.req.query('model');
+    if(model)snapshot.sessions=snapshot.sessions.filter(s=>s.models?.some(m=>m.model===model)||s.model===model);
+    if(c.req.query('format')==='csv') {
+      c.header('Content-Type','text/csv; charset=utf-8');c.header('Content-Disposition','attachment; filename="quotern-sessions.csv"');
+      return c.body(sessionsToCsv(snapshot.sessions));
+    }
     return c.json(ok(snapshot));
+  });
+
+  app.get('/functions/tud-context-audit', async c => {
+    if(!isLocalPanelOrigin(c.req.header('Origin'),c.req.url))return c.json({success:false,message:'SESSION_FORBIDDEN_ORIGIN',data:null},403);
+    c.header('Cache-Control','no-store');
+    const {auditContextSources}=await import('../context-audit.js');
+    return c.json(ok(await auditContextSources()));
+  });
+
+  app.get('/functions/tud-session-directory',async c=>{
+    if(!isLocalPanelOrigin(c.req.header('Origin'),c.req.url))return c.json({success:false,message:'SESSION_FORBIDDEN_ORIGIN',data:null},403);
+    const source=c.req.query('source')??'',sessionId=c.req.query('sessionId')??'';
+    if(!['codex','claude','dsh','pi','zcode','antigravity'].includes(source)||!sessionId||sessionId.length>512||/[\u0000-\u001f]/.test(sessionId))return c.json({success:false,message:'INVALID_SESSION_TARGET',data:null},400);
+    c.header('Cache-Control','no-store');const{readSessionDirectory}=await import('../session-directory.js');
+    return c.json(ok({directory:await readSessionDirectory(deps.dataDir,source,sessionId)}));
   });
 
   app.get('/functions/tud-usage-daily', async (c) => {

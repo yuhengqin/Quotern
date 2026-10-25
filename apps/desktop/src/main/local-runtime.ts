@@ -254,6 +254,7 @@ function buildApp(state: {
   ) => Promise<SyncResult[]>;
 }): LocalApiApp {
   return createLocalApiApp({
+    sessionActionsIpc: true,
     getQuotaState: getQuotaRuntimeState,
     dataDir: state.dir,
     getConfig: state.getConfig,

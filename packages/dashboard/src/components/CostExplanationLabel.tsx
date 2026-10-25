@@ -52,7 +52,7 @@ export function CostExplanationLabel({ report, loading, error }: {
                 {report!.coverage.limited && <p className="text-muted">{t('usage.cost.coverageSince', { date: report!.coverage.collectSince.slice(0, 10) })}</p>}
               </div>
             )}
-            <Link to="/pricing" search={{ q: '' }} className="mt-3 inline-block rounded text-xs text-muted underline underline-offset-4 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{t('usage.cost.viewPrices')}</Link>
+            <Link to="/pricing" search={{ q: '' }} target="_blank" rel="noopener" className="mt-3 inline-block rounded text-xs text-muted underline underline-offset-4 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{t('usage.cost.viewPrices')}</Link>
           </Popover.Dialog>
         </Popover.Content>
       </Popover>

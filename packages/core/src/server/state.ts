@@ -87,6 +87,9 @@ export class BucketStore {
 }
 
 export interface LocalApiDeps {
+  sessionActions?: import('../session-actions.js').SessionActionRuntime;
+  /** Only the in-process Desktop transport may use the synthetic tud.local Host. */
+  sessionActionsIpc?: boolean;
   quota?: LocalQuotaRuntime;
   /** Electron exposes quota through IPC while sharing account labels locally. */
   getQuotaState?(): QuotaState | null;

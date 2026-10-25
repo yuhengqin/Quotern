@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { computeRowCost, isModelPriced, explainRowCost } from './pricing/index.js';
+import { computeRowCost, isModelPriced, explainRowCost, getModelPricingRates } from './pricing/index.js';
 import { claudeRequestPricingFact, normalizeClaudeUsage } from './parsers/claude.js';
 import { serviceTierFromEvent, TOKEN_FIELDS, type RequestPricingFact, type TokenParts } from './pricing/request-pricing.js';
 import { localDateAndHour } from './timezone.js';
@@ -7,6 +7,8 @@ import type { SessionMessage, SessionMetricOptions } from './session-metrics.js'
 import { accountReference } from './account-reference.js';
 import { toUtcHalfHourStart } from './queue/keys.js';
 import { inTimeBounds } from './usage-window.js';
+import { extractAdditionalObservations } from './session-extra-observation.js';
+import type { SessionInsights } from './session-insights.js';
 
 export interface SessionBilling {
   service: string;
@@ -22,6 +24,10 @@ export interface SessionContextObservation {
   observedAt: string;
 }
 export interface SessionObservation {
+  estimatedTokenParts?: TokenParts;
+  costAssumption?: 'grok-80-20';
+  seq?: number;
+  cumulative?: boolean;
   tokenParts?: TokenParts;
   pricingFact?: RequestPricingFact;
   requestKnown?: boolean;
@@ -46,6 +52,12 @@ export interface SessionObservation {
   replayKey?: string;
 }
 export interface ObservationContext {
+  insightTurnId?: string;
+  insightModel?: string;
+  insightStart?: number;
+  insightOutputAt?: number;
+  insightTotalTokens?: number;
+  insightBlocked?: boolean;
   observationTier?: RequestPricingFact['serviceTier'];
   sessionId: string;
   parentId?: string;
@@ -60,6 +72,12 @@ export interface ObservationContext {
   observationLimit?: number;
 }
 type Obj = Record<string, unknown>;
+export function extractSessionObservations(source: string, record: Obj, context: ObservationContext): SessionObservation[] {
+  const extra = extractAdditionalObservations(source, record, context);
+  if (['grok','zcode','droid','copilot','dsh'].includes(source)) return extra;
+  const event = extractSessionObservation(source, record, context);
+  return event ? [event] : [];
+}
 const obj = (v: unknown): Obj => v && typeof v === 'object' && !Array.isArray(v) ? v as Obj : {};
 const text = (v: unknown): string => typeof v === 'string' ? v.trim().slice(0, 120) : '';
 const count = (v: unknown): number => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
@@ -231,6 +249,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
 }
 
 export interface SessionActivity {
+  insights?: SessionInsights;
   models?: SessionModelUsage[];
   detailsComplete?: boolean;
   unallocatedCostUsd?: number | null;
@@ -243,6 +262,8 @@ export interface SessionActivity {
   context: SessionContextObservation | null; profileId?: string;
 }
 export interface SessionActivitySnapshot {
+  /** Actual server query bounds; notification targets read collected history instead of page filters. */
+  range?: { fromDate: string; toDate: string; fromTime?: string; toTime?: string; kind: 'selected' | 'collected' };
   sessions: SessionActivity[]; totalTokens: number; attributedTokens: number; otherTokens: number;
   tokenTotalMismatch: boolean; missingSources: string[]; observedAt: string;
   billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'];
@@ -250,6 +271,7 @@ export interface SessionActivitySnapshot {
     sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[] }[];
 }
 export interface SessionModelUsage {
+  pricing?: { matchedModel: string | null; table: string | null; matchMethod: string; rates: Record<string,number> | null; unpricedTokens: number; ruleReferences: string[]; assumptions:string[] };
   model: string; tokens: number; requests: number | null;
   input_tokens: number | null; output_tokens: number | null; cached_input_tokens: number | null;
   cache_creation_input_tokens: number | null; reasoning_output_tokens: number | null;
@@ -275,9 +297,23 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   const selected = new Map<string, SessionObservation>();
   for (const e of events) {
     const key = JSON.stringify([e.source, e.sessionId, e.id]);
-    selected.set(key, mergeSessionObservation(selected.get(key), repriceObservation(e)));
+    selected.set(key, mergeSessionObservation(selected.get(key), e));
   }
-  const ordered = [...selected.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const cumulative = new Map<string, SessionObservation>();
+  const ordered = [...selected.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).map(event => {
+    if (!event.cumulative) return repriceObservation(event);
+    const key = JSON.stringify([event.source,event.sessionId]);
+    const previous = cumulative.get(key);
+    // Settings copies and compacted snapshots can be older than the session high-water mark.
+    if(previous&&event.tokens<previous.tokens)return {...event,tokens:0,costUsd:0};
+    cumulative.set(key,event);
+    const tokens = Math.max(0,event.tokens-(previous?.tokens??0));
+    let tokenParts = event.tokenParts && (!previous || previous.tokenParts) ? Object.fromEntries(TOKEN_FIELDS.map(field=>[field,Math.max(0,event.tokenParts![field]-(previous?.tokenParts?.[field]??0))])) as unknown as TokenParts : undefined;
+    if(tokenParts&&TOKEN_FIELDS.reduce((sum,field)=>sum+tokenParts![field],0)!==tokens)tokenParts=undefined;
+    const estimatedTokenParts=event.estimatedTokenParts?Object.fromEntries(TOKEN_FIELDS.map(field=>[field,Math.max(0,event.estimatedTokenParts![field]-(previous?.estimatedTokenParts?.[field]??0))])) as unknown as TokenParts:undefined;
+    // Missing historical breakdowns cannot allocate the next cumulative price to this delta.
+    return repriceObservation({...event,tokens,tokenParts,estimatedTokenParts,costUsd:null,costKind:'unknown'});
+  }).filter(event=>!event.cumulative||event.tokens>0);
   const bySession = new Map<string, SessionObservation[]>();
   for (const event of ordered.filter(e => e.source === 'codex')) {
     const rows = bySession.get(event.sessionId) ?? [];
@@ -371,8 +407,9 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
 }
 
 function repriceObservation(event: SessionObservation): SessionObservation {
-  if (!event.usageKnown || !event.tokenParts || event.costKind === 'recorded' || event.costBasis !== 'request-facts') return event;
-  const cost = explainRowCost({ ...event.tokenParts, pricing_requests: event.pricingFact ? [event.pricingFact] : undefined,
+  const parts=event.tokenParts??event.estimatedTokenParts;
+  if (!event.usageKnown || !parts || event.costKind === 'recorded' || event.costBasis !== 'request-facts') return event;
+  const cost = explainRowCost({ ...parts, pricing_requests: event.pricingFact ? [event.pricingFact] : undefined,
     hour_start: event.timestamp, source: event.source, model: event.model, project: '', total_tokens: event.tokens, conversation_count: 0 });
   return { ...event, costUsd: cost.costUsd, costKind: cost.costUsd === null ? 'unknown' : 'estimated', costIncomplete: cost.unpricedTokens > 0 };
 }
@@ -384,7 +421,10 @@ function summarizeSessionModels(events: SessionObservation[]): SessionModelUsage
     const kinds = new Set(rows.map(row => row.costKind));
     const knownCostUsd = rows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
     const parts = Object.fromEntries(TOKEN_FIELDS.map(key => [key, complete ? rows.reduce((sum, row) => sum + row.tokenParts![key], 0) : null])) as Record<typeof TOKEN_FIELDS[number], number | null>;
+    const explanations=rows.filter(row=>row.tokenParts||row.estimatedTokenParts).map(row=>explainRowCost({...row.tokenParts??row.estimatedTokenParts!,pricing_requests:row.pricingFact?[row.pricingFact]:undefined,hour_start:row.timestamp,source:row.source,model,project:'',total_tokens:row.tokens,conversation_count:0}));
+    const first=explanations[0];
     return { ...parts, model, tokens: rows.reduce((sum, row) => sum + row.tokens, 0), requests: rows.every(row => row.requestKnown === true) ? rows.length : null,
+      ...(first?{pricing:{matchedModel:first.matchedModel,table:first.priceTable,matchMethod:first.matchMethod,rates:first.costKind==='unpriced'?null:Object.fromEntries(Object.entries(getModelPricingRates(model,{source:rows[0]!.source})??{})),unpricedTokens:explanations.reduce((sum,e)=>sum+e.unpricedTokens,0),ruleReferences:[...new Set(explanations.flatMap(e=>e.requestPricing?.ruleReferences??[]))],assumptions:[...new Set(rows.flatMap(e=>e.costAssumption?[e.costAssumption]:[]))]}}:{}),
       costUsd: rows.some(row => row.costUsd === null || row.costIncomplete) ? null : knownCostUsd, knownCostUsd,
       costKind: kinds.size === 1 ? [...kinds][0]! : 'mixed' as const, serviceTiers: [...new Set(rows.map(row => row.pricingFact?.serviceTier ?? 'unknown'))] };
   }).sort((a, b) => b.tokens - a.tokens || a.model.localeCompare(b.model));

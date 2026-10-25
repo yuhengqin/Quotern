@@ -46,6 +46,28 @@
 
 验收至少覆盖：切换本地化/K/M/B/T 后相关展示实际更新；零、极小非零、普通金额、未知值和部分计价；同一数据跨组件与两端同格式；模型单价、报价基准和 USD/CNY 切换保留；CSV/API 数值精度不受展示舍入影响。文档更新本身不能代替代码检查或真实页面验收。
 
+## 信息呈现与默认界面
+
+1. **先确定用户要判断或执行什么。** 正文优先展示结果和动作，不按 DTO 字段顺序铺开页面。新增一行文字、标签或说明时，确认它是否改变用户当前判断；默认界面没有这种价值的内容进入按需入口。
+2. **默认配置不制造标签。** `standard`、`unknown` 等无区分价值的服务档位不显示，也不生成空白副行；非默认档位才补充标识。这条针对配置/身份标签，不适用于记录到的零值；未知测量值保持未知，不伪装成零。
+3. **汇总必须有新增价值。** 单模型与整体用量/费用一致时省略合计行；多模型或存在未归属差额时保留合计。主汇总使用一个视觉重点，表内合计与分项对齐，用普通背景和轻分隔线，不叠加第二块强调卡片或整行重底色。
+4. **说明放在问题发生的位置，默认收起。** 指标定义、统计口径、样本与覆盖、缺失字段清单、计价匹配规则等，使用相邻、可点击且支持键盘的帮助浮层。长说明不常驻正文，不用悬停 Tooltip 承载长文或链接，也不在折叠标题重复完整摘要。实际失败、待处理问题、未知/已知小计和影响判断的异常保留简短状态，详细原因按需展开。
+5. **复用业务目的地。** 参考价格在新标签页进入价格页，保留原页面与弹窗，携带明确、可清除的模型筛选；Desktop 使用带原有 IPC 数据连接的独立价格窗口；不能把多个模型拼成模糊搜索，不能在匹配失败时静默退回全部目录。参考价和会话费用依据分别表达，不把当前目录当作历史账单。实现标识如 `overlay`、`prefix-strip` 只在主动查看依据时出现。
+6. **保留可访问性与单一事实来源。** 将说明移入帮助不等于丢弃信息；入口有可理解名称，鼠标/键盘/触屏可打开，Escape 关闭并恢复焦点。通用规则维护在本节，AGENTS 仅引用；具体反例和自动验收归入现有测试，不维护另一份平行“错题本”。
+
+| 必验案例 | 默认界面 | 按需查看 / 异常处理 |
+| --- | --- | --- |
+| 单模型、完整归属 | 一条模型行，无重复合计，无 standard 标签 | 输出与其中推理关系保留 |
+| 多模型或未归属差额 | 表尾合计，数值与分项对齐 | 缺分类与未分配金额可查询，未知不变成零 |
+| standard / unknown / fast 混合 | 只显示 fast，不留空副行 | 原始记录保留，不改变采集与计费 |
+| 指标定义、样本与缺失清单 | 数值与必要的短状态 | 相邻帮助入口，无大段常驻说明 |
+| 查看本会话价格 | 只显示准确匹配的会话模型，可清除筛选 | 未匹配明确提示，不扩大结果；价格依据仍可主动查询 |
+| 无模型明细 | 一条缺失状态，不绘制八列空表；摘要中的已知数值保留 | 未分配模型 Token、会话金额和已知小计仍可查询，零与未知有区别 |
+| 响应指标缺少样本 | 两项均缺失时合并一条提示；单项缺失单独表达 | 有效的 0 tok/s、0 s 保留；帮助仍提供样本与定义 |
+| 单成员 / 多成员关联 | 单成员直接显示名称链接、关系、角色及用量；多成员保留汇总折叠 | 不重复单成员数值，不丢失历史链接或分叉身份 |
+| 正常短指标与元信息 | 活动宽屏最多三列/窄屏两列；会话信息宽屏双列/窄屏单列 | 长标签可换行，长数值在紧凑视口跨列显示，避免拆散数字分组；不能以截断隐藏真实值 |
+| 单套 / 多套价格证据 | 费用帮助内，单模型至多一套证据直接展示；其他保留分组折叠 | 账单提示只表达一次，匹配规则、假设及未分配金额保留 |
+
 ## 组件清单
 
 以下路径以仓库根为起点。清单覆盖现有主要 UI 入口，不代表所有业务组件都已通用化，也不代表独立副本逐字一致。
@@ -59,6 +81,7 @@
 | 持续状态提示 | [StatusBanner](../packages/dashboard/src/components/StatusBanner.tsx)，DashboardPage、PricingPage、SettingsPanel 使用 | `info/warn/error/success` 状态与说明；操作完成的短暂反馈使用 Toast | 同名独立副本 |
 | 设置帮助说明 | 浏览器设置维持现有说明布局 | 标题旁的独立信息按钮，悬停显示入口名称，点击打开可阅读、可含链接的说明浮层；触发器不放入 Checkbox / Label 的点击区域，关闭与焦点恢复沿用 HeroUI Popover。规则与背景可按需查看，实际状态、错误和操作反馈仍直接显示 | [SettingsHelpPopover](../apps/desktop/src/renderer/components/SettingsHelpPopover.tsx)，用于 QuotaSettings 的提醒与分析、周额度参考节奏、订阅通道，以及 SettingsPanel 的 Token 数量格式和 PetSettingsCard 的导入宠物；解释性浮层不套用 FilterMenu |
 | 应用 Toast 队列 | [AppToastContext](../packages/dashboard/src/components/AppToastContext.tsx)，AppShell 提供队列 | `useAppToastQueue` 必须位于 Provider 内；局部队列仍有合法使用场景，如价格页比较数量提示 | 独立 Context 和 `AppToastProvider`，后者避让窗口拖拽区 |
+| 按需帮助 | [HelpPopover](../packages/dashboard/src/components/HelpPopover.tsx)，SessionDetailDialog、SessionUsageBreakdown、PricingPage 使用 | 标题旁独立图标，Tooltip 只提示入口名称，点击 Popover 阅读定义、依据或覆盖信息；共享壳负责视口边界、焦点和 Escape，不使用筛选菜单外壳。现有 SettingsHelpPopover 是 Desktop 设置专用，CostExplanationLabel 绑定费用业务，均不适合直接承载共享会话指标 | 直接引用 Dashboard 实现，并在 index.css 登记 `@source` |
 | 图表基础 | [ChartPrimitives](../packages/dashboard/src/components/ChartPrimitives.tsx)，TokenUsageTrendCard、UsageDistributionCard 等使用 | Recharts 容器、主题、Tooltip/Legend；数据转换与指标含义留在业务图表中 | 同名独立副本 |
 | Agent 来源图标 | [ProviderIcon](../packages/dashboard/src/components/ProviderIcon.tsx)，会话、项目和 Agent 选择器使用 | Agent/采集来源标识及 fallback | 同名文件，分别核对资源与平台能力 |
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
@@ -75,7 +98,7 @@
 
 ### 业务内复用入口
 
-通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动展开已有会话；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史；缺记录时保留目标等待常规同步。Dashboard 与 Desktop 使用同一页面和详情行，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与展开行为保留。
+通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动打开详情弹窗；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史及服务端实际范围；缺记录时保留目标等待常规同步。关闭详情后焦点回到会话行，常规数据刷新不重新打开已关闭的弹窗。Dashboard 与 Desktop 使用同一页面和详情组件，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与关联展开行为保留。
 
 | 能力 | 入口与使用点 | 适用边界及共享方式 |
 | --- | --- | --- |
@@ -86,9 +109,12 @@
 | 初次加载/范围刷新 | [DashboardLoadingSkeleton](../packages/dashboard/src/components/DashboardLoadingSkeleton.tsx)、[DashboardRangeSyncOverlay](../packages/dashboard/src/components/DashboardRangeSyncOverlay.tsx)，DashboardPage 使用 | 骨架匹配当前总览槽位；刷新遮罩需要定位父级。两端有独立副本，Desktop 另用于托盘 |
 | 来源占比条 | [SourceProgress](../packages/dashboard/src/components/SourceProgress.tsx)，AgentShareCard 使用 | 来源品牌色及百分比语义，两端各有副本 |
 | 会话预览与归属 | [SessionActivityPanel](../packages/dashboard/src/components/SessionActivityPanel.tsx)，DashboardPage 使用 | 总览预览最近 6 条和用量归属；“查看全部”及关联入口带入当前范围，进入会话页；Desktop 直接 re-export |
-| 会话浏览页 | [SessionsPage](../packages/dashboard/src/pages/SessionsPage.tsx)，两端 `/sessions` 路由与 FilterChromeActions 接入 | 共用 SessionBrowser、FilterMenu 与会话行；搜索、Agent/项目筛选、排序字段及方向、12 条分页及关联条件保存在 URL。宽布局表头支持最近活动、Token、费用排序，Token 与费用各占独立列；列宽按容器比例分配，避免多余宽度全部落入会话名称列。Token 占比在展开详情的服务/账号信息行展示，统计范围及占比说明收进该值的 Tooltip；窄布局使用排序菜单及方向按钮，任务时长排序也保留在菜单中。表头用 HeroUI Button 组合 `Table.SortableColumnHeader`，并显式复用 Table 排序标签及方向图标样式；完整 Table.Header 依赖表格集合，不适用于原生 details/summary 展开行。页头以时间控件表达范围，不重复统计范围/用量说明，不提供局部刷新及主题按钮；有总览来源限制时保留范围提示。总览日期（含滚动时间边界）和来源范围单独保留，清除列表筛选不会扩大关联范围。返回总览复用 dashboard-return-state；Desktop 路由直接引用共享页面并登记 CSS `@source` |
+| 会话浏览页 | [SessionsPage](../packages/dashboard/src/pages/SessionsPage.tsx)，两端 `/sessions` 路由与 FilterChromeActions 接入 | 共用 SessionBrowser、FilterMenu 与会话行；搜索、Agent/项目筛选、排序字段及方向、12 条分页及关联条件保存在 URL。宽布局表头支持最近活动、Token、费用排序，Token 与费用各占独立列；列宽按容器比例分配，避免多余宽度全部落入会话名称列。Token 占比在展开详情的服务/账号信息行展示，统计范围及占比说明收进该值的 Tooltip；窄布局使用排序菜单及方向按钮，任务时长排序也保留在菜单中。表头用 HeroUI Button 组合 `Table.SortableColumnHeader`，并显式复用 Table 排序标签及方向图标样式；完整 Table.Header 依赖表格集合，不适用于当前按根会话分组的列表。页头以时间控件表达范围，不重复统计范围/用量说明，不提供局部刷新及主题按钮；有总览来源限制时保留范围提示。总览日期（含滚动时间边界）和来源范围单独保留，清除列表筛选不会扩大关联范围。返回总览复用 dashboard-return-state；Desktop 路由直接引用共享页面并登记 CSS `@source`；模型筛选和日期/项目分组写入 URL；12 条按根会话分页，关联项折叠并支持子项模型筛选；点击会话打开 HeroUI Modal，保留通知精确定位与旧模型/归属信息；详情使用 SessionDetailDialog 与 SessionUsageBreakdown，SessionInsightDetails 保留兼容导出和 ContextAuditButton；Desktop index.css 登记共享组件 `@source`；所有 Select 仍走 FilterMenu |
+| 会话详情 | [SessionDetailDialog](../packages/dashboard/src/components/SessionDetailDialog.tsx)、[SessionUsageBreakdown](../packages/dashboard/src/components/SessionUsageBreakdown.tsx)，由 SessionActivityPanel 打开；[session-detail](../packages/dashboard/src/lib/session-detail.ts) 统一展示口径 | 单一标题、固定四项操作及正文滚动区。默认“仅本会话”，存在后代时可切换“含关联会话”，联动总量、Token 构成和模型费用；按本会话/子代理/分叉/其他关联拆分，单成员直接展示身份与用量，多成员保留折叠；无后代省略不可切换的范围入口，旧 runtime 降级摘要保留。列表筛选不二次裁剪成员。普通详情以一行“所选期间用量”显示 runtime 实际范围；通知定位仍为已采集历史，时区放入数据说明。性能和活动固定为本会话且直接展示，分别保留样本和覆盖；少量会话信息直接展示，不增加折叠步骤；任务时长去掉“已记录计时”后缀，估算标识保留，来源与含义从相邻帮助查看；关联会话名称承接原历史链接，角色在名称旁展示并允许窄屏换行，不增加重复操作行；统计、口径、费用依据、响应样本和活动覆盖从相邻 HelpPopover 查看。Token 构成与模型费用共用 HeroUI Table，单模型且与整体一致时无重复合计，多模型或未归属差额时表尾显示普通背景合计；standard/unknown 不生成标签或副行。逐模型展示总 Token、输入/缓存/输出/推理、已知请求和费用；无模型明细时以紧凑缺失状态替代空表，摘要保留已知总量/费用/小计；非空的 unknown 模型仍显示为模型行。未知分类、未分类 Token 和未分配费用从帮助查看，窄屏只在有数据的表格区域横向滚动。Token 与费用格式遵循本文件「用量数字与模型单价」章节；极小非零、未知、零、已知小计分开；无详情专用精确/简洁模式，原始精度沿用列表 CSV 导出。用户明确要求删除会话 ID、项目路径及恢复命令原文和重复复制入口；账号、时间、计费和代理关系保留。复制成功使用应用 Toast（约 2.5 秒），不占标题区；动作错误保留附近反馈，目录失败可重试。旧 runtime 继续回退本会话明细和可用复制能力。Desktop 经 SessionActivityPanel 共用，index.css 登记两个组件的 `@source` |
+| 上下文审计与兼容入口 | [SessionInsightDetails](../packages/dashboard/src/components/SessionInsightDetails.tsx) | SessionInsightDetails 兼容导出新详情弹窗；ContextAuditButton 保留只读上下文来源审计。列表 CSV 导出仍由 SessionActivityPanel 提供，不与详情 JSON 复制混用；Desktop 共用 |
+| 会话本机操作 | [SessionDetailDialog](../packages/dashboard/src/components/SessionDetailDialog.tsx) | 顶部固定“继续会话 / 打开文件夹 / 复制恢复命令 / 复制项目路径”，复制能力独立于本机启动能力。两个本机动作通过 `/functions/tud-session-actions` 请求运行端从已采集记录解析的操作；执行中禁用两个动作按钮，固定操作区反馈启动结果及错误。不可用操作保留禁用入口并分别说明原因。动作 API 返回的恢复命令优先；显式 null 不回退到旧命令。旧/远程 API 保留复制回退，目录读取失败可重试。PI 使用核实的原始 JSONL，ZCode 按会话 ID 查询数据库目录；Antigravity CLI 使用 `agy --conversation <所选 ID>`，仅从已采集 CLI 原文件所属的 `cache/last_conversations.json` 精确匹配项目目录，目录未知时保留复制命令；不把桌面版 / IDE 记录直接当作 CLI 会话。DeepSeek Harness 需要兼容恢复的 profile，未适配时说明限制。Windows 使用系统默认终端宿主与 PowerShell，macOS 使用系统 Terminal，Linux 使用 x-terminal-emulator；不读取或切换用户终端 profile。Desktop 共用组件与 IPC transport |
 | 趋势浏览 | [UsageTrendExplorer](../packages/dashboard/src/components/UsageTrendExplorer.tsx)，DashboardPage 使用 | 用量时间轴、动态粒度和费用分组；本地模式的两张图共同占满总览一整行，宽屏各占半宽、窄屏纵向排列。每张图的展开按钮打开 HeroUI Modal，复用当前数据、指标与分组状态，保留控件、Tooltip、图例和计价说明；Desktop 直接 re-export，并在 `index.css` 登记共享组件的 `@source` |
-| 价格筛选与比较 | [PricingTools](../packages/dashboard/src/components/PricingTools.tsx)、[PricingMoreFilters](../packages/dashboard/src/components/PricingMoreFilters.tsx)、[PricingComparison](../packages/dashboard/src/components/PricingComparison.tsx) | 厂商、上下文、日期、汇率、渠道及估算场景属于价格业务；共享 PricingPage 的 loadCatalog 读取 runtime 生效表，Desktop 注入 IPC 价格与用量读取；runtime 不可用时回退内置目录 |
+| 价格筛选与比较 | [PricingTools](../packages/dashboard/src/components/PricingTools.tsx)、[PricingMoreFilters](../packages/dashboard/src/components/PricingMoreFilters.tsx)、[PricingComparison](../packages/dashboard/src/components/PricingComparison.tsx) | 厂商、上下文、日期、汇率、渠道及估算场景属于价格业务；共享 PricingPage 的 loadCatalog 读取 runtime 生效表，Desktop 注入 IPC 价格与用量读取；runtime 不可用时回退内置目录；两端价格路由共用 parsePricingSearch，models 参数携带来源/模型集合，按保守身份解析筛选同一模型的渠道分组，保留清除入口及未匹配提示 |
 | 用量分享 | [ShareActivityModal](../packages/dashboard/src/components/ShareActivityModal.tsx)、[ShareBackgroundPicker](../packages/dashboard/src/components/ShareBackgroundPicker.tsx)、[ShareCardCarousel](../packages/dashboard/src/components/ShareCardCarousel.tsx)、[ShareCardActions](../packages/dashboard/src/components/ShareCardActions.tsx) | 绑定分享快照、背景库和海报导出；Desktop 分享弹窗 re-export Dashboard。组件不作为任意轮播或上传器 |
 
 当前没有统一的全页面 EmptyState；无数据、无匹配结果、读取失败由对应业务表达。新增页面先复用合适的 HeroUI 原件或现有业务表达，确有重复契约时再抽取。
@@ -148,6 +174,7 @@ import { FilterSelectPopover } from './FilterMenu';
 2. 用内置浏览器检查真实页面：长列表、长名称、窗口变矮、选中项在末尾、鼠标滚动与键盘 End/Arrow/Enter/Escape、焦点返回触发器。确认最后一项可见可选，背景页面不被列表滚动带走。
 3. 有固定头尾时，滚到底检查搜索/动作仍可见；嵌套 Modal 的菜单要单独检查。级联列、Desktop 托盘与原生窗口按实际可用环境补验，未实测必须说明。
 4. 执行相关类型检查和测试。菜单公共入口策略由 [ui-menu-contracts.test.ts](../packages/dashboard/src/lib/ui-menu-contracts.test.ts) 检查两个 renderer 的直接 Select/Autocomplete 浮层用法（含命名导入别名）；它随 Dashboard 现有测试进入 CI。该检查不能代替视觉、滚动和键盘验收，自定义 Popover 的语义及复用由代码审查核对。
+5. 按本节信息呈现矩阵验收默认界面和按需展开后的界面。单/多模型、完整/部分归属、standard/非默认档位、说明隐藏与打开、价格筛选/清除/未匹配都要检查；不能只测“字段存在”。[session-detail-presentation.test.ts](../packages/dashboard/src/lib/session-detail-presentation.test.ts) 和 [pricing-selection.test.ts](../packages/dashboard/src/lib/pricing-selection.test.ts) 随 Dashboard 测试进入三平台 CI；两端构建后运行 `corepack pnpm test:session-detail-ui`，由 [session-detail-smoke.mjs](../apps/desktop/scripts/session-detail-smoke.mjs) 实测 DOM、键盘、Popover 和窄屏。Windows CI 自动执行同一界面脚本。查看截图确认表头圆角、合计行与信息层级；自动断言不能替代视觉判断。
 
 ```bash
 pnpm --filter quotern-dashboard exec tsc --noEmit

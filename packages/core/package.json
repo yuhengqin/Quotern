@@ -57,6 +57,10 @@
       "types": "./dist/timezone.d.ts",
       "import": "./dist/timezone.js"
     },
+    "./session-csv": {
+      "types": "./dist/session-csv.d.ts",
+      "import": "./dist/session-csv.js"
+    },
     "./project-label": {
       "types": "./dist/project-label.d.ts",
       "import": "./dist/project-label.js"

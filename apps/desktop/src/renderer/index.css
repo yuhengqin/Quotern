@@ -5,6 +5,10 @@
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
 @source "../../../../packages/dashboard/src/components/UsageTrendExplorer.tsx";
 @source "../../../../packages/dashboard/src/components/SessionActivityPanel.tsx";
+@source "../../../../packages/dashboard/src/components/SessionInsightDetails.tsx";
+@source "../../../../packages/dashboard/src/components/SessionDetailDialog.tsx";
+@source "../../../../packages/dashboard/src/components/SessionUsageBreakdown.tsx";
+@source "../../../../packages/dashboard/src/components/HelpPopover.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardTimeRangeControl.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardDateRangePicker.tsx";
 @source "../../../../packages/dashboard/src/components/BackToUsageLink.tsx";

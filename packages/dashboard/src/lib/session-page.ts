@@ -24,6 +24,8 @@ export interface SessionPageSearch {
   q: string;
   sources: string[];
   project: string;
+  model?: string;
+  groupBy?: 'none' | 'date' | 'project';
   sort: SessionSort;
   direction: SessionSortDirection;
   page: number;
@@ -54,6 +56,8 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     q: typeof raw.q === 'string' ? raw.q : '',
     sources: strings(raw.sources),
     project: typeof raw.project === 'string' ? raw.project : '',
+    ...(typeof raw.model === 'string' && raw.model ? { model: raw.model } : {}),
+    ...(['date','project'].includes(String(raw.groupBy)) ? {groupBy: raw.groupBy as 'date'|'project'} : {}),
     sort: ['recent', 'tokens', 'cost', 'duration'].includes(String(raw.sort)) ? raw.sort as SessionSort : 'recent',
     direction: raw.direction === 'ascending' ? 'ascending' : 'descending',
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,

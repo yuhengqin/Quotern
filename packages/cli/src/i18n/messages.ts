@@ -197,6 +197,7 @@ Commands:
   sync                  手动同步本地用量数据
   usage [summary|overview|daily|weekly|monthly|models|projects]
                         查询已落盘的本地用量数据（只读，不触发同步）
+  sessions              查询已采集会话；支持模型／项目筛选及 JSON／CSV 导出
   statusline            从 stdin 读取 Claude 状态并显示会话费用、今日估价与上下文
   service <action>      后台服务与开机自启（macOS / Windows / Linux）
                         action: start | stop | status
@@ -241,6 +242,7 @@ Commands:
   sync                  Sync local usage data manually
   usage [summary|overview|daily|weekly|monthly|models|projects]
                         Query persisted local usage (read only; does not sync)
+  sessions              Query collected sessions with model/project filters and JSON/CSV export
   statusline            Show Claude session cost, local daily estimate and context from stdin
   service <action>      Background service and login startup (macOS / Windows / Linux)
                         action: start | stop | status
@@ -285,6 +287,7 @@ Examples:
   sync                  ローカル使用量を手動で同期
   usage [summary|overview|daily|weekly|monthly|models|projects]
                         保存済みの使用量を参照（読取専用。同期は行いません）
+  sessions              保存済みセッションを絞り込み、JSON/CSV で出力
   statusline            stdin の Claude 状態から費用とコンテキストを表示
   service <action>      バックグラウンドサービスとログイン時の自動起動
                         action: start | stop | status
@@ -329,6 +332,7 @@ Examples:
   sync                  로컬 사용량을 수동 동기화
   usage [summary|overview|daily|weekly|monthly|models|projects]
                         저장된 로컬 사용량 조회 (읽기 전용, 동기화하지 않음)
+  sessions              수집된 세션 필터링 및 JSON/CSV 내보내기
   statusline            stdin의 Claude 상태로 비용 및 컨텍스트 표시
   service <action>      백그라운드 서비스 및 로그인 시 자동 시작
                         action: start | stop | status

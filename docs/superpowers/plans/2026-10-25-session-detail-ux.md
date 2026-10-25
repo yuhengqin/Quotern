@@ -112,3 +112,20 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - 独立代码审查仅发现价格窗口原生主题可能滞后，已修正并实测创建前和创建后的主题变化；独立视觉检查三张最终截图未发现名称/角色重叠或截断。账号沿用匿名短标识，截图只代表当前滚动视口。
 - 合并前检查发现目标 `codex/session-insights` 工作区干净，但其 CLI/Vite 实例 `aaac6f4d-5718-4789-be33-0085b2ad82bd` 正在运行（API 8454/UI 5197，PID 与命令行已核实）。依 worktree 开发规范第 11 行，先保留本任务可验收分支，不操作该服务或在未协调时更新其工作树。
 - 用户随后明确允许“合入并热更新”，实现提交 `6fdbbb9a` 已快进合入目标，未重启服务。两分支代码树一致、工作区干净；5197 `/health` 返回 200 且实例身份不变，服务端已返回新标签链接及无箭头文案。未推送。
+
+## 六项整体精简执行
+
+当前基线 `164d0127`，复用本任务工作区。范围只涉及共享详情组件、四语言文案、实机 smoke 及 UI 规范；Desktop 继续直接共享组件，无 Core/API 或依赖改动。
+
+- [x] 扩展 `apps/desktop/scripts/session-detail-smoke.mjs` 合成数据及断言：无模型已知/未知/已知小计、两项/单项性能缺失与零、单/多关联、无后代/旧 runtime、单/多模型价格依据及宽窄布局。先对旧构建观察预期失败。
+- [x] 修改 `SessionDetailDialog.tsx` 的空性能、关联分组、范围入口、活动和信息布局；修改 `SessionUsageBreakdown.tsx` 的空模型和价格依据；必要文案在 `i18n/usage-messages.ts` 四语言同改，正常测量与零值不丢失。
+- [x] 同步 `docs/ui-guidelines.md` 现役规则及 changeset，执行两端构建、Dashboard 测试、Desktop typecheck、diff check、实机 smoke 和独立审查，查看最终宽窄截图。
+- [ ] 仅提交本任务文件，快进合回 `codex/session-insights`，检查 5197 的服务身份、更新后的页面和两分支干净状态，不重启或推送。
+
+### 六项精简验证记录
+
+- 对旧构建的首个界面断言以“会话信息应有两列”失败；长计数新增文本布局断言先证明 320 px 下被拆为三行，再通过跨列布局保持单行。长范围标签在按钮内换行，避免英文窄屏溢出；“无模型”文案明确为缺少用量明细，不否认已有模型名称。
+- 最终两端构建、Dashboard 264 项测试/22 suites、Desktop typecheck 及 diff check 通过。构建保留既有大分块和混合导入提示；未改 Core/API/依赖，未重复 Core/CLI 全套。日志为 `.quotern-dev/six-refinements-final-*.log` 与 `six-refinements-readable-typecheck.log`。
+- 最终 `corepack pnpm test:session-detail-ui` 28 组通过，结果及截图位于 `.quotern-dev/session-detail-ui-1792927694559-52656/`。覆盖无模型的已知/未知/零/线程已知小计、未分配金额为零、unknown 模型行、有效 0 tok/s 与 0 s、单项缺样本、单成员链接与多成员折叠、旧 runtime 摘要、单模型多套价格证据、320/375/700 px 与短窗口、长计数完整单行、窄屏价格帮助末尾可达，以及原有操作/复制/Toast/通知/焦点/新页价格回归。
+- 小计合成场景使用实际 `relatedUsage.knownCostUsd` 契约；不向没有该字段的 SessionActivity 顶层伪造已知小计。新场景统一等待弹窗入场和视口恢复后再交互，失败会输出溢出元素信息，避免动画坐标误击。
+- 独立代码审查未发现可行动问题；之后的窄屏长标签/长值调整通过真实几何断言及截图验证。独立视觉检查四张最终宽窄截图未发现重叠、横向裁切或异常留白，零值、大数值和单价规则清晰。使用合成 HTTP/IPC 数据，未执行真实 Agent 恢复、新增屏幕阅读器或安装包验收。

@@ -26,8 +26,8 @@ export function DetailDisclosure({ title, summary, children, id }: { title: stri
   </details>;
 }
 
-export function DetailValue({ label, value }: { label: ReactNode; value: ReactNode }) {
-  return <div className="flex min-w-0 items-baseline justify-between gap-4"><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words text-right tabular-nums text-foreground">{value}</dd></div>;
+export function DetailValue({ label, value, className = '' }: { label: ReactNode; value: ReactNode; className?: string }) {
+  return <div className={`flex min-w-0 items-baseline justify-between gap-4 ${className}`}><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words text-right tabular-nums text-foreground">{value}</dd></div>;
 }
 
 function ModelPricing({ model, format }: { model: DetailModel; format: DetailFormat }) {
@@ -50,11 +50,12 @@ function ModelPricing({ model, format }: { model: DetailModel; format: DetailFor
 
 export function SessionPricingDetails({ usage, format }: { usage: ReturnType<typeof buildSessionDetail>['usage']; format: DetailFormat }) {
   const { t } = useTranslation();
+  const singleBasis = usage.models.length === 1 && usage.models[0]!.pricingEvidence.length <= 1;
   return <>
-    <p>{t('usage.insights.priceNote')}</p><p>{t('usage.detail.referencePrices')}</p>
+    <p>{t('usage.detail.costBasisNote')}</p>
     {usage.costUsd === null && usage.knownCostUsd > 0 && <p>{t('usage.explorer.partial')}</p>}
     {usage.unallocatedCostUsd !== null && <p>{t('usage.explorer.unallocatedCost')}: {format.money(usage.unallocatedCostUsd)}. {t('usage.detail.modelCostCaution')}</p>}
-    {usage.models.length > 0 && <DetailDisclosure title={t('usage.detail.priceBasis')}>{usage.models.map(model => <ModelPricing key={model.model} model={model} format={format} />)}</DetailDisclosure>}
+    {usage.models.length > 0 && (singleBasis ? <ModelPricing model={usage.models[0]!} format={format} /> : <DetailDisclosure title={t('usage.detail.priceBasis')}>{usage.models.map(model => <ModelPricing key={model.model} model={model} format={format} />)}</DetailDisclosure>)}
   </>;
 }
 
@@ -75,11 +76,11 @@ export function SessionModelBreakdown({ usage, format, pricingModels }: { usage:
           {usage.missingModelTokens !== null && usage.missingModelTokens > 0 && <p>{t('usage.detail.unassignedModel', { tokens: format.tokens(usage.missingModelTokens) })}</p>}
           {usage.unallocatedCostUsd !== null && <p>{t('usage.explorer.unallocatedCost')}: {format.money(usage.unallocatedCostUsd)}. {t('usage.detail.modelCostCaution')}</p>}
         </HelpPopover>
-        {!usage.detailsComplete && <span className="text-xs text-muted">{t('usage.detail.incompleteDetails')}</span>}
+        {!usage.detailsComplete && usage.models.length > 0 && <span className="text-xs text-muted">{t('usage.detail.incompleteDetails')}</span>}
       </div>
       {pricingModels.length > 0 && <Link to="/pricing" search={{ q: '', models: pricingModels }} target="_blank" rel="noopener" className="inline-flex items-center gap-1 rounded text-xs text-accent outline-offset-2 focus-visible:outline-2">{t('usage.cost.viewPrices')}</Link>}
     </div>
-      <Table variant="secondary" className="max-w-full text-xs">
+      {!usage.models.length ? <p className="text-xs text-muted">{t('usage.detail.noModelUsage')}</p> : <Table variant="secondary" className="max-w-full text-xs">
         <Table.ScrollContainer tabIndex={0} role="region" aria-label={t('usage.detail.modelCosts')} className="max-w-full overflow-x-auto overscroll-x-contain">
           <Table.Content aria-label={t('usage.detail.modelCosts')} className="min-w-[50rem]">
             <Table.Header>
@@ -116,7 +117,6 @@ export function SessionModelBreakdown({ usage, format, pricingModels }: { usage:
             </Table.Body>
           </Table.Content>
         </Table.ScrollContainer>
-      </Table>
-    {!usage.models.length && <p className="mt-2 text-xs text-muted">{t('usage.activity.modelNotRecorded')}</p>}
+      </Table>}
   </section>;
 }

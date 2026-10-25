@@ -27,12 +27,26 @@ const root = { source: 'codex', sessionId: 'fixture-root', sessionTitle: title, 
   insights: { parentId: null, relationKind: 'unknown', relationConflict: false, orphan: false, agentRole: null, agentNickname: null, firstActivityAt: '2026-10-25T05:18:13Z', messageCount: 23, ownTokens: 20_000_000, ownCostUsd: 6, subagentTokens: 800_000, subagentCostUsd: 3.4, combinedTokens: 21_100_000, combinedCostUsd: null, combinedKnownCostUsd: 9.9, descendantCount: 2, relatedUsage: [
     { source: 'codex', sessionId: 'fixture-child', sessionTitle: '子代理：核对费用来源', tokens: 800_000, costUsd: 3.4, knownCostUsd: 3.4, costKind: 'estimated', relationKind: 'subagent', agentRole: 'reviewer', agentNickname: 'Check', models: [{ ...model(800_000, 3.4), serviceTiers: ['standard', 'fast'] }], detailsComplete: true },
     { source: 'codex', sessionId: 'fixture-fork', sessionTitle: '分叉：部分费用尚未确定', tokens: 300_000, costUsd: null, knownCostUsd: 0.5, costKind: 'mixed', relationKind: 'fork', agentRole: null, agentNickname: null, models: [model(300_000, null, 'unpriced-fixture-model')], detailsComplete: true },
-  ], performance: { tokensPerSecond: 60.444, estimatedRequestCount: 3, estimatedDurationMs: 33403, ttftMs: 2790.5, ttftSampleCount: 4, kind: 'estimated' }, signals: { toolCalls: 0, editTurns: null, retryTurns: null, firstPass: null, errorCount: null, compactionCount: null, costPerEdit: null, tokensPerEdit: null, coverage: 'partial' }, resumeCommand: 'codex resume fixture-root' },
+  ], performance: { tokensPerSecond: 60.444, estimatedRequestCount: 3, estimatedDurationMs: 33403, ttftMs: 2790.5, ttftSampleCount: 4, kind: 'estimated' }, signals: { toolCalls: 0, editTurns: 0, retryTurns: 0, firstPass: null, errorCount: 0, compactionCount: 1, costPerEdit: null, tokensPerEdit: null, coverage: 'partial' }, resumeCommand: 'codex resume fixture-root' },
 };
-const empty = { ...root, sessionId: 'fixture-empty', sessionTitle: 'Missing metrics / unknown usage', tokens: null, costUsd: null, costKind: 'unknown', models: [], detailsComplete: false, insights: undefined };
+const empty = { ...root, sessionId: 'fixture-empty', sessionTitle: 'Missing metrics / unknown usage', model: 'unknown', tokens: null, costUsd: null, costKind: 'unknown', models: [], detailsComplete: false, insights: undefined };
 const unassigned = { ...root, sessionId: 'fixture-unassigned', sessionTitle: 'Partial model allocation', tokens: 1000, costUsd: 6, unallocatedCostUsd: 2, models: [model(800, 4)], detailsComplete: false, insights: undefined, taskTimingKind: 'estimated' };
 const unclassified = { ...root, sessionId: 'fixture-unclassified', sessionTitle: 'Unclassified token remainder', tokens: 1000, costUsd: 0, models: [{ ...model(1000, 0), requests: 0, cached_input_tokens: 880 }], detailsComplete: false, insights: undefined, taskTimingKind: 'mixed' };
 const child = { ...root, ...root.insights.relatedUsage[0], insights: undefined };
+const emptyKnown = { ...empty, sessionId: 'fixture-empty-known', sessionTitle: 'No model details with known usage', model: 'known-model-without-details', tokens: 1000, costUsd: 6, costKind: 'recorded', unallocatedCostUsd: 6 };
+const emptySubtotal = { ...emptyKnown, sessionId: 'fixture-empty-subtotal', sessionTitle: 'No model details with a known subtotal', tokens: 0, costUsd: 0, unallocatedCostUsd: 0,
+  insights: { ...root.insights, ownTokens: 0, ownCostUsd: 0, subagentTokens: 1000, subagentCostUsd: null, combinedTokens: 1000, combinedCostUsd: null, combinedKnownCostUsd: 1.5, descendantCount: 1,
+    relatedUsage: [{ ...root.insights.relatedUsage[0], tokens: 1000, costUsd: null, knownCostUsd: 1.5, costKind: 'mixed', models: [] }],
+  },
+};
+const emptyZero = { ...empty, sessionId: 'fixture-empty-zero', sessionTitle: 'No model details with recorded zero usage', tokens: 0, costUsd: 0, costKind: 'recorded' };
+const zeroPerformance = { ...root, sessionId: 'fixture-zero-performance', sessionTitle: 'Valid zero performance', insights: { ...root.insights, performance: { ...root.insights.performance, tokensPerSecond: 0, ttftMs: 0 } } };
+const partialPerformance = { ...zeroPerformance, sessionId: 'fixture-partial-performance', sessionTitle: 'Only throughput is available', insights: { ...zeroPerformance.insights, performance: { ...zeroPerformance.insights.performance, ttftMs: null } } };
+const multi = { ...root, sessionId: 'fixture-multi', sessionTitle: 'Multiple related sessions', insights: { ...root.insights, relatedUsage: root.insights.relatedUsage.map(member => ({ ...member, relationKind: 'subagent' })) } };
+const legacy = { ...root, sessionId: 'fixture-legacy-details', sessionTitle: 'Legacy related details unavailable', insights: { ...root.insights, relatedUsage: undefined } };
+const multiplePrices = { ...root, sessionId: 'fixture-multiple-prices', sessionTitle: 'One model with multiple pricing records', insights: { ...root.insights, descendantCount: 1, relatedUsage: [{ ...root.insights.relatedUsage[0], models: [{ ...model(800_000, 3.4), pricing: { ...price, table: 'fixture-overlay', rates: { ...price.rates, input: 3 } } }] }] } };
+const unknownModel = { ...empty, sessionId: 'fixture-unknown-model', sessionTitle: 'Recorded usage with an unknown model name', tokens: 1000, models: [{ ...model(1000, null, 'unknown'), requests: null, input_tokens: null, cached_input_tokens: null, cache_creation_input_tokens: null, output_tokens: null, reasoning_output_tokens: null, pricing: null }] };
+const largeActivity = { ...root, sessionId: 'fixture-large-activity', sessionTitle: 'Large activity counts and long labels', insights: { ...root.insights, signals: { ...root.insights.signals, toolCalls: Number.MAX_SAFE_INTEGER, editTurns: 100_000_000, retryTurns: 0, errorCount: 0, compactionCount: 1 } } };
 let locale = 'zh-CN';
 let directoryFailure = false;
 let actionsUnavailable = false;
@@ -59,7 +73,7 @@ const api = async (route, init) => {
   if (url.pathname === '/functions/tud-session-directory') return directoryFailure ? { status: 503, body: { success: false, message: 'FIXTURE_UNAVAILABLE', data: null } } : { status: 200, body: { success: true, data: { directory: fixtureDirectory } } };
   if (url.pathname === '/functions/tud-session-activity') {
     const id = url.searchParams.get('sessionId');
-    const row = [empty, unassigned, unclassified, child].find(row => row.sessionId === id) ?? root;
+    const row = [empty, unassigned, unclassified, child, emptyKnown, emptySubtotal, emptyZero, zeroPerformance, partialPerformance, multi, legacy, multiplePrices, unknownModel, largeActivity].find(row => row.sessionId === id) ?? root;
     return { status: 200, body: { success: true, data: { sessions: [row], totalTokens: 21_100_000, attributedTokens: 21_100_000, otherTokens: 0, tokenTotalMismatch: false, missingSources: [], observedAt: '2026-10-25T05:40:00Z', billing: [], range: { fromDate: '2026-10-01', toDate: '2026-10-25', kind: id ? 'collected' : 'selected' } } } };
   }
   return { status: 503, body: { success: false, message: 'FIXTURE_NOT_PROVIDED', data: null } };
@@ -79,7 +93,12 @@ async function connect(window) {
   const client = await connectPage(target); clients.push(client); return client;
 }
 async function noOverflow(client, label) {
-  assert.equal(await client.evaluate(`(() => { const d=${dialog}; return d && d.scrollWidth<=d.clientWidth+1 && [...d.querySelectorAll('*')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&!e.parentElement?.closest('[role="region"]');}).every(e=>e.getBoundingClientRect().right<=d.getBoundingClientRect().right+2); })()`), true, label);
+  const layout = await client.evaluate(`(() => {
+    const d=${dialog}, right=d.getBoundingClientRect().right;
+    const overflow=[...d.querySelectorAll('*')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&!e.parentElement?.closest('[role="region"]')&&r.right>right+2;});
+    return { fits:d.scrollWidth<=d.clientWidth+1&&!overflow.length, overflow:overflow.slice(0,5).map(e=>({tag:e.tagName,text:e.textContent.slice(0,100),right:e.getBoundingClientRect().right})) };
+  })()`);
+  assert.equal(layout.fits, true, `${label}: ${JSON.stringify(layout.overflow)}`);
 }
 async function pricingHeadingsVisible(client) {
   assert.equal(await client.evaluate(`(() => {
@@ -122,6 +141,15 @@ async function main() {
   assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
   assert.equal(await client.evaluate(`Boolean(${dialog}.querySelector('section[aria-label="Token 构成"]'))`), false);
   assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['gpt-fixture-model-with-a-long-name', '2,000万', '20万', '1,960万', '0', '20万\n其中推理: 6万', '111', '$6']);
+  assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('section[aria-label="会话信息"] dl')).gridTemplateColumns.split(' ').length`), 2, 'wide session information uses two columns');
+  assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('section[aria-label="已记录的活动"] dl')).gridTemplateColumns.split(' ').length`), 3, 'wide short activity metrics use three columns');
+  await client.click(help('费用说明'));
+  await until(() => client.evaluate(`document.body.innerText.includes('匹配模型')`), 'single model and price evidence is visible after one help click');
+  assert.equal(await client.evaluate(`Boolean(${summary('价格依据')})`), false);
+  assert.equal(await client.evaluate(`[...document.querySelectorAll('[role="dialog"]')].at(-1).innerText.split('账单').length-1`), 1, 'the cost explanation does not repeat the bill disclaimer');
+  await wait(250);
+  await client.screenshot(path.join(output, 'desktop-single-price-help.png'));
+  await client.key('Escape');
   assert.equal(await client.evaluate(`Boolean(${dialog}.querySelector('section[aria-label="会话信息"]')) && !(${summary('会话信息')})`), true, 'short session information stays visible without a disclosure');
   assert.equal(await client.evaluate(`[...${dialog}.querySelectorAll('dt')].find(el=>el.textContent==='任务时长').nextElementSibling.textContent`), '19分', 'recorded timing has no redundant suffix');
   await client.click(help('任务时长说明'));
@@ -131,6 +159,7 @@ async function main() {
   checks.push('session-information-visible-with-task-timing-explanation-on-demand');
   for (const hidden of ['standard', '吞吐按有效请求样本估算', '未记录的指标', '不代表会话全生命周期', '匹配方式与规则']) assert.equal((await text(client)).includes(hidden), false, hidden + ' should be on demand');
   checks.push('single-model-no-duplicate-total-default-tier-or-permanent-explanations');
+  checks.push('compact-wide-information-activity-grid-and-single-pricing-basis');
   checks.push('desktop-target-autoopens-own-scope-with-four-header-actions');
   await noOverflow(client, 'wide dialog overflow');
   await client.screenshot(path.join(output, 'desktop-light.png'));
@@ -217,6 +246,8 @@ async function main() {
   await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: false });
   await wait(150);
   await noOverflow(client, '375px dialog overflow');
+  assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('section[aria-label="已记录的活动"] dl')).gridTemplateColumns.split(' ').length`), 2, 'narrow activity metrics use two columns');
+  assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('section[aria-label="会话信息"] dl')).gridTemplateColumns.split(' ').length`), 1, 'narrow session information keeps readable full-width rows');
   assert.equal(await client.evaluate(`(() => { const region=${dialog}.querySelector('[role="region"]'); return region.scrollWidth>region.clientWidth; })()`), true);
   await client.evaluate(`(() => { const region=${dialog}.querySelector('[role="region"]'); region.scrollIntoView({block:'center', inline:'nearest'}); region.focus({preventScroll:true}); return true; })()`);
   assert.equal(await client.evaluate(`document.activeElement === ${dialog}.querySelector('[role="region"]')`), true, 'table scroll region receives keyboard focus');
@@ -232,6 +263,15 @@ async function main() {
   await client.key('Escape');
   await until(() => client.evaluate(`document.querySelectorAll('[role="dialog"]').length===1 && !document.body.innerText.includes('推理已包含在输出中')`), 'narrow help fully closes');
   assert.equal(await client.evaluate(`document.activeElement?.getAttribute('aria-label')==='模型与费用说明'`), true, 'narrow help returns focus');
+  await client.click(help('费用说明'));
+  await until(() => client.evaluate(`document.body.innerText.includes('匹配模型')`), 'single pricing basis opens directly at 375px');
+  await wait(250);
+  assert.equal(await client.evaluate(`(() => { const p=[...document.querySelectorAll('[role="dialog"]')].at(-1), r=p.getBoundingClientRect(); return r.left>=0 && r.top>=0 && r.right<=innerWidth+1 && r.bottom<=innerHeight+1; })()`), true, 'direct pricing basis stays inside the narrow viewport');
+  await client.evaluate(`(() => { const p=[...document.querySelectorAll('[role="dialog"]')].at(-1); p.scrollTop=p.scrollHeight; return true; })()`);
+  assert.equal(await client.evaluate(`(() => { const p=[...document.querySelectorAll('[role="dialog"]')].at(-1), note=[...p.querySelectorAll('p')].find(el=>el.textContent.includes('匹配方式与规则')); return note.getBoundingClientRect().bottom<=p.getBoundingClientRect().bottom; })()`), true, 'the final pricing rule can be reached by scrolling');
+  await client.screenshot(path.join(output, 'desktop-single-price-help-narrow.png'));
+  await client.key('Escape');
+  await until(() => client.evaluate(`document.querySelectorAll('[role="dialog"]').length===1`), 'narrow pricing basis dismisses');
   checks.push('desktop-dark-and-375px-bounded-keyboard-scrollable-table');
   await client.call('Emulation.clearDeviceMetricsOverride');
   await wait(150);
@@ -278,7 +318,7 @@ async function main() {
   assert.equal(await client.evaluate(`Boolean(${dialog})`), true);
   checks.push('desktop-reference-window-keeps-session-and-ipc-with-independent-window-controls');
   await client.click(button('含关联会话'));
-  await client.click(summary('子代理'));
+  assert.equal(await client.evaluate(`Boolean(${summary('子代理')}) || Boolean(${summary('分叉会话')})`), false, 'single-member groups do not need another disclosure');
   const childLink = `[...${dialog}.querySelectorAll('a')].find(el=>el.textContent===${JSON.stringify(child.sessionTitle)})`;
   assert.equal(await client.evaluate(`Boolean(${childLink}) && (${childLink}).parentElement.textContent.includes('reviewer') && !${dialog}.innerText.includes('查看该会话的已采集历史')`), true);
   assert.equal(await client.evaluate(`(() => { const link=${childLink}, role=link.nextElementSibling, a=link.getBoundingClientRect(), b=role.getBoundingClientRect(); return Math.abs(a.top-b.top)<5 && b.left>a.left; })()`), true, 'role sits beside the agent name on wide layouts');
@@ -349,8 +389,9 @@ async function main() {
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-empty&sessionFocus=empty`);
   await until(async () => (await text(browser)).includes(empty.sessionTitle), 'unknown fixture');
   assert.ok((await text(browser)).includes('No valid samples'));
-  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
-  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '—', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', 'Amount unknown']);
+  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table').length`), 0, 'no model rows means no empty eight-column table');
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('section[aria-label="Response performance"]').innerText.split('No valid samples').length-1`), 1, 'both missing performance metrics share one empty state');
+  assert.equal(await browser.evaluate(`Boolean(${help('About Usage scope')})`), false, 'no descendants means no fixed scope label or irrelevant scope help');
   await until(() => browser.evaluate(`Boolean(${button('Retry')})`), 'directory retry available');
   directoryFailure = false;
   await browser.click(button('Retry'));
@@ -359,6 +400,80 @@ async function main() {
   await until(() => clipboard.readText() === 'codex resume fixture-empty', 'runtime command without insights');
   await browser.screenshot(path.join(output, 'browser-missing.png'));
   checks.push('english-no-insights-no-models-unknown-usage-and-directory-retry');
+  const openFixture = async row => {
+    await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=${row.sessionId}&sessionFocus=${row.sessionId}`);
+    await until(async () => (await text(browser)).includes(row.sessionTitle), row.sessionTitle);
+    await wait(250);
+  };
+  for (const [row, total, cost] of [[emptyKnown, '1K', '$6'], [emptySubtotal, '1K', '≥ $1.5'], [emptyZero, '0', '$0']]) {
+    await openFixture(row);
+    if (row === emptySubtotal) await browser.click(button('With related sessions'));
+    assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table').length`), 0);
+    assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('section[aria-label="Usage summary"] > dl').querySelectorAll('dd')].map(el=>el.innerText)`), [total, cost]);
+    assert.equal(await browser.evaluate(`Boolean(${help('About Usage scope')})`), row === emptySubtotal);
+    if (row === emptyKnown) {
+      assert.equal(await browser.evaluate(`[...${dialog}.querySelectorAll('a')].some(el=>el.textContent==='View model reference prices' && el.href.includes('known-model-without-details'))`), true);
+      await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
+      await noOverflow(browser, 'empty model status stays compact at 320px');
+      await browser.screenshot(path.join(output, 'browser-empty-known-narrow.png'));
+      await browser.call('Emulation.clearDeviceMetricsOverride');
+      await until(() => browser.evaluate('innerWidth>=1000'), 'browser viewport restored before help interaction');
+      await wait(150);
+    }
+    if (row !== emptyZero) {
+      await browser.click(help('About Models and costs'));
+      await until(() => browser.evaluate(`document.body.innerText.includes('1K additional tokens have no model details.')`), 'model allocation stays available without a table');
+      assert.equal(await browser.evaluate(`document.body.innerText.includes(${JSON.stringify('Source session cost is not allocated to models: ' + (row === emptySubtotal ? '$0' : '$6'))})`), true);
+      await browser.key('Escape');
+    }
+  }
+  checks.push('no-model-known-unknown-zero-subtotal-and-unallocated-cost-remain-distinct');
+  for (const [row, missing] of [[zeroPerformance, 0], [partialPerformance, 1]]) {
+    await openFixture(row);
+    const performanceText = await browser.evaluate(`${dialog}.querySelector('section[aria-label="Response performance"]').innerText`);
+    assert.equal(performanceText.includes('≈ 0 tok/s'), true);
+    assert.equal(performanceText.split('No valid samples').length-1, missing);
+    if (!missing) assert.equal(performanceText.includes('0 s'), true);
+  }
+  checks.push('valid-zero-performance-and-single-missing-metric-are-preserved');
+  await openFixture(multi);
+  await browser.click(button('With related sessions'));
+  assert.equal(await browser.evaluate(`Boolean(${summary('Subagents')}) && !(${summary('Subagents')}).parentElement.open`), true);
+  assert.equal((await text(browser)).includes(child.sessionTitle), false);
+  await browser.click(summary('Subagents'));
+  assert.equal((await text(browser)).includes(child.sessionTitle), true);
+  assert.equal((await text(browser)).includes(multi.insights.relatedUsage[1].sessionTitle), true);
+  await browser.screenshot(path.join(output, 'browser-multiple-related.png'));
+  checks.push('multiple-related-members-keep-disclosure-and-all-history-links');
+  await openFixture(legacy);
+  assert.equal((await text(browser)).includes('Related details are unavailable'), true);
+  assert.equal((await text(browser)).includes('≥ $9.9'), true);
+  assert.equal(await browser.evaluate(`Boolean(${help('About Usage scope')}) && !(${button('With related sessions')})`), true);
+  checks.push('old-runtime-related-totals-and-scope-explanation-remain-available');
+  await openFixture(multiplePrices);
+  await browser.click(button('With related sessions'));
+  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1, 'identical model names still combine');
+  await browser.click(help('About Cost'));
+  await until(() => browser.evaluate(`Boolean(${summary('Pricing basis')})`), 'multiple pricing records keep disclosure');
+  await browser.click(summary('Pricing basis'));
+  assert.equal(await browser.evaluate(`document.body.innerText.includes('fixture-overlay')`), true);
+  await browser.key('Escape');
+  checks.push('multiple-pricing-records-retain-complete-on-demand-basis');
+  await openFixture(unknownModel);
+  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length>=1`), true, 'a recorded unknown model is still a model row');
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('table tbody tr').cells[0].innerText`), 'unknown');
+  await openFixture(largeActivity);
+  await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('section[aria-label="Recorded activity"]').innerText.includes('9,007,199,254,740,991')`), true);
+  await browser.evaluate(`${dialog}.querySelector('section[aria-label="Recorded activity"]').scrollIntoView({block:'center'}); true`);
+  await noOverflow(browser, 'large activity values and long scope labels remain within compact columns');
+  assert.equal(await browser.evaluate(`(() => { const value=[...${dialog}.querySelector('section[aria-label="Recorded activity"]').querySelectorAll('dd')].find(el=>el.textContent==='9,007,199,254,740,991'); const range=document.createRange(); range.selectNodeContents(value); return range.getClientRects().length; })()`), 1, 'a long count remains readable on one line at 320px');
+  await browser.screenshot(path.join(output, 'browser-large-activity-narrow.png'));
+  await browser.call('Emulation.setDeviceMetricsOverride', { width: 700, height: 760, deviceScaleFactor: 1, mobile: false });
+  await noOverflow(browser, 'large activity values remain within medium-width columns');
+  assert.equal(await browser.evaluate(`(() => { const value=[...${dialog}.querySelector('section[aria-label="Recorded activity"]').querySelectorAll('dd')].find(el=>el.textContent==='9,007,199,254,740,991'); const range=document.createRange(); range.selectNodeContents(value); return range.getClientRects().length; })()`), 1, 'a long count remains readable at 700px');
+  await browser.call('Emulation.clearDeviceMetricsOverride');
+  checks.push('unknown-model-rows-and-large-narrow-activity-values-are-retained');
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-unassigned&sessionFocus=unassigned`);
   await until(async () => (await text(browser)).includes(unassigned.sessionTitle), 'unassigned fixture');
   assert.ok((await text(browser)).includes('19m · Estimated'));

@@ -4,8 +4,10 @@ import type { SupportedLocale } from 'quotern-i18n';
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.detail.incompleteDetails': ['明细不全', 'Partial details', '一部の明細なし', '일부 내역 누락'],
+  'usage.detail.noModelUsage': ['未记录模型用量明细', 'No model usage details recorded', 'モデル別の使用量詳細が記録されていません', '모델 사용량 내역이 기록되지 않았습니다'],
   'usage.detail.tokenPartsNote': ['推理已包含在输出中，不重复相加。— 表示未记录或无法确定，不能当作零；总量可能另含未分类 Token。', 'Reasoning is included in output and must not be added again. — means not recorded or unknown, not zero. Totals may include unclassified tokens.', '推論は出力に含まれるため重複加算しません。— は未記録または不明で、ゼロではありません。合計には未分類 Token が含まれる場合があります。', '추론은 출력에 포함되므로 중복 합산하지 않습니다. —는 미기록 또는 미확인이며 0이 아닙니다. 합계에 미분류 Token이 포함될 수 있습니다.'],
   'usage.detail.partialActivity': ['记录不全', 'Partial records', '一部の記録なし', '일부 기록 누락'],
+  'usage.detail.costBasisNote': ['会话费用保留上报、估算和未知来源，依据已有记录与匹配规则计算；未分配到模型的金额单独保留。价格页显示当前参考单价，两者均不代表实际账单。', 'Session costs retain recorded, estimated and unknown provenance using available records and matching rules; amounts not allocated to models are kept separately. The prices page shows current reference rates. Neither represents an actual bill.', 'セッション費用は記録済み・推定・不明の区別を保ち、利用可能な記録と照合ルールに基づきます。モデルに割り当てられない金額は別に保持します。価格ページは現在の参考単価を示し、いずれも実際の請求額ではありません。', '세션 비용은 기록·추정·미확인 출처를 유지하며 기존 기록과 일치 규칙에 따라 계산합니다. 모델에 배분되지 않은 금액은 별도로 보존합니다. 가격 페이지는 현재 참조 단가를 표시하며 둘 다 실제 청구서는 아닙니다.'],
   'usage.detail.referencePrices': ['价格页展示当前参考单价；会话费用依据已有记录和匹配规则计算，均不代表实际账单。', 'The prices page shows current reference rates. Session costs use available records and matching rules; neither is an actual bill.', '価格ページは現在の参考単価を表示します。セッション費用は記録と照合ルールに基づき、実際の請求額ではありません。', '가격 페이지는 현재 참조 단가를 표시합니다. 세션 비용은 기록과 일치 규칙을 사용하며 실제 청구서가 아닙니다.'],
   'usage.detail.sessionModels': ['本会话模型', 'Session models', 'このセッションのモデル', '이 세션의 모델'],
   'usage.detail.sessionModelsCount': ['本会话模型（{{count}}）', 'Session models ({{count}})', 'セッションのモデル（{{count}}）', '세션 모델 ({{count}})'],

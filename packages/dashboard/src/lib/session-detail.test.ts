@@ -104,3 +104,20 @@ test('pricing navigation follows scope and preserves source-specific model ident
   sample.models = [];
   assert.deepEqual(buildSessionDetail(sample, 'own').pricingModels, [{ source: 'codex', model: 'model-a' }]);
 });
+
+test('model expansion aggregates matching rates while preserving unknown old-runtime category costs', () => {
+  const sample = row();
+  (sample.models![0] as any).costBreakdown = [{ category: 'input', tokens: 70, rateUsdPerMillion: 2, costUsd: 0.00014, knownCostUsd: 0.00014 }];
+  const child = sample.insights!.relatedUsage![0];
+  (child.models![0] as any).costBreakdown = [{ category: 'input', tokens: 10, rateUsdPerMillion: 4, costUsd: 0.00004, knownCostUsd: 0.00004 }];
+  sample.insights!.relatedUsage![1].models![0].pricing = { matchedModel: 'model-a', table: 'overlay', matchMethod: 'exact', rates: { input: 2, output: 10 }, unpricedTokens: 0, ruleReferences: [], assumptions: [] };
+  const before = JSON.stringify(sample);
+  const detail = buildSessionDetail(sample, 'thread');
+  const items = (detail.usage.models[0] as any).costBreakdown;
+  assert.ok(Array.isArray(items), 'the shared detail model provides expansion items');
+  const input = items.filter((item: any) => item.category === 'input');
+  assert.equal(input.length, 2);
+  assert.deepEqual(input.map((item: any) => [item.rateUsdPerMillion, item.tokens, item.costUsd, item.knownCostUsd]), [[2, 70, null, 0.00014], [4, 10, 0.00004, 0.00004]]);
+  assert.ok(Math.abs(detail.usage.costUsd! - 1.6) < 1e-12, 'display details do not reprice source totals');
+  assert.equal(JSON.stringify(sample), before);
+});

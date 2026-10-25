@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { computeRowCost, isModelPriced, explainRowCost, getModelPricingRates } from './pricing/index.js';
 import { claudeRequestPricingFact, normalizeClaudeUsage } from './parsers/claude.js';
-import { serviceTierFromEvent, TOKEN_FIELDS, type RequestPricingFact, type TokenParts } from './pricing/request-pricing.js';
+import { serviceTierFromEvent, TOKEN_FIELDS, type RequestPricingFact, type TokenParts, type TokenCostItem } from './pricing/request-pricing.js';
 import { localDateAndHour } from './timezone.js';
 import type { SessionMessage, SessionMetricOptions } from './session-metrics.js';
 import { accountReference } from './account-reference.js';
@@ -277,7 +277,16 @@ export interface SessionActivitySnapshot {
     sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[];
     sessionCount?: number }[];
 }
+export interface SessionModelCostItem {
+  category: TokenCostItem['category'];
+  tokens: number | null;
+  rateUsdPerMillion: number | null;
+  /** Only confirmed components of the model amount; never an allocation of a reported total. */
+  costUsd: number | null;
+  knownCostUsd: number;
+}
 export interface SessionModelUsage {
+  costBreakdown?: SessionModelCostItem[];
   pricing?: { matchedModel: string | null; table: string | null; matchMethod: string; rates: Record<string,number> | null; unpricedTokens: number; ruleReferences: string[]; assumptions:string[] };
   model: string; tokens: number; requests: number | null;
   input_tokens: number | null; output_tokens: number | null; cached_input_tokens: number | null;
@@ -438,9 +447,28 @@ function summarizeSessionModels(events: SessionObservation[]): SessionModelUsage
     const kinds = new Set(rows.map(row => row.costKind));
     const knownCostUsd = rows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0);
     const parts = Object.fromEntries(TOKEN_FIELDS.map(key => [key, complete ? rows.reduce((sum, row) => sum + row.tokenParts![key], 0) : null])) as Record<typeof TOKEN_FIELDS[number], number | null>;
-    const explanations=rows.filter(row=>row.tokenParts||row.estimatedTokenParts).map(row=>explainRowCost({...row.tokenParts??row.estimatedTokenParts!,pricing_requests:row.pricingFact?[row.pricingFact]:undefined,hour_start:row.timestamp,source:row.source,model,project:'',total_tokens:row.tokens,conversation_count:0}));
+    const costItems = new Map<string, SessionModelCostItem>();
+    const explanations = rows.map(row => {
+      const quantities = row.tokenParts ?? row.estimatedTokenParts;
+      const explanation = quantities ? explainRowCost({ ...quantities, pricing_requests: row.pricingFact ? [row.pricingFact] : undefined, hour_start: row.timestamp, source: row.source, model, project: '', total_tokens: row.tokens, conversation_count: 0 }) : null;
+      const canExplainCost = Boolean(row.tokenParts && row.usageKnown && row.costBasis === 'request-facts' && row.costKind !== 'recorded');
+      const rates = getModelPricingRates(model, { source: row.source });
+      const items = explanation?.items ?? (['input', 'cache_read', 'cache_write', 'output'] as const).map(category => ({ category, tokens: 0, rateUsdPerMillion: rates?.[category] ?? null, costUsd: null }));
+      for (const item of items) {
+        const costUsd = canExplainCost ? item.costUsd : null;
+        const contribution: SessionModelCostItem = { ...item, tokens: row.tokenParts ? item.tokens : null, costUsd, knownCostUsd: costUsd ?? 0 };
+        const key = JSON.stringify([item.category, item.rateUsdPerMillion]);
+        const previous = costItems.get(key);
+        costItems.set(key, previous ? { ...contribution,
+          tokens: previous.tokens === null || contribution.tokens === null ? null : previous.tokens + contribution.tokens,
+          costUsd: previous.costUsd === null || costUsd === null ? null : previous.costUsd + costUsd,
+          knownCostUsd: previous.knownCostUsd + contribution.knownCostUsd,
+        } : contribution);
+      }
+      return explanation;
+    }).filter((explanation): explanation is NonNullable<typeof explanation> => explanation !== null);
     const first=explanations[0];
-    return { ...parts, model, tokens: rows.reduce((sum, row) => sum + row.tokens, 0), requests: rows.every(row => row.requestKnown === true) ? rows.length : null,
+    return { ...parts, model, costBreakdown: [...costItems.values()], tokens: rows.reduce((sum, row) => sum + row.tokens, 0), requests: rows.every(row => row.requestKnown === true) ? rows.length : null,
       ...(first?{pricing:{matchedModel:first.matchedModel,table:first.priceTable,matchMethod:first.matchMethod,rates:first.costKind==='unpriced'?null:Object.fromEntries(Object.entries(getModelPricingRates(model,{source:rows[0]!.source})??{})),unpricedTokens:explanations.reduce((sum,e)=>sum+e.unpricedTokens,0),ruleReferences:[...new Set(explanations.flatMap(e=>e.requestPricing?.ruleReferences??[]))],assumptions:[...new Set(rows.flatMap(e=>e.costAssumption?[e.costAssumption]:[]))]}}:{}),
       costUsd: rows.some(row => row.costUsd === null || row.costIncomplete) ? null : knownCostUsd, knownCostUsd,
       costKind: kinds.size === 1 ? [...kinds][0]! : 'mixed' as const, serviceTiers: [...new Set(rows.map(row => row.pricingFact?.serviceTier ?? 'unknown'))] };

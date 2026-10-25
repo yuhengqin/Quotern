@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { extractSessionObservation, aggregateSessionActivity } from '../src/session-observation.js';
 import * as timing from '../src/task-timing.js';
 import type { SessionTimingEvent } from '../src/task-timing.js';
+import { applyRemotePricingOverlay, resetPricingRuntime } from '../src/pricing/index.js';
 
 test('Claude session details share TTL fallback normalization and group each model in the selected period', () => {
   const context = { sessionId: 'same' };
@@ -31,6 +32,26 @@ test('repeated Codex snapshots keep a known request count', () => {
   const event = (timestamp: string) => extractSessionObservation('codex', { type: 'event_msg', timestamp, payload: { type: 'token_count', info: { model: 'gpt-6.1-sol', total_token_usage: { input_tokens: 10, output_tokens: 2 }, last_token_usage: { input_tokens: 10, output_tokens: 2 } } } }, context)!;
   const row = aggregateSessionActivity([event('2026-10-18T00:00:00Z'), event('2026-10-18T00:01:00Z')], [], { totalTokens: 12 }).sessions[0]!;
   assert.equal(row.models?.[0]?.requests, 1);
+});
+
+test('model cost details keep effective rates apart and never allocate a source-reported total', () => {
+  applyRemotePricingOverlay({ exact: { 'openai/gpt-6.1-sol': { input: 2, output: 10, cache_read: 0.1, cache_write: 2.5 } } });
+  try {
+    const event = (id: string, tier: string) => extractSessionObservation('codex', { type: 'event_msg', timestamp: '2026-10-19T00:00:00Z', payload: { type: 'token_count', service_tier: tier, info: { model: 'gpt-6.1-sol', total_token_usage: { input_tokens: 100, output_tokens: 20, reasoning_output_tokens: 5 }, last_token_usage: { input_tokens: 100, output_tokens: 20, reasoning_output_tokens: 5 } } } }, { sessionId: id })!;
+    const standard = event('standard', 'default'), fast = event('fast', 'fast');
+    fast.sessionId = standard.sessionId; fast.id += '-fast';
+    const model = aggregateSessionActivity([standard, fast], [], { totalTokens: 240 }).sessions[0]!.models![0] as any;
+    assert.ok(Array.isArray(model.costBreakdown), 'model details include grouped cost items');
+    assert.deepEqual(model.costBreakdown.filter((item: any) => item.category === 'input' && item.tokens > 0).map((item: any) => item.rateUsdPerMillion).sort(), [2, 4]);
+    assert.ok(Math.abs(model.costBreakdown.reduce((total: number, item: any) => total + (item.costUsd ?? 0), 0) - model.costUsd) < 1e-8);
+    const recorded = { ...standard, costKind: 'recorded' as const, costUsd: 7 };
+    const sourceModel = aggregateSessionActivity([recorded], [], { totalTokens: recorded.tokens }).sessions[0]!.models![0] as any;
+    assert.equal(sourceModel.costUsd, 7);
+    assert.ok(sourceModel.costBreakdown.every((item: any) => item.costUsd === null && item.knownCostUsd === 0), 'reference rates cannot invent recorded category charges');
+    const legacy = { ...standard, tokenParts: undefined, pricingFact: undefined };
+    const legacyModel = aggregateSessionActivity([legacy], [], { totalTokens: legacy.tokens }).sessions[0]!.models![0] as any;
+    assert.ok(legacyModel.costBreakdown.every((item: any) => item.tokens === null && item.costUsd === null), 'missing token categories remain unknown');
+  } finally { resetPricingRuntime(); }
 });
 
 test('fork task copies are attributed before calculating each session duration', () => {

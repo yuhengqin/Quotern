@@ -1,4 +1,4 @@
-import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
+import type { SessionActivity, SessionActivitySnapshot, SessionModelCostItem } from 'quotern-core';
 
 export type DetailScope = 'own' | 'thread';
 export type DetailRange = SessionActivitySnapshot['range'];
@@ -6,7 +6,7 @@ type Insight = NonNullable<SessionActivity['insights']>;
 type RelatedUsage = NonNullable<Insight['relatedUsage']>[number];
 type ModelUsage = NonNullable<SessionActivity['models']>[number];
 export type DetailMember = Omit<RelatedUsage, 'relationKind'> & { relationKind: 'own' | RelatedUsage['relationKind'] };
-export type DetailModel = ModelUsage & { pricingEvidence: NonNullable<ModelUsage['pricing']>[] };
+export type DetailModel = ModelUsage & { pricingEvidence: NonNullable<ModelUsage['pricing']>[]; costBreakdown: SessionModelCostItem[] };
 export const detailTokenFields = ['input_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'output_tokens', 'reasoning_output_tokens'] as const;
 type TokenParts = Record<typeof detailTokenFields[number], number | null>;
 type CostKind = SessionActivity['costKind'];
@@ -27,6 +27,13 @@ function ownUsage(row: SessionActivity): DetailMember {
   };
 }
 
+/** Older runtimes expose reference rates but cannot prove category charges. */
+function modelCostItems(row: ModelUsage): SessionModelCostItem[] {
+  if (row.costBreakdown) return row.costBreakdown;
+  const output = row.output_tokens === null || row.reasoning_output_tokens === null ? null : row.output_tokens + row.reasoning_output_tokens;
+  return ([['input', row.input_tokens], ['cache_read', row.cached_input_tokens], ['cache_write', row.cache_creation_input_tokens], ['output', output]] as const).map(([category, tokens]) => ({ category, tokens, rateUsdPerMillion: row.pricing?.rates?.[category] ?? null, costUsd: null, knownCostUsd: 0 }));
+}
+
 function summarizeModels(members: DetailMember[]): DetailModel[] {
   const byModel = new Map<string, ModelUsage[]>();
   for (const member of members) for (const model of member.models ?? []) {
@@ -41,12 +48,18 @@ function summarizeModels(members: DetailMember[]): DetailModel[] {
       const key = JSON.stringify(basis), previous = pricing.get(key);
       pricing.set(key, { ...basis, unpricedTokens: (previous?.unpricedTokens ?? 0) + unpricedTokens });
     }
+    const costItems = new Map<string, SessionModelCostItem>();
+    for (const item of rows.flatMap(modelCostItems)) {
+      const key = JSON.stringify([item.category, item.rateUsdPerMillion]), previous = costItems.get(key);
+      costItems.set(key, previous ? { ...item, tokens: sum([previous.tokens, item.tokens]), costUsd: sum([previous.costUsd, item.costUsd]), knownCostUsd: previous.knownCostUsd + item.knownCostUsd } : { ...item });
+    }
     return {
       model, tokens: rows.reduce((total, row) => total + row.tokens, 0), requests: sum(rows.map(row => row.requests)),
       ...Object.fromEntries(detailTokenFields.map(field => [field, sum(rows.map(row => row[field]))])) as TokenParts,
       costUsd: sum(rows.map(row => row.costUsd)), knownCostUsd: rows.reduce((total, row) => total + row.knownCostUsd, 0),
       costKind: costKind(rows.map(row => row.costKind)), serviceTiers: [...new Set(rows.flatMap(row => row.serviceTiers))],
       pricingEvidence: [...pricing.values()],
+      costBreakdown: [...costItems.values()],
     };
   }).sort((a, b) => (b.costUsd ?? b.knownCostUsd) - (a.costUsd ?? a.knownCostUsd) || b.tokens - a.tokens || a.model.localeCompare(b.model));
 }

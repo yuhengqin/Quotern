@@ -47,6 +47,18 @@ const multi = { ...root, sessionId: 'fixture-multi', sessionTitle: 'Multiple rel
 const legacy = { ...root, sessionId: 'fixture-legacy-details', sessionTitle: 'Legacy related details unavailable', insights: { ...root.insights, relatedUsage: undefined } };
 const multiplePrices = { ...root, sessionId: 'fixture-multiple-prices', sessionTitle: 'One model with multiple pricing records', insights: { ...root.insights, descendantCount: 1, relatedUsage: [{ ...root.insights.relatedUsage[0], models: [{ ...model(800_000, 3.4), pricing: { ...price, table: 'fixture-overlay', rates: { ...price.rates, input: 3 } } }] }] } };
 const unknownModel = { ...empty, sessionId: 'fixture-unknown-model', sessionTitle: 'Recorded usage with an unknown model name', tokens: 1000, models: [{ ...model(1000, null, 'unknown'), requests: null, input_tokens: null, cached_input_tokens: null, cache_creation_input_tokens: null, output_tokens: null, reasoning_output_tokens: null, pricing: null }] };
+const pricedModel = { ...model(1_600_000, 3.05), input_tokens: 1_000_000, cached_input_tokens: 500_000, output_tokens: 85_000, reasoning_output_tokens: 15_000, costBreakdown: [
+  { category: 'input', tokens: 1_000_000, rateUsdPerMillion: 2, costUsd: 2, knownCostUsd: 2 },
+  { category: 'cache_read', tokens: 500_000, rateUsdPerMillion: 0.1, costUsd: 0.05, knownCostUsd: 0.05 },
+  { category: 'cache_write', tokens: 0, rateUsdPerMillion: 2.5, costUsd: 0, knownCostUsd: 0 },
+  { category: 'output', tokens: 100_000, rateUsdPerMillion: 10, costUsd: 1, knownCostUsd: 1 },
+] };
+const priced = { ...root, sessionId: 'fixture-priced', sessionTitle: 'Model with verifiable item costs', tokens: 1_600_000, costUsd: 3.05, models: [pricedModel], insights: undefined };
+const recorded = { ...priced, sessionId: 'fixture-recorded', sessionTitle: 'Source-reported model cost without item charges', costUsd: 7, costKind: 'recorded', models: [{ ...pricedModel, costUsd: 7, knownCostUsd: 7, costKind: 'recorded', costBreakdown: pricedModel.costBreakdown.map(item => ({ ...item, costUsd: null, knownCostUsd: 0 })) }] };
+const partialPriced = { ...priced, sessionId: 'fixture-partial-priced', sessionTitle: 'Cache lifetimes with partial item charges', tokens: 1_900_000, costUsd: null, costKind: 'mixed', models: [{ ...pricedModel, tokens: 1_900_000, cache_creation_input_tokens: 300_000, costUsd: null, knownCostUsd: 3.4, costKind: 'mixed', costBreakdown: [...pricedModel.costBreakdown.filter(item => item.category !== 'cache_write'),
+  { category: 'cache_write_5m', tokens: 200_000, rateUsdPerMillion: 1.25, costUsd: 0.25, knownCostUsd: 0.25 },
+  { category: 'cache_write_1h', tokens: 100_000, rateUsdPerMillion: 2, costUsd: null, knownCostUsd: 0.1 },
+] }] };
 const largeActivity = { ...root, sessionId: 'fixture-large-activity', sessionTitle: 'Large activity counts and long labels', insights: { ...root.insights, signals: { ...root.insights.signals, toolCalls: Number.MAX_SAFE_INTEGER, editTurns: 100_000_000, retryTurns: 0, errorCount: 0, compactionCount: 1 } } };
 let locale = 'zh-CN';
 let directoryFailure = false;
@@ -84,7 +96,7 @@ const api = async (route, init) => {
     if (fallback && detailDelay) await wait(detailDelay);
     if (fallback && detailFailure) return { status: 500, body: { success: false, message: 'FIXTURE_DETAIL_FAILURE', data: null } };
     const id = url.searchParams.get('sessionId');
-    const row = [empty, unassigned, unclassified, child, emptyKnown, emptySubtotal, emptyZero, zeroPerformance, partialPerformance, multi, legacy, multiplePrices, unknownModel, largeActivity].find(row => row.sessionId === id) ?? root;
+    const row = [empty, unassigned, unclassified, child, emptyKnown, emptySubtotal, emptyZero, zeroPerformance, partialPerformance, multi, legacy, multiplePrices, unknownModel, largeActivity, priced, recorded, partialPriced].find(row => row.sessionId === id) ?? root;
     // Model the legacy runtime: any exact identity request uses collected history,
     // regardless of newer UI-only parameters. Bounded source requests stay selected.
     return { status: 200, body: { success: true, data: { sessions: id ? [row] : detailMissing ? [root, fork] : [root, child, fork], totalTokens: 21_100_000, attributedTokens: 21_100_000, otherTokens: 0, tokenTotalMismatch: false, missingSources: [], observedAt: '2026-10-25T05:40:00Z', billing: [], range: { fromDate: '2026-10-01', toDate: '2026-10-25', kind: id ? 'collected' : 'selected' } } } };
@@ -96,6 +108,7 @@ const button = text => `[...document.querySelectorAll('[role="dialog"] button')]
 const summary = text => `[...document.querySelectorAll('[role="dialog"] summary')].find(el=>el.textContent.includes(${JSON.stringify(text)}))`;
 const dialog = 'document.querySelector("[role=dialog]")';
 const help = label => `[...document.querySelectorAll('[role="dialog"] button')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)})`;
+const modelToggle = `${dialog}.querySelector('table button[aria-expanded]')`;
 const text = client => client.evaluate(`${dialog}?.innerText ?? ''`);
 const checks = [], windows = [], clients = [];
 let server;
@@ -163,6 +176,20 @@ async function main() {
   assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
   assert.equal(await client.evaluate(`Boolean(${dialog}.querySelector('section[aria-label="Token 构成"]'))`), false);
   assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['gpt-fixture-model-with-a-long-name', '2,000万', '20万', '1,960万', '0', '20万\n其中推理: 6万', '111', '$6']);
+  assert.equal(await client.evaluate(`(${modelToggle}).getAttribute('aria-expanded')`), 'false');
+  await client.evaluate(`(${modelToggle}).focus(); true`);
+  await client.key('Enter');
+  await until(() => client.evaluate(`Boolean(${dialog}.querySelector('[data-model-pricing]'))`), 'model pricing expands with Enter');
+  assert.equal(await client.evaluate(`Boolean(document.getElementById((${modelToggle}).getAttribute('aria-controls')))`), true);
+  assert.equal(await client.evaluate(`${dialog}.querySelector('[data-model-pricing] table tbody tr').cells[1].innerText`), '20万');
+  assert.equal(await client.evaluate(`${dialog}.querySelector('[data-model-pricing] table tbody tr').cells[3].innerText`), '—', 'old runtimes do not invent item charges');
+  assert.ok((await text(client)).includes('未记录可核对的分项费用'));
+  for (const hidden of ['匹配模型', '价格表', '匹配方式与规则', 'fixture-overlay', 'prefix-strip']) assert.equal((await text(client)).includes(hidden), false);
+  await client.screenshot(path.join(output, 'desktop-model-expanded.png'));
+  await client.key(' ');
+  await until(() => client.evaluate(`!${dialog}.querySelector('[data-model-pricing]')`), 'model pricing collapses with Space');
+  assert.equal(await client.evaluate(`document.activeElement === (${modelToggle})`), true);
+  checks.push('model-pricing-keyboard-expansion-and-safe-legacy-item-costs');
   assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('section[aria-label="会话信息"] dl')).gridTemplateColumns.split(' ').length`), 2, 'wide session information uses two columns');
   assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('section[aria-label="已记录的活动"] dl')).gridTemplateColumns.split(' ').length`), 3, 'wide short activity metrics use three columns');
   await client.click(help('费用说明'));
@@ -241,10 +268,11 @@ async function main() {
   assert.equal(await client.evaluate(`Boolean(${summary('已记录的活动')})`), false);
   assert.equal(await client.evaluate(`Boolean(${summary('会话信息')})`), false);
   assert.ok((await text(client)).includes('记录不全'));
-  assert.equal(await client.evaluate(`Boolean(${summary('查看计算依据')}) && !(${summary('查看计算依据')}).parentElement.open`), true);
-  await client.click(summary('查看计算依据'));
-  assert.ok(await client.evaluate(`document.body.innerText.includes('fixture')`));
-  await client.click(summary('查看计算依据'));
+  assert.equal(await client.evaluate(`Boolean(${summary('查看计算依据')})`), false, 'global technical evidence disclosure has been removed');
+  await client.click(modelToggle);
+  assert.ok((await text(client)).includes('用量与计价明细'));
+  assert.equal((await text(client)).includes('匹配模型'), false);
+  await client.click(modelToggle);
   await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 });
   await until(() => client.evaluate(`document.querySelectorAll('[role="dialog"]').length===1 && !document.querySelector('[role="tooltip"]')`), 'pricing help and hover label dismiss');
   assert.ok(!(await text(client)).includes(fixtureDirectory));
@@ -275,6 +303,11 @@ async function main() {
   await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39, nativeVirtualKeyCode: 39 });
   await until(() => client.evaluate(`${dialog}.querySelector('[role="region"]').scrollLeft>0`), 'table scrolls with keyboard');
   await client.screenshot(path.join(output, 'desktop-narrow.png'));
+  await client.click(modelToggle);
+  await noOverflow(client, 'expanded pricing remains in the narrow table scroll region');
+  await client.evaluate(`${dialog}.querySelector('[data-model-pricing]').scrollIntoView({block:'center'}); true`);
+  await client.screenshot(path.join(output, 'desktop-model-expanded-narrow-dark.png'));
+  await client.click(modelToggle);
   await client.click(help('模型与费用说明'));
   await until(() => client.evaluate(`document.body.innerText.includes('推理已包含在输出中')`), 'narrow help opens');
   await wait(250);
@@ -584,12 +617,44 @@ async function main() {
   await openFixture(multiplePrices);
   await browser.click(button('With related sessions'));
   assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1, 'identical model names still combine');
-  assert.equal(await browser.evaluate(`Boolean(${summary('View calculation basis')}) && !(${summary('View calculation basis')}).parentElement.open`), true, 'multiple pricing records remain collapsed below model table');
-  await browser.click(summary('View calculation basis'));
-  assert.equal(await browser.evaluate(`document.body.innerText.includes('fixture-overlay')`), true);
+  assert.equal(await browser.evaluate(`(${modelToggle}).getAttribute('aria-expanded')`), 'false', 'multiple pricing records are collapsed within their model');
+  await browser.click(modelToggle);
+  assert.equal(await browser.evaluate(`(() => { const rows=[...${dialog}.querySelector('[data-model-pricing] tbody').rows].filter(row=>row.cells[0].textContent==='Uncached input'); return rows.length===2 && rows[0].cells[2].textContent==='$2' && rows[1].cells[2].textContent==='$3' && rows.every(row=>row.cells[3].textContent==='—'); })()`), true, 'old runtime reference rates retain their quantities without claiming item costs');
+  assert.equal(await browser.evaluate(`document.body.innerText.includes('fixture-overlay') || document.body.innerText.includes('Matching method')`), false);
   assert.equal(await browser.evaluate(`document.querySelectorAll('[role="dialog"]').length`), 1, 'calculation details use the main body rather than another popover');
-  await browser.click(summary('View calculation basis'));
-  checks.push('multiple-pricing-records-retain-complete-on-demand-basis');
+  await browser.screenshot(path.join(output, 'browser-model-multiple-rates.png'));
+  checks.push('multiple-rates-expand-next-to-model-without-technical-evidence');
+  await openFixture(priced);
+  await browser.click(modelToggle);
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('[data-model-pricing] tbody').rows].map(row=>[...row.cells].map(cell=>cell.innerText))`), [['Uncached input','1M','$2','$2'], ['Cache read','500K','$0.1','$0.05'], ['Cache writes','0','$2.5','$0'], ['Output including reasoning','100K','$10','$1']]);
+  assert.equal((await text(browser)).includes('Verifiable item costs were not recorded'), false);
+  await browser.screenshot(path.join(output, 'browser-model-item-costs.png'));
+  await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
+  await noOverflow(browser, 'verifiable item costs remain contained at 320px');
+  await browser.evaluate(`${dialog}.querySelector('[data-model-pricing]').scrollIntoView({block:'center'}); true`);
+  await browser.screenshot(path.join(output, 'browser-model-item-costs-narrow.png'));
+  await browser.call('Emulation.clearDeviceMetricsOverride');
+  await browser.evaluate('localStorage.setItem("quotern.locale.preference", "zh-CN"); localStorage.setItem("quotern-token-unit-mode", "international"); true');
+  await openFixture(priced);
+  await browser.click(modelToggle);
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-model-pricing] tbody tr').cells[1].innerText`), '1M', 'expanded usage respects international units in Chinese');
+  await browser.evaluate('localStorage.setItem("quotern-token-unit-mode", "localized"); true');
+  await openFixture(priced);
+  await browser.click(modelToggle);
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-model-pricing] tbody tr').cells[1].innerText`), '100万', 'saved localized units also apply to expanded quantities');
+  assert.equal(await browser.evaluate(`${dialog}.querySelector('[data-model-pricing] tbody tr').cells[2].innerText`), '$2', 'fixed per-million rates do not change with quantity preferences');
+  await browser.screenshot(path.join(output, 'browser-model-item-costs-zh.png'));
+  await browser.evaluate('localStorage.setItem("quotern.locale.preference", "en"); true');
+  await openFixture(partialPriced);
+  await browser.click(modelToggle);
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('[data-model-pricing] tbody').rows].filter(row=>row.cells[0].textContent.startsWith('Cache write (')).map(row=>[...row.cells].map(cell=>cell.innerText))`), [['Cache write (5 min)','200K','$1.25','$0.25'], ['Cache write (1 hour)','100K','$2','≥ $0.1']]);
+  assert.ok((await text(browser)).includes('Some costs cannot be broken down'));
+  checks.push('cache-lifetimes-partial-item-costs-and-saved-token-unit-preferences');
+  await openFixture(recorded);
+  await browser.click(modelToggle);
+  assert.equal(await browser.evaluate(`[...${dialog}.querySelector('[data-model-pricing] tbody').rows].every(row=>row.cells[3].textContent==='—')`), true);
+  assert.ok((await text(browser)).includes('$7'));
+  checks.push('item-quantity-rate-cost-chain-and-reported-total-remain-distinct');
   await openFixture(unknownModel);
   assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length>=1`), true, 'a recorded unknown model is still a model row');
   assert.equal(await browser.evaluate(`${dialog}.querySelector('table tbody tr').cells[0].innerText`), 'unknown');
@@ -671,4 +736,4 @@ async function main() {
   console.log(JSON.stringify({ ok: true, checks, output }));
 }
 const deadline = setTimeout(() => app.exit(2), 120_000);
-void app.whenReady().then(main).catch(async error => { console.error(error); await mkdir(output, { recursive: true }); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error)); for (let i = 0; i < clients.length; i++) { if (windows[i]?.isDestroyed()) continue; try { await clients[i].screenshot(path.join(output, `failure-${i}.png`)); await writeFile(path.join(output, `failure-${i}.txt`), await clients[i].evaluate('document.body.innerText')); } catch {} } process.exitCode = 1; }).finally(async () => { for (const client of clients) client.close(); for (const window of windows) if (!window.isDestroyed()) window.destroy(); if (server) await new Promise(resolve => server.close(resolve)); clearTimeout(deadline); app.exit(process.exitCode ?? 0); });
+void app.whenReady().then(main).catch(async error => { console.error(error); await mkdir(output, { recursive: true }); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error)); await writeFile(path.join(output, 'diagnostics.json'), JSON.stringify({ activityCalls, windows: windows.map(window => window.isDestroyed() ? null : window.webContents.getURL()), errors: clients.map(client => client.errors) }, null, 2)); for (let i = 0; i < clients.length; i++) { if (windows[i]?.isDestroyed()) continue; try { await clients[i].screenshot(path.join(output, `failure-${i}.png`)); await writeFile(path.join(output, `failure-${i}.txt`), await clients[i].evaluate('document.body.innerText')); } catch {} } process.exitCode = 1; }).finally(async () => { for (const client of clients) client.close(); for (const window of windows) if (!window.isDestroyed()) window.destroy(); if (server) await new Promise(resolve => server.close(resolve)); clearTimeout(deadline); app.exit(process.exitCode ?? 0); });

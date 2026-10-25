@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { EnvHttpProxyAgent } from 'undici';
 import { mergeModelsDevPricing, MODELS_DEV_URL } from './models-dev.mjs';
 import type { QueueBucket } from '../types.js';
-import { builtinRequestRules, priceRequest, TOKEN_FIELDS, validRequestRules } from './request-pricing.js';
+import { builtinRequestRules, priceRequest, tokenCostItem, TOKEN_FIELDS, validRequestRules, type TokenCostItem } from './request-pricing.js';
 export * from './request-pricing.js';
 import { pricingOverlayPath } from '../paths.js';
 import pricingData from './pricing.json' with { type: 'json' };
@@ -508,6 +508,8 @@ export function computeRowCost(row: QueueBucket): number {
 export type CostKind = 'reported' | 'model_estimate' | 'default_estimate' | 'unpriced';
 
 export interface RowCostExplanation {
+  /** Category amounts from the same effective rates as the cost calculation. */
+  items?: TokenCostItem[];
   requestPricing?: { requests: number; ruleReferences: string[]; legacyTokens: number; serviceTiers: string[] };
   source: string;
   model: string;
@@ -558,6 +560,12 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
     costKind: entirelyUnpriced || !match.value ? 'unpriced' : match.source === 'default' ? 'default_estimate' : 'model_estimate',
     costUsd: entirelyUnpriced || !match.value ? null : computeRowCost(row),
     tokens, unpricedTokens,
+    items: requestCost?.items ?? [
+      tokenCostItem('input', row.input_tokens ?? 0, match.value?.input),
+      tokenCostItem('output', (row.output_tokens ?? 0) + (row.source === 'codex' || row.source === 'every-code' ? 0 : row.reasoning_output_tokens ?? 0), match.value?.output),
+      tokenCostItem('cache_read', row.cached_input_tokens ?? 0, match.value?.cache_read),
+      tokenCostItem('cache_write', row.cache_creation_input_tokens ?? 0, match.value?.cache_write),
+    ],
     ...(requestCost ? { requestPricing: requestCost.evidence } : {}),
   };
 }
@@ -570,6 +578,7 @@ function requestAwareCost(row: QueueBucket) {
     .filter(rule => rule.source === row.source && (rule.model === match.matchedModel || rule.model === row.model));
   const remainder = { ...row, pricing_requests: undefined };
   let cost = 0, unpricedTokens = 0;
+  const items: TokenCostItem[] = [];
   const references = new Set<string>(), tiers = new Set<string>();
   let requests = 0;
   for (const fact of row.pricing_requests ?? []) {
@@ -580,14 +589,16 @@ function requestAwareCost(row: QueueBucket) {
     for (const key of TOKEN_FIELDS) remainder[key] = (remainder[key] ?? 0) - fact[key];
     const priced = priceRequest(fact, base, rules);
     cost += priced.cost; unpricedTokens += priced.unpricedTokens; requests++;
+    items.push(...priced.items);
     priced.ruleReferences.forEach(ref => references.add(ref)); tiers.add(fact.serviceTier ?? 'unknown');
   }
   const legacyTokens = computeTokens(remainder);
   if (legacyTokens) {
     const legacy = explainRowCost(remainder);
     cost += legacy.costUsd ?? 0; unpricedTokens += legacy.unpricedTokens;
+    items.push(...legacy.items ?? []);
   }
-  return { cost: roundCostUsd(cost), unpricedTokens, evidence: { requests, ruleReferences: [...references], legacyTokens, serviceTiers: [...tiers] } };
+  return { cost: roundCostUsd(cost), unpricedTokens, items, evidence: { requests, ruleReferences: [...references], legacyTokens, serviceTiers: [...tiers] } };
 }
 
 /**

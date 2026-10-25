@@ -2,6 +2,17 @@ import type { ModelPricingRates } from './matcher.js';
 
 export const TOKEN_FIELDS = ['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'reasoning_output_tokens'] as const;
 export type TokenParts = Record<typeof TOKEN_FIELDS[number], number>;
+export interface TokenCostItem {
+  category: 'input' | 'output' | 'cache_read' | 'cache_write' | 'cache_write_1h' | 'cache_write_5m';
+  tokens: number;
+  rateUsdPerMillion: number | null;
+  costUsd: number | null;
+}
+
+export function tokenCostItem(category: TokenCostItem['category'], tokens: number, rate: number | undefined): TokenCostItem {
+  const rateUsdPerMillion = rate !== undefined && Number.isFinite(rate) && rate >= 0 ? rate : null;
+  return { category, tokens, rateUsdPerMillion, costUsd: tokens === 0 ? 0 : rateUsdPerMillion === null ? null : tokens * rateUsdPerMillion / 1e6 };
+}
 /** Local numerical evidence. No request content, credentials or raw paths. */
 export interface RequestPricingFact extends TokenParts {
   id: string; timestamp: string;
@@ -65,7 +76,7 @@ export function builtinRequestRules(model: string, source: string, base: ModelPr
   return rules;
 }
 
-export function priceRequest(fact: RequestPricingFact, base: ModelPricingRates, rules: RequestPricingRule[]): { cost: number; unpricedTokens: number; ruleReferences: string[] } {
+export function priceRequest(fact: RequestPricingFact, base: ModelPricingRates, rules: RequestPricingRule[]): { cost: number; unpricedTokens: number; ruleReferences: string[]; items: TokenCostItem[] } {
   const matched = rules.filter(rule => (!rule.serviceTier || rule.serviceTier === fact.serviceTier)
     && (!rule.effectiveFrom || Date.parse(fact.timestamp) >= Date.parse(rule.effectiveFrom))
     && (!rule.effectiveTo || Date.parse(fact.timestamp) < Date.parse(rule.effectiveTo))
@@ -75,7 +86,8 @@ export function priceRequest(fact: RequestPricingFact, base: ModelPricingRates, 
   const rates = Object.assign({}, base, ...matched.map(rule => rule.rates));
   const oneHour = Math.min(fact.cache_creation_input_tokens, fact.cacheWrite1hTokens ?? 0);
   const fiveMinute = Math.min(fact.cache_creation_input_tokens - oneHour, fact.cacheWrite5mTokens ?? 0);
-  const fields: Array<[number, number | undefined]> = [[fact.input_tokens, rates.input], [fact.output_tokens + fact.reasoning_output_tokens, rates.output], [fact.cached_input_tokens, rates.cache_read], [fact.cache_creation_input_tokens - oneHour - fiveMinute, rates.cache_write], [oneHour, rates.cache_write_1h ?? rates.cache_write], [fiveMinute, rates.cache_write_5m ?? rates.cache_write]];
-  return { cost: fields.reduce((sum, [n, rate]) => sum + n * (rate ?? 0), 0) / 1e6,
-    unpricedTokens: fields.reduce((sum, [n, rate]) => sum + (rate === undefined ? n : 0), 0), ruleReferences: [...new Set(matched.map(rule => rule.reference))] };
+  const fields: Array<[TokenCostItem['category'], number, number | undefined]> = [['input', fact.input_tokens, rates.input], ['output', fact.output_tokens + fact.reasoning_output_tokens, rates.output], ['cache_read', fact.cached_input_tokens, rates.cache_read], ['cache_write', fact.cache_creation_input_tokens - oneHour - fiveMinute, rates.cache_write], ['cache_write_1h', oneHour, rates.cache_write_1h ?? rates.cache_write], ['cache_write_5m', fiveMinute, rates.cache_write_5m ?? rates.cache_write]];
+  return { cost: fields.reduce((sum, [, n, rate]) => sum + n * (rate ?? 0), 0) / 1e6,
+    unpricedTokens: fields.reduce((sum, [, n, rate]) => sum + (rate === undefined ? n : 0), 0), ruleReferences: [...new Set(matched.map(rule => rule.reference))],
+    items: fields.filter(([category, tokens]) => tokens > 0 || !category.startsWith('cache_write_')).map(([category, tokens, rate]) => tokenCostItem(category, tokens, rate)) };
 }

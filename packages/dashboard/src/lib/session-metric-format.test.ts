@@ -53,8 +53,8 @@ test('session Token values follow the saved unit preference', async () => {
   }
 });
 
-test('session USD values use a dollar prefix and at most four decimal places', () => {
-  for (const [value, expected] of [[1.422123456789, '$1.4221'], [1.422, '$1.422'], [0, '$0'], [1234.56789, '$1,234.5679']] as const) {
+test('session USD values follow the shared two-decimal cost contract without trailing zeroes', () => {
+  for (const [value, expected] of [[1.422123456789, '$1.42'], [1.4, '$1.4'], [0, '$0'], [1234.56789, '$1,234.57']] as const) {
     assert.equal(formatSessionUsd(value, 'en'), expected);
   }
   assert.equal(formatSessionUsd(null, 'en'), '—');
@@ -63,8 +63,9 @@ test('session USD values use a dollar prefix and at most four decimal places', (
 });
 
 test('small nonzero session costs stay distinguishable from zero and unknown subtotals retain a lower bound', () => {
-  assert.equal(formatSessionUsd(0.00000123, 'en'), '<$0.0001');
-  assert.equal(formatSessionUsd(0.0001, 'en'), '$0.0001');
-  assert.equal(formatSessionUsd(1.422123456789, 'en', { lowerBound: true }), '≥ $1.4221');
+  assert.equal(formatSessionUsd(0.00000123, 'en'), '<$0.01');
+  assert.equal(formatSessionUsd(0.0001, 'en'), '<$0.01');
+  assert.equal(formatSessionUsd(-0.001, 'en'), '>-$0.01');
+  assert.equal(formatSessionUsd(1.422123456789, 'en', { lowerBound: true }), '≥ $1.42');
   assert.equal(formatSessionUsd(0.00000123, 'en', { lowerBound: true }), '> $0');
 });

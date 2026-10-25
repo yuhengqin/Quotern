@@ -70,7 +70,7 @@ export * from './doctor.js';
 export * from './local-metrics.js';
 export * from './share-backgrounds.js';
 export type { SessionMetrics, SessionMessage } from './session-metrics.js';
-export type { SessionActivity, SessionActivitySnapshot, SessionModelUsage, SessionBilling, SessionContextObservation } from './session-observation.js';
+export type { SessionActivity, SessionActivitySnapshot, SessionModelUsage, SessionModelCostItem, SessionBilling, SessionContextObservation } from './session-observation.js';
 export type { SessionListPage, SessionListQuery, SessionDetailResponse } from './session-list.js';
 export { sessionsToCsv } from './session-insights.js';
 export type { SessionInsights, SessionRelationKind } from './session-insights.js';

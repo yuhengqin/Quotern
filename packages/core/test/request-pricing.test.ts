@@ -73,3 +73,36 @@ test('long-context modifiers preserve missing rates and permit explicit zero rat
   core.applyRemotePricingOverlay({ exact: { 'anthropic/claude-haiku-5-5': { input: 1, output: 0 } } });
   assert.equal(core.explainRowCost(bucket).unpricedTokens, 0);
 });
+
+test('cost items retain each applicable request rate and cache lifetime without double counting', () => {
+  overlay();
+  const bucket = row({ input_tokens: 200, output_tokens: 20, cache_creation_input_tokens: 100,
+    pricing_requests: [fact('standard', 100, { cache_creation_input_tokens: 100, cacheWrite1hTokens: 60, cacheWrite5mTokens: 40 }), fact('fast', 100, { serviceTier: 'fast' })] });
+  const explanation = core.explainRowCost(bucket) as any;
+  assert.ok(Array.isArray(explanation.items), 'the calculation exposes its category quantities and effective rates');
+  const used = explanation.items.filter((item: any) => item.tokens > 0);
+  assert.deepEqual(used.filter((item: any) => item.category === 'input').map((item: any) => [item.tokens, item.rateUsdPerMillion]), [[100, 1], [100, 5]]);
+  assert.deepEqual(used.filter((item: any) => item.category.startsWith('cache_write')).map((item: any) => [item.category, item.tokens, item.rateUsdPerMillion]), [['cache_write_1h', 60, 2], ['cache_write_5m', 40, 1.25]]);
+  assert.equal(used.reduce((total: number, item: any) => total + item.tokens, 0), 320);
+  assert.ok(Math.abs(used.reduce((total: number, item: any) => total + item.costUsd, 0) - core.computeRowCost(bucket)) < 1e-8);
+});
+
+test('cost item prices distinguish missing rates from explicit free output', () => {
+  const bucket = row({ input_tokens: 100, output_tokens: 10, pricing_requests: [fact('one')] });
+  core.applyRemotePricingOverlay({ exact: { 'price-fixture': { input: 1 } } });
+  let output = (core.explainRowCost(bucket) as any).items?.find((item: any) => item.category === 'output');
+  assert.ok(output, 'output remains an explicit cost item');
+  assert.equal(output.rateUsdPerMillion, null); assert.equal(output.costUsd, null);
+  core.applyRemotePricingOverlay({ exact: { 'price-fixture': { input: 1, output: 0 } } });
+  output = (core.explainRowCost(bucket) as any).items.find((item: any) => item.category === 'output');
+  assert.equal(output.rateUsdPerMillion, 0); assert.equal(output.costUsd, 0);
+});
+
+test('cost items include a legacy remainder once without applying request modifiers to it', () => {
+  overlay();
+  const bucket = row({ input_tokens: 200, output_tokens: 20, pricing_requests: [fact('fast', 100, { serviceTier: 'fast' })] });
+  const explanation = core.explainRowCost(bucket);
+  assert.equal(explanation.items!.reduce((sum, item) => sum + item.tokens, 0), 220);
+  assert.deepEqual(explanation.items!.filter(item => item.category === 'input').map(item => [item.tokens, item.rateUsdPerMillion]), [[100, 5], [100, 1]]);
+  assert.ok(Math.abs(explanation.items!.reduce((sum, item) => sum + (item.costUsd ?? 0), 0) - core.computeRowCost(bucket)) < 1e-8);
+});

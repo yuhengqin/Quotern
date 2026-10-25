@@ -1,4 +1,5 @@
 import type { SessionMetrics } from 'quotern-core';
+import { formatUsd } from './format.ts';
 import { formatCompactTokenCount } from './utils.ts';
 
 /** Compact display follows the saved unit preference. */
@@ -13,12 +14,7 @@ export function formatSessionUsd(
   locale: string,
   { lowerBound = false }: { lowerBound?: boolean } = {},
 ): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  if (value !== 0 && Math.abs(value) < 0.0001) {
-    return lowerBound ? '> $0' : value > 0 ? '<$0.0001' : '>-$0.0001';
-  }
-  const amount = value.toLocaleString(locale, { maximumFractionDigits: 4 });
-  return `${lowerBound ? '≥ ' : ''}$${amount}`;
+  return formatUsd(value, locale, { lowerBound });
 }
 
 export function formatSessionDuration(seconds: number | null): string {

@@ -10,17 +10,19 @@ const commands = new Map<string, readonly string[]>([
   ['grok', ['grok', '--resume']],
   ['pi', ['pi', '--session']],
   ['zcode', ['zcode', '--resume']],
+  ['antigravity', ['agy', '--conversation']],
 ]);
 
 export function validSessionActionTarget(source: unknown, sessionId: unknown): source is string {
-  return typeof source === 'string' && (commands.has(source) || source === 'dsh' || source === 'antigravity')
+  return typeof source === 'string' && (commands.has(source) || source === 'dsh')
     && typeof sessionId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(sessionId);
 }
 
 /** Fixed executable/argv only; never interpret a displayed command as shell text. */
-export function sessionResumeCommand(source: string, sessionId: string, context?: { sessionFile?: string | null; directory?: string | null }): SessionResumeCommand | null {
+export function sessionResumeCommand(source: string, sessionId: string, context?: { sessionFile?: string | null; directory?: string | null; antigravityCli?: boolean }): SessionResumeCommand | null {
   const command = commands.get(source);
-  if (!command || !validSessionActionTarget(source, sessionId) || source === 'pi' && !context?.sessionFile) return null;
+  if (!command || !validSessionActionTarget(source, sessionId) || source === 'pi' && !context?.sessionFile
+    || source === 'antigravity' && !context?.antigravityCli) return null;
   const args = [...command.slice(1), source === 'pi' ? context!.sessionFile! : sessionId];
   if (source === 'zcode' && context?.directory) args.push('--cwd', context.directory);
   return { executable: command[0]!, args };

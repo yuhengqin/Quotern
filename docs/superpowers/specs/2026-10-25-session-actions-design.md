@@ -16,6 +16,8 @@ Windows 新终端不能继承采集服务的 `TERM=dumb`、`NO_COLOR`、强制�
 
 Codex 目录优先读取已采集原日志所属的 thread ledger，其次为有界日志尾部与头部；Claude 使用选中会话最新 cwd。保留 Codex 在启动目录与记录目录不同时的原生选择，不改全局 `tui.resume_cwd`。
 
-PI 使用 `pi --session <原始 JSONL>`，避免按 ID 拼接文件名；ZCode 使用 `zcode --resume <ID> --cwd <目录>`，数据库查询限定选中 ID。能力查询预检 CLI，缺程序时禁用恢复并保留目录操作及复制命令。DeepSeek Harness 的 `--resume` 由支持它的 profile 定义，当前未核实通用终端入口；Antigravity 未核实目录元数据和恢复协议。界面展示具体限制，不隐去入口或伪造命令。
+PI 使用 `pi --session <原始 JSONL>`，避免按 ID 拼接文件名；ZCode 使用 `zcode --resume <ID> --cwd <目录>`，数据库查询限定选中 ID。能力查询预检 CLI，缺程序时禁用恢复并保留目录操作及复制命令。DeepSeek Harness 的 `--resume` 由支持它的 profile 定义，当前未核实通用终端入口。界面展示具体限制，不隐去入口或伪造命令。
+
+Antigravity CLI 使用[官方恢复接口](https://antigravity.google/docs/cli/commands/resume) `agy --conversation <所选 UUID>`；本机 `agy 1.4.5 --help` 已核对。`--continue` / `-c` 会选择当前工作区最近会话，不用于指定会话按钮。从已采集的 `antigravity-cli/conversations/<UUID>.db` 或 `brain/<UUID>/.system_generated/logs/transcript.jsonl` 确认 CLI 来源及原文件存在，再读取同一 CLI 根的 `cache/last_conversations.json`。仅接受唯一、精确匹配该 UUID 的绝对目录，读取限制 1 MiB；缺失、歧义、超限或目录不存在时保留复制恢复命令并禁用本机操作。桌面版 / IDE 记录仍需原生会话选择器的导入流程，不直接传给 CLI。
 
 工作目录和原始会话文件只用于本机详情操作，不写入批量会话缓存或导出。

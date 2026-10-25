@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zstdCompressSync } from 'node:zlib';
-import { readSessionDirectory } from '../src/session-directory.js';
+import { readSessionDirectory, readSessionTarget } from '../src/session-directory.js';
 import { DatabaseSync } from 'node:sqlite';
 
 function frame(text: string): Buffer {
@@ -130,5 +130,28 @@ test('ZCode directory lookup scopes a multi-session database to the selected ses
     assert.equal(await readSessionDirectory(root, 'zcode', 's'), 'C:/zcode-latest');
     assert.equal(await readSessionDirectory(root, 'zcode', 'other'), 'C:/unrelated-latest');
     assert.equal(await readSessionDirectory(root, 'zcode', 'absent'), null);
+  });
+});
+
+test('Antigravity CLI transcript lookup verifies its UUID path and rejects ambiguous or oversized workspace caches', async () => {
+  await fixture('antigravity', async (root) => {
+    const id = '54e8134a-82fb-446c-ab48-1fd5e72b763f', other = '8cf9419a-c4ad-4040-8707-c68e5b8ddd3a';
+    const cli = join(root, 'antigravity-cli');
+    const path = join(cli, 'brain', id, '.system_generated', 'logs', 'transcript.jsonl');
+    const cache = join(cli, 'cache', 'last_conversations.json');
+    await mkdir(join(cli, 'brain', id, '.system_generated', 'logs'), { recursive: true });
+    await mkdir(join(cli, 'cache'));
+    await writeFile(path, '{}\n');
+    const saveIndex = (sessionId: string) => writeFile(join(root, 'sessions', 'antigravity.json'), JSON.stringify({ files: { [path]: { context: { sessionId } } } }));
+    await saveIndex(id);
+    await writeFile(cache, JSON.stringify({ [root]: id }));
+    assert.deepEqual(await readSessionTarget(root, 'antigravity', id), { directory: root, sessionFile: null, antigravityCli: true });
+    await saveIndex(other);
+    assert.equal((await readSessionTarget(root, 'antigravity', other)).antigravityCli, undefined);
+    await saveIndex(id);
+    await writeFile(cache, JSON.stringify({ [root]: id, [cli]: id }));
+    assert.equal(await readSessionDirectory(root, 'antigravity', id), null);
+    await writeFile(cache, JSON.stringify({ [root]: id, oversized: 'x'.repeat(2 * 1024 * 1024) }));
+    assert.equal(await readSessionDirectory(root, 'antigravity', id), null);
   });
 });

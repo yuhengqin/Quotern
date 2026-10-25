@@ -1,5 +1,5 @@
-import { open, readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { open, readFile, stat } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { Decompress } from 'fzstd';
 import { codexLedgerDbPaths, newestCodexLedgerPaths } from './parsers/codex-ledger.js';
 import { queryDbJson, readSqliteWithSnapshot } from './parsers/sqlite.js';
@@ -142,17 +142,42 @@ function metadataDirectory(bytes: Buffer, source: string, sessionId: string, ini
   return { directory, identified, currentIdentity };
 }
 
-export interface LocalSessionTarget { directory: string | null; sessionFile: string | null }
+export interface LocalSessionTarget { directory: string | null; sessionFile: string | null; antigravityCli?: boolean }
+
+async function antigravityCliTarget(path: string, sessionId: string): Promise<LocalSessionTarget | null> {
+  if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(sessionId)) return null;
+  const databaseRoot = dirname(dirname(path));
+  const transcriptRoot = dirname(dirname(dirname(dirname(dirname(path)))));
+  const root = basename(databaseRoot) === 'antigravity-cli' && relative(join(databaseRoot, 'conversations', sessionId + '.db'), path) === '' ? databaseRoot
+    : basename(transcriptRoot) === 'antigravity-cli' && relative(join(transcriptRoot, 'brain', sessionId, '.system_generated', 'logs', 'transcript.jsonl'), path) === '' ? transcriptRoot : null;
+  if (!root) return null;
+  try { if (!(await stat(path)).isFile()) return null; } catch { return null; }
+  let directory: string | null = null;
+  try {
+    const cache = await sourcePrefix(join(root, 'cache', 'last_conversations.json'));
+    const mapping: unknown = cache ? JSON.parse(cache.bytes.toString('utf8')) : null;
+    if (mapping && typeof mapping === 'object' && !Array.isArray(mapping)) {
+      const matches = Object.entries(mapping).filter(([cwd, id]) => id === sessionId && isAbsolute(cwd) && directoryValue(cwd));
+      if (matches.length === 1) directory = matches[0]![0];
+    }
+  } catch { /* Older conversations may no longer have a workspace-cache entry. */ }
+  return { directory, sessionFile: null, antigravityCli: true };
+}
 
 /** Local detail lookup only. Never persist cwd or attach it to bulk session exports. */
 export async function readSessionTarget(dataDir: string, source: string, sessionId: string): Promise<LocalSessionTarget> {
   const empty = { directory: null, sessionFile: null };
-  if (!['codex', 'claude', 'dsh', 'pi', 'zcode'].includes(source)) return empty;
+  if (!['codex', 'claude', 'dsh', 'pi', 'zcode', 'antigravity'].includes(source)) return empty;
   let snapshot: { files?: Record<string, { context?: { sessionId?: string }; messages?: Record<string, { sessionId: string }> }> };
   try { snapshot = JSON.parse(await readFile(join(dataDir, 'sessions', `${source}.json`), 'utf8')); } catch { return empty; }
   for (const [path, file] of Object.entries(snapshot.files ?? {})) {
     if (file.context?.sessionId !== sessionId && !Object.values(file.messages ?? {}).some(m => m.sessionId === sessionId)) continue;
     if (!isAbsolute(path)) continue;
+    if (source === 'antigravity') {
+      const target = await antigravityCliTarget(path, sessionId);
+      if (target) return target;
+      continue;
+    }
     if (source === 'zcode' && /\.(db|sqlite)$/.test(path)) return { directory: zcodeDirectory(path, sessionId), sessionFile: null };
     if (!/\.jsonl(?:\.zstd?)?$/.test(path)) continue;
     const prefix = await sourcePrefix(path);

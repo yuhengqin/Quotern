@@ -102,6 +102,78 @@ test('DSH explains the terminal-profile prerequisite instead of inventing a resu
   });
 });
 
+test('Antigravity CLI resumes the selected conversation from its verified workspace cache', async () => {
+  await fixture(async (app, directory, launches) => {
+    const root = dirname(directory), cli = join(root, 'antigravity-cli');
+    const id = '54e8134a-82fb-446c-ab48-1fd5e72b763f';
+    const path = join(cli, 'conversations', id + '.db');
+    await mkdir(dirname(path), { recursive: true }); await mkdir(join(cli, 'cache'));
+    await writeFile(path, 'collected database');
+    await writeFile(join(root, 'sessions', 'antigravity.json'), JSON.stringify({ files: { [path]: { context: { sessionId: id } } } }));
+    await writeFile(join(cli, 'cache', 'last_conversations.json'), JSON.stringify({ [directory]: id, [root]: '8cf9419a-c4ad-4040-8707-c68e5b8ddd3a' }));
+    const query = new URLSearchParams({ source: 'antigravity', sessionId: id });
+    const response = await app.request(`${route}?${query}`);
+    assert.equal(response.status, 200);
+    const details = (await response.json()).data;
+    assert.equal(details.directory, directory);
+    assert.equal(details.canOpenDirectory, true);
+    assert.equal(details.canResume, true);
+    assert.equal(details.resumeCommand, 'agy --conversation 54e8134a-82fb-446c-ab48-1fd5e72b763f');
+    for (const action of ['resume', 'open-directory']) {
+      const actionResponse = await app.request(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': details.token }, body: JSON.stringify({ source: 'antigravity', sessionId: id, action }) });
+      assert.equal(actionResponse.status, 200);
+    }
+    assert.deepEqual(launches, [
+      { action: 'resume', directory, command: { executable: 'agy', args: ['--conversation', id] } },
+      { action: 'open-directory', directory },
+    ]);
+    const legacy = await app.request(`/functions/tud-session-directory?${query}`);
+    assert.equal(legacy.status, 200);
+    assert.equal((await legacy.json()).data.directory, directory);
+  });
+});
+
+test('Antigravity app and IDE history are not passed directly to the CLI', async () => {
+  await fixture(async (app, directory, launches) => {
+    const root = dirname(directory), id = '54e8134a-82fb-446c-ab48-1fd5e72b763f';
+    for (const variant of ['antigravity', 'antigravity-ide']) {
+      const path = join(root, variant, 'conversations', id + '.db');
+      await mkdir(dirname(path), { recursive: true }); await writeFile(path, 'collected database');
+      await writeFile(join(root, 'sessions', 'antigravity.json'), JSON.stringify({ files: { [path]: { context: { sessionId: id } } } }));
+      const details = (await (await app.request(`${route}?source=antigravity&sessionId=${id}`)).json()).data;
+      assert.equal(details.canResume, false, variant);
+      assert.equal(details.resumeCommand, null, variant);
+      const response = await app.request(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': details.token }, body: JSON.stringify({ source: 'antigravity', sessionId: id, action: 'resume' }) });
+      assert.equal(response.status, 400, variant);
+    }
+    assert.deepEqual(launches, []);
+  });
+});
+
+test('Antigravity CLI requires an exact workspace mapping and revalidates the collected source', async () => {
+  await fixture(async (app, directory, launches) => {
+    const root = dirname(directory), cli = join(root, 'antigravity-cli'), id = '54e8134a-82fb-446c-ab48-1fd5e72b763f';
+    const path = join(cli, 'conversations', id + '.db'), cache = join(cli, 'cache', 'last_conversations.json');
+    await mkdir(dirname(path), { recursive: true }); await mkdir(dirname(cache));
+    await writeFile(path, 'collected database');
+    await writeFile(join(root, 'sessions', 'antigravity.json'), JSON.stringify({ files: { [path]: { context: { sessionId: id } } } }));
+    await writeFile(cache, JSON.stringify({ [directory]: '8cf9419a-c4ad-4040-8707-c68e5b8ddd3a' }));
+    const get = async () => (await (await app.request(`${route}?source=antigravity&sessionId=${id}`)).json()).data;
+    const unmatched = await get();
+    assert.equal(unmatched.directory, null);
+    assert.equal(unmatched.canResume, false);
+    assert.equal(unmatched.resumeReason, 'SESSION_DIRECTORY_UNAVAILABLE');
+    assert.equal(unmatched.resumeCommand, 'agy --conversation 54e8134a-82fb-446c-ab48-1fd5e72b763f');
+    await writeFile(cache, JSON.stringify({ [directory]: id }));
+    const known = await get();
+    assert.equal(known.canResume, true);
+    await rm(path);
+    const response = await app.request(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': known.token }, body: JSON.stringify({ source: 'antigravity', sessionId: id, action: 'resume' }) });
+    assert.equal(response.status, 400);
+    assert.deepEqual(launches, []);
+  });
+});
+
 test('PI does not fall back to an ID when its verified JSONL is archived or disappears', async () => {
   await fixture(async (app, directory, launches) => {
     const root = dirname(directory), path = join(root, 'archived-pi.jsonl');

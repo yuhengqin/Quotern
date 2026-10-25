@@ -230,7 +230,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.get('/functions/tud-session-directory',async c=>{
     if(!isLocalPanelOrigin(c.req.header('Origin'),c.req.url))return c.json({success:false,message:'SESSION_FORBIDDEN_ORIGIN',data:null},403);
     const source=c.req.query('source')??'',sessionId=c.req.query('sessionId')??'';
-    if(!['codex','claude','dsh','pi','zcode'].includes(source)||!sessionId||sessionId.length>512||/[\u0000-\u001f]/.test(sessionId))return c.json({success:false,message:'INVALID_SESSION_TARGET',data:null},400);
+    if(!['codex','claude','dsh','pi','zcode','antigravity'].includes(source)||!sessionId||sessionId.length>512||/[\u0000-\u001f]/.test(sessionId))return c.json({success:false,message:'INVALID_SESSION_TARGET',data:null},400);
     c.header('Cache-Control','no-store');const{readSessionDirectory}=await import('../session-directory.js');
     return c.json(ok({directory:await readSessionDirectory(deps.dataDir,source,sessionId)}));
   });

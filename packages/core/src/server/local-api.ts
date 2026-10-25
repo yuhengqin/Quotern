@@ -5,6 +5,9 @@ import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
 import { registerSessionActionsApi } from './session-actions-api.js';
+import { SessionQueryService, type SessionRangeQuery } from '../session-query.js';
+import type { SessionListQuery } from '../session-list.js';
+import { sessionsToCsv } from '../session-csv.js';
 
 import type { LocalApiDeps } from './state.js';
 import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
@@ -15,18 +18,14 @@ import {
   aggregateUsageSummary,
   resolveAggregateWindow,
 } from '../aggregate.js';
-import { readSessionMetrics, readSessionHistory } from '../session-collector.js';
-import { aggregateSessionActivity } from '../session-observation.js';
-import { attachSessionTitles } from '../session-titles.js';
-import { aggregateSessionMetrics, type SessionMessage } from '../session-metrics.js';
-import { attributeTaskTimingEvents, type SessionTimingEvent } from '../task-timing.js';
-import { computeTokens, getEffectivePricingData, getPricingStatus } from '../pricing/index.js';
+import { readSessionMetrics, readSessionHistory, type SessionHistory } from '../session-collector.js';
+import { aggregateSessionMetrics } from '../session-metrics.js';
+import { getEffectivePricingData, getPricingStatus } from '../pricing/index.js';
 import { localDateAndHour } from '../timezone.js';
 import { resolveLocalCollectSince } from '../config.js';
 import { normalizeSyncSource } from '../sync/index.js';
 import { localDateNow, localDateDaysAgo } from '../timezone.js';
 import { demoMetadata } from '../demo/types.js';
-import { sessionTitleKey } from '../session-titles.js';
 import { buildUsageReport, type UsageReportPeriod } from '../usage-report.js';
 import { aggregateUsageTrend, type TrendGranularity } from '../usage-trend.js';
 import {
@@ -67,13 +66,20 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || defaultDays));
     return { fromDate: localDateDaysAgo(days, undefined, demoNow), toDate: localDateNow(undefined, demoNow) };
   };
+  const demoHistories = new Map<string, SessionHistory>();
   const readHistory: typeof readSessionHistory = async (dir, sources, options = {}) => {
     if (!deps.demo) return readSessionHistory(dir, sources, options);
+    const key = JSON.stringify([...(options.sources ?? [])].sort());
+    const cached = demoHistories.get(key);
+    if (cached) return cached;
     const history = deps.demo.history;
     const selected = (source: string) => !options.sources?.length || options.sources.includes(source);
-    return { messages: history.messages.filter(row => selected(row.source)), timingEvents: history.timingEvents.filter(row => selected(row.source)),
+    const result = { messages: history.messages.filter(row => selected(row.source)), timingEvents: history.timingEvents.filter(row => selected(row.source)),
       observations: history.observations.filter(row => selected(row.source)), evidence: (history.evidence ?? []).filter(row => selected(row.source)), titles: new Map(history.titles), codexParents: new Map(history.codexParents), missingSources: history.missingSources.filter(selected) };
+    demoHistories.set(key, result);
+    return result;
   };
+  const sessionQueries = new SessionQueryService(deps, readHistory);
   const readConfigView = () => {
     const config = deps.getConfig();
     return {
@@ -199,6 +205,49 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     return c.json(ok(aggregateSessionMetrics(history.messages, { ...options, missingSources: history.missingSources, timingEvents: history.timingEvents })));
   });
 
+  const sessionRange = (c: Context): SessionRangeQuery | null => {
+    const bounds = readBounds(c, 7);
+    if (bounds === null) return null;
+    const sources = c.req.query('sources')?.split(',').map(source => normalizeSyncSource(source));
+    if (sources?.some(source => !source)) return null;
+    return { days: Math.min(365, Math.max(1, Number(c.req.query('days')) || 7)), bounds, sources: sources as string[] | undefined };
+  };
+  const sessionFilters = (c: Context): SessionListQuery | null => {
+    const integer = (name: string, fallback: number) => {
+      const raw = c.req.query(name);
+      return raw === undefined ? fallback : /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : 0;
+    };
+    const page = integer('page', 1), pageSize = integer('pageSize', 12);
+    const sort = c.req.query('sort') ?? 'recent', direction = c.req.query('direction') ?? 'descending';
+    const filterSources = c.req.query('filterSources')?.split(',').map(source => normalizeSyncSource(source));
+    if (page < 1 || ![12, 24, 48].includes(pageSize) || !['recent', 'tokens', 'cost', 'duration'].includes(sort) || !['ascending', 'descending'].includes(direction) || filterSources?.some(source => !source)) return null;
+    return { page, pageSize, sort: sort as SessionListQuery['sort'], direction: direction as SessionListQuery['direction'], filterSources: filterSources as string[] | undefined,
+      q: c.req.query('q'), project: c.req.query('project'), model: c.req.query('model'), group: c.req.query('group') };
+  };
+
+  app.get('/functions/tud-session-list', async c => {
+    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);
+    const range = sessionRange(c), filters = sessionFilters(c);
+    if (!range || !filters) return c.json({ success: false, message: 'INVALID_SESSION_QUERY', data: null }, 400);
+    c.header('Cache-Control', 'no-store');
+    if (['csv', 'export'].includes(c.req.query('format') ?? '')) {
+      const csv = sessionsToCsv(await sessionQueries.export(range, filters));
+      if (c.req.query('format') === 'export') return c.json(ok({ csv }));
+      c.header('Content-Type', 'text/csv; charset=utf-8'); c.header('Content-Disposition', 'attachment; filename="quotern-sessions.csv"');
+      return c.body(csv);
+    }
+    return c.json(ok(await sessionQueries.list(range, filters)));
+  });
+
+  app.get('/functions/tud-session-detail', async c => {
+    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);
+    const source = normalizeSyncSource(c.req.query('source') ?? ''), sessionId = c.req.query('sessionId');
+    const range = sessionRange(c);
+    if (!source || !sessionId || sessionId.length > 512 || /[\u0000-\u001f]/.test(sessionId) || !range) return c.json({ success: false, message: 'INVALID_SESSION_TARGET', data: null }, 400);
+    c.header('Cache-Control', 'no-store');
+    return c.json(ok(await sessionQueries.detail({ ...range, collected: !range.bounds }, { source, sessionId })));
+  });
+
   app.get('/functions/tud-session-activity', async c => {
     if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);
     const targetSource = c.req.query('sessionSource'), targetId = c.req.query('sessionId');
@@ -211,46 +260,10 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const sources = targeted ? [targetSource!] : c.req.query('sources')?.split(',').map(source => normalizeSyncSource(source));
     if (sources?.some(source => !source)) return c.json({ success: false, message: 'INVALID_SOURCE', data: null }, 400);
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 7));
-    const window = resolveAggregateWindow(days, resolveLocalCollectSince(deps.getConfig()), undefined, bounds);
-    const fromDate = targeted ? window.statsSinceDate : window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
-    const rows = deps.bucketStore.getRows().filter(row => {
-      const date = localDateAndHour(row.hour_start).date;
-      return date >= fromDate && date <= window.toDate && inTimeBounds(row.hour_start, bounds) && (!sources?.length || (sources as string[]).includes(row.source));
-    });
-    const usageSources = [...new Set(rows.map(row => row.source))];
-    const options = { ...bounds, fromDate, toDate: window.toDate, ...(sources ? { sources: sources as string[] } : {}) };
-    const history = await readHistory(deps.dataDir, usageSources, options);
-    const observed = new Set(history.observations.filter(event => event.usageKnown).map(event => event.source));
-    const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
     c.header('Cache-Control', 'no-store');
-    const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
-    snapshot.range = { fromDate, toDate: window.toDate, ...(bounds?.fromTime ? { fromTime: bounds.fromTime } : {}), ...(bounds?.toTime ? { toTime: bounds.toTime } : {}), kind: targeted ? 'collected' : 'selected' };
+    const snapshot = await sessionQueries.full({ days, bounds, sources: sources as string[] | undefined, collected: targeted });
     const model = c.req.query('model');
     const previewSessions = preview ? snapshot.sessions.filter(s => !model || s.models?.some(m => m.model === model) || s.model === model).sort((a,b) => b.lastActivityAt.localeCompare(a.lastActivityAt)).slice(0,6) : undefined;
-    if (deps.demo) {
-      for (const session of snapshot.sessions) session.sessionTitle = history.titles.get(sessionTitleKey(session.source, session.sessionId))?.title;
-    } else await attachSessionTitles(snapshot.sessions, history.titles);
-    const sessionKey = (source: string, id: string) => JSON.stringify([source, id]);
-    const messages = new Map<string, SessionMessage[]>(), timings = new Map<string, SessionTimingEvent[]>();
-    for (const message of history.messages) { const key = sessionKey(message.source, message.sessionId); const group = messages.get(key) ?? []; group.push(message); messages.set(key, group); }
-    for (const event of attributeTaskTimingEvents(history.timingEvents, history.codexParents)) { const key = sessionKey(event.source, event.sessionId); const group = timings.get(key) ?? []; group.push(event); timings.set(key, group); }
-    for (const session of previewSessions ?? snapshot.sessions) {
-      const key = sessionKey(session.source, session.sessionId);
-      const metric = aggregateSessionMetrics(messages.get(key) ?? [], { ...options, timingEvents: timings.get(key) ?? [] });
-      session.taskSeconds = metric.taskSeconds; session.taskTimingKind = metric.taskTimingKind;
-    }
-    const labels = new Map<string, Set<string>>();
-    for (const provider of (deps.getQuotaState?.() ?? deps.quota?.getState())?.providers ?? []) if (provider.provenance?.accountRef) {
-      const names = labels.get(provider.provenance.accountRef) ?? new Set<string>();
-      names.add(provider.profileLabel ?? '默认账号'); labels.set(provider.provenance.accountRef, names);
-    }
-    for (const row of [...snapshot.sessions.map(session => session.billing), ...snapshot.billing]) {
-      if (row.accountRef && labels.has(row.accountRef)) row.accountLabel = [...labels.get(row.accountRef)!].join(' / ');
-    }
-    const { enrichSessionInsights, sessionsToCsv } = await import('../session-insights.js');
-    const inWindow = (stamp: string) => { const date = localDateAndHour(stamp).date; return date >= fromDate && date <= window.toDate && inTimeBounds(stamp,bounds); };
-    enrichSessionInsights(snapshot.sessions,history.messages.filter(m=>inWindow(m.timestamp)),history.evidence.filter(e=>e.kind==='metadata'||inWindow(e.timestamp)));
-    if (deps.demo) for (const session of snapshot.sessions) if (session.insights) session.insights.resumeCommand = null;
     if (targeted) snapshot.sessions = snapshot.sessions.filter(session => session.source === targetSource && session.sessionId === targetId);
     if(model)snapshot.sessions=snapshot.sessions.filter(s=>s.models?.some(m=>m.model===model)||s.model===model);
     if(c.req.query('format')==='csv') {
@@ -258,6 +271,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
       return c.body(sessionsToCsv(snapshot.sessions));
     }
     if (previewSessions) {
+      const sessionKey = (source: string, id: string) => JSON.stringify([source, id]);
       const keys = new Set(snapshot.sessions.map(s => sessionKey(s.source,s.sessionId)));
       snapshot.sessionCount = snapshot.sessions.length;
       snapshot.billing = snapshot.billing.map(({sessionRefs, ...row}) => ({...row, sessionCount:sessionRefs?.filter(s=>keys.has(sessionKey(s.source,s.sessionId))).length ?? 0}));

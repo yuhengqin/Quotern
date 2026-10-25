@@ -65,15 +65,19 @@ export class BucketStore {
    * hook-driven syncs can apply their small delta without rescanning history.
    */
   private rows = new Map<string, QueueBucket>();
+  private revision = 0;
 
   async reload(dataDir: string, statsSince: string): Promise<void> {
     const rows = await loadRecentBuckets(dataDir, statsSince);
     this.rows = new Map(rows.map((row) => [bucketKey(row), row]));
+    this.revision++;
   }
 
   getRows(): QueueBucket[] {
     return Array.from(this.rows.values());
   }
+
+  getRevision(): number { return this.revision; }
 
   async refresh(dataDir: string, statsSince: string): Promise<void> {
     await this.reload(dataDir, statsSince);
@@ -83,6 +87,7 @@ export class BucketStore {
     for (const bucket of buckets) {
       this.rows.set(bucketKey(bucket), bucket);
     }
+    if (buckets.length) this.revision++;
   }
 }
 

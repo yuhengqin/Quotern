@@ -32,6 +32,7 @@
     "test:localization-catalogs": "node --experimental-strip-types --test scripts/localization-catalogs.test.mjs",
     "test:demo-preload": "node --test scripts/demo-preload.test.mjs",
     "test:session-detail-ui": "node apps/desktop/scripts/run-session-detail-smoke.mjs",
+    "test:session-pagination-ui": "node apps/desktop/scripts/run-session-pagination-smoke.mjs",
     "test:dev-runtime": "node --test scripts/dev-runtime.test.mjs",
     "test:vite-core-source": "node --test scripts/vite-core-source.test.mjs",
     "start": "pnpm start:cli",

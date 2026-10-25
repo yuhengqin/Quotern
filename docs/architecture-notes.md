@@ -48,6 +48,9 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | `GET /functions/tud-sync-status` | 同步时间、来源和 Hook 状态 |
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
 | `GET /functions/tud-pricing` | runtime 生效价格表与 `hasOverlay/updatedAt/refreshing` 状态；不下载远端、不暴露自定义源地址，响应禁止缓存；Desktop 经 IPC 走同一接口 |
+| `GET /functions/tud-session-list` | 轻量会话列表；日期/时间和 `sources` 限定统计范围，`q/filterSources/project/model/group/sort/direction` 在完整范围内筛选排序；`page` 从 1 开始，`pageSize=12\|24\|48` 按主会话分页。返回当前页及匹配子树、完整 facets、`pagination`（根总数和匹配会话总数分开），越界页夹到有效范围；摘要行标记 `detailLevel=summary`，不含完整模型、活动和时长详情 |
+| `GET /functions/tud-session-detail?source=AGENT&sessionId=ID` | 按需计算目标的完整明细及关联用量；可带日期/时间和统计来源 `sources`，保持列表分母；无窗口时查询已采集历史。找不到返回 `session:null`，不扩大指定窗口 |
+| `GET /functions/tud-session-list?format=csv` | 导出完整筛选排序结果，忽略页码；`format=export` 返回同内容的 JSON envelope `{csv}`，供 HTTP/IPC 统一 transport 使用 |
 | `POST /functions/tud-trigger-sync` | 可传 `{ source }`；省略或 `all` 为全量，未知来源返回 400 |
 | `POST /functions/tud-ensure-local-range` | 可传 `{ days }`；支持 1、7、30、90；自定义范围传 `{ days, custom: true }`，支持 1–365 的整数，按需扩展采集范围 |
 | `GET /functions/tud-share-backgrounds` | 读取本机共享背景图库，返回图片 Data URL 和元数据 |
@@ -56,6 +59,8 @@ Agent 日志或数据库 / 需要登录状态的数据源
 统计接口成功时返回 `{ success: true, message: 'ok', data }`，已处理的参数错误返回 `{ success: false, message, data: null }`。调用方同时处理 HTTP 错误、非 JSON 响应和业务状态；`trigger-sync` 的 `data.ok` 还表示实际同步结果，不能只检查外层 `success`。
 
 桌面 runtime 暂未就绪时，IPC 可返回 503 / `LOCAL_RUNTIME_NOT_READY`。Renderer 的 [api.ts](../apps/desktop/src/renderer/lib/api.ts) 每 500 毫秒重试，最多等待 20 秒。新增入口应沿用现有 transport，不在组件中另建轮询或直接访问文件。
+
+会话查询由 [session-query.ts](../packages/core/src/session-query.ts) 维护每个 API 实例最多 12 份范围缓存，页码从同一范围派生；同步后的来源快照文件变化、bucket revision、有效价格表或实际窗口变化均参与失效。历史整理按来源快照复用，同文件同版本的并发读取合并；版本检查包含 mtime/ctime/size/inode，并在读取期间文件被替换时重试。标题及账号显示名在响应阶段更新，响应派生不修改缓存对象。范围读取期间 bucket revision 变化会重试，避免旧分母写入新版本。旧 `tud-session-activity` 继续提供完整快照和通知语义，并复用同一查询层；新页面遇到旧 runtime 的 404 时回退完整快照后本地分页。缓存只保存已允许持久化的元数据，不新增对话正文。
 
 ## 数据目录与文件归属
 

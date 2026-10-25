@@ -249,6 +249,10 @@ export function extractSessionObservation(source: string, record: Obj, context: 
 }
 
 export interface SessionActivity {
+  /** Explicit transport completeness; accounting detailsComplete has a different meaning. */
+  detailLevel?: 'summary' | 'full';
+  modelNames?: string[];
+  relation?: { parentId: string | null; relationKind: import('./session-insights.js').SessionRelationKind; relationConflict: boolean };
   insights?: SessionInsights;
   models?: SessionModelUsage[];
   detailsComplete?: boolean;
@@ -263,7 +267,7 @@ export interface SessionActivity {
 }
 export interface SessionActivitySnapshot {
   /** Actual server query bounds; notification targets read collected history instead of page filters. */
-  range?: { fromDate: string; toDate: string; fromTime?: string; toTime?: string; kind: 'selected' | 'collected' };
+  range?: { fromDate: string; toDate: string; fromTime?: string; toTime?: string; sources?: string[]; kind: 'selected' | 'collected' };
   /** Present only on explicit lightweight previews; totals still describe the full scope. */
   sessionCount?: number;
   sessions: SessionActivity[]; totalTokens: number; attributedTokens: number; otherTokens: number;
@@ -289,14 +293,10 @@ export function mergeSessionObservation(previous: SessionObservation | undefined
   return next.timestamp >= previous.timestamp ? next : previous;
 }
 
-export function aggregateSessionActivity(events: readonly SessionObservation[], messages: readonly SessionMessage[], options: SessionMetricOptions & { totalTokens: number; now?: number }): SessionActivitySnapshot {
-  const inRange = (source: string, stamp: string, usageBucket = false) => {
-    if (options.sources?.length && !options.sources.includes(source)) return false;
-    if (!Number.isFinite(Date.parse(stamp))) return false;
-    if (!inTimeBounds(usageBucket ? toUtcHalfHourStart(stamp)! : stamp, options)) return false;
-    const date = localDateAndHour(stamp, options.timeZone).date;
-    return (!options.fromDate || date >= options.fromDate) && (!options.toDate || date <= options.toDate);
-  };
+export interface PreparedSessionObservations { events: SessionObservation[]; missingSources: string[] }
+
+/** Range-independent accounting: preserve cumulative deltas and inherited-prefix semantics. */
+export function prepareSessionObservations(events: readonly SessionObservation[]): PreparedSessionObservations {
   const selected = new Map<string, SessionObservation>();
   for (const e of events) {
     const key = JSON.stringify([e.source, e.sessionId, e.id]);
@@ -338,6 +338,19 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
     }
     for (const event of rows.slice(0, copied)) inherited.add(event);
   }
+  return { events: ordered.filter(event => !inherited.has(event)), missingSources: [...missingParents] };
+}
+
+export function aggregateSessionActivity(events: readonly SessionObservation[], messages: readonly SessionMessage[], options: SessionMetricOptions & { totalTokens: number; now?: number; prepared?: PreparedSessionObservations; modelDetails?: boolean }): SessionActivitySnapshot {
+  const inRange = (source: string, stamp: string, usageBucket = false) => {
+    if (options.sources?.length && !options.sources.includes(source)) return false;
+    if (!Number.isFinite(Date.parse(stamp))) return false;
+    if (!inTimeBounds(usageBucket ? toUtcHalfHourStart(stamp)! : stamp, options)) return false;
+    const date = localDateAndHour(stamp, options.timeZone).date;
+    return (!options.fromDate || date >= options.fromDate) && (!options.toDate || date <= options.toDate);
+  };
+  const prepared = options.prepared ?? prepareSessionObservations(events);
+  const ordered = prepared.events;
   const groups = new Map<string, { row: SessionActivity; events: SessionObservation[] }>();
   const ensure = (source: string, sessionId: string, stamp: string, projectLabel?: string) => {
     const key = JSON.stringify([source, sessionId]);
@@ -352,7 +365,7 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   };
   for (const m of messages) if (inRange(m.source, m.timestamp)) ensure(m.source, m.sessionId, m.timestamp, m.projectLabel);
   for (const e of ordered) {
-    if (!inRange(e.source, e.timestamp, e.usageKnown) || inherited.has(e)) continue;
+    if (!inRange(e.source, e.timestamp, e.usageKnown)) continue;
     const g = ensure(e.source, e.sessionId, e.timestamp, e.projectLabel), row = g.row;
     g.events.push(e);
     if (e.usageKnown) row.tokens = (row.tokens ?? 0) + e.tokens;
@@ -396,7 +409,8 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
     const kinds = new Set(costs.filter(event => event.tokens > 0 || event.costUsd !== null).map(event => event.costKind));
     if (costs.some(event => event.costIncomplete)) kinds.add('unknown');
     row.costKind = kinds.size === 1 ? [...kinds][0]! : kinds.size > 1 ? 'mixed' : 'unknown';
-    row.models = summarizeSessionModels(calls);
+    row.modelNames = [...new Set(calls.map(event => event.model))];
+    if (options.modelDetails !== false) row.models = summarizeSessionModels(calls);
     row.detailsComplete = calls.length > 0 && calls.every(event => event.tokenParts && TOKEN_FIELDS.reduce((sum, key) => sum + event.tokenParts![key], 0) === event.tokens);
     row.unallocatedCostUsd = totals.length ? row.costUsd : null;
     row.sharePercent = row.tokens !== null && totalTokens > 0 ? row.tokens / totalTokens * 100 : null;
@@ -406,7 +420,7 @@ export function aggregateSessionActivity(events: readonly SessionObservation[], 
   }).sort((a, b) => (b.tokens ?? -1) - (a.tokens ?? -1) || b.lastActivityAt.localeCompare(a.lastActivityAt));
   if (totalTokens > attributedTokens) addBilling(emptyBilling(), totalTokens - attributedTokens, null, 'unknown');
   return { sessions, totalTokens, attributedTokens, otherTokens: Math.max(0, totalTokens - attributedTokens), tokenTotalMismatch: attributedTokens > options.totalTokens,
-    missingSources: [...new Set([...(options.missingSources ?? []), ...missingParents])], observedAt: new Date(options.now ?? Date.now()).toISOString(), billing: [...services.values()].sort((a, b) => b.tokens - a.tokens) };
+    missingSources: [...new Set([...(options.missingSources ?? []), ...prepared.missingSources])], observedAt: new Date(options.now ?? Date.now()).toISOString(), billing: [...services.values()].sort((a, b) => b.tokens - a.tokens) };
 }
 
 function repriceObservation(event: SessionObservation): SessionObservation {

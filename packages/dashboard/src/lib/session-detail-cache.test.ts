@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { SessionActivity } from 'quotern-core';
-import { SessionDetailCache, sessionDetailQuery } from './session-detail-cache.ts';
+import { SessionDetailCache, sessionDetailQuery, sessionDetailItemQuery } from './session-detail-cache.ts';
 
 const row = (sessionId: string, source = 'codex') => ({ source, sessionId, tokens: 123 }) as SessionActivity;
 
@@ -13,6 +13,19 @@ test('full snapshot rows open without loading and source is part of the identity
   assert.equal(calls, 0);
   assert.equal((await cache.load(row('same', 'claude')))?.source, 'claude');
   assert.equal(calls, 1);
+});
+
+test('lightweight list rows require exact detail reads and never replace a fully loaded row', async () => {
+  const summary = { ...row('a'), detailLevel: 'summary' as const };
+  const calls: string[] = [];
+  const cache = new SessionDetailCache(async (source, sessionId) => { calls.push(`${source}:${sessionId}`); return [{ ...row(sessionId!, source), detailLevel: 'full' }]; }, [summary], 'session');
+  assert.equal(cache.get(summary), undefined);
+  await Promise.all([cache.load(summary), cache.load(summary)]);
+  assert.deepEqual(calls, ['codex:a']);
+  cache.seed([summary]);
+  assert.equal(cache.get(summary)?.detailLevel, 'full');
+  await cache.load(row('b'));
+  assert.deepEqual(calls, ['codex:a', 'codex:b']);
 });
 
 test('prefetch and clicks for siblings share a single source reading and retain full rows', async () => {
@@ -65,4 +78,11 @@ test('detail fallback queries freeze the parent calendar or exact instant window
   const instant = new URL(sessionDetailQuery('claude', { fromDate: '2026-10-01', toDate: '2026-10-02', fromTime: '2026-10-01T12:00:00Z', toTime: '2026-10-02T12:00:00Z', kind: 'selected' }), 'https://fixture.local');
   assert.equal(instant.searchParams.get('fromTime'), '2026-10-01T12:00:00Z');
   assert.equal(instant.searchParams.get('fromDate'), null);
+});
+
+test('exact detail queries retain the list source scope for the token-share denominator', () => {
+  const query = new URL(sessionDetailItemQuery({ source: 'claude', sessionId: 'a' }, { fromDate: '2026-10-01', toDate: '2026-10-02', kind: 'selected', sources: ['codex', 'claude'] }), 'http://local');
+  assert.equal(query.searchParams.get('sources'), 'claude,codex');
+  assert.equal(query.searchParams.get('source'), 'claude');
+  assert.equal(query.searchParams.get('fromDate'), '2026-10-01');
 });

@@ -30,6 +30,7 @@ export interface SessionPageSearch {
   sort: SessionSort;
   direction: SessionSortDirection;
   page: number;
+  pageSize: number;
   sessionSource?: string;
   sessionId?: string;
   sessionFocus?: string;
@@ -63,6 +64,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     sort: ['recent', 'tokens', 'cost', 'duration'].includes(String(raw.sort)) ? raw.sort as SessionSort : 'recent',
     direction: raw.direction === 'ascending' ? 'ascending' : 'descending',
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
+    pageSize: [12, 24, 48].includes(Number(raw.pageSize)) ? Number(raw.pageSize) : 12,
     ...(target ? { sessionSource: String(raw.sessionSource), sessionId: raw.sessionId as string, ...(typeof raw.sessionFocus === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.sessionFocus) ? { sessionFocus: raw.sessionFocus } : {}), ...(raw.sessionPeriod === 'selected' && calendar ? { sessionPeriod: 'selected' as const } : {}) } : {}),
   };
 }

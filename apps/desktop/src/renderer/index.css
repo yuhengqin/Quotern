@@ -5,6 +5,7 @@
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
 @source "../../../../packages/dashboard/src/components/UsageTrendExplorer.tsx";
 @source "../../../../packages/dashboard/src/components/SessionActivityPanel.tsx";
+@source "../../../../packages/dashboard/src/components/SessionPagination.tsx";
 @source "../../../../packages/dashboard/src/components/SessionInsightDetails.tsx";
 @source "../../../../packages/dashboard/src/components/SessionDetailDialog.tsx";
 @source "../../../../packages/dashboard/src/components/SessionUsageBreakdown.tsx";

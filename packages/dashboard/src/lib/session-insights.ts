@@ -6,10 +6,10 @@ export function sessionThreads(rows: SessionActivity[]) {
   const byId=new Map(rows.map(row=>[sessionIdentity(row),row]));
   const children=new Map<string,SessionActivity[]>(),roots:SessionActivity[]=[];
   for(const row of rows){
-    const parent=row.insights?.parentId;
+    const parent=(row.relation??row.insights)?.parentId;
     let cursor:SessionActivity|undefined=row;const ancestors=new Set<string>();let cycle=false;
-    while(cursor?.insights?.parentId){const id=sessionIdentity(cursor);if(ancestors.has(id)){cycle=true;break;}ancestors.add(id);cursor=byId.get(sessionIdentity({source:cursor.source,sessionId:cursor.insights.parentId}));}
-    if(parent&&!cycle&&!row.insights?.relationConflict&&visible.has(sessionIdentity({source:row.source,sessionId:parent}))){
+    while(cursor&&(cursor.relation??cursor.insights)?.parentId){const id=sessionIdentity(cursor);if(ancestors.has(id)){cycle=true;break;}ancestors.add(id);cursor=byId.get(sessionIdentity({source:cursor.source,sessionId:(cursor.relation??cursor.insights)!.parentId!}));}
+    if(parent&&!cycle&&!(row.relation??row.insights)?.relationConflict&&visible.has(sessionIdentity({source:row.source,sessionId:parent}))){
       const key=sessionIdentity({source:row.source,sessionId:parent});const list=children.get(key)??[];list.push(row);children.set(key,list);
     }else roots.push(row);
   }
@@ -26,7 +26,7 @@ export function sessionBranchRows(rows: SessionActivity[], children: Map<string,
   return result;
 }
 export function filterSessionBranches(rows: SessionActivity[], children: Map<string, SessionActivity[]>, model: string): SessionActivity[] {
-  return model === 'all' ? rows : rows.filter(row => sessionBranchRows([row], children).some(item => item.model === model || item.models?.some(usage => usage.model === model)));
+  return model === 'all' ? rows : rows.filter(row => sessionBranchRows([row], children).some(item => item.model === model || item.modelNames?.includes(model) || item.models?.some(usage => usage.model === model)));
 }
 export function sessionGroups(rows:SessionActivity[],mode:'none'|'date'|'project',locale:string){
   const groups=new Map<string,SessionActivity[]>();

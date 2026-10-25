@@ -80,6 +80,16 @@ test('session sort direction survives URL restoration and changes reset paginati
   assert.equal(parseSessionPageSearch({ direction: 'invalid' }).direction, 'descending');
 });
 
+test('page capacity restores from the URL and changing it resets the page while retaining filters', () => {
+  const previous = parseSessionPageSearch({ page: 8, pageSize: 24, q: 'needle', scopeSources: ['codex'] });
+  assert.equal(previous.pageSize, 24);
+  const next = updateSessionPageSearch(previous, { pageSize: 48 });
+  assert.equal(next.page, 1);
+  assert.equal(next.q, 'needle');
+  assert.equal(next.pageSize, 48);
+  assert.equal(parseSessionPageSearch({ pageSize: 999 }).pageSize, 12);
+});
+
 test('clearing list filters resets the page but retains the overview and attribution scope', () => {
   const search = parseSessionPageSearch({ days: 30, scopeSources: ['pi', 'omp'], group: '["openai","api",null]', q: 'model', sources: ['pi'], project: 'app', sort: 'cost', page: 8 });
   const cleared = updateSessionPageSearch(search, { q: '', sources: [], project: '' });

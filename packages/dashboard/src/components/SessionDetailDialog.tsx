@@ -4,14 +4,14 @@ import { Button, Modal, ToggleButton, ToggleButtonGroup, Tooltip } from '@heroui
 import { ArrowLeft, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SupportedLocale } from 'quotern-i18n';
-import type { SessionActivity, SessionActivitySnapshot } from 'quotern-core';
+import type { SessionActivity, SessionActivitySnapshot, SessionDetailResponse } from 'quotern-core';
 import { request } from '@/lib/api';
 import { formatSessionDuration, formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
 import { sourceLabel } from '@/lib/tokens';
 import { DEFAULT_STATS_TIMEZONE } from '../lib/stats-timezone';
 import { accountLabel, costLabel, modeLabel, serviceLabel } from '../lib/session-labels';
 import { createSessionDetailSearch } from '../lib/session-page';
-import { SessionDetailCache, sessionDetailQuery } from '../lib/session-detail-cache';
+import { SessionDetailCache, sessionDetailQuery, sessionDetailItemQuery, isMissingSessionEndpoint } from '../lib/session-detail-cache';
 import { buildSessionDetail, type DetailMember, type DetailRange, type DetailScope } from '../lib/session-detail';
 import { ProviderIcon } from './ProviderIcon';
 import { useAppToastQueue } from '@/components/AppToastContext';
@@ -58,11 +58,17 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
   const { t } = useTranslation();
   const [period] = useState(range);
   const abort = useRef(new AbortController());
-  const [cache] = useState(() => new SessionDetailCache(async source => {
-    const snapshot = await request<SessionActivitySnapshot>(sessionDetailQuery(source, period), { signal: AbortSignal.any([abort.current.signal, AbortSignal.timeout(30_000)]) });
-    return snapshot.sessions;
-  }, [...sessions, row]));
-  const [frames, setFrames] = useState<DetailFrame[]>(() => [{ key: 0, source: row.source, sessionId: row.sessionId, title: row.sessionTitle ?? t('usage.insights.detailTitle'), row }]);
+  const [cache] = useState(() => new SessionDetailCache(async (source, sessionId) => {
+    const signal = () => AbortSignal.any([abort.current.signal, AbortSignal.timeout(30_000)]);
+    try {
+      const result = await request<SessionDetailResponse>(sessionDetailItemQuery({ source, sessionId: sessionId! }, period), { signal: signal() });
+      return result.session ? [result.session] : [];
+    } catch (error) {
+      if (!isMissingSessionEndpoint(error)) throw error;
+      return (await request<SessionActivitySnapshot>(sessionDetailQuery(source, period), { signal: signal() })).sessions;
+    }
+  }, [...sessions, row], 'session'));
+  const [frames, setFrames] = useState<DetailFrame[]>(() => [{ key: 0, source: row.source, sessionId: row.sessionId, title: row.sessionTitle ?? t('usage.insights.detailTitle'), row: cache.get(row) ?? null }]);
   const sequence = useRef(0);
   const dialog = useRef<HTMLDivElement>(null);
   const views = useRef(new Map<number, { top: number; trigger?: HTMLElement }>());
@@ -75,7 +81,7 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
   useEffect(() => {
     if (JSON.stringify(range) !== JSON.stringify(period)) return;
     cache.seed([...sessions, row]);
-    setFrames(previous => previous.map(frame => frame.key === 0 ? { ...frame, row, title: row.sessionTitle ?? frame.title } : frame));
+    setFrames(previous => previous.map(frame => frame.key === 0 ? { ...frame, row: cache.get(row) ?? frame.row, title: row.sessionTitle ?? frame.title } : frame));
   }, [cache, row, sessions, range, period]);
 
   useLayoutEffect(() => {
@@ -98,6 +104,9 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
       if (!abort.current.signal.aborted) setFrames(previous => previous.map(item => item.key === frame.key ? { ...item, error: 'failed' } : item));
     });
   };
+  useEffect(() => {
+    if (!cache.get(row)) loadFrame({ key: 0, source: row.source, sessionId: row.sessionId, title: row.sessionTitle ?? '', row: null });
+  }, [cache]);
   const navigate = (member: DetailMember, trigger: HTMLElement) => {
     saveView(trigger);
     const cached = cache.get(member) ?? null;
@@ -116,7 +125,7 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
       <Modal.CloseTrigger aria-label={t('usage.detail.close')} />
       {frames.map((frame, index) => <div key={frame.key} data-session-frame hidden={frame.key !== active.key} inert={frame.key !== active.key} className={frame.key === active.key ? 'contents' : 'hidden'}>
         {frame.row ? <SessionDetailContent row={frame.row} range={period} showTokenShare={index === 0 && showTokenShare} onNavigate={navigate} onPrefetch={prefetch} navigation={index > 0 && <Button size="sm" variant="tertiary" className="mb-2 max-w-full" onPress={back}><ArrowLeft className="size-3.5 shrink-0" aria-hidden />{t('usage.detail.backSession')}</Button>} /> : <>
-          <Modal.Header className="border-b border-separator pb-3 pr-9"><Button size="sm" variant="tertiary" className="mb-2" onPress={back}><ArrowLeft className="size-3.5" aria-hidden />{t('usage.detail.backSession')}</Button><h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{frame.title}</h2></Modal.Header>
+          <Modal.Header className="border-b border-separator pb-3 pr-9">{index > 0 && <Button size="sm" variant="tertiary" className="mb-2" onPress={back}><ArrowLeft className="size-3.5" aria-hidden />{t('usage.detail.backSession')}</Button>}<h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{frame.title}</h2></Modal.Header>
           <Modal.Body className="space-y-3 py-8 text-sm"><p role={frame.error ? 'status' : undefined}>{t(frame.error === 'failed' ? 'usage.detail.relatedError' : frame.error === 'missing' ? 'usage.detail.relatedMissing' : 'usage.activity.loading')}</p>{frame.error && <Button size="sm" variant="secondary" onPress={() => { setFrames(previous => previous.map(item => item.key === frame.key ? { ...item, error: undefined } : item)); loadFrame(frame, true); }}>{t('usage.detail.retry')}</Button>}</Modal.Body>
         </>}
       </div>)}

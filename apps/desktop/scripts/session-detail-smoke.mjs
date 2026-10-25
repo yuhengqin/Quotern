@@ -61,6 +61,8 @@ let detailDelay = 0;
 let navigation = null;
 const api = async (route, init) => {
   const url = new URL(route, 'http://fixture.local');
+  // This fixture deliberately models a runtime predating the paged endpoints.
+  if (['/functions/tud-session-list', '/functions/tud-session-detail'].includes(url.pathname)) return { status: 404, body: { success: false, message: 'NOT_FOUND', data: null } };
   if (url.pathname === '/functions/tud-pricing') return { status: 200, body: { success: true, data: { pricing: { exact: Object.fromEntries(['gpt-fixture-model-with-a-long-name', 'unpriced-fixture-model', 'unrelated-model'].map(name => [`openai/${name}`, { input: 2, output: 10, cache_read: 0.2, cache_write: 2 }])) }, status: { hasOverlay: true, updatedAt: '2026-10-25T05:40:00Z', refreshing: false } } } };
   if (url.pathname.endsWith('usage-model-breakdown')) return { status: 200, body: { success: true, data: { models: [] } } };
   if (url.pathname === '/functions/tud-session-actions') {

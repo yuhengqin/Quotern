@@ -47,8 +47,8 @@ export function sortSessionActivity(rows: SessionActivity[], sort: SessionSort, 
   });
 }
 
-export function sessionActivityPage(rows: SessionActivity[], page: number) {
-  const pages = Math.max(1, Math.ceil(rows.length / SESSION_PAGE_SIZE));
+export function sessionActivityPage(rows: SessionActivity[], page: number, pageSize = SESSION_PAGE_SIZE) {
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
   const current = Math.min(pages, Math.max(1, page));
-  return { rows: rows.slice((current - 1) * SESSION_PAGE_SIZE, current * SESSION_PAGE_SIZE), page: current, pages };
+  return { rows: rows.slice((current - 1) * pageSize, current * pageSize), page: current, pages };
 }

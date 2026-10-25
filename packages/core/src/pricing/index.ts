@@ -44,6 +44,24 @@ let builtinPricing = packagedPricing;
 
 /** Optional remote partial overlay (exact/alias/fuzzy/default). */
 let remoteOverlay: PricingData | null = null;
+const modelMatchCache = new Map<string, ReturnType<typeof lookupPricingStacked>>();
+let matchedBuiltin = builtinPricing;
+let matchedOverlay: PricingData | null = remoteOverlay;
+
+/** Catalog identity is stable between applied snapshots; observations reuse model matches. */
+function currentModelMatch(model: string, source?: string | null): ReturnType<typeof lookupPricingStacked> {
+  if (matchedBuiltin !== builtinPricing || matchedOverlay !== remoteOverlay) {
+    modelMatchCache.clear(); matchedBuiltin = builtinPricing; matchedOverlay = remoteOverlay;
+  }
+  const key = JSON.stringify([source ?? null, model]);
+  let result = modelMatchCache.get(key);
+  if (!result) {
+    result = lookupPricingStacked(model, remoteOverlay, builtinPricing, source ?? null);
+    modelMatchCache.set(key, result);
+    while (modelMatchCache.size > 1024) modelMatchCache.delete(modelMatchCache.keys().next().value!);
+  }
+  return result;
+}
 
 export interface PricingSnapshot { builtin: PricingData; overlay: PricingData | null }
 /** Capture both matching layers; flattening them changes alias/fuzzy precedence. */
@@ -441,22 +459,17 @@ export function resolvePricingRefreshConfig(opts?: {
 }
 
 export function getModelPricing(model: string, opts?: { source?: string }): ModelPricing {
-  const result = lookupPricingStacked(
-    model,
-    remoteOverlay,
-    builtinPricing,
-    opts?.source ?? null,
-  );
+  const result = currentModelMatch(model, opts?.source);
   return toModelPricing(result.value);
 }
 
 /** Display evidence retains absent rates; absence is not an explicit free rate. */
 export function getModelPricingRates(model:string,opts?:{source?:string}):ModelPricingRates|null {
-  return lookupPricingStacked(model,remoteOverlay,builtinPricing,opts?.source??null).value;
+  return currentModelMatch(model, opts?.source).value;
 }
 
 export function isModelPriced(model: string, source?: string): boolean {
-  const result = lookupPricingStacked(model, remoteOverlay, builtinPricing, source ?? null);
+  const result = currentModelMatch(model, source);
   return hasNonZeroPricing(result.value);
 }
 
@@ -520,7 +533,7 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
       costKind: 'reported', costUsd: row.reported_cost_usd!, tokens, unpricedTokens: 0,
     };
   }
-  const match = lookupPricingStacked(row.model, remoteOverlay, builtinPricing, row.source);
+  const match = currentModelMatch(row.model, row.source);
   const table = match.table === 'overlay' ? remoteOverlay : builtinPricing;
   const published = table?._meta?.generated_at ?? table?._meta?.updated_at;
   const priceUpdatedAt = typeof published === 'string' && Number.isFinite(Date.parse(published))
@@ -551,7 +564,7 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
 
 /** Annotated request quantities replace the same quantities in the legacy bucket. */
 function requestAwareCost(row: QueueBucket) {
-  const match = lookupPricingStacked(row.model, remoteOverlay, builtinPricing, row.source);
+  const match = currentModelMatch(row.model, row.source);
   const base = match.value ?? {};
   const rules = [...builtinRequestRules(match.matchedModel ?? '', row.source, base), ...(builtinPricing.request_rules ?? []), ...(remoteOverlay?.request_rules ?? [])]
     .filter(rule => rule.source === row.source && (rule.model === match.matchedModel || rule.model === row.model));

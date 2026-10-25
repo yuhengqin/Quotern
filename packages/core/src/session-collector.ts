@@ -16,6 +16,8 @@ import { extractSessionTitle, sessionTitleKey, type SessionTitle } from './sessi
 import { extractSessionEvidence, type SessionEvidence } from './session-insights.js';
 import { extractSessionObservations } from './session-observation.js';
 import { createCodexLineReader } from './parsers/codex-log-reader.js';
+import { localDateAndHour } from './timezone.js';
+import { inTimeBounds } from './usage-window.js';
 
 const VERSION = 11;
 interface FileSnapshot {
@@ -39,18 +41,33 @@ interface SourceSnapshot {
   files: Record<string, FileSnapshot>;
 }
 const cache = new Map<string, { stamp: string; value: SourceSnapshot }>();
+const pendingSources = new Map<string, Promise<SourceSnapshot | null>>();
+const materializedSources = new WeakMap<SourceSnapshot, ReturnType<typeof materialize>>();
 const sourcePath = (dataDir: string, source: string) => join(dataDir, 'sessions', `${source}.json`);
 const validSource = (source: string) => /^[a-z][a-z0-9-]*$/.test(source);
 
 async function loadSource(path: string, source: string): Promise<SourceSnapshot | null> {
   try {
-    const st = await stat(path), stamp = `${st.mtimeMs}:${st.size}`;
+    const st = await stat(path), stamp = `${st.mtimeMs}:${st.ctimeMs}:${st.size}:${st.ino}`;
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
-    const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-    if (![3, 4, 5, 6, 7, 8, 9, 10, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
-    cache.set(path, { stamp, value });
-    return value;
+    const key = JSON.stringify([path, stamp]);
+    let pending = pendingSources.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
+        if (![3, 4, 5, 6, 7, 8, 9, 10, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+        const after = await stat(path);
+        // A sync may rename a newer snapshot while this read is in flight.
+        if (`${after.mtimeMs}:${after.ctimeMs}:${after.size}:${after.ino}` !== stamp) return loadSource(path, source);
+        cache.delete(path);
+        cache.set(path, { stamp, value });
+        while (cache.size > 64) cache.delete(cache.keys().next().value!);
+        return value;
+      })().finally(() => pendingSources.delete(key));
+      pendingSources.set(key, pending);
+    }
+    return await pending;
   } catch { return null; }
 }
 
@@ -227,13 +244,24 @@ export async function syncSessionSource(
   } finally { await release(); }
 }
 
+export interface SessionHistory {
+  messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[];
+  evidence: SessionEvidence[]; titles: Map<string, SessionTitle>; missingSources: string[]; codexParents: Map<string, string>;
+}
+const histories = new Map<string, { snapshots: (SourceSnapshot | null)[]; history: SessionHistory; incomplete: Set<string>; missing: Set<string> }>();
+
 export async function readSessionHistory(
   dataDir: string,
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
-): Promise<{ messages: CollectedSessionMessage[]; timingEvents: SessionTimingEvent[]; observations: SessionObservation[]; evidence: SessionEvidence[]; titles: Map<string, SessionTitle>; missingSources: string[]; codexParents: Map<string, string> }> {
+): Promise<SessionHistory> {
   const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
-  const sources = new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))]);
+  const sources = [...new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))])]
+    .filter(source => validSource(source) && (!options.sources?.length || options.sources.includes(source))).sort();
+  const snapshots = await Promise.all(sources.map(source => loadSource(sourcePath(dataDir, source), source)));
+  const historyKey = JSON.stringify([dataDir, sources]);
+  let cached = histories.get(historyKey);
+  if (!cached || !snapshots.every((value, index) => value === cached!.snapshots[index])) {
   const messages: CollectedSessionMessage[] = [];
   const timingEvents: SessionTimingEvent[] = [];
   const evidence: SessionEvidence[] = [];
@@ -241,12 +269,13 @@ export async function readSessionHistory(
   const titles = new Map<string, SessionTitle>();
   const missingSources: string[] = [];
   const codexParents = new Map<string, string>();
-  for (const source of sources) {
-    if (!validSource(source)) continue;
-    if (options.sources?.length && !options.sources.includes(source)) continue;
-    const stored = await loadSource(sourcePath(dataDir, source), source);
-    if (!stored) { if (usageSources.includes(source) || options.sources?.includes(source)) missingSources.push(source); continue; }
-    const result = materialize(stored);
+  const incomplete = new Set<string>(), missing = new Set<string>();
+  for (const [index, source] of sources.entries()) {
+    const stored = snapshots[index];
+    if (!stored) { missing.add(source); continue; }
+    let result = materializedSources.get(stored);
+    if (!result) { result = materialize(stored); materializedSources.set(stored, result); }
+    if (!result.complete) incomplete.add(source);
     for (const file of Object.values(stored.files)) for (const event of Object.values(file.evidence??{})) {
       evidence.push(event);
     }
@@ -262,10 +291,25 @@ export async function readSessionHistory(
       const key = JSON.stringify([event.source, event.sessionId, event.id]);
       observations.set(key, mergeSessionObservation(observations.get(key), event));
     }
-    const inRange = aggregateSessionMetrics(result.messages, options).sessionCount > 0;
-    if ((usageSources.includes(source) || options.sources?.includes(source) || inRange) && (!result.complete || (usageSources.includes(source) && result.messages.length === 0))) missingSources.push(source);
   }
-  return { messages, timingEvents, observations: [...observations.values()], evidence, titles, missingSources, codexParents };
+  cached = { snapshots, incomplete, missing, history: { messages, timingEvents, observations: [...observations.values()], evidence, titles, missingSources, codexParents } };
+  histories.delete(historyKey); histories.set(historyKey, cached);
+  while (histories.size > 8) histories.delete(histories.keys().next().value!);
+  }
+  const { history, missing, incomplete } = cached;
+  const required = new Set([...usageSources, ...(options.sources ?? [])]);
+  const missingSources = sources.filter(source => {
+    if (missing.has(source)) return required.has(source);
+    if (usageSources.includes(source) && !history.messages.some(message => message.source === source)) return true;
+    if (!incomplete.has(source)) return false;
+    if (required.has(source)) return true;
+    return history.messages.some(message => {
+      if (message.source !== source || !message.id || !message.sessionId || !Number.isFinite(Date.parse(message.timestamp)) || !inTimeBounds(message.timestamp, options)) return false;
+      const date = localDateAndHour(message.timestamp, options.timeZone).date;
+      return (!options.fromDate || date >= options.fromDate) && (!options.toDate || date <= options.toDate);
+    });
+  });
+  return { ...history, missingSources };
 }
 
 export async function readSessionMetrics(

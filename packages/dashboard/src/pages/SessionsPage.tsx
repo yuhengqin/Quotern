@@ -7,7 +7,9 @@ import { BackToUsageLink } from '../components/BackToUsageLink';
 import { DashboardTimeRangeControl } from '../components/DashboardTimeRangeControl';
 import { FocusedSession, SessionAttributionSummary, SessionBrowser, SessionCoverageNote } from '../components/SessionActivityPanel';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
+import { useSessionList } from '@/hooks/useSessionList';
 import { useRollingDayRange } from '@/hooks/useRollingDayRange';
+import type { SessionListPage } from 'quotern-core';
 import { isCliBackend } from '@/lib/api';
 import { sourceLabel } from '@/lib/tokens';
 import type { DashboardDateRange } from '../lib/dashboard-date-range';
@@ -26,8 +28,11 @@ export function SessionsPage() {
   const timeControl = sessionTimeRangeControl(search);
   const local = isCliBackend();
   const target = search.sessionSource && search.sessionId ? { source: search.sessionSource, sessionId: search.sessionId, period: search.sessionPeriod } : undefined;
-  const { data, error } = useSessionActivity(search.days, null, dateRange, search.scopeSources, local, target);
-  const rows = useMemo(() => data ? sessionPageRows(data, search.group) : [], [data, search.group]);
+  const focused = useSessionActivity(search.days, null, dateRange, search.scopeSources, local && Boolean(target), target);
+  const list = useSessionList(search, dateRange, local && !target);
+  const { data, error } = target ? focused : list;
+  const pageData = data && 'pagination' in data && 'facets' in data ? data as SessionListPage : undefined;
+  const rows = useMemo(() => data ? pageData ? data.sessions : sessionPageRows(data, search.group) : [], [data, pageData, search.group]);
   const group = data?.billing.find(row => sessionAttributionKey(row) === search.group);
   const update = (patch: Partial<SessionPageSearch>) => {
     void navigate({ to: '/sessions', search: previous => updateSessionPageSearch(parseSessionPageSearch(previous), patch), replace: !('page' in patch), resetScroll: false });
@@ -54,13 +59,13 @@ export function SessionsPage() {
       <DashboardTimeRangeControl value={timeControl.value} customRange={timeControl.customRange} onChange={changeTimeRange} onCustomRangeChange={changeTimeRange} />
     </div>}
     {!local ? <p role="status" className="py-8 text-sm text-muted">{t('usage.activity.localOnly')}</p> : <>
-      {error && <p role="status" className="mb-4 text-xs text-warning">{t('usage.activity.readError')} {data ? t('usage.activity.staleReading') : t('usage.activity.unavailable')}</p>}
+      {error && <div className="mb-4 flex flex-wrap items-center gap-2"><p role="status" className="text-xs text-warning">{t('usage.activity.readError')} {data ? t('usage.activity.staleReading') : t('usage.activity.unavailable')}</p>{!target && <Button size="sm" variant="secondary" onPress={list.retry}>{t('usage.detail.retry')}</Button>}</div>}
       {search.group && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-xs">
         <div className="min-w-0"><p className="font-medium">{t('usage.activity.relatedSessions')}{group && <> · <SessionAttributionSummary row={group} /></>}</p><p className="mt-1 text-muted">{t('usage.activity.relatedSessionNote')}</p></div>
         <Button size="sm" variant="tertiary" onPress={() => update({ group: undefined })}>{t('usage.activity.allSessions')}</Button>
       </div>}
       {!data ? <p role="status" className="py-12 text-center text-sm text-muted">{t(error ? 'usage.activity.unavailable' : 'usage.activity.loading')}</p> : <>
-        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} range={data.range} /> : <SessionBrowser rows={rows} availableSessions={data.sessions} usage={search.group ? undefined : data} value={search} onChange={update} range={data.range} />}
+        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} range={data.range} /> : <SessionBrowser rows={rows} availableSessions={data.sessions} usage={search.group ? undefined : data} value={search} onChange={update} range={data.range} pageData={pageData} loading={list.loading} onExport={list.exportCsv} onNormalizePage={list.currentData ? page => { void navigate({ to: '/sessions', search: previous => ({ ...parseSessionPageSearch(previous), page }), replace: true, resetScroll: false }); } : undefined} />}
         <SessionCoverageNote snapshot={data} />
       </>}
     </>}

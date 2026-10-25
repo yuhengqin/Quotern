@@ -8,6 +8,7 @@ import type { buildSessionDetail, DetailModel } from '../lib/session-detail';
 import { costLabel } from '../lib/session-labels';
 import { shouldShowUsageTotal, visibleServiceTiers } from '../lib/session-detail-presentation';
 import type { PricingModelSelection } from '../lib/pricing-selection';
+import { formatPricingDisplayRate } from '../lib/pricing-display';
 import { HelpPopover } from './HelpPopover';
 
 export type DetailFormat = {
@@ -40,7 +41,7 @@ function ModelPricing({ model, format }: { model: DetailModel; format: DetailFor
         <DetailValue label={t('usage.detail.priceTable')} value={price.table ?? t('usage.insights.unknown')} />
         <DetailValue label={t('usage.detail.matchedModel')} value={<span className="break-all font-mono text-xs">{price.matchedModel ?? t('usage.insights.unknown')}</span>} />
       </dl>
-      {price.rates && <><p className="text-xs text-muted">{t('usage.detail.perMillion')}</p><dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">{Object.entries(price.rates).map(([key, value]) => <DetailValue key={key} label={rateKeys[key] ? t(rateKeys[key]) : key} value={format.money(value)} />)}</dl></>}
+      {price.rates && <><p className="text-xs text-muted">{t('usage.detail.perMillion')}</p><dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">{Object.entries(price.rates).map(([key, value]) => <DetailValue key={key} label={rateKeys[key] ? t(rateKeys[key]) : key} value={formatPricingDisplayRate(value, 'USD', null, i18n.resolvedLanguage).text} />)}</dl></>}
       <p className="break-words text-xs text-muted">{t('usage.detail.matchMethod')}: {price.matchMethod}{price.ruleReferences.length > 0 && <> · {price.ruleReferences.join(' · ')}</>}</p>
       {price.assumptions.includes('grok-80-20') && <p className="text-xs text-muted">{t('usage.insights.grokCostAssumption')}</p>}
       {price.unpricedTokens > 0 && <p className="text-xs text-warning">{t('usage.overview.unpriced')}: {format.tokens(price.unpricedTokens)} Token</p>}
@@ -50,12 +51,11 @@ function ModelPricing({ model, format }: { model: DetailModel; format: DetailFor
 
 export function SessionPricingDetails({ usage, format }: { usage: ReturnType<typeof buildSessionDetail>['usage']; format: DetailFormat }) {
   const { t } = useTranslation();
-  const singleBasis = usage.models.length === 1 && usage.models[0]!.pricingEvidence.length <= 1;
+  const note = usage.costKind === 'recorded' ? 'usage.detail.recordedCostNote' : usage.costKind === 'estimated' ? 'usage.detail.estimatedCostNote' : 'usage.detail.costBasisNote';
   return <>
-    <p>{t('usage.detail.costBasisNote')}</p>
+    <p>{t(note)}</p>
     {usage.costUsd === null && usage.knownCostUsd > 0 && <p>{t('usage.explorer.partial')}</p>}
     {usage.unallocatedCostUsd !== null && <p>{t('usage.explorer.unallocatedCost')}: {format.money(usage.unallocatedCostUsd)}. {t('usage.detail.modelCostCaution')}</p>}
-    {usage.models.length > 0 && (singleBasis ? <ModelPricing model={usage.models[0]!} format={format} /> : <DetailDisclosure title={t('usage.detail.priceBasis')}>{usage.models.map(model => <ModelPricing key={model.model} model={model} format={format} />)}</DetailDisclosure>)}
   </>;
 }
 
@@ -118,5 +118,9 @@ export function SessionModelBreakdown({ usage, format, pricingModels }: { usage:
           </Table.Content>
         </Table.ScrollContainer>
       </Table>}
+      {usage.models.length > 0 && <div className="mt-3 text-xs"><DetailDisclosure title={t('usage.detail.viewCalculation')}>
+        <p className="text-muted">{t('usage.detail.referencePrices')}</p>
+        {usage.models.map(model => <ModelPricing key={model.model} model={model} format={format} />)}
+      </DetailDisclosure></div>}
   </section>;
 }

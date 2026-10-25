@@ -1,3 +1,4 @@
+import { dashboardNow } from './demo-runtime.ts';
 import type { SessionActivitySnapshot } from 'quotern-core';
 import { dateRangeDays, type DashboardDateRange } from './dashboard-date-range.ts';
 import { DASHBOARD_RANGE_DAYS, isDashboardRange, type DashboardRange } from './dashboard-range.ts';
@@ -66,7 +67,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
 }
 
 /** Freeze the overview's range so navigation cannot silently move its denominator. */
-export function createSessionPageSearch(scope: SessionScope, now = new Date()): SessionPageSearch {
+export function createSessionPageSearch(scope: SessionScope, now = dashboardNow()): SessionPageSearch {
   const range = scope.selectedDate ? { start: scope.selectedDate, end: scope.selectedDate } : scope.dateRange;
   return parseSessionPageSearch({
     days: scope.selectedDate ? 1 : scope.days,
@@ -90,7 +91,7 @@ export function selectSessionPageRange(search: SessionPageSearch, range: Dashboa
 }
 
 /** Preserve inherited exact bounds, while reflecting their matching preset if possible. */
-export function sessionTimeRangeControl(search: SessionPageSearch, now = new Date()): { value: DashboardRange; customRange: DashboardDateRange | null } {
+export function sessionTimeRangeControl(search: SessionPageSearch, now = dashboardNow()): { value: DashboardRange; customRange: DashboardDateRange | null } {
   if (search.range && search.range !== 'custom') return { value: search.range, customRange: null };
   if (search.fromTime && search.toTime) return { value: 'last-24-hours', customRange: null };
   const calendar = search.start && search.end ? { start: search.start, end: search.end } : null;

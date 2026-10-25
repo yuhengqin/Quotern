@@ -264,11 +264,14 @@ export interface SessionActivity {
 export interface SessionActivitySnapshot {
   /** Actual server query bounds; notification targets read collected history instead of page filters. */
   range?: { fromDate: string; toDate: string; fromTime?: string; toTime?: string; kind: 'selected' | 'collected' };
+  /** Present only on explicit lightweight previews; totals still describe the full scope. */
+  sessionCount?: number;
   sessions: SessionActivity[]; totalTokens: number; attributedTokens: number; otherTokens: number;
   tokenTotalMismatch: boolean; missingSources: string[]; observedAt: string;
   billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'];
     /** Exact contributing sessions; absent only in responses from older runtimes. */
-    sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[] }[];
+    sessionRefs?: Pick<SessionActivity, 'source' | 'sessionId'>[];
+    sessionCount?: number }[];
 }
 export interface SessionModelUsage {
   pricing?: { matchedModel: string | null; table: string | null; matchMethod: string; rates: Record<string,number> | null; unpricedTokens: number; ruleReferences: string[]; assumptions:string[] };

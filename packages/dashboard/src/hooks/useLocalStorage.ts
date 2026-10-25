@@ -4,6 +4,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
+import { demoStorageKey } from '../lib/demo-runtime';
 
 function readStoredValue<T>(
   key: string,
@@ -11,7 +12,7 @@ function readStoredValue<T>(
   isValid?: (value: unknown) => value is T,
 ): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(demoStorageKey(key));
     if (raw == null) return defaultValue;
     const parsed: unknown = JSON.parse(raw);
     if (isValid && !isValid(parsed)) return defaultValue;
@@ -38,7 +39,7 @@ export function useLocalStorage<T>(
 
   useEffect(() => {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem(demoStorageKey(key), JSON.stringify(value));
     } catch {
       // ignore private mode / quota
     }

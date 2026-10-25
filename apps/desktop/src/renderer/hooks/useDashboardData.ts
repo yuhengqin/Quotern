@@ -18,7 +18,7 @@ import {
 } from '@/lib/dashboard-mock-data';
 import { fingerprintUsageDataset } from '@/lib/usage-dataset-fingerprint';
 import { rememberRangeValue } from '@/lib/range-query-cache';
-import { DASHBOARD_POLL_MS } from '@/lib/dashboard-refresh';
+import { subscribeAutomaticRefresh } from '@/lib/dashboard-refresh';
 
 export type DashboardDataSource = 'api';
 
@@ -353,15 +353,7 @@ export function useDashboardData(
       })();
     };
 
-    const timer = window.setInterval(maybeReload, DASHBOARD_POLL_MS);
-    window.addEventListener('focus', maybeReload);
-    document.addEventListener('visibilitychange', maybeReload);
-
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', maybeReload);
-      document.removeEventListener('visibilitychange', maybeReload);
-    };
+    return subscribeAutomaticRefresh(maybeReload);
   }, [reload]);
 
   const rangeChanged = lastFetchedRangeKeyRef.current !== null && lastFetchedRangeKeyRef.current !== rangeKey;

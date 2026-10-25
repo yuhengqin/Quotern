@@ -2,6 +2,7 @@ import { request } from '@/lib/api';
 import { imageDataUrl, MAX_BACKGROUND_BYTES, type ShareBackground } from './share-backgrounds';
 import { readLegacyBackgrounds } from './share-background-legacy';
 import { loadSharedBackgroundLibrary } from './share-background-migration';
+import { isDemoMode } from './demo-runtime.ts';
 
 const route = '/functions/tud-share-backgrounds';
 function mutate<T = ShareBackground[]>(body: unknown): Promise<T> {
@@ -17,6 +18,7 @@ export const shareBackgroundStore = {
   touch: (id: string) => mutate({ operation: 'touch', id }),
 };
 export function loadBackgroundLibrary() {
+  if (isDemoMode()) return shareBackgroundStore.list().then(items => ({ items, migrationNotice: null, pendingCount: 0 }));
   return loadSharedBackgroundLibrary({
     list: shareBackgroundStore.list, legacy: readLegacyBackgrounds,
     importLegacy: (items) => mutate({ operation: 'import', items }),

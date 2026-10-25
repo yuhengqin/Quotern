@@ -1,3 +1,4 @@
+import { dashboardNow } from './demo-runtime.ts';
 import { previousRollingRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { localDateAndHour } from 'quotern-core/timezone';
 import { emptyDashboardData } from './dashboard-mock-data.ts';
@@ -99,7 +100,7 @@ const SOURCE_LABELS: Record<string, string> = {
 /** Keep only hour buckets that have already started (stats timezone). */
 export function clipHourlyRowsToNow(
   rows: DashboardHourlyUsageRow[],
-  now = new Date(),
+  now = dashboardNow(),
 ): DashboardHourlyUsageRow[] {
   const upToHour = localHourNow(undefined, now);
   return rows.filter((row) => row.hour <= upToHour);
@@ -108,7 +109,7 @@ export function clipHourlyRowsToNow(
 /** Sample/fallback dataset with today's hourly curve clipped to now. */
 export function withClippedTodayHourly(
   data: DashboardMockData,
-  now = new Date(),
+  now = dashboardNow(),
 ): DashboardMockData {
   return {
     ...data,

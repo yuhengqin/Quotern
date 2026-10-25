@@ -7,6 +7,7 @@ import type {
 import { localDateDaysAgo, localDateNow } from './stats-timezone.ts';
 import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 import { mergeCompleteLocalMetrics } from './local-metric-details.ts';
+import { dashboardNow } from './demo-runtime.ts';
 
 export type TimeRangeKey = 'week' | 'month' | 'all';
 
@@ -25,7 +26,7 @@ export function daysForRange(key: TimeRangeKey): number {
 }
 
 /** Asia/Shanghai YYYY-MM-DD for today and (today - days + 1). */
-export function rangeDateBounds(days: number, now = new Date()): {
+export function rangeDateBounds(days: number, now = dashboardNow()): {
   start: string;
   end: string;
 } {
@@ -42,7 +43,7 @@ export function rangeDateBounds(days: number, now = new Date()): {
 export function formatRangeLabel(
   key: TimeRangeKey,
   statsSince: string | null | undefined,
-  now = new Date(),
+  now = dashboardNow(),
 ): string {
   const days = daysForRange(key);
   const { start, end } = rangeDateBounds(days, now);

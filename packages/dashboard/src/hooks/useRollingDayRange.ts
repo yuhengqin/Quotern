@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isDemoMode } from '../lib/demo-runtime';
 import { rollingDayRange } from '@/lib/dashboard-date-range';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { ROLLING_DAY_TICK_MS } from '@/lib/dashboard-refresh';
@@ -7,7 +8,7 @@ import { ROLLING_DAY_TICK_MS } from '@/lib/dashboard-refresh';
 export function useRollingDayRange(active: boolean) {
   const [range, setRange] = useState(rollingDayRange);
   useEffect(() => {
-    if (!active) return;
+    if (!active || isDemoMode()) return;
     const refresh = () => { if (!document.hidden) setRange(rollingDayRange()); };
     refresh();
     const timer = window.setInterval(refresh, ROLLING_DAY_TICK_MS);

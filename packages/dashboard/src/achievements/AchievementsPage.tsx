@@ -14,7 +14,7 @@ import './achievements.css';
 export function AchievementsPage() {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
-  const { snapshot, loading, busy, error, refresh, updatePreferences, openDetails, openFamily, share } = useAchievements();
+  const { snapshot, loading, busy, error, refresh, updatePreferences, openDetails, openFamily, share, readOnly } = useAchievements();
   const [category, setCategory] = useState<AchievementCategory | 'all'>('all');
   const [family, setFamily] = useState<AchievementFamily | 'all'>('all');
   const [status, setStatus] = useState('all'), [editing, setEditing] = useState(false), [year, setYear] = useState<number | null>(null);
@@ -25,7 +25,7 @@ export function AchievementsPage() {
   const shelf = snapshot?.preferences.showcaseIds.map(id => snapshot.earned.find(item => item.id === id)).filter(item => item !== undefined) ?? [];
   const annual = snapshot?.annual.find(item => item.year === year) ?? snapshot?.annual[0];
   const toggleShowcase = async (id: string) => {
-    if (!snapshot || busy) return;
+    if (!snapshot || busy || readOnly) return;
     const current = snapshot.preferences.showcaseIds;
     const next = current.includes(id) ? current.filter(value => value !== id) : [...current, id];
     if (next.length > 3) return;
@@ -39,7 +39,7 @@ export function AchievementsPage() {
         <p className="mt-2 text-sm text-muted">{t('achievement.page.intro')}</p>
       </div>
       <div className="flex items-center gap-3 pt-1 sm:pt-9">
-        <Switch aria-label={t('achievement.page.celebrations')} isSelected={snapshot?.preferences.celebrationsEnabled ?? true} isDisabled={!snapshot || busy} onChange={selected => void updatePreferences({ celebrationsEnabled: selected }).catch(() => undefined)} size="sm">
+        <Switch aria-label={t('achievement.page.celebrations')} isSelected={snapshot?.preferences.celebrationsEnabled ?? true} isDisabled={readOnly || !snapshot || busy} onChange={selected => void updatePreferences({ celebrationsEnabled: selected }).catch(() => undefined)} size="sm">
           <Switch.Content><Switch.Control><Switch.Thumb/></Switch.Control><Label className="text-xs">{t('achievement.page.celebrations')}</Label></Switch.Content>
         </Switch>
         <Button aria-label={t('achievement.page.refresh')} isIconOnly size="sm" variant="tertiary" isDisabled={loading} onPress={() => void refresh()}><RefreshCw size={15}/></Button>
@@ -57,7 +57,7 @@ export function AchievementsPage() {
             <h2 className="mt-3 text-2xl font-semibold tracking-tight">{t('achievement.page.shelfHeading')}</h2>
             <p className="mt-2 text-sm leading-6 text-violet-100/65">{t('achievement.page.shelfSummary', { series: new Set(snapshot.earned.map(item => item.family)).size, badges: snapshot.earned.length })}</p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" className="border border-white/20 bg-white/10 text-white hover:bg-white/20" aria-pressed={editing} onPress={() => setEditing(value => !value)}>{editing ? <Check size={14}/> : <Plus size={14}/>} {t(editing ? 'achievement.page.editDone' : 'achievement.page.editShelf')}</Button>
+              <Button size="sm" variant="secondary" isDisabled={readOnly} className="border border-white/20 bg-white/10 text-white hover:bg-white/20" aria-pressed={editing} onPress={() => setEditing(value => !value)}>{editing ? <Check size={14}/> : <Plus size={14}/>} {t(editing ? 'achievement.page.editDone' : 'achievement.page.editShelf')}</Button>
               <Button size="sm" className="bg-violet-200 text-violet-950" isDisabled={shelf.length === 0} onPress={() => share({ kind: 'showcase' })}><Share2 size={14}/>{t('achievement.page.shareShelf')}</Button>
             </div>
           </div>
@@ -65,7 +65,7 @@ export function AchievementsPage() {
             {[0, 1, 2].map(index => {
               const item = shelf[index];
               return <div key={index} className="relative min-w-0">
-                <button type="button" className="w-full min-w-0 rounded-2xl px-1 py-3 text-center transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-violet-200" onClick={() => item ? openDetails(item.id) : setEditing(true)} aria-label={item ? t('achievement.page.viewBadge', { name: achievementDisplayName(item, true, locale) }) : t('achievement.page.chooseShelfBadge', { index: index + 1 })}>
+                <button type="button" disabled={!item && readOnly} className="w-full min-w-0 rounded-2xl px-1 py-3 text-center transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-violet-200" onClick={() => item ? openDetails(item.id) : setEditing(true)} aria-label={item ? t('achievement.page.viewBadge', { name: achievementDisplayName(item, true, locale) }) : t('achievement.page.chooseShelfBadge', { index: index + 1 })}>
                 {item ? <><BadgeArtwork family={item.family} tier={item.tier} size={110} className="mx-auto h-auto max-w-full"/><span className="mt-2 block break-words text-xs font-medium text-violet-50">{achievementDisplayName(item, true, locale)}</span></> : <><span className="mx-auto flex aspect-square w-full max-w-[100px] items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[.03]"><Plus size={24} className="text-violet-200/35"/></span><span className="mt-3 block text-xs text-violet-200/45">{t('achievement.page.emptyShelfSlot')}</span></>}
                 </button>
                 {editing && item && <button type="button" className="absolute right-0 top-0 rounded-full border border-white/20 bg-violet-950/80 p-1.5 text-violet-100 hover:bg-violet-800 disabled:opacity-40" disabled={busy} aria-label={t('achievement.page.removeFromShelf', { name: achievementDisplayName(item, true, locale) })} onClick={() => void toggleShowcase(item.id)}><X size={13}/></button>}

@@ -4,6 +4,14 @@
 
 ## Runtime owner 与 CLI 服务
 
+只读演示 `quotern demo start --file <snapshot.json>` 是独立入口，默认监听 `127.0.0.1:8253`，不参与下述正常 runtime owner、Hook、采集、自启和额度调度。它可以与正常客户端并行；停止演示只关闭自己持有的 HTTP server。开发验收使用本 worktree 私有快照和独立端口，不用正常 `start` 代替演示入口。完整步骤见 [CLI 演示说明](../CLI.md#演示快照与只读面板)。
+
+演示快照保留脱敏后的会话洞察证据、累计用量标记及估算计价依据；旧版 v1 快照缺少洞察证据时仍可读取，缺失指标保持未知。项目目录和自定义代理名称不发布，演示不提供恢复命令或本机目录操作，也不读取部署机器的上下文审计；普通 CLI/Desktop 的这些能力仍由原有接口提供。CSV 导出保持完整筛选结果，不受首页六条预览限制。
+
+公网固定演示的 gzip、静态资源长期缓存与版本化 API 响应缓存见 [NGINX 演示部署配置](../deploy/demo/README.md)。该缓存例外只作用于演示站点；更新代码或快照必须更换缓存版本键，HTML 与 API 浏览器缓存不跨部署保留。
+
+演示启动在监听端口前经同一套只读 API 预生成默认首页响应，仅注入 `/`、`/dashboard` 的 HTML；浏览器只复用快照元数据匹配且 URL 完全相同的 GET，其他范围、筛选和完整会话页照常请求 API。演示首页 `session-activity?days=7&preview=6` 只返回最近六条详情，但保留完整 Token/费用、会话总数和每个账单组的会话计数；定向查询和普通模式忽略预览参数。构建的 `demo-preload.json` 记录真实入口、Dashboard 及静态依赖，演示 HTML 提前发出资源提示；旧构建缺少清单时仍可加载。普通 CLI 和 Desktop 不注入预生成数据或资源提示。
+
 正式运行统一使用 `~/.quotern/`，不提供其他目录名称的识别、自动迁移或兼容入口。隔离开发继续使用当前 worktree 的 `.quotern-dev/data`。
 
 同一数据目录的常驻采集由一个 owner 管理，`tud.pid` 记录 `{ pid, kind }`。Desktop 启动时先处理 CLI 自启，再停止 CLI 并接管；macOS / Windows 有对应的 CLI 自启撤销实现。Linux 的撤销分支没有实现，不能据其他平台行为作保证。

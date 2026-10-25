@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { coreSourcePlugin } from '../../scripts/vite-core-source.mjs';
+import { createDemoInitialChunk, demoPreloadPlugin } from '../../scripts/demo-preload.mjs';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
@@ -49,6 +50,7 @@ export default defineConfig(({ mode }) => {
       }),
       react(),
       tailwindcss(),
+      demoPreloadPlugin(),
     ],
     resolve: {
       alias: {
@@ -70,6 +72,8 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      // The public-IP demo uses HTTP/1; normal CLI/Desktop builds keep their chunk strategy.
+      rollupOptions: env.QUOTERN_DEMO_BUILD === '1' ? { output: { manualChunks: createDemoInitialChunk(), onlyExplicitManualChunks: true } } : undefined,
     },
   };
 });

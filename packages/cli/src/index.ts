@@ -518,6 +518,13 @@ async function main(): Promise<void> {
   try {
     // Query before the runtime argument path: no startup, ownership or sync.
     const commandLine = extractCliLanguage(process.argv.slice(2));
+    if (commandLine.args[0] === 'demo') {
+      try {
+        const { runDemoCommand } = await import('./demo.js');
+        server = await runDemoCommand(commandLine.args.slice(1), resolveDashboardDir());
+      } catch (error) { throw new CliUserError(error instanceof Error ? error.message : '演示操作失败'); }
+      return;
+    }
     if (commandLine.args[0] === 'statusline') {
       await runStatusline(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
       return;

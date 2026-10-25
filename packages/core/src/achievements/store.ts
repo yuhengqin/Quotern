@@ -195,6 +195,20 @@ export class AchievementStore {
     } finally { await release(); }
   }
   async read(): Promise<AchievementSnapshot> { return (await this.transaction()).snapshot; }
+  /** Export projection only: no directory creation, lock, notice claim or persistence. */
+  async readOnly(): Promise<AchievementSnapshot> {
+    const state = await this.readStored(), facts = await this.loadFacts();
+    const catalog = new Map((state.projectCatalog ?? []).map(item => [item.id, item]));
+    for (const project of facts.projects) {
+      catalog.set(project.id, { id: project.id, label: project.label, kind: project.kind ?? 'unconfirmed' });
+      for (const alias of project.aliases ?? []) if (alias !== project.id) (state.projectAliases ??= {})[alias] = project.id;
+    }
+    const fullFacts = { ...facts, projects: [...catalog.values()].map(item => ({ ...item, dates: [] as string[] })).filter(item => !facts.projects.some(current => current.id === item.id)).concat(facts.projects) };
+    const projects = resolveAchievementProjects(fullFacts, state.projectSettings, state.projectAliases, state.earned);
+    const evaluation = evaluateAchievements(projects.facts);
+    this.merge(state, facts, evaluation, projects);
+    return this.snapshot(state, facts, evaluation, projects);
+  }
   async update(operation: AchievementOperation): Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }> {
     validateAchievementOperation(operation);
     return this.transaction(operation);

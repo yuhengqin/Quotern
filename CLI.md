@@ -68,6 +68,8 @@ quotern start
 | `quotern doctor` | 检查运行环境、本地数据源及服务状态 |
 | `quotern usage [period]` | 只读查询已采集用量，支持文本、JSON、CSV |
 | `quotern statusline` | 从 Claude stdin 显示会话费用、今日估价、上下文和会话平均费用速率 |
+| `quotern demo export --out <文件>` | 将已采集数据匿名化导出为独立演示快照 |
+| `quotern demo start --file <文件>` | 只读运行演示快照，默认端口 8253 |
 | `quotern help` | 显示帮助 |
 
 ## 常用选项
@@ -118,6 +120,25 @@ Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/
 需要 `quotern` 已安装并可从 Claude 启动的 shell 找到；也可将 command 换成已安装 CLI 的绝对路径。支持 `--lang zh-CN|en|ja|ko` 和 `--data-dir <已有数据目录>`。配置格式见 [Claude Code 官方文档](https://code.claude.com/docs/en/statusline)。
 
 会话费用和当前上下文优先使用 Claude 通过 stdin 传来的数值；今日费用只读本地 Claude 统计，并显示最近同步时刻。费用未知时显示未知，部分价格缺失时显示已知小计；会话均速为宿主会话金额除以已运行时长，不是生成速度或订阅额度消耗率。宿主金额也是参考价估算，不能当作付款账单。命令不会启动服务、联网、同步或改写 Claude 设置，空/坏输入也只输出一行未知读数。
+
+## 演示快照与只读面板
+
+使用当前源码构建 CLI 后，可将已采集历史导出为单个匿名化 JSON，再在同一台机器或另一台没有 Agent 的机器展示：
+
+```bash
+corepack pnpm build:cli
+node packages/cli/bin/quotern.js demo export --out ./demo/quotern-demo.json
+node packages/cli/bin/quotern.js demo start --file ./demo/quotern-demo.json
+# 默认 http://127.0.0.1:8253；Ctrl+C 只停止这个演示进程
+```
+
+安装了包含此功能的 CLI 时，对应命令为 `quotern demo export` / `quotern demo start`；`quotern demo --help` 查看参数。
+
+- 导出默认只读当前 Quotern 数据目录；`--data-dir <source>` 可显式选择另一份已采集数据。不会同步、修复配置、抢占运行实例、注册 Hook 或读取原始对话日志。正常客户端可以继续运行；遇到输入文件持续变化会拒绝导出，稍后重试即可。
+- `--out` 必填，不覆盖已有文件，也不允许输出到源数据目录内。快照按字段白名单保留统计、时间、数值证据、会话与成就、两层生效价格；项目/会话标题使用演示名称，身份和关联标识每次独立匿名化。游标、原始路径、聊天正文、登录凭据、用户图片与任意未知字段不导出。仍保留真实用量、时间、Agent、模型和计费证据；它是历史使用情况的演示副本。
+- `--file` 必填；演示启动不会回退正常目录。数据完全在内存读取，不创建 `tud.pid`、Hook、采集游标、日志、额度管理器或聚合缓存。默认单独使用 8253，可用 `--port <number>` 和 `--host <address>` 指定监听；端口冲突时退出，不停止占用者。
+- 所有写请求返回 HTTP 403 / `DEMO_READ_ONLY`。日期与相对时间冻结在快照最新数据的参考时间；事件真实时间不平移。筛选、搜索、会话详情、成就浏览、价格比较及内置分享卡下载保留。采集、在线额度、成就修改、服务器背景图库管理关闭，浏览器偏好使用演示专属命名空间。
+- 快照是当前持久化文件的稳定读取结果，不补采缺失历史，也不是跨原始 Agent 日志的事务或付款账单。使用同一份快照更新演示时，退出演示并用新文件重启。云端部署及公网访问控制另行配置，本命令不自动发布。
 
 ## 数据与同步
 

@@ -22,7 +22,7 @@ export function ShareBackgroundPicker({ library, selectedVariant, children, dele
   const input = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<CropSource | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const disabled = !library.ready || library.busy || library.loading;
+  const disabled = library.readOnly || !library.ready || library.busy || library.loading;
   useEffect(() => {
     if (source) library.setEditing(true);
     return () => library.setEditing(false);
@@ -43,7 +43,7 @@ export function ShareBackgroundPicker({ library, selectedVariant, children, dele
           setSource({ name: selectedVariant.label, image: selectedVariant.backgroundImage, replaceId: selectedVariant.id });
         },
       )}
-        <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} aria-label={t('share.chooseBackgroundImage')}
+        <input ref={input} type="file" disabled={library.readOnly} accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} aria-label={t('share.chooseBackgroundImage')}
           onChange={(event) => {
             const chosen = event.target.files?.[0];
             event.target.value = '';

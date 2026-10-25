@@ -1,3 +1,4 @@
+import { dashboardNow } from '../lib/demo-runtime.ts';
 import { useEffect, useRef, useState } from 'react';
 import { ensureLocalRange, fetchUsageDataset, isCliBackend } from '@/lib/api';
 import { buildDashboardDataFromDataset } from '@/lib/dashboard-data';
@@ -36,7 +37,7 @@ export function useShareData(initial: ShareSnapshot | null, rangeDays: number, s
           if (cancelled) return;
           ensuredDays.current = Math.max(ensuredDays.current, collectDays);
         }
-        const dataset = await fetchUsageDataset(resolveDashboardFetchDays(rangeDays, selectedDate, new Date(), dateRange));
+        const dataset = await fetchUsageDataset(resolveDashboardFetchDays(rangeDays, selectedDate, dashboardNow(), dateRange));
         if (cancelled) return;
         const data = buildShareDataFromDataset(dataset, rangeDays, buildDashboardDataFromDataset, dateRange);
         cache.current.set(key, data);

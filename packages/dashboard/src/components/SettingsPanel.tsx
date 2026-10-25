@@ -21,9 +21,13 @@ import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
 import { useTheme } from '@/hooks/useTheme';
 import { useTranslation } from 'quotern-i18n/react';
+import { registerMessages } from 'quotern-i18n';
+import { settingsMessages } from '../i18n/settings-messages';
 import {
   type SettingsTabId,
 } from '@/lib/shell-events';
+
+registerMessages(settingsMessages);
 
 const TAB_ITEMS: { id: SettingsTabId; labelKey: string }[] = [
   { id: 'app', labelKey: 'settings.tabs.app' },

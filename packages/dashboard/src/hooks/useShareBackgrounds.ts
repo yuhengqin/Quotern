@@ -3,6 +3,7 @@ import { useTranslation } from 'quotern-i18n/react';
 import { defaultBackground, type ShareBackground } from '../lib/share-backgrounds';
 import { loadBackgroundLibrary, shareBackgroundStore } from '../lib/share-background-client';
 import type { BackgroundMigrationNotice } from '../lib/share-background-migration';
+import { isDemoMode } from '../lib/demo-runtime';
 
 export function useShareBackgrounds() {
   const { t } = useTranslation();
@@ -57,12 +58,14 @@ export function useShareBackgrounds() {
   }, [reload]);
 
   useEffect(() => {
+    if (isDemoMode()) return;
     const refresh = () => { if (!document.hidden && !editing.current) void reload(); };
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, [reload]);
 
   const run = useCallback(async (operation: () => Promise<ShareBackground[]>, select?: (items: ShareBackground[]) => string | null) => {
+    if (isDemoMode()) throw new Error('DEMO_READ_ONLY');
     if (locked.current) throw new Error('share.backgroundBusy');
     locked.current = true;
     setBusy(true);
@@ -86,15 +89,15 @@ export function useShareBackgrounds() {
   const select = useCallback((id: string | null) => {
     if (locked.current || loading || (id !== null && !ready)) return;
     setSelectedId(id);
-    if (id) void run(() => shareBackgroundStore.touch(id), (saved) => saved.some((item) => item.id === id) ? id : defaultBackground(saved)?.id ?? null).catch(() => undefined);
+    if (id && !isDemoMode()) void run(() => shareBackgroundStore.touch(id), (saved) => saved.some((item) => item.id === id) ? id : defaultBackground(saved)?.id ?? null).catch(() => undefined);
   }, [ready, loading, run]);
 
   return {
-    items, selectedId, ready, loading, busy, error,
+    items, selectedId, ready, loading, busy, error, readOnly: isDemoMode(),
     migrationNotice: migrationNotice ? t(migrationNotice.key, migrationNotice) : null,
     reload, select, setEditing,
     markUsed: (id: string) => {
-      if (!locked.current) void run(() => shareBackgroundStore.touch(id)).catch(() => undefined);
+      if (!locked.current && !isDemoMode()) void run(() => shareBackgroundStore.touch(id)).catch(() => undefined);
     },
     add: (name: string, blob: Blob, replaceId?: string) => run(() => shareBackgroundStore.add(name, blob, replaceId), (saved) => defaultBackground(saved)?.id ?? null),
     remove: (id: string) => run(() => shareBackgroundStore.remove(id)),

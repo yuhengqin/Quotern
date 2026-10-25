@@ -29,6 +29,7 @@ export function aggregateUsageSummary(
   rows: QueueBucket[],
   statsSince: string,
   timeZone: string = DEFAULT_STATS_TIMEZONE,
+  now?: Date,
 ): UsageSummary {
   const bySourceMap = new Map<
     string,
@@ -45,7 +46,7 @@ export function aggregateUsageSummary(
   let totalTokens = 0;
   let totalCostUsd = 0;
 
-  const today = localDateNow(timeZone);
+  const today = localDateNow(timeZone, now);
   let todayTokens = 0;
   let todayCostUsd = 0;
 

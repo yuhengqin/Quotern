@@ -150,4 +150,5 @@ export function printHelp(locale: SupportedLocale = systemCliLocale()): void {
     host: DEFAULT_HOST,
     sources: formatSyncSourceList(),
   }));
+  console.log(cliT(locale, 'help.demo'));
 }

@@ -38,11 +38,21 @@ const ZERO_PRICING: ModelPricing = {
   cache_write: 0,
 };
 
-/** Bundled full table — never mutated at runtime. */
-const builtinPricing = pricingData as PricingData;
+/** The packaged table is never mutated; only explicit demo replay replaces the active reference. */
+const packagedPricing = pricingData as PricingData;
+let builtinPricing = packagedPricing;
 
 /** Optional remote partial overlay (exact/alias/fuzzy/default). */
 let remoteOverlay: PricingData | null = null;
+
+export interface PricingSnapshot { builtin: PricingData; overlay: PricingData | null }
+/** Capture both matching layers; flattening them changes alias/fuzzy precedence. */
+export function getPricingSnapshot(): PricingSnapshot { return { builtin: builtinPricing, overlay: remoteOverlay }; }
+/** Explicit, process-local replay for the separate demo process. Null restores packaged pricing. */
+export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
+  builtinPricing = snapshot?.builtin ?? packagedPricing;
+  applyRemotePricingOverlay(snapshot?.overlay ?? null);
+}
 
 let pricingRefreshUrl: string | null = null;
 let pricingUpdatedAt: string | null = null;

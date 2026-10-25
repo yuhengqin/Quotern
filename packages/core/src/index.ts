@@ -77,3 +77,8 @@ export { auditContextSources } from './context-audit.js';
 export type { ContextAudit } from './context-audit.js';
 export { readSessionReport } from './session-report.js';
 export * from './achievements/public.js';
+export { exportDemoSnapshot, loadDemoSnapshot } from './demo/snapshot.js';
+export { demoMetadata } from './demo/types.js';
+export { prepareDemoBootstrap } from './demo/bootstrap.js';
+export type { DemoBootstrap } from './demo/bootstrap.js';
+export type { DemoSnapshot, DemoMetadata, DemoHistory } from './demo/types.js';

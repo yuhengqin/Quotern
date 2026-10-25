@@ -1,11 +1,13 @@
 import { appendDashboardRangeQuery, previousRollingRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
-import { fetchPricingCatalog as fetchPublishedPricingCatalog, pricingDataToCatalog, type PricingCatalogResponse } from './pricing-data.ts';
+import type { PricingCatalogResponse } from './pricing-data.ts';
+import { readDemoBootstrap } from './demo-bootstrap.ts';
 import type { PricingData, PricingStatus } from 'quotern-core';
 export type { PricingCatalogRow, PricingCatalogResponse } from './pricing-data.ts';
 
 /** The runtime owns prices; a standalone/offline panel can still use its bundle. */
 export async function fetchPricingCatalog(url?: string): Promise<PricingCatalogResponse> {
+  const { fetchPricingCatalog: fetchPublishedPricingCatalog, pricingDataToCatalog } = await import('./pricing-data.ts');
   if (url !== undefined) return fetchPublishedPricingCatalog(url);
   try {
     const data = await request<{ pricing: PricingData; status: Omit<PricingStatus, 'url'> }>('/functions/tud-pricing', {
@@ -51,6 +53,7 @@ export async function fetchAchievements(): Promise<AchievementSnapshot> {
 }
 
 export async function updateAchievements(operation: AchievementOperation): Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }> {
+  if (isDemoMode() && ['claim-notice', 'seen'].includes(operation.operation)) return { snapshot: await fetchAchievements() };
   return request<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }>(`${apiPrefixes().others}achievements`, {
     method: 'POST',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
@@ -110,6 +113,11 @@ interface Envelope<T> {
 }
 
 export async function request<T>(input: string, init?: RequestInit): Promise<T> {
+  if (isDemoMode() && !['GET', 'HEAD'].includes((init?.method ?? 'GET').toUpperCase())) throw new Error('DEMO_READ_ONLY');
+  if ((init?.method ?? 'GET').toUpperCase() === 'GET') {
+    const data = readDemoBootstrap<T>(input);
+    if (data !== undefined) return data;
+  }
   const res = await fetch(input, init);
   let body: Envelope<T> | null = null;
   try {
@@ -521,6 +529,10 @@ export async function ensureLocalRange(
   days: number,
   custom = false,
 ): Promise<EnsureLocalRangeResult> {
+  if (isDemoMode()) {
+    const config = await fetchConfig();
+    return { expanded: false, localCollectSince: config.localCollectSince ?? config.statsSince, statsSince: config.statsSince, sync: null, message: `Demo snapshot ${getDemoMetadata()!.exportedAt}` };
+  }
   const { others } = apiPrefixes();
   return request<EnsureLocalRangeResult>(`${others}ensure-local-range`, {
     method: 'POST',
@@ -551,3 +563,4 @@ export function apiErrorHint(message: string): string | null {
   }
   return null;
 }
+import { isDemoMode, getDemoMetadata } from './demo-runtime.ts';

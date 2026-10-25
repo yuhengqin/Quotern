@@ -327,6 +327,24 @@ test('tracked locks reject missing, corrupt and mismatched receipts even when ma
   assert.equal(JSON.parse(await readFile(join(dir, 'runtime.lock/owner.json'), 'utf8')).sessionId, 'old-desktop');
 });
 
+test('matching Windows Job receipts allow recovery when historical PIDs have been reused', {
+  skip: process.platform !== 'win32',
+}, async (t) => {
+  const tracker = { kind: 'windows-job-v1', jobName: 'Local\\QuoternDev-old-desktop', proofToken: randomUUID() };
+  const { root, dir, record } = await staleDesktop(t, {
+    status: 'running', processTracker: tracker,
+    pid: process.pid, children: [{ name: 'old-service', pid: process.pid }],
+  });
+  await mkdir(join(dir, 'jobs'));
+  await writeFile(join(dir, 'jobs/old-desktop.json'), JSON.stringify({
+    ...tracker, sessionId: record.sessionId, mode: record.mode, pid: record.pid,
+    worktree: record.worktree, startedAt: record.startedAt, status: 'ended',
+  }));
+  const recovered = await createDevSession(root, 'desktop', {});
+  assert.notEqual(recovered.record.sessionId, record.sessionId);
+  assert.doesNotThrow(() => process.kill(process.pid, 0));
+});
+
 test('unknown lock contents are preserved instead of recursively removed', async (t) => {
   const { root, dir } = await staleDesktop(t);
   await writeFile(join(dir, 'runtime.lock/unexpected'), 'keep');

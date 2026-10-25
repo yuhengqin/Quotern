@@ -67,11 +67,11 @@ export async function posixGroupEndEvidence(record) {
 }
 
 export async function sessionEndEvidence(record) {
-  if (exists(record.pid)) return `原会话 PID ${record.pid} 仍存在`;
-  for (const child of record.children) {
-    if (exists(child.pid)) return `子进程 PID ${child.pid} 仍存在`;
-  }
+  const livePidReason = () => exists(record.pid) ? `原会话 PID ${record.pid} 仍存在`
+    : record.children.some(child => exists(child.pid)) ? '子进程 PID 仍存在' : null;
   if (process.platform !== 'win32') {
+    const live = livePidReason();
+    if (live) return live;
     const reason = await posixGroupEndEvidence(record);
     if (reason) return reason;
     if (exists(record.pid) || record.children.some(child => exists(child.pid))) return '检查期间原会话或子进程 PID 重新出现';
@@ -80,11 +80,11 @@ export async function sessionEndEvidence(record) {
   // Legacy normal closes already confirmed cleanup. Tracked sessions always need
   // their receipt if a crash interrupted lease release, even with status stopped.
   if (!record.processTracker && record.status === 'stopped' && Number.isFinite(Date.parse(record.stoppedAt))
-    && Date.parse(record.stoppedAt) >= Date.parse(record.startedAt)) return null;
+    && Date.parse(record.stoppedAt) >= Date.parse(record.startedAt)) return livePidReason();
   const tracker = record.processTracker;
   if (!tracker || tracker.kind !== 'windows-job-v1' || tracker.jobName !== `Local\\QuoternDev-${record.sessionId}`
     || typeof tracker.proofToken !== 'string' || !/^[0-9a-f-]{36}$/i.test(tracker.proofToken)) {
-    return '旧会话缺少 Windows Job 进程归属记录，需要人工核验恢复';
+    return livePidReason() || '旧会话缺少 Windows Job 进程归属记录，需要人工核验恢复';
   }
   try {
     const path = jobEvidencePath(record);
@@ -94,9 +94,18 @@ export async function sessionEndEvidence(record) {
     if (proof.status !== 'ended' || ['sessionId', 'mode', 'pid', 'worktree', 'startedAt'].some((key) => proof[key] !== record[key])
       || ['kind', 'jobName', 'proofToken'].some((key) => proof[key] !== tracker[key])) return 'Windows Job 退出凭据与原会话不匹配';
   } catch (error) {
+    const live = livePidReason();
+    if (live) return live;
+    if (error.code === 'ENOENT' && tracker.transport === 'wmi-pipe-v1' && tracker.setupComplete === false
+      && !record.children.length && ['starting', 'cleanup-required', 'stopped'].includes(record.status)) {
+      // startWindowsJob cannot return (and dev.mjs cannot spawn a workload) until
+      // setupComplete has been durably saved. A failed setup has no service tree.
+      return null;
+    }
     return error.code === 'ENOENT' ? 'Windows Job 尚无全部后代退出凭据，可能仍有后代进程或监视进程异常'
       : 'Windows Job 退出凭据无法读取，保留原锁';
   }
-  if (exists(record.pid) || record.children.some((child) => exists(child.pid))) return '检查期间原会话或子进程 PID 重新出现';
+  // A matching receipt proves the original pinned process and its entire Job
+  // ended. A now-live historical PID is a different process and must not block.
   return null;
 }

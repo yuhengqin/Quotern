@@ -1,18 +1,35 @@
-// Windows PowerShell 5 needs a console-capable host; spawning it with libuv's
-// DETACHED_PROCESS silently exits on some systems. A detached Node host survives
-// the supervisor and keeps its own hidden PowerShell child alive until Job zero.
+// WMI creates this host outside the development terminal's process tree. Keep
+// the native observer alive when the supervisor's named pipe disappears.
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 
-const child = spawn('powershell.exe', process.argv.slice(2), { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-process.stdin.pipe(child.stdin);
-for (const [source, destination] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
-  source.pipe(destination);
-  destination.on('error', () => { source.unpipe(destination); source.resume(); });
-}
-child.stdin.on('error', () => { process.stdin.unpipe(child.stdin); process.stdin.destroy(); });
-child.on('error', (error) => {
-  process.stderr.write(`${error.message}\n`);
-  process.stdin.destroy();
-  process.exitCode = 1;
+const { pipeName, token, args } = JSON.parse(Buffer.from(process.argv[2], 'base64').toString('utf8'));
+const socket = net.connect(pipeName);
+const deadline = setTimeout(() => socket.destroy(), 15000);
+let child;
+socket.on('connect', () => {
+  clearTimeout(deadline);
+  socket.write(`${JSON.stringify({ type: 'host', pid: process.pid, token })}\n`);
+  // A console-capable non-detached child supports Windows PowerShell 5 too.
+  child = spawn('powershell.exe', args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  socket.pipe(child.stdin);
+  child.stdout.pipe(socket, { end: false });
+  child.stdout.on('error', () => {});
+  child.stdin.on('error', () => { socket.unpipe(child.stdin); });
+  let errors = '';
+  child.stderr.on('data', data => { errors = (errors + data).slice(-2000); });
+  child.on('error', error => { socket.end(`${JSON.stringify({ type: 'error', message: error.message })}\n`); });
+  child.on('exit', code => {
+    if (code) socket.write(`${JSON.stringify({ type: 'error', message: errors || `Windows Job observer exited: ${code}` })}\n`);
+    socket.end(); process.exitCode = code ?? 1;
+  });
 });
-child.on('exit', (code) => { process.stdin.destroy(); process.exitCode = code ?? 1; });
+socket.on('error', () => {});
+socket.on('close', () => {
+  clearTimeout(deadline);
+  if (child) {
+    socket.unpipe(child.stdin); child.stdin.end();
+    // Do not leave a paused readable stream blocking the observer on a dead pipe.
+    child.stdout.unpipe(socket); child.stdout.resume();
+  }
+});

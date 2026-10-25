@@ -1,9 +1,13 @@
-import { spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import net from 'node:net';
+import { promisify } from 'node:util';
+
+const runFile = promisify(execFile);
 
 export function jobEvidencePath(record) {
   if (!/^[a-zA-Z0-9-]{1,128}$/.test(record.sessionId)) throw new Error('Job 会话 ID 无效');
@@ -14,7 +18,8 @@ export async function startWindowsJob(session) {
   if (process.platform !== 'win32') return null;
   const record = session.record;
   if (record.pid !== process.pid) throw new Error('只能为当前开发主管进程建立 Job 归属');
-  const tracker = { kind: 'windows-job-v1', jobName: `Local\\QuoternDev-${record.sessionId}`, proofToken: randomUUID() };
+  const tracker = { kind: 'windows-job-v1', jobName: `Local\\QuoternDev-${record.sessionId}`,
+    proofToken: randomUUID(), transport: 'wmi-pipe-v1', setupComplete: false };
   await session.update({ processTracker: tracker });
   const evidencePath = jobEvidencePath(record);
   await mkdir(dirname(evidencePath), { recursive: true });
@@ -24,15 +29,15 @@ export async function startWindowsJob(session) {
   };
   const helper = join(dirname(fileURLToPath(import.meta.url)), 'dev-windows-job.ps1');
   const host = join(dirname(fileURLToPath(import.meta.url)), 'dev-windows-job-host.mjs');
-  // libuv gives non-detached children a kill-on-close Job. Our observer must
-  // survive its parent and be created BEFORE that parent joins our own Job.
-  const child = spawn(process.execPath, [host, '-NoLogo', '-NoProfile', '-NonInteractive',
-    '-ExecutionPolicy', 'Bypass', '-File', helper, '-SupervisorProcessId', String(record.pid),
-    '-JobName', tracker.jobName, '-EvidencePath', evidencePath,
-    '-EvidenceBase64', Buffer.from(JSON.stringify(evidence)).toString('base64')], {
-    detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  let failure, pending, timer, stderr = '', sequence = 0;
+  const launcher = join(dirname(fileURLToPath(import.meta.url)), 'dev-windows-job-launch.ps1');
+  const pipeName = `\\\\.\\pipe\\QuoternDev-${record.sessionId}-${randomUUID()}`;
+  const payload = Buffer.from(JSON.stringify({ pipeName, token: tracker.proofToken, args: [
+    '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper,
+    '-SupervisorProcessId', String(record.pid), '-JobName', tracker.jobName,
+    '-EvidencePath', evidencePath, '-EvidenceBase64', Buffer.from(JSON.stringify(evidence)).toString('base64'),
+  ] })).toString('base64');
+  let failure, pending, timer, socket, lines, launchResult, sequence = 0;
+  let queue = Promise.resolve();
   let readyResolve, readyReject;
   const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
   function fail(error) {
@@ -41,39 +46,70 @@ export async function startWindowsJob(session) {
     pending?.reject(error);
     pending = null;
   }
-  const lines = createInterface({ input: child.stdout });
-  lines.on('line', (line) => {
-    try {
-      const message = JSON.parse(line);
-      if (message.type === 'prepared') child.stdin.write('attach\n');
-      else if (message.type === 'ready') { clearTimeout(timer); readyResolve(); }
-      else if (message.type === 'members' && pending?.id === message.id) {
-        if (!Number.isSafeInteger(message.active) || message.active < 1) throw new Error('Job 进程计数无效');
-        const request = pending; pending = null; request.resolve(message.active);
-      }
-    } catch (error) { fail(error); }
+  const server = net.createServer((connection) => {
+    if (socket) { connection.destroy(); return; }
+    socket = connection;
+    socket.on('error', fail);
+    socket.on('close', () => fail(new Error('Windows Job 监视连接已结束')));
+    lines = createInterface({ input: socket });
+    let authenticated = false;
+    lines.on('line', (line) => {
+      queue = queue.then(async () => {
+        const message = JSON.parse(line);
+        if (!authenticated) {
+          const launched = await launchResult;
+          if (message.type !== 'host' || message.token !== tracker.proofToken || message.pid !== launched.pid) {
+            throw new Error('Windows Job 监视进程身份不匹配');
+          }
+          authenticated = true;
+          tracker.guardianPid = message.pid;
+          await session.update({ processTracker: { ...tracker } });
+          server.close();
+        } else if (message.type === 'prepared') {
+          if (!/^\d+$/.test(message.createdAt) || !Number.isSafeInteger(message.windowsSessionId)) {
+            throw new Error('Windows Job 主管身份不完整');
+          }
+          tracker.supervisorCreatedAt = message.createdAt;
+          tracker.windowsSessionId = message.windowsSessionId;
+          await session.update({ processTracker: { ...tracker } });
+          socket.write('attach\n');
+        } else if (message.type === 'ready') {
+          tracker.setupComplete = true;
+          await session.update({ processTracker: { ...tracker } });
+          clearTimeout(timer); readyResolve();
+        } else if (message.type === 'members' && pending?.id === message.id) {
+          if (!Number.isSafeInteger(message.active) || message.active < 1) throw new Error('Job 进程计数无效');
+          const request = pending; pending = null; request.resolve(message.active);
+        } else if (message.type === 'error') throw new Error(message.message);
+      }).catch(fail);
+    });
   });
-  child.stderr.on('data', (data) => { stderr = (stderr + data).slice(-2000); });
-  child.stdin.on('error', fail);
-  child.on('error', fail);
-  child.on('exit', (code) => fail(new Error(`Windows Job 监视进程已退出（${code}）：${stderr.trim()}`)));
-  const ref = (enabled) => {
-    for (const handle of [child, child.stdin, child.stdout, child.stderr]) handle[enabled ? 'ref' : 'unref']?.();
-  };
-  timer = setTimeout(() => fail(new Error('Windows Job 建立超时，未启动开发服务')), 15000);
+  server.on('error', fail);
+  timer = setTimeout(() => fail(new Error('Windows Job 建立超时，未启动开发服务')), 20000);
   try {
+    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(pipeName, resolve); });
+    // detached:true only changes the console; taskkill /T and outer Jobs still
+    // reach descendants. WMI + BREAKAWAY starts the observer outside that tree.
+    launchResult = runFile('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive',
+      '-ExecutionPolicy', 'Bypass', '-File', launcher, '-NodePath', process.execPath,
+      '-HostPath', host, '-PayloadBase64', payload], { windowsHide: true, timeout: 15000, encoding: 'utf8' })
+      .then(({ stdout }) => {
+        const result = JSON.parse(stdout.trim());
+        if (!Number.isSafeInteger(result.pid) || result.pid <= 0) throw new Error('Windows Job 监视进程未创建');
+        return result;
+      });
+    launchResult.catch(fail);
     await ready;
-    await session.update({ processTracker: { ...tracker, guardianPid: child.pid } });
   } catch (error) {
-    child.stdin.end();
+    socket?.destroy();
     throw error;
   } finally {
     clearTimeout(timer);
-    ref(false);
+    server.close(); server.unref(); socket?.unref();
   }
   return {
     async childrenEnded(timeout = 2500) {
-      ref(true);
+      socket.ref();
       try {
         const deadline = Date.now() + timeout;
         do {
@@ -83,16 +119,16 @@ export async function startWindowsJob(session) {
             const id = ++sequence;
             pending = { id, resolve: (value) => { clearTimeout(expiry); resolve(value); },
               reject: (error) => { clearTimeout(expiry); reject(error); } };
-            child.stdin.write(`check:${id}\n`);
+            socket.write(`check:${id}\n`);
           });
           if (active === 1) return true; // Only the still-live supervisor remains.
           await new Promise((resolve) => setTimeout(resolve, 50));
         } while (Date.now() < deadline);
         return false;
-      } finally { ref(false); }
+      } finally { socket.unref(); }
     },
     detach() {
-      child.stdin.end(); lines.close(); child.stdout.destroy(); child.stderr.destroy(); ref(false);
+      socket.end(); lines.close(); socket.destroy(); socket.unref();
     },
   };
 }

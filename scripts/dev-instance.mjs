@@ -118,7 +118,7 @@ async function recoverLease(root, dir, resource, path) {
     if (!owner || !MODES[owner.mode]?.includes(resource) || typeof owner.sessionId !== 'string'
       || !owner.sessionId || owner.worktree !== root || !Number.isSafeInteger(owner.pid) || owner.pid <= 0
       || !Number.isFinite(Date.parse(owner.startedAt)) || Date.parse(owner.startedAt) > Date.now()) return '归属记录不完整';
-    if (pidAlive(owner.pid)) return `原会话 PID ${owner.pid} 仍存在`;
+    if (process.platform !== 'win32' && pidAlive(owner.pid)) return `原会话 PID ${owner.pid} 仍存在`;
     const record = await readJson(join(dir, `${owner.mode}.json`));
     if (!record || ['sessionId', 'mode', 'pid', 'worktree', 'startedAt'].some((key) => record[key] !== owner[key])
       || !['starting', 'building', 'running', 'cleanup-required', 'stopped'].includes(record.status)

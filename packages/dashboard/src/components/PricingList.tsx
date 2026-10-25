@@ -198,7 +198,7 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
         </GridListItem>}
       </GridList>
     </Virtualizer> : <div className="h-full overflow-hidden rounded-2xl border border-border/60 bg-surface-secondary p-1">
-      <Virtualizer key={wide ? 'wide' : 'compact'} layout={TableLayout} layoutOptions={{ headingHeight: 36, estimatedRowHeight: 56 }} shouldObserveItemSize>
+      <Virtualizer key={wide ? 'wide' : 'compact'} layout={TableLayout} layoutOptions={{ headingHeight: 56, estimatedRowHeight: 56 }} shouldObserveItemSize>
         <Table className="table-size-small h-full w-full">
           <Table.ScrollContainer className="h-full min-w-0 rounded-xl">
             <Table.Content aria-label={t('pricing.list.tableAria')} className="h-full w-full overflow-y-auto [scrollbar-gutter:stable]" selectedKeys={selected} selectionMode="multiple" selectionBehavior="toggle" disabledKeys={rows.filter(item => item.kind !== 'model').map(item => item.id)} disabledBehavior="selection" sortDescriptor={sortDescriptor} onSortChange={handleSort}>

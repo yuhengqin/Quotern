@@ -1,5 +1,5 @@
 // Opt-in acceptance: built Desktop + browser renderer, synthetic API only.
-// Run after both builds: pnpm --filter quotern-desktop exec electron scripts/session-detail-smoke.mjs <fresh-output>
+// Run after both builds: corepack pnpm test:session-detail-ui [fresh-output]
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -11,8 +11,8 @@ import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = path.resolve(desktop, '../..');
-const output = path.resolve(process.argv[2] ?? '');
-assert.ok(process.argv[2] && !existsSync(output), 'Provide a fresh dedicated output directory');
+const output = path.resolve(process.argv[2] ?? path.join(workspace, `.quotern-dev/session-detail-ui-${Date.now()}-${process.pid}`));
+assert.ok(!existsSync(output), 'Provide a fresh dedicated output directory');
 app.setPath('userData', path.join(output, 'profile'));
 app.on('window-all-closed', () => {});
 await mkdir(path.join(output, 'profile'), { recursive: true });
@@ -21,10 +21,10 @@ app.commandLine.appendSwitch('remote-debugging-port', String(debugPort));
 const fixtureDirectory = 'D:\\Fixture\\Quotern\\a-long-project-directory-for-session-detail-acceptance';
 const title = '评估用量统计的显示格式 · 多层子代理与分叉会话';
 const price = { matchedModel: 'fixture-model', table: 'fixture', matchMethod: 'exact', rates: { input: 2, output: 10, cache_read: 0.2, cache_write: 2 }, unpricedTokens: 0, ruleReferences: [], assumptions: [] };
-const model = (tokens, cost, name = 'gpt-fixture-model-with-a-long-name') => ({ model: name, tokens, costUsd: cost, knownCostUsd: cost ?? 0.5, costKind: cost == null ? 'mixed' : 'estimated', requests: 111, input_tokens: tokens * 0.01, cached_input_tokens: tokens * 0.98, cache_creation_input_tokens: 0, output_tokens: tokens * 0.007, reasoning_output_tokens: tokens * 0.003, serviceTiers: ['fast'], pricing: price });
+const model = (tokens, cost, name = 'gpt-fixture-model-with-a-long-name') => ({ model: name, tokens, costUsd: cost, knownCostUsd: cost ?? 0.5, costKind: cost == null ? 'mixed' : 'estimated', requests: 111, input_tokens: tokens * 0.01, cached_input_tokens: tokens * 0.98, cache_creation_input_tokens: 0, output_tokens: tokens * 0.007, reasoning_output_tokens: tokens * 0.003, serviceTiers: ['standard'], pricing: price });
 const root = { source: 'codex', sessionId: 'fixture-root', sessionTitle: title, projectLabel: 'Quotern', model: 'gpt-fixture-model-with-a-long-name', lastActivityAt: '2026-10-25T05:38:22Z', tokens: 20_000_000, costUsd: 6, costKind: 'estimated', sharePercent: 20, models: [model(20_000_000, 6)], detailsComplete: true, billing: { service: 'openai', mode: 'subscription', accountRef: 'fixture-account', evidence: 'recorded' }, context: null, taskSeconds: 1140, taskTimingKind: 'recorded',
   insights: { parentId: null, relationKind: 'unknown', relationConflict: false, orphan: false, agentRole: null, agentNickname: null, firstActivityAt: '2026-10-25T05:18:13Z', messageCount: 23, ownTokens: 20_000_000, ownCostUsd: 6, subagentTokens: 800_000, subagentCostUsd: 3.4, combinedTokens: 21_100_000, combinedCostUsd: null, combinedKnownCostUsd: 9.9, descendantCount: 2, relatedUsage: [
-    { source: 'codex', sessionId: 'fixture-child', sessionTitle: '子代理：核对费用来源', tokens: 800_000, costUsd: 3.4, knownCostUsd: 3.4, costKind: 'estimated', relationKind: 'subagent', agentRole: 'reviewer', agentNickname: 'Check', models: [model(800_000, 3.4)], detailsComplete: true },
+    { source: 'codex', sessionId: 'fixture-child', sessionTitle: '子代理：核对费用来源', tokens: 800_000, costUsd: 3.4, knownCostUsd: 3.4, costKind: 'estimated', relationKind: 'subagent', agentRole: 'reviewer', agentNickname: 'Check', models: [{ ...model(800_000, 3.4), serviceTiers: ['standard', 'fast'] }], detailsComplete: true },
     { source: 'codex', sessionId: 'fixture-fork', sessionTitle: '分叉：部分费用尚未确定', tokens: 300_000, costUsd: null, knownCostUsd: 0.5, costKind: 'mixed', relationKind: 'fork', agentRole: null, agentNickname: null, models: [model(300_000, null, 'unpriced-fixture-model')], detailsComplete: true },
   ], performance: { tokensPerSecond: 60.444, estimatedRequestCount: 3, estimatedDurationMs: 33403, ttftMs: 2790.5, ttftSampleCount: 4, kind: 'estimated' }, signals: { toolCalls: 0, editTurns: null, retryTurns: null, firstPass: null, errorCount: null, compactionCount: null, costPerEdit: null, tokensPerEdit: null, coverage: 'partial' }, resumeCommand: 'codex resume fixture-root' },
 };
@@ -40,6 +40,8 @@ const actionCalls = [];
 let navigation = null;
 const api = async (route, init) => {
   const url = new URL(route, 'http://fixture.local');
+  if (url.pathname === '/functions/tud-pricing') return { status: 200, body: { success: true, data: { pricing: { exact: Object.fromEntries(['gpt-fixture-model-with-a-long-name', 'unpriced-fixture-model', 'unrelated-model'].map(name => [`openai/${name}`, { input: 2, output: 10, cache_read: 0.2, cache_write: 2 }])) }, status: { hasOverlay: true, updatedAt: '2026-10-25T05:40:00Z', refreshing: false } } } };
+  if (url.pathname.endsWith('usage-model-breakdown')) return { status: 200, body: { success: true, data: { models: [] } } };
   if (url.pathname === '/functions/tud-session-actions') {
     if (directoryFailure || actionsUnavailable) return { status: 503, body: { success: false, message: 'FIXTURE_ACTIONS_UNAVAILABLE', data: null } };
     if (init?.method === 'POST') {
@@ -64,6 +66,7 @@ const until = async (predicate, label) => { for (let i = 0; i < 100; i++) { if (
 const button = text => `[...document.querySelectorAll('[role="dialog"] button')].find(el=>el.textContent.trim()===${JSON.stringify(text)} && !el.closest('details:not([open])'))`;
 const summary = text => `[...document.querySelectorAll('[role="dialog"] summary')].find(el=>el.textContent.includes(${JSON.stringify(text)}))`;
 const dialog = 'document.querySelector("[role=dialog]")';
+const help = label => `[...document.querySelectorAll('[role="dialog"] button')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)})`;
 const text = client => client.evaluate(`${dialog}?.innerText ?? ''`);
 const checks = [], windows = [], clients = [];
 let server;
@@ -75,6 +78,16 @@ async function connect(window) {
 }
 async function noOverflow(client, label) {
   assert.equal(await client.evaluate(`(() => { const d=${dialog}; return d && d.scrollWidth<=d.clientWidth+1 && [...d.querySelectorAll('*')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&!e.parentElement?.closest('[role="region"]');}).every(e=>e.getBoundingClientRect().right<=d.getBoundingClientRect().right+2); })()`), true, label);
+}
+async function pricingHeadingsVisible(client) {
+  assert.equal(await client.evaluate(`(() => {
+    const row = document.querySelector('[data-pricing-row="model"]');
+    const headings = [...document.querySelectorAll('[role="columnheader"]')];
+    return Boolean(row && headings.length && headings.every(heading => {
+      const range = document.createRange(); range.selectNodeContents(heading);
+      return range.getBoundingClientRect().bottom <= row.getBoundingClientRect().top + 1;
+    }));
+  })()`), true, 'all header text, including wrapped English labels, stays above the first price row');
 }
 async function main() {
   await mkdir(output, { recursive: true });
@@ -96,14 +109,27 @@ async function main() {
   assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('.modal__header').querySelectorAll('button')].map(el=>el.textContent.trim())`), ['继续会话','打开文件夹','复制恢复命令','复制项目路径']);
   assert.equal(await client.evaluate(`Boolean(${button('精确数值')}) || Boolean(${button('更多')})`), false);
   assert.ok((await text(client)).includes('2026-10-01'));
-  const ownPerformance = await client.evaluate(`${dialog}.querySelector('section[aria-label="响应表现"]').innerText`);
-  const ownActivity = await client.evaluate(`${dialog}.querySelector('section[aria-label="已记录的活动"]').innerText`);
-  assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 2);
+  const ownPerformance = await client.evaluate(`${dialog}.querySelector('section[aria-label="响应表现"] dl').innerText`);
+  const ownActivity = await client.evaluate(`${dialog}.querySelector('section[aria-label="已记录的活动"] dl').innerText`);
+  assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
   assert.equal(await client.evaluate(`Boolean(${dialog}.querySelector('section[aria-label="Token 构成"]'))`), false);
-  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['合计', '2,000万', '20万', '1,960万', '0', '20万\n其中推理: 6万', '111', '$6\n价格估算']);
+  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['gpt-fixture-model-with-a-long-name', '2,000万', '20万', '1,960万', '0', '20万\n其中推理: 6万', '111', '$6']);
+  for (const hidden of ['standard', '吞吐按有效请求样本估算', '未记录的指标', '不代表会话全生命周期', '匹配方式与规则']) assert.equal((await text(client)).includes(hidden), false, hidden + ' should be on demand');
+  checks.push('single-model-no-duplicate-total-default-tier-or-permanent-explanations');
   checks.push('desktop-target-autoopens-own-scope-with-four-header-actions');
   await noOverflow(client, 'wide dialog overflow');
   await client.screenshot(path.join(output, 'desktop-light.png'));
+  await client.click(help('响应表现说明'));
+  await until(() => client.evaluate(`document.body.innerText.includes('吞吐按有效请求样本估算') && document.body.innerText.includes('33.4 s')`), 'performance explanation and samples on demand');
+  await wait(250);
+  await client.screenshot(path.join(output, 'desktop-help.png'));
+  await client.key('Escape');
+  await until(() => client.evaluate(`!document.body.innerText.includes('吞吐按有效请求样本估算')`), 'help dismiss');
+  assert.equal(await client.evaluate(`Boolean(${dialog}) && document.activeElement?.getAttribute('aria-label')==='响应表现说明'`), true);
+  await client.click(help('已记录的活动说明'));
+  await until(() => client.evaluate(`document.body.innerText.includes('未记录的指标')`), 'missing metrics on demand');
+  await client.key('Escape');
+  checks.push('click-help-discloses-samples-and-missing-metrics-escape-restores-focus');
   await until(() => client.evaluate(`!(${button('继续会话')}).disabled`), 'native actions ready');
   await client.click(button('继续会话'));
   assert.equal(await client.evaluate(`(${button('正在打开…')}).disabled && (${button('打开文件夹')}).disabled`), true);
@@ -125,9 +151,15 @@ async function main() {
   assert.ok((await text(client)).includes('$6'));
   await client.click(button('含关联会话'));
   await until(async () => (await text(client)).includes('≥ $9.9'), 'thread scope');
-  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['合计', '2,110万', '21.1万', '2,068万', '0', '21.1万\n其中推理: 6.33万', '333', '≥ $9.9\n部分估算或缺失']);
-  assert.equal(await client.evaluate(`${dialog}.querySelector('section[aria-label="响应表现"]').innerText`), ownPerformance);
-  assert.equal(await client.evaluate(`${dialog}.querySelector('section[aria-label="已记录的活动"]').innerText`), ownActivity);
+  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr:last-child').cells].map(cell=>cell.innerText)`), ['合计', '2,110万', '21.1万', '2,068万', '0', '21.1万\n其中推理: 6.33万', '333', '≥ $9.9']);
+  assert.equal(await client.evaluate(`${dialog}.querySelector('section[aria-label="响应表现"] dl').innerText`), ownPerformance);
+  assert.equal(await client.evaluate(`${dialog}.querySelector('section[aria-label="已记录的活动"] dl').innerText`), ownActivity);
+  assert.ok((await text(client)).includes('fast'));
+  assert.ok(!(await text(client)).includes('standard'));
+  assert.equal(await client.evaluate(`getComputedStyle(${dialog}.querySelector('table tbody tr:last-child')).backgroundColor`), 'rgba(0, 0, 0, 0)');
+  await client.screenshot(path.join(output, 'desktop-multiple.png'));
+  await client.evaluate(`${dialog}.querySelector('table tbody tr:last-child').scrollIntoView({block:'nearest'}); true`);
+  await client.screenshot(path.join(output, 'desktop-model-table.png'));
   checks.push('scope-switch-updates-totals');
   await client.click(button('复制恢复命令'));
   await until(() => clipboard.readText() === 'codex resume fixture-root', 'resume clipboard');
@@ -136,13 +168,19 @@ async function main() {
   await until(() => client.evaluate(`!document.body.innerText.includes('复制恢复命令 · 已复制')`), 'copy toast auto dismisses');
   await client.click(button('复制项目路径'));
   await until(() => clipboard.readText() === fixtureDirectory, 'directory clipboard');
+  await until(() => client.evaluate(`document.body.innerText.includes('复制项目路径 · 已复制')`), 'path toast appears');
+  await until(() => client.evaluate(`!document.body.innerText.includes('复制项目路径 · 已复制')`), 'path toast auto dismisses before later overlay checks');
   checks.push('top-level-command-and-path-copy-with-transient-toast');
   assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 3);
   assert.equal(await client.evaluate(`Boolean(${summary('已记录的活动')})`), false);
   assert.equal(await client.evaluate(`(${summary('会话信息')}).textContent.trim()`), '会话信息');
-  assert.ok((await text(client)).includes('未记录'));
+  assert.ok((await text(client)).includes('记录不全'));
+  assert.equal(await client.evaluate(`Boolean(${summary('价格依据')})`), false);
+  await client.click(help('费用说明'));
+  await until(() => client.evaluate(`Boolean(${summary('价格依据')})`), 'pricing basis on demand');
   await client.click(summary('价格依据'));
-  assert.ok((await text(client)).includes('fixture'));
+  assert.ok(await client.evaluate(`document.body.innerText.includes('fixture')`));
+  await client.key('Escape');
   await client.click(summary('会话信息'));
   assert.ok(!(await text(client)).includes(fixtureDirectory));
   assert.ok(!(await text(client)).includes('fixture-root'));
@@ -169,20 +207,38 @@ async function main() {
   await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39, nativeVirtualKeyCode: 39 });
   await until(() => client.evaluate(`${dialog}.querySelector('[role="region"]').scrollLeft>0`), 'table scrolls with keyboard');
   await client.screenshot(path.join(output, 'desktop-narrow.png'));
+  await client.click(help('模型与费用说明'));
+  await until(() => client.evaluate(`document.body.innerText.includes('推理已包含在输出中')`), 'narrow help opens');
+  await wait(250);
+  assert.equal(await client.evaluate(`(() => { const dialogs=[...document.querySelectorAll('[role="dialog"]')], rect=dialogs.at(-1).getBoundingClientRect(); return rect.left>=0 && rect.top>=0 && rect.right<=innerWidth+1 && rect.bottom<=innerHeight+1; })()`), true, 'narrow help stays in viewport');
+  await client.screenshot(path.join(output, 'desktop-narrow-help.png'));
+  await client.key('Escape');
+  await until(() => client.evaluate(`document.querySelectorAll('[role="dialog"]').length===1 && !document.body.innerText.includes('推理已包含在输出中')`), 'narrow help fully closes');
+  assert.equal(await client.evaluate(`document.activeElement?.getAttribute('aria-label')==='模型与费用说明'`), true, 'narrow help returns focus');
   checks.push('desktop-dark-and-375px-bounded-keyboard-scrollable-table');
   await client.call('Emulation.clearDeviceMetricsOverride');
-  await client.key('Escape');
+  await wait(150);
+  assert.equal(await client.evaluate(`(() => { const el=[...${dialog}.querySelectorAll('button')].find(el=>el.getAttribute('aria-label')==='关闭会话详情'), r=el.getBoundingClientRect(), hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2); return el.contains(hit); })()`), true, 'close button is unobstructed after viewport reset');
+  await client.click(`[...${dialog}.querySelectorAll('button')].find(el=>el.getAttribute('aria-label')==='关闭会话详情')`);
+  await until(() => client.evaluate(`!${dialog}`), 'close before repeated notification');
   navigation = { navigationId: 'fixture-notice-2', source: 'codex', sessionId: 'fixture-root' };
   window.webContents.send('dsh-pet:navigation');
   await until(() => client.evaluate(`Boolean(${dialog})`), 'repeated notification');
+  await wait(250);
   checks.push('repeat-notification-reopens-dialog');
+  await client.click(`[...${dialog}.querySelectorAll('a')].find(el=>el.textContent.includes('查看模型参考价'))`);
+  await until(() => client.evaluate(`document.body.innerText.includes('本会话模型（1）') && document.body.innerText.includes('gpt-fixture-model-with-a-long-name')`), 'desktop session pricing selection');
+  assert.equal(await client.evaluate(`Boolean(${dialog})`), false);
+  assert.equal(await client.evaluate(`document.body.innerText.includes('unrelated-model') || document.body.innerText.includes('unpriced-fixture-model')`), false);
+  await client.screenshot(path.join(output, 'desktop-pricing.png'));
+  checks.push('desktop-session-link-navigates-to-exact-model-price-filter');
   window.destroy();
 
   const dashboard = path.join(workspace, 'packages/dashboard/dist');
   server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/functions/')) { const chunks = []; for await (const chunk of req) chunks.push(chunk); const result = await api(req.url, { method: req.method, headers: req.headers, body: Buffer.concat(chunks).toString() }); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
-    const relative = url.pathname === '/sessions' || url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+    const relative = ['/sessions', '/pricing', '/'].includes(url.pathname) ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
     const file = path.resolve(dashboard, relative);
     if (!file.startsWith(dashboard + path.sep)) { res.writeHead(403).end(); return; }
     try { const data = await readFile(file); res.writeHead(200, { 'Content-Type': ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' })[path.extname(file)] ?? 'application/octet-stream' }).end(data); } catch { res.writeHead(404).end(); }
@@ -217,7 +273,7 @@ async function main() {
   await until(async () => (await text(browser)).includes(empty.sessionTitle), 'unknown fixture');
   assert.ok((await text(browser)).includes('No valid samples'));
   assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
-  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '—', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', 'Amount unknown\nAmount unknown']);
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '—', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', 'Amount unknown']);
   await until(() => browser.evaluate(`Boolean(${button('Retry')})`), 'directory retry available');
   directoryFailure = false;
   await browser.click(button('Retry'));
@@ -228,14 +284,20 @@ async function main() {
   checks.push('english-no-insights-no-models-unknown-usage-and-directory-retry');
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-unassigned&sessionFocus=unassigned`);
   await until(async () => (await text(browser)).includes(unassigned.sessionTitle), 'unassigned fixture');
-  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '1K', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', '$6\nPrice estimate']);
-  assert.ok((await text(browser)).includes('200 additional tokens have no model details.'));
-  assert.ok((await text(browser)).includes('$2'));
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr:last-child').cells].map(cell=>cell.innerText)`), ['Total', '1K', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', '$6']);
+  assert.equal((await text(browser)).includes('200 additional tokens have no model details.'), false);
+  await browser.click(help('About Models and costs'));
+  await until(() => browser.evaluate(`document.body.innerText.includes('200 additional tokens have no model details.') && document.body.innerText.includes('$2')`), 'allocation explanation on demand');
+  await wait(250);
   await browser.screenshot(path.join(output, 'browser-unassigned.png'));
+  await browser.key('Escape');
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-unclassified&sessionFocus=unclassified`);
   await until(async () => (await text(browser)).includes(unclassified.sessionTitle), 'unclassified fixture');
-  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '1K', '10', '880', '0', '10\nOf which reasoning: 3', '0', '$0\nPrice estimate']);
-  assert.ok((await text(browser)).includes('Unclassified tokens: 100'));
+  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['gpt-fixture-model-with-a-long-name', '1K', '10', '880', '0', '10\nOf which reasoning: 3', '0', '$0']);
+  await browser.click(help('About Models and costs'));
+  await until(() => browser.evaluate(`document.body.innerText.includes('Unclassified tokens: 100')`), 'unclassified explanation on demand');
+  await browser.key('Escape');
   checks.push('summary-retains-unknown-parts-unallocated-cost-unclassified-tokens-and-zero');
   resumeBlocked = true;
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=blocked`);
@@ -251,10 +313,25 @@ async function main() {
   await browser.click(button('Copy project path'));
   await until(() => clipboard.readText() === fixtureDirectory, 'legacy directory fallback');
   checks.push('runtime-null-command-and-legacy-command-directory-copy-fallback');
+  await browser.click(button('With related sessions'));
+  await until(async () => (await text(browser)).includes('≥ $9.9'), 'browser pricing uses related scope');
+  await browser.click(`[...${dialog}.querySelectorAll('a')].find(el=>el.textContent.includes('View model reference prices'))`);
+  await until(() => browser.evaluate(`document.body.innerText.includes('Session models (2)') && document.body.innerText.includes('unpriced-fixture-model') && document.body.innerText.includes('gpt-fixture-model-with-a-long-name')`), 'browser multi-model pricing filter');
+  assert.equal(await browser.evaluate(`document.body.innerText.includes('unrelated-model')`), false);
+  await pricingHeadingsVisible(browser);
+  await browser.screenshot(path.join(output, 'browser-pricing.png'));
+  await browser.click(`[...document.querySelectorAll('button')].find(el=>el.getAttribute('aria-label')==='Remove Session models filter')`);
+  await until(() => browser.evaluate(`document.body.innerText.includes('unrelated-model') && !location.search.includes('models=')`), 'clear session model filter');
+  const unmatchedQuery = new URLSearchParams({ models: JSON.stringify([{ source: 'codex', model: 'missing-fixture-model' }]) });
+  await browserWindow.loadURL(`${origin}/pricing?${unmatchedQuery}`);
+  await until(() => browser.evaluate(`document.body.innerText.includes('Unmatched models: 1')`), 'unmatched model status');
+  assert.equal(await browser.evaluate(`document.body.innerText.includes('unrelated-model') || document.body.innerText.includes('gpt-fixture-model-with-a-long-name')`), false);
+  await browser.screenshot(path.join(output, 'browser-pricing-unmatched.png'));
+  checks.push('browser-price-filter-multiple-models-clear-and-unmatched-stays-empty');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
   assert.equal(browser.errors.length, 0, JSON.stringify(browser.errors));
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2));
   console.log(JSON.stringify({ ok: true, checks, output }));
 }
 const deadline = setTimeout(() => app.exit(2), 120_000);
-void app.whenReady().then(main).catch(async error => { console.error(error); await mkdir(output, { recursive: true }); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error)); for (let i = 0; i < clients.length; i++) { try { await clients[i].screenshot(path.join(output, `failure-${i}.png`)); await writeFile(path.join(output, `failure-${i}.txt`), await clients[i].evaluate('document.body.innerText')); } catch {} } process.exitCode = 1; }).finally(async () => { for (const client of clients) client.close(); for (const window of windows) if (!window.isDestroyed()) window.destroy(); if (server) await new Promise(resolve => server.close(resolve)); clearTimeout(deadline); app.exit(process.exitCode ?? 0); });
+void app.whenReady().then(main).catch(async error => { console.error(error); await mkdir(output, { recursive: true }); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error)); for (let i = 0; i < clients.length; i++) { if (windows[i]?.isDestroyed()) continue; try { await clients[i].screenshot(path.join(output, `failure-${i}.png`)); await writeFile(path.join(output, `failure-${i}.txt`), await clients[i].evaluate('document.body.innerText')); } catch {} } process.exitCode = 1; }).finally(async () => { for (const client of clients) client.close(); for (const window of windows) if (!window.isDestroyed()) window.destroy(); if (server) await new Promise(resolve => server.close(resolve)); clearTimeout(deadline); app.exit(process.exitCode ?? 0); });

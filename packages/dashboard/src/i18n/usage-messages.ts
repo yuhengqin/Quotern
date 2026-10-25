@@ -3,6 +3,14 @@ import type { SupportedLocale } from 'quotern-i18n';
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  'usage.detail.incompleteDetails': ['明细不全', 'Partial details', '一部の明細なし', '일부 내역 누락'],
+  'usage.detail.tokenPartsNote': ['推理已包含在输出中，不重复相加。— 表示未记录或无法确定，不能当作零；总量可能另含未分类 Token。', 'Reasoning is included in output and must not be added again. — means not recorded or unknown, not zero. Totals may include unclassified tokens.', '推論は出力に含まれるため重複加算しません。— は未記録または不明で、ゼロではありません。合計には未分類 Token が含まれる場合があります。', '추론은 출력에 포함되므로 중복 합산하지 않습니다. —는 미기록 또는 미확인이며 0이 아닙니다. 합계에 미분류 Token이 포함될 수 있습니다.'],
+  'usage.detail.partialActivity': ['记录不全', 'Partial records', '一部の記録なし', '일부 기록 누락'],
+  'usage.detail.referencePrices': ['价格页展示当前参考单价；会话费用依据已有记录和匹配规则计算，均不代表实际账单。', 'The prices page shows current reference rates. Session costs use available records and matching rules; neither is an actual bill.', '価格ページは現在の参考単価を表示します。セッション費用は記録と照合ルールに基づき、実際の請求額ではありません。', '가격 페이지는 현재 참조 단가를 표시합니다. 세션 비용은 기록과 일치 규칙을 사용하며 실제 청구서가 아닙니다.'],
+  'usage.detail.sessionModels': ['本会话模型', 'Session models', 'このセッションのモデル', '이 세션의 모델'],
+  'usage.detail.sessionModelsCount': ['本会话模型（{{count}}）', 'Session models ({{count}})', 'セッションのモデル（{{count}}）', '세션 모델 ({{count}})'],
+  'usage.detail.unmatchedModels': ['未匹配模型：{{count}}', 'Unmatched models: {{count}}', '未一致のモデル：{{count}}', '일치하지 않는 모델: {{count}}'],
+  'usage.detail.unmatchedNote': ['当前参考价目录中未找到以下模型；筛选仍保持，不以其他模型代替。', 'These models were not found in the current reference catalog. The filter stays active and does not substitute other models.', '次のモデルは現在の参考価格一覧にありません。フィルターは維持され、他のモデルで代用しません。', '현재 참조 가격 목록에서 다음 모델을 찾지 못했습니다. 필터는 유지되며 다른 모델로 대체하지 않습니다.'],
   'usage.detail.own': ['本会话', 'This session', 'このセッション', '이 세션'],
   'usage.detail.thread': ['含关联会话', 'With related sessions', '関連セッションを含む', '관련 세션 포함'],
   'usage.detail.scopeOwn': ['仅本会话', 'This session only', 'このセッションのみ', '현재 세션만'],

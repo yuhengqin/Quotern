@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Xmark } from '@gravity-ui/icons';
 import { Check, Columns2, Info } from 'lucide-react';
 import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
@@ -25,6 +25,8 @@ import {
   type PricingSortDescriptor,
 } from '../lib/pricing-catalog';
 import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingComparison } from '../lib/pricing-workbench';
+import { filterSessionPricingGroups, parsePricingSearch } from '../lib/pricing-selection';
+import { HelpPopover } from '../components/HelpPopover';
 
 function ActiveFilter({ children, onRemove, label }: { children: ReactNode; onRemove: () => void; label: string }) {
   const { t } = useTranslation();
@@ -39,8 +41,9 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
-  const search = useSearch({ strict: false }) as { q?: string };
-  const initialQuery = typeof search.q === 'string' ? search.q : '';
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const { q: initialQuery, models: sessionModels } = useMemo(() => parsePricingSearch(search), [search]);
   const [query, setQuery] = useState(initialQuery);
   const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
@@ -112,7 +115,9 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
     return [...unique.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [directModels]);
   const modelGroups = useMemo(() => groupPricingCatalog(directModels), [directModels]);
-  const groups = useMemo(() => filterAndSortPricingGroups(groupPricingCatalog(filterPricingCatalog(directModels, { ...advancedFilters, providers: providerFilters })), debouncedQuery, sort, usedOnly), [directModels, debouncedQuery, sort, providerFilters, advancedFilters, usedOnly]);
+  const sessionFilter = useMemo(() => filterSessionPricingGroups(modelGroups, sessionModels ?? [], catalog?.matching), [modelGroups, sessionModels, catalog?.matching]);
+  const scopedRows = useMemo(() => sessionFilter.groups.flatMap(group => group.entries), [sessionFilter]);
+  const groups = useMemo(() => filterAndSortPricingGroups(groupPricingCatalog(filterPricingCatalog(scopedRows, { ...advancedFilters, providers: providerFilters })), debouncedQuery, sort, usedOnly), [scopedRows, debouncedQuery, sort, providerFilters, advancedFilters, usedOnly]);
   const selectedGroups = useMemo(() => selected.flatMap(id => modelGroups.find(group => group.id === id) ?? []), [selected, modelGroups]);
   const toggleComparison = (id: string) => {
     if (!selected.includes(id) && selected.length >= MAX_COMPARISON_MODELS) {
@@ -129,12 +134,13 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
     setSelected(current => togglePricingComparison(current, id));
   };
   const channelCount = groups.reduce((sum, group) => sum + group.entries.length, 0);
-  const hasFilterChips = Boolean(query.trim() || providerFilters.length > 0 || advancedFilters.minContext || advancedFilters.releasedAfter || advancedFilters.releasedBefore || usedOnly);
+  const hasFilterChips = Boolean(sessionModels?.length || query.trim() || providerFilters.length > 0 || advancedFilters.minContext || advancedFilters.releasedAfter || advancedFilters.releasedBefore || usedOnly);
   const providerName = (key: string) => {
     const provider = providers.find(item => item.key === key);
     return provider?.key === 'unknown' ? t('pricing.provider.other') : provider?.label ?? key;
   };
-  const clearFilters = () => { setQuery(''); setDebouncedQuery(''); setProviderFilters([]); setAdvancedFilters(EMPTY_PRICING_FILTERS); setUsedOnly(false); };
+  const clearSessionModels = (q = query) => { void navigate({ to: '/pricing', search: { q } }); };
+  const clearFilters = () => { setQuery(''); setDebouncedQuery(''); setProviderFilters([]); setAdvancedFilters(EMPTY_PRICING_FILTERS); setUsedOnly(false); if (sessionModels?.length) clearSessionModels(''); };
   const sortKey = `${sort.column}:${sort.direction}`;
   const tableTimestamp = catalog?.generatedAt ?? catalog?.updatedAt;
   const dateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleString(locale, { hour12: false }) : t('pricing.summary.unknownDate');
@@ -170,6 +176,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
         <PricingCalculator scenario={scenario} onChange={setScenario} enabled={estimateEnabled} onEnabledChange={setEstimateEnabled} />
       </div>
       {hasFilterChips && <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label={t('pricing.filters.selected')}>
+        {sessionModels?.length && <ActiveFilter label={t('usage.detail.sessionModels')} onRemove={() => clearSessionModels()}>{t('usage.detail.sessionModelsCount', { count: sessionModels.length })}</ActiveFilter>}
         {query.trim() && <ActiveFilter label={t('pricing.filters.search')} onRemove={() => { setQuery(''); setDebouncedQuery(''); }}>{t('pricing.filters.searchChip', { query: query.trim() })}</ActiveFilter>}
         {usedOnly && <ActiveFilter label={t('pricing.filters.usage')} onRemove={() => setUsedOnly(false)}>{t('pricing.filters.usedChip')}</ActiveFilter>}
         {providerFilters.map(key => <ActiveFilter key={key} label={providerName(key)} onRemove={() => setProviderFilters(providerFilters.filter(provider => provider !== key))}>{providerName(key)}</ActiveFilter>)}
@@ -179,6 +186,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
       </div>}
       {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
         <span role="status" aria-live="polite">{t('pricing.summary.count', { count: groups.length })}</span>
+        {sessionFilter.unmatched.length > 0 && <span className="inline-flex items-center gap-1">{t('usage.detail.unmatchedModels', { count: sessionFilter.unmatched.length })}<HelpPopover title={t('usage.detail.sessionModels')}><p>{t('usage.detail.unmatchedNote')}</p><ul className="space-y-1">{sessionFilter.unmatched.map(item => <li key={JSON.stringify(item)} className="break-all">{item.model} · {item.source}</li>)}</ul></HelpPopover></span>}
         {sort.column === 'usage' && <span>{t(usageStatus === 'loading' ? 'pricing.summary.usageLoadingSort' : usageStatus === 'error' ? 'pricing.summary.usageErrorSort' : hasUsage ? 'pricing.summary.usageSort' : 'pricing.summary.noUsageSort')}</span>}
         {sort.column === 'latest' && <span>{t('pricing.summary.latestSort')}</span>}
         {usageStatus !== 'ready' && sort.column !== 'usage' && <span>{t(usageStatus === 'error' ? 'pricing.summary.usageError' : 'pricing.summary.usageLoading')}</span>}
@@ -193,6 +201,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
               <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
               <p className="text-muted">{t('pricing.summary.providerMeaning')}</p>
               <p className="text-muted">{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
+              {sessionModels?.length && <p className="text-muted">{t('usage.detail.referencePrices')}</p>}
             </Popover.Dialog>
           </Popover.Content>
         </Popover>

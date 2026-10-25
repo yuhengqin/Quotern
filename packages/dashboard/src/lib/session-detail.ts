@@ -79,9 +79,19 @@ export function buildSessionDetail(row: SessionActivity, requestedScope: DetailS
     const entries = members.filter(member => member.relationKind === kind);
     return entries.length ? [{ kind, members: entries, tokens: sum(entries.map(member => member.tokens)), costUsd: sum(entries.map(member => member.costUsd)), knownCostUsd: entries.reduce((total, member) => total + member.knownCostUsd, 0) }] : [];
   });
+  const selectedMembers = scope === 'thread' ? members : [own];
+  const pricingModels = new Map<string, { source: string; model: string }>();
+  for (const member of selectedMembers) for (const model of member.models ?? []) {
+    const item = { source: member.source, model: model.model };
+    pricingModels.set(JSON.stringify(item), item);
+  }
+  if (!own.models?.length && row.model && row.model !== 'unknown') {
+    const item = { source: row.source, model: row.model };
+    pricingModels.set(JSON.stringify(item), item);
+  }
   return {
     scope, threadAvailable, hasDescendants: count > 0, groups,
-    usage: summarizeDetailUsage(scope === 'thread' ? members : [own]),
+    pricingModels: [...pricingModels.values()], usage: summarizeDetailUsage(selectedMembers),
     legacyCombined: !threadAvailable && row.insights ? { tokens: row.insights.combinedTokens, costUsd: row.insights.combinedCostUsd, knownCostUsd: row.insights.combinedKnownCostUsd, subagentTokens: row.insights.subagentTokens, subagentCostUsd: row.insights.subagentCostUsd } : null,
   };
 }

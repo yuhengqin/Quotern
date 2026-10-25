@@ -95,3 +95,12 @@ test('copied attribution follows the selected scope and retains exact task timin
   assert.deepEqual(thread.attribution.map((group: { kind: string }) => group.kind), ['own', 'subagent', 'fork']);
   assert.equal(thread.attribution.reduce((total: number, group: { tokens: number }) => total + group.tokens, 0), thread.usage.tokens);
 });
+
+test('pricing navigation follows scope and preserves source-specific model identities', () => {
+  const sample = row();
+  sample.insights!.relatedUsage![0].source = 'claude';
+  assert.deepEqual(buildSessionDetail(sample, 'own').pricingModels, [{ source: 'codex', model: 'model-a' }]);
+  assert.deepEqual(buildSessionDetail(sample, 'thread').pricingModels, [{ source: 'codex', model: 'model-a' }, { source: 'claude', model: 'model-a' }]);
+  sample.models = [];
+  assert.deepEqual(buildSessionDetail(sample, 'own').pricingModels, [{ source: 'codex', model: 'model-a' }]);
+});

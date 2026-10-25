@@ -82,8 +82,9 @@ PR 会自动带出模板，按模板填完即可。几个容易踩的点：
 - **改了面板 UI 要看两处。** `packages/dashboard/src` 与 `apps/desktop/src/renderer` 是同构但独立的两份代码，改一处时确认另一处是否需要同步。
 - **跨端改动**在 PR 正文写清影响范围。
 - 合并前确保 `pnpm build` 和 `pnpm test` 通过。`pnpm test` 会先构建再跑四个包的测试；只想跑单个包时用 `pnpm --filter quotern-core test`（把包名换成 `quotern` / `quotern-dashboard` / `quotern-desktop` 即可）。
+- 改动会话详情、帮助浮层或会话模型价格跳转后，在两端构建完成后执行 `corepack pnpm test:session-detail-ui`。脚本使用合成 API 与独立临时目录，检查默认标签、重复汇总、说明按需查看、价格筛选以及键盘/窄屏；截图和结果写入 `.quotern-dev/session-detail-ui-*`。Windows CI 自动运行同一命令，视觉层级仍须人工看截图。
 
-PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Windows + Node 22 上跑同一套命令：`pnpm build` → 桌面端 `typecheck` → 四个包的测试。CI 红了先看是哪个包哪一步挂的，本地用上面对应的 `--filter` 命令复现。
+PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Windows + Node 22 上跑同一套命令：`pnpm build` → 桌面端 `typecheck` → 四个包的测试。Windows 另执行 `pnpm test:session-detail-ui` 合成界面回归。CI 红了先看是哪个包哪一步挂的，本地用上面对应命令复现。
 
 仅修改 Markdown（`**/*.md`）、`docs/` 目录或根 `LICENSE` 的 push / PR 会跳过这套 CI；只要同时包含其他文件的改动，仍运行三平台验证。Actions 页面的手动运行不受文档过滤影响。
 

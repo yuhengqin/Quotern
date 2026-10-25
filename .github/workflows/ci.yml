@@ -75,5 +75,9 @@ jobs:
       - name: 测试 dashboard
         run: pnpm --filter quotern-dashboard test
 
+      - name: 会话详情与价格跳转界面回归（合成数据）
+        if: runner.os == 'Windows'
+        run: pnpm test:session-detail-ui
+
       - name: 测试 desktop
         run: pnpm --filter quotern-desktop test

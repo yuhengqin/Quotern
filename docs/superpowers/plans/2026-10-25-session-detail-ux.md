@@ -81,3 +81,19 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - 基于 `4524d535`，变更只涉及共享详情组件、合成验收脚本及对应文档。独立审查未发现产品缺陷，指出的 smoke 预期文案错误已修正并通过实测。
 - Dashboard/Desktop 构建及 Desktop typecheck 均通过，Dashboard 255 项测试全部通过，`git diff --check` 通过。日志为 `.quotern-dev/unified-token-table-*.log`；Dashboard 大包警告仍存在。本次不重复 Core/CLI 测试。
 - smoke 在旧构建上因缺少合计行失败；新构建通过 14 组检查。`.quotern-dev/session-detail-unified-table-3/` 保存结果及截图，覆盖首行合计与范围联动、输出包含推理、零值、无模型、分类未知、未分配费用、未分类 Token、中英文、浅深色、320/375 px、表格键盘横向滚动及原有动作/复制/焦点行为。实际操作使用合成 API，未启动真实 Agent 会话。
+
+## 信息层级与回归约束
+
+- [x] 条件显示表尾合计，隐藏默认档位，说明移至相邻帮助入口。
+- [x] 两端价格路由支持当前会话模型的明确集合筛选、清除与未匹配处理。
+- [x] UI 规范补默认展示和渐进披露原则、反例及验收矩阵，AGENTS 引用同一来源。
+- [x] 针对单/多模型、默认/非默认档位、按需帮助及价格跳转执行回归、实机检查与独立审查，再按已有授权提交并本地合并。
+
+### 信息层级修订验证
+
+- 新增单元用例先因缺少实现失败，再通过；针对旧构建的界面检查因单模型仍有重复合计失败。根 `corepack pnpm test` exit 0：1,935 项中 1,899 通过、36 跳过；Desktop typecheck 与 diff check 通过，日志为 `.quotern-dev/session-detail-attention-full-test.log`、`attention-typecheck.log`。最后的表头高度与链接图标调整后，两端构建、Desktop typecheck、Dashboard 264 项测试及界面脚本重新通过。
+- 默认参数运行 `corepack pnpm test:session-detail-ui`，18 组检查通过；产物位于 `.quotern-dev/session-detail-ui-1792924015295-58536/`，含完整合计表、稳定帮助浮层、375 px 帮助边界与焦点、模型价格跳转/清除/未匹配截图。对复制提示先验证出现再消失，避免异步提示或悬停暂停干扰后续遮挡检查；截图等待入场动画结束。
+- 实机发现价格页原有固定 36 px 表头不能容纳英文双行标题；新增 DOM 文字边界断言先失败，再将表头布局保留高度修至 56 px 后通过。未更改价格分组、比较或排序规则。
+- 独立代码审查未发现产品缺陷；独立视觉检查提出的叠印与表头问题已分别以稳定帧截图核实、布局修正解决，最终三张缺口截图再次独立核验通过。
+- 权威规则位于 UI 规范的信息呈现章节，AGENTS/CONTRIBUTING 引用同一入口；单元测试进入现有三平台 CI，合成 UI 脚本接入 Windows CI。远端 CI 尚未运行，本次不推送或发布。验证只覆盖本地构建与合成 HTTP/IPC renderer，未运行真实 Agent 恢复或新增屏幕阅读器测试。
+- 代码、文档和规则已同步并本地验证；机器记忆与工作区清理不在本轮范围，验证产物保留。现有模块类型、SQLite、静态/动态混合导入及大分块警告保留。

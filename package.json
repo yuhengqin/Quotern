@@ -23,6 +23,7 @@
     "test:run-parallel": "node --test scripts/run-parallel.test.mjs",
     "test:dev-instance": "node --test scripts/dev-instance.test.mjs",
     "test:localization-catalogs": "node --experimental-strip-types --test scripts/localization-catalogs.test.mjs",
+    "test:session-detail-ui": "node apps/desktop/scripts/run-session-detail-smoke.mjs",
     "test:dev-runtime": "node --test scripts/dev-runtime.test.mjs",
     "test:vite-core-source": "node --test scripts/vite-core-source.test.mjs",
     "start": "pnpm start:cli",

@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Modal, Popover, ToggleButton, ToggleButtonGroup, Tooltip } from '@heroui/react';
-import { ChevronRight, Copy, MoreHorizontal } from 'lucide-react';
+import { Button, Modal, ToggleButton, ToggleButtonGroup, Tooltip } from '@heroui/react';
+import { ChevronRight, Copy } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SupportedLocale } from 'quotern-i18n';
 import type { SessionActivity } from 'quotern-core';
@@ -11,9 +11,9 @@ import { sourceLabel } from '@/lib/tokens';
 import { DEFAULT_STATS_TIMEZONE, getStatsTimezoneLabel } from '../lib/stats-timezone';
 import { accountLabel, costLabel, modeLabel, serviceLabel } from '../lib/session-labels';
 import { parseSessionPageSearch } from '../lib/session-page';
-import { buildSessionDetail, formatExactSessionNumber, sessionDetailExport, type DetailRange, type DetailScope } from '../lib/session-detail';
+import { buildSessionDetail, type DetailRange, type DetailScope } from '../lib/session-detail';
 import { ProviderIcon } from './ProviderIcon';
-import { FilterMenuPopover } from './FilterMenu';
+import { useAppToastQueue } from '@/components/AppToastContext';
 import { DetailDisclosure, DetailValue, SessionModelBreakdown, SessionTokenBreakdown, type DetailFormat } from './SessionUsageBreakdown';
 
 const groupLabels = { own: 'usage.detail.own', subagent: 'usage.insights.subagent', fork: 'usage.detail.forks', unknown: 'usage.detail.otherRelated' } as const;
@@ -47,9 +47,8 @@ function actionErrorKey(code: string): string {
 export function SessionDetailDialog({ row, range, showTokenShare = false, onClose }: { row: SessionActivity; range?: DetailRange; showTokenShare?: boolean; onClose(): void }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  const [scope, setScope] = useState<DetailScope>('thread');
-  const [exact, setExact] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const toastQueue = useAppToastQueue();
+  const [scope, setScope] = useState<DetailScope>('own');
   const [feedback, setFeedback] = useState('');
   const [directory, setDirectory] = useState<string | null>(null);
   const [directoryState, setDirectoryState] = useState<'loading' | 'ready' | 'error' | 'unsupported'>('loading');
@@ -98,9 +97,8 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
 
   const copy = async (value: string, label: string) => {
     const key = sessionKey;
-    setMoreOpen(false);
-    try { await navigator.clipboard.writeText(value); if (currentSession.current === key) setFeedback(`${label} · ${t('usage.insights.copied')}`); }
-    catch { if (currentSession.current === key) setFeedback(t('usage.insights.copyFailed')); }
+    try { await navigator.clipboard.writeText(value); if (currentSession.current === key) toastQueue.add({ title: `${label} · ${t('usage.insights.copied')}`, variant: 'success' }, { timeout: 2500 }); }
+    catch { if (currentSession.current === key) toastQueue.add({ title: t('usage.insights.copyFailed'), variant: 'danger' }); }
   };
   const runAction = async (action: 'resume' | 'open-directory') => {
     if (busy.current || !current?.token || !(action === 'resume' ? current.canResume : current.canOpenDirectory)) return;
@@ -122,17 +120,17 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
     }
   };
   const format: DetailFormat = {
-    tokens: value => exact ? formatExactSessionNumber(value, locale) : formatSessionTokens(value),
-    number: value => value == null ? t('usage.insights.unknown') : exact ? formatExactSessionNumber(value, locale) : value.toLocaleString(locale, { maximumFractionDigits: 1 }),
+    tokens: formatSessionTokens,
+    number: value => value == null ? t('usage.insights.unknown') : value.toLocaleString(locale, { maximumFractionDigits: 1 }),
     money: (value, known = 0) => value == null
-      ? known > 0 ? exact ? `≥ $${formatExactSessionNumber(known, locale)}` : formatSessionUsd(known, locale, { lowerBound: true }) : t('usage.activity.amountUnknown')
-      : exact ? `$${formatExactSessionNumber(value, locale)}` : formatSessionUsd(value, locale),
+      ? known > 0 ? formatSessionUsd(known, locale, { lowerBound: true }) : t('usage.activity.amountUnknown')
+      : formatSessionUsd(value, locale),
   };
   const date = (stamp: string | null | undefined) => stamp && Number.isFinite(Date.parse(stamp))
     ? new Date(stamp).toLocaleString(locale, { timeZone: DEFAULT_STATS_TIMEZONE, hour12: false }) : t('usage.insights.unknown');
   const period = range ? range.fromTime && range.toTime ? `${date(range.fromTime)} – ${date(range.toTime)}` : range.fromDate === range.toDate ? range.fromDate : `${range.fromDate} – ${range.toDate}` : t('usage.explorer.range');
   const scopeLabel = t(detail.scope === 'thread' ? 'usage.detail.thread' : 'usage.detail.own');
-  const taskDuration = row.taskSeconds != null && exact ? `${formatExactSessionNumber(row.taskSeconds, locale)} s` : formatSessionDuration(row.taskSeconds ?? null);
+  const taskDuration = formatSessionDuration(row.taskSeconds ?? null);
   const performance = insight?.performance;
   const metrics = insight ? [
     { label: 'usage.insights.messageCount', value: insight.messageCount },
@@ -146,11 +144,10 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
     { label: 'usage.insights.tokensPerEdit', value: insight.signals.tokensPerEdit },
   ] : [];
   const available = metrics.filter(metric => metric.value != null), missing = metrics.filter(metric => metric.value == null);
-  const activitySummary = [insight?.messageCount != null ? `${t('usage.insights.messageCount')} ${format.number(insight.messageCount)}` : '', insight?.signals.toolCalls != null ? `${t('usage.insights.toolCalls')} ${format.number(insight.signals.toolCalls)}` : ''].filter(Boolean).join(' · ') || t('usage.detail.noActivity');
   const columnClass = 'grid grid-cols-2 items-baseline gap-x-3 gap-y-1 [&>:first-child]:col-span-2 sm:grid-cols-[minmax(0,1fr)_minmax(5rem,auto)_minmax(6rem,auto)] sm:[&>:first-child]:col-span-1';
 
   return <Modal isOpen onOpenChange={open => { if (!open) onClose(); }}>
-    <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog className="max-w-3xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}>
+    <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog className="max-w-5xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}>
       <Modal.CloseTrigger aria-label={t('usage.detail.close')} />
       <Modal.Header className="border-b border-separator pb-3">
         <div className="flex min-w-0 items-start gap-3 pr-9"><span className="mt-1 shrink-0"><ProviderIcon provider={row.source} size={22} /></span><div className="min-w-0">
@@ -159,17 +156,9 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
         </div></div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" variant="primary" isDisabled={!current?.canResume || pending !== null} aria-busy={pending === 'resume'} aria-describedby={resumeHint ? `${hintId}-resume` : undefined} onPress={() => void runAction('resume')}>{t(pending === 'resume' ? 'usage.insights.opening' : 'usage.insights.resume')}</Button>
-          <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={directoryHint ? `${hintId}-directory` : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.insights.openDirectory')}</Button>
-          {resumeCommand && <Button size="sm" variant="secondary" onPress={() => void copy(resumeCommand, t('usage.insights.copyResume'))}><Copy className="size-3.5" aria-hidden />{t('usage.insights.copyResume')}</Button>}
-          <Popover isOpen={moreOpen} onOpenChange={setMoreOpen}>
-            <Button size="sm" variant="tertiary" aria-label={t('usage.detail.more')}><MoreHorizontal className="size-4" aria-hidden />{t('usage.detail.more')}</Button>
-            <FilterMenuPopover placement="bottom start" className="w-56" bodyClassName="flex flex-col gap-1 p-2">
-              <Button size="sm" variant="tertiary" className="justify-start" onPress={() => void copy(sessionDetailExport(row, detail.scope, range), t('usage.detail.copyExact'))}>{t('usage.detail.copyExact')}</Button>
-              {directory && <Button size="sm" variant="tertiary" className="justify-start" onPress={() => void copy(directory, t('usage.insights.copyDirectory'))}>{t('usage.insights.copyDirectory')}</Button>}
-              <Button size="sm" variant="tertiary" className="justify-start" onPress={() => void copy(row.sessionId, t('usage.detail.copyId'))}>{t('usage.detail.copyId')}</Button>
-            </FilterMenuPopover>
-          </Popover>
-          <Button size="sm" variant="tertiary" aria-pressed={exact} onPress={() => { setExact(!exact); setFeedback(''); }}>{t(exact ? 'usage.detail.compact' : 'usage.detail.exact')}</Button>
+          <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={directoryHint ? `${hintId}-directory` : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.detail.openFolder')}</Button>
+          <Button size="sm" variant="tertiary" isDisabled={!resumeCommand} onPress={() => resumeCommand && void copy(resumeCommand, t('usage.insights.copyResume'))}><Copy className="size-3.5" aria-hidden />{t('usage.insights.copyResume')}</Button>
+          <Button size="sm" variant="tertiary" isDisabled={!directory} onPress={() => directory && void copy(directory, t('usage.detail.copyPath'))}><Copy className="size-3.5" aria-hidden />{t('usage.detail.copyPath')}</Button>
         </div>
         {feedback && <p role="status" className="mt-1 text-xs">{feedback}</p>}
       </Modal.Header>
@@ -178,12 +167,13 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
           {resumeHint && <p id={`${hintId}-resume`}>{t(actionErrorKey(resumeHint))}</p>}
           {directoryHint && directoryHint !== resumeHint && <p id={`${hintId}-directory`}>{t(actionErrorKey(directoryHint))}</p>}
           {directoryHint && directoryHint === resumeHint && <span id={`${hintId}-directory`} className="sr-only">{t(actionErrorKey(directoryHint))}</span>}
+          {directoryState === 'error' && <Button size="sm" variant="tertiary" onPress={() => setDirectoryAttempt(value => value + 1)}>{t('usage.detail.retry')}</Button>}
         </div>}
         <section aria-label={t('usage.detail.summary')} className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 text-xs text-muted"><p>{t(range?.kind === 'collected' ? 'usage.detail.collectedRange' : 'usage.detail.selectedRange')}: <span className="text-foreground">{period}</span></p><p>{getStatsTimezoneLabel()}</p></div>
+            <p className="min-w-0 text-xs text-muted">{t(range?.kind === 'collected' ? 'usage.detail.collectedRange' : 'usage.detail.selectedRange')}: <span className="text-foreground">{period}</span></p>
             {detail.hasDescendants && detail.threadAvailable ? <ToggleButtonGroup size="sm" selectionMode="single" disallowEmptySelection selectedKeys={[detail.scope]} aria-label={t('usage.detail.usageScope')} onSelectionChange={keys => { setScope(keys.has('thread') ? 'thread' : 'own'); setFeedback(''); }}>
-              <ToggleButton id="thread">{t('usage.detail.thread')}</ToggleButton><ToggleButton id="own"><ToggleButtonGroup.Separator />{t('usage.detail.own')}</ToggleButton>
+              <ToggleButton id="own">{t('usage.detail.scopeOwn')}</ToggleButton><ToggleButton id="thread"><ToggleButtonGroup.Separator />{t('usage.detail.thread')}</ToggleButton>
             </ToggleButtonGroup> : <span className="text-xs text-muted">{scopeLabel}</span>}
           </div>
           <dl className="grid grid-cols-2 divide-x divide-separator rounded-xl border border-separator">
@@ -208,21 +198,21 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
         <section aria-label={t('usage.detail.performance')}>
           <h3 className="mb-3 font-semibold">{t('usage.detail.performance')} <span className="text-xs font-normal text-muted">· {t('usage.detail.own')}</span></h3>
           <dl className="grid gap-4 sm:grid-cols-2">
-            <div><dt className="text-xs text-muted">{t('usage.insights.speed')}</dt><dd className="mt-1 text-lg tabular-nums">{performance?.tokensPerSecond != null ? `≈ ${format.number(performance.tokensPerSecond)} tok/s` : <span className="text-sm text-muted">{t('usage.detail.noSamples')}</span>}</dd>{performance && <p className="text-xs text-muted">{t('usage.insights.samples')}: {format.number(performance.estimatedRequestCount)}{performance.estimatedDurationMs != null && <> · {t('usage.detail.sampleDuration')}: {exact ? `${formatExactSessionNumber(performance.estimatedDurationMs, locale)} ms` : `${(performance.estimatedDurationMs / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} s`}</>}</p>}</div>
-            <div><dt className="text-xs text-muted">{t('usage.detail.averageWait')}</dt><dd className="mt-1 text-lg tabular-nums">{performance?.ttftMs != null ? exact ? `${formatExactSessionNumber(performance.ttftMs, locale)} ms` : `${(performance.ttftMs / 1000).toLocaleString(locale, { maximumFractionDigits: 2 })} s` : <span className="text-sm text-muted">{t('usage.detail.noSamples')}</span>}</dd>{performance && <p className="text-xs text-muted">{t('usage.insights.samples')}: {format.number(performance.ttftSampleCount)}</p>}</div>
+            <div><dt className="text-xs text-muted">{t('usage.insights.speed')}</dt><dd className="mt-1 text-lg tabular-nums">{performance?.tokensPerSecond != null ? `≈ ${format.number(performance.tokensPerSecond)} tok/s` : <span className="text-sm text-muted">{t('usage.detail.noSamples')}</span>}</dd>{performance && <p className="text-xs text-muted">{t('usage.insights.samples')}: {format.number(performance.estimatedRequestCount)}{performance.estimatedDurationMs != null && <> · {t('usage.detail.sampleDuration')}: {(performance.estimatedDurationMs / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })} s</>}</p>}</div>
+            <div><dt className="text-xs text-muted">{t('usage.detail.averageWait')}</dt><dd className="mt-1 text-lg tabular-nums">{performance?.ttftMs != null ? `${(performance.ttftMs / 1000).toLocaleString(locale, { maximumFractionDigits: 2 })} s` : <span className="text-sm text-muted">{t('usage.detail.noSamples')}</span>}</dd>{performance && <p className="text-xs text-muted">{t('usage.insights.samples')}: {format.number(performance.ttftSampleCount)}</p>}</div>
           </dl>
           <p className="mt-3 text-xs text-muted">{t('usage.detail.performanceNote')}</p>
         </section>
 
         <div>
-          <DetailDisclosure title={t('usage.detail.activity')} summary={activitySummary}>
+          <section aria-label={t('usage.detail.activity')} className="space-y-3 pb-5">
+            <h3 className="font-semibold">{t('usage.detail.activity')}</h3>
             <p className="text-xs text-muted">{t('usage.detail.own')} · {t(insight?.signals.coverage === 'unsupported' ? 'usage.detail.unsupported' : insight?.signals.coverage === 'complete' ? 'usage.detail.covered' : 'usage.detail.partialCoverage')}</p>
             {available.length > 0 && <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">{available.map(metric => <DetailValue key={metric.label} label={t(metric.label)} value={typeof metric.value === 'boolean' ? t(metric.value ? 'usage.detail.signalPresent' : 'usage.detail.signalAbsent') : metric.label === 'usage.insights.costPerEdit' ? format.money(metric.value) : metric.label === 'usage.insights.tokensPerEdit' ? format.tokens(metric.value) : format.number(metric.value)} />)}</dl>}
             {missing.length > 0 && <p className="text-xs text-muted">{t('usage.detail.notRecordedMetrics')}: {missing.map(metric => t(metric.label)).join('、')}</p>}
             {!insight && <p className="text-muted">{t('usage.detail.noActivity')}</p>}
-            <p className="text-xs text-muted">{t('usage.insights.evidenceNote')}</p>
-          </DetailDisclosure>
-          <DetailDisclosure title={t('usage.detail.sessionInfo')} summary={row.taskSeconds != null ? `${t('usage.explorer.taskTime')} ${taskDuration}` : undefined}>
+          </section>
+          <DetailDisclosure title={t('usage.detail.sessionInfo')}>
             <dl className="space-y-2">
               <DetailValue label={t('usage.activity.recent')} value={date(row.lastActivityAt)} />
               <DetailValue label={t('usage.insights.firstActivity')} value={date(insight?.firstActivityAt)} />
@@ -231,18 +221,13 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
               <DetailValue label={t('usage.detail.account')} value={accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')} />
               {!row.models?.length && row.model !== 'unknown' && <DetailValue label={t('usage.common.model')} value={row.model} />}
               {showTokenShare && row.sharePercent != null && <DetailValue label={t('usage.detail.ownShare')} value={<Tooltip><Tooltip.Trigger className="cursor-help underline decoration-dotted underline-offset-4">{row.sharePercent.toLocaleString(locale, { maximumFractionDigits: 1 })}%</Tooltip.Trigger><Tooltip.Content className="max-w-xs">{t('usage.activity.contributionFilterNote')} {t('usage.activity.contributionNote')}</Tooltip.Content></Tooltip>} />}
-              {insight?.parentId && <DetailValue label={t('usage.detail.parent')} value={<span className="break-all font-mono text-xs">{insight.parentId} · {t(insight.relationKind === 'fork' ? 'usage.insights.relationFork' : insight.relationKind === 'subagent' ? 'usage.insights.relationSubagent' : 'usage.insights.relationUnknown')}</span>} />}
+              {insight?.parentId && <DetailValue label={t('usage.detail.parent')} value={t(insight.relationKind === 'fork' ? 'usage.insights.relationFork' : insight.relationKind === 'subagent' ? 'usage.insights.relationSubagent' : 'usage.insights.relationUnknown')} />}
               {(insight?.agentNickname || insight?.agentRole) && <DetailValue label={t('usage.detail.agentIdentity')} value={[insight.agentNickname, insight.agentRole].filter(Boolean).join(' · ')} />}
             </dl>
             {insight?.orphan && <p className="text-xs text-muted">{t('usage.detail.orphan')}</p>}
-            <div><div className="flex items-center justify-between gap-2"><p className="text-xs text-muted">{t('usage.detail.sessionId')}</p><Button size="sm" variant="tertiary" onPress={() => void copy(row.sessionId, t('usage.detail.copyId'))}>{t('usage.detail.copyId')}</Button></div><code className="block break-all rounded-lg bg-surface-secondary px-3 py-2 text-xs">{row.sessionId}</code></div>
-            <div><div className="flex items-center justify-between gap-2"><p className="text-xs text-muted">{t('usage.detail.directory')}</p>{directory && <Button size="sm" variant="tertiary" onPress={() => void copy(directory, t('usage.insights.copyDirectory'))}>{t('usage.insights.copyDirectory')}</Button>}</div>
-              <p className="break-all font-mono text-xs">{directory ?? t(directoryState === 'loading' ? 'usage.activity.loading' : directoryState === 'error' ? 'usage.detail.directoryError' : 'usage.insights.unknown')}</p>
-              {directoryState === 'error' && <Button size="sm" variant="tertiary" onPress={() => setDirectoryAttempt(value => value + 1)}>{t('usage.detail.retry')}</Button>}
-            </div>
-            {resumeCommand && <div><p className="mb-1 text-xs text-muted">{t('usage.detail.resumeCommand')}</p><code className="block break-all rounded-lg bg-surface-secondary p-3 text-xs">{resumeCommand}</code></div>}
           </DetailDisclosure>
           <DetailDisclosure title={t('usage.detail.dataNotes')}>
+            <p>{getStatsTimezoneLabel()}</p>
             <p>{t('usage.detail.rangeNote')}</p><p>{t('usage.insights.priceNote')}</p><p>{t('usage.insights.evidenceNote')}</p>
             {row.billing.mode === 'unknown' && <p>{t('usage.activity.insufficientBillingEvidence')}</p>}
             {!detail.usage.detailsComplete && <p>{t('usage.explorer.missingDetails')}</p>}

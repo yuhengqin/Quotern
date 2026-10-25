@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
+import { registerSessionActionsApi } from './session-actions-api.js';
 
 import type { LocalApiDeps } from './state.js';
 import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
@@ -69,6 +70,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   registerShareBackgroundApi(app, deps.dataDir);
   registerAchievementsApi(app, deps.dataDir);
   registerQuotaApi(app, deps.quota);
+  registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {

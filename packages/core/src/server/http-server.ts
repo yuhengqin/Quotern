@@ -4,6 +4,7 @@ import type { Hono } from 'hono';
 
 import { isApiPath, serveStatic } from './static.js';
 import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
+import { SESSION_ACTIONS_ROUTE } from './session-actions-api.js';
 
 export interface HttpServerOptions {
   honoApp: Hono;
@@ -18,10 +19,11 @@ export function createHttpServer(opts: HttpServerOptions): Server {
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? '/';
+    const sessionAction = url.split('?')[0]!.replace(/\/$/, '') === SESSION_ACTIONS_ROUTE;
 
     if (isApiPath(url)) {
       try {
-        const limit = url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
+        const limit = sessionAction ? 4096 : url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
         if (Number(req.headers['content-length']) > limit) throw new ShareBackgroundError('背景请求超过大小限制', 413);
         const body =
           req.method !== 'GET' && req.method !== 'HEAD'
@@ -34,11 +36,12 @@ export function createHttpServer(opts: HttpServerOptions): Server {
         }
 
         const response = await opts.honoApp.fetch(
-          new Request(`http://${host}:${port}${url}`, {
+          new Request(sessionAction ? `http://${req.headers.host ?? 'invalid.local'}${url}` : `http://${host}:${port}${url}`, {
             method: req.method,
             headers,
             body: body as BodyInit | undefined,
           }),
+          { quoternRemoteAddress: req.socket.remoteAddress },
         );
 
         res.statusCode = response.status;
@@ -51,7 +54,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
         if (err instanceof ShareBackgroundError) {
           res.statusCode = err.status;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(JSON.stringify({ success: false, message: err.message, data: null }));
+          res.end(JSON.stringify({ success: false, message: sessionAction ? 'INVALID_SESSION_ACTION' : err.message, data: null }));
           req.resume();
           return;
         }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { SessionActivity } from './session-observation.js';
 import type { SessionMessage } from './session-metrics.js';
+import { sessionResumeCommand } from './session-resume.js';
 
 export type SessionRelationKind = 'fork' | 'subagent' | 'unknown';
 export interface SessionEvidence {
@@ -132,12 +133,12 @@ export function enrichSessionInsights(rows: SessionActivity[], messages: readonl
     const retries = events.filter(e => e.kind === 'retry').length;
     const ownCost=row.unallocatedCostUsd==null&&row.models?.some(model=>model.costUsd===null)?null:row.costUsd;
     const id = row.sessionId;
-    const prefix = ({ codex: 'codex resume', claude: 'claude --resume', opencode: 'opencode --session', grok: 'grok --resume' } as Record<string,string>)[row.source];
+    const resume = sessionResumeCommand(row.source, id);
     row.insights = { parentId: parentId ?? null, relationKind: latest('relationKind') as SessionRelationKind ?? 'unknown', relationConflict: meta.some(e => e.relationConflict) || new Set(meta.map(e=>e.parentId).filter(Boolean)).size > 1, orphan: !!parentId && !byKey.has(key(row.source,parentId)), agentRole: latest('agentRole') as string ?? null, agentNickname: latest('agentNickname') as string ?? null, workingDirectory: latest('workingDirectory') as string ?? null,
       firstActivityAt: scopedMessages.map(m=>m.timestamp).sort()[0] ?? null, messageCount: scopedMessages.length?new Set(scopedMessages.map(m=>m.id)).size:complete?0:null, ownTokens: row.tokens, ownCostUsd: ownCost, subagentTokens: 0, subagentCostUsd: 0, combinedTokens: row.tokens, combinedCostUsd: ownCost, combinedKnownCostUsd: row.costUsd ?? 0, descendantCount: 0,
       performance: { tokensPerSecond: duration > 0 ? output / (duration / 1000) : null, estimatedRequestCount: requests.length, estimatedDurationMs: duration || null, ttftMs: ttft.length ? ttft.reduce((s,e)=>s+e.ttftMs!,0)/ttft.length : null, ttftSampleCount: ttft.length, kind: 'estimated' },
       signals: { toolCalls: tools.length || (complete?0:null), editTurns, retryTurns: retries || (complete?0:null), firstPass: complete&&editTurns!==null&&editTurns>0?editTurns===1&&retries===0:null, errorCount: events.filter(e=>e.kind==='error').length || (complete?0:null), compactionCount: events.filter(e=>e.kind==='compaction').length || (complete?0:null), costPerEdit: editTurns && ownCost !== null ? ownCost/editTurns : null, tokensPerEdit: editTurns && row.tokens !== null ? row.tokens/editTurns : null, coverage: supported ? complete?'complete':'partial' : 'unsupported' },
-      resumeCommand: prefix && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(id) ? `${prefix} ${id}` : null };
+      resumeCommand: resume ? [resume.executable, ...resume.args].join(' ') : null };
   }
   // Disconnect all participants in a cycle; never hide or remove a session.
   for (const row of rows) {

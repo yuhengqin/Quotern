@@ -1,18 +1,83 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button, Modal } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { ContextAudit, SessionActivity } from 'quotern-core';
 import { request } from '@/lib/api';
 import { formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
 
+interface SessionActions {
+  key: string;
+  directory: string | null;
+  token: string | null;
+  canOpenDirectory: boolean;
+  canResume: boolean;
+  reason: string | null;
+}
+
+function actionErrorKey(code: string): string {
+  switch (code) {
+    case 'SESSION_DIRECTORY_UNAVAILABLE': return 'usage.insights.directoryUnavailable';
+    case 'SESSION_CLI_UNAVAILABLE': return 'usage.insights.cliUnavailable';
+    case 'SESSION_ACTION_LOCAL_ONLY': return 'usage.insights.actionsLocalOnly';
+    case 'SESSION_ACTION_UNSUPPORTED': return 'usage.insights.terminalUnavailable';
+    case 'SESSION_ACTION_FORBIDDEN': return 'usage.insights.actionExpired';
+    default: return 'usage.insights.actionFailed';
+  }
+}
+
 export function SessionInsightDetails({ row }: { row: SessionActivity }) {
   const { t, i18n }=useTranslation();
   const [feedback,setFeedback]=useState('');
-  const [directory,setDirectory]=useState<string|null>(null);
-  useEffect(()=>{let active=true;setDirectory(null);if(['codex','claude','dsh'].includes(row.source)){const query=new URLSearchParams({source:row.source,sessionId:row.sessionId});void request<{directory:string|null}>(`/functions/tud-session-directory?${query}`).then(result=>{if(active)setDirectory(result.directory);}).catch(()=>{});}return()=>{active=false;};},[row.source,row.sessionId]);
+  const [actions, setActions] = useState<SessionActions | null>(null);
+  const [pending, setPending] = useState<'resume' | 'open-directory' | null>(null);
+  const busy = useRef(false);
+  const sessionKey = JSON.stringify([row.source, row.sessionId]);
+  const currentSession = useRef(sessionKey);
+  currentSession.current = sessionKey;
+  const hintId = useId();
+  const current = actions?.key === sessionKey ? actions : null;
+  const directory = current?.directory;
+  useEffect(() => {
+    let active = true;
+    const key = JSON.stringify([row.source, row.sessionId]);
+    const query = new URLSearchParams({ source: row.source, sessionId: row.sessionId });
+    setFeedback('');
+    setActions(null);
+    void request<Omit<SessionActions, 'key'>>(`/functions/tud-session-actions?${query}`)
+      .then(result => { if (active) setActions({ ...result, key }); })
+      .catch(async error => {
+        // Keep directory copying available with older runtimes and remote panels.
+        let directory: string | null = null;
+        if (['codex', 'claude', 'dsh'].includes(row.source)) {
+          try { directory = (await request<{ directory: string | null }>(`/functions/tud-session-directory?${query}`)).directory; } catch { /* No directory metadata. */ }
+        }
+        if (active) setActions({ key, directory, token: null, canOpenDirectory: false, canResume: false, reason: error instanceof Error ? error.message : 'SESSION_ACTION_UNAVAILABLE' });
+      });
+    return () => { active = false; };
+  }, [row.source, row.sessionId]);
   const insight=row.insights;
   const show=(value:number|null|undefined,suffix='')=>value==null?'—':`${value.toLocaleString(i18n.resolvedLanguage,{maximumFractionDigits:3})}${suffix}`;
-  const copy=async(value:string)=>{try{await navigator.clipboard.writeText(value);setFeedback(t('usage.insights.copied'));}catch{setFeedback(t('usage.insights.copyFailed'));}};
+  const copy=async(value:string)=>{const key=sessionKey;try{await navigator.clipboard.writeText(value);if(currentSession.current===key)setFeedback(t('usage.insights.copied'));}catch{if(currentSession.current===key)setFeedback(t('usage.insights.copyFailed'));}};
+  const runAction = async (action: 'resume' | 'open-directory') => {
+    if (busy.current || !current?.token || !(action === 'resume' ? current.canResume : current.canOpenDirectory)) return;
+    const key = sessionKey;
+    busy.current = true;
+    setPending(action);
+    setFeedback('');
+    try {
+      await request('/functions/tud-session-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': current.token },
+        body: JSON.stringify({ source: row.source, sessionId: row.sessionId, action }),
+      });
+      if (currentSession.current === key) setFeedback(t(action === 'resume' ? 'usage.insights.terminalOpened' : 'usage.insights.directoryOpened'));
+    } catch (error) {
+      if (currentSession.current === key) setFeedback(t(actionErrorKey(error instanceof Error ? error.message : '')));
+    } finally {
+      busy.current = false;
+      setPending(null);
+    }
+  };
   if(!insight)return <p className="text-xs text-muted">{t('usage.insights.unknown')}</p>;
   const locale = i18n.resolvedLanguage ?? 'zh-CN';
   const usd = (value: number | null | undefined) => formatSessionUsd(value, locale);
@@ -36,10 +101,13 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
   ];
   return <div className="space-y-4">
     <div className="flex flex-wrap gap-2">
+      {insight.resumeCommand && <Button size="sm" variant="primary" isDisabled={!current?.canResume || pending !== null} aria-busy={pending === 'resume'} aria-describedby={current?.reason ? hintId : undefined} onPress={() => void runAction('resume')}>{t(pending === 'resume' ? 'usage.insights.opening' : 'usage.insights.resume')}</Button>}
+      {directory && <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={current?.reason ? hintId : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.insights.openDirectory')}</Button>}
       {insight.resumeCommand&&<Button size="sm" variant="secondary" onPress={()=>void copy(insight.resumeCommand!)}>{t('usage.insights.copyResume')}</Button>}
       {directory&&<Button size="sm" variant="secondary" onPress={()=>void copy(directory)}>{t('usage.insights.copyDirectory')}</Button>}
       <p role="status" className="self-center text-xs text-muted">{feedback}</p>
     </div>
+    {current?.reason && (insight.resumeCommand || directory) && <p id={hintId} className="text-xs text-muted">{t(actionErrorKey(current.reason))}</p>}
     {insight.resumeCommand&&<code className="block break-all rounded-lg bg-surface-secondary p-3 text-xs">{insight.resumeCommand}</code>}
     {directory&&<p className="break-all text-xs text-muted">{directory}</p>}
     {(insight.parentId||insight.agentRole||insight.agentNickname)&&<p className="break-all text-xs text-muted">{t(`usage.insights.${insight.relationKind==='fork'?'relationFork':insight.relationKind==='subagent'?'relationSubagent':'relationUnknown'}`)} · {[insight.agentNickname,insight.agentRole,insight.parentId].filter(Boolean).join(' · ')}</p>}

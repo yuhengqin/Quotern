@@ -3,6 +3,7 @@ import { Button, Modal } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { ContextAudit, SessionActivity } from 'quotern-core';
 import { request } from '@/lib/api';
+import { formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
 
 export function SessionInsightDetails({ row }: { row: SessionActivity }) {
   const { t, i18n }=useTranslation();
@@ -13,10 +14,16 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
   const show=(value:number|null|undefined,suffix='')=>value==null?'—':`${value.toLocaleString(i18n.resolvedLanguage,{maximumFractionDigits:3})}${suffix}`;
   const copy=async(value:string)=>{try{await navigator.clipboard.writeText(value);setFeedback(t('usage.insights.copied'));}catch{setFeedback(t('usage.insights.copyFailed'));}};
   if(!insight)return <p className="text-xs text-muted">{t('usage.insights.unknown')}</p>;
+  const locale = i18n.resolvedLanguage ?? 'zh-CN';
+  const usd = (value: number | null | undefined) => formatSessionUsd(value, locale);
+  const usage = (count: number | null, cost: number | null) => `${formatSessionTokens(count)} Token · ${usd(cost)}`;
+  const combined = `${formatSessionTokens(insight.combinedTokens)} Token · ${insight.combinedCostUsd == null
+    ? insight.combinedKnownCostUsd > 0 ? formatSessionUsd(insight.combinedKnownCostUsd, locale, { lowerBound: true }) : t('usage.activity.amountUnknown')
+    : usd(insight.combinedCostUsd)}`;
   const metrics:[string,string][]=[
-    ['usage.insights.own',`${show(insight.ownTokens)} Token · ${show(insight.ownCostUsd,' USD')}`],
-    ['usage.insights.subagent',`${show(insight.subagentTokens)} Token · ${show(insight.subagentCostUsd,' USD')}`],
-    ['usage.insights.combined',`${show(insight.combinedTokens)} Token · ${insight.combinedCostUsd==null?insight.combinedKnownCostUsd>0?`≥ ${show(insight.combinedKnownCostUsd,' USD')}`:t('usage.activity.amountUnknown'):show(insight.combinedCostUsd,' USD')}`],
+    ['usage.insights.own',usage(insight.ownTokens,insight.ownCostUsd)],
+    ['usage.insights.subagent',usage(insight.subagentTokens,insight.subagentCostUsd)],
+    ['usage.insights.combined',combined],
     ['usage.insights.messageCount',show(insight.messageCount)],
     ['usage.insights.firstActivity',insight.firstActivityAt?new Date(insight.firstActivityAt).toLocaleString(i18n.resolvedLanguage):'—'],
     ['usage.insights.speed',`${show(insight.performance.tokensPerSecond,' token/s')} · ${t('usage.insights.samples')}: ${insight.performance.estimatedRequestCount} · ${show(insight.performance.estimatedDurationMs,' ms')}`],
@@ -24,7 +31,8 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
     ['usage.insights.toolCalls',show(insight.signals.toolCalls)],['usage.insights.editTurns',show(insight.signals.editTurns)],
     ['usage.insights.retryTurns',show(insight.signals.retryTurns)],['usage.insights.firstPass',insight.signals.firstPass==null?'—':String(insight.signals.firstPass)],
     ['usage.insights.errorCount',show(insight.signals.errorCount)],['usage.insights.compactionCount',show(insight.signals.compactionCount)],
-    ['usage.insights.costPerEdit',show(insight.signals.costPerEdit,' USD')],['usage.insights.tokensPerEdit',show(insight.signals.tokensPerEdit)],
+    ['usage.insights.costPerEdit',usd(insight.signals.costPerEdit)],
+    ['usage.insights.tokensPerEdit',formatSessionTokens(insight.signals.tokensPerEdit)],
   ];
   return <div className="space-y-4">
     <div className="flex flex-wrap gap-2">
@@ -40,10 +48,10 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
     <div className="space-y-2 rounded-xl border border-separator p-3">
       <p className="text-xs text-muted">{t('usage.insights.priceNote')}</p>
       {row.models?.map(model=>model.pricing&&<details key={model.model} className="text-xs"><summary className="cursor-pointer py-2 font-medium">{model.model} · {model.pricing.table??'—'} · {model.pricing.matchedModel??'—'}</summary>
-        <dl className="grid grid-cols-2 gap-2 p-2">{Object.entries(model.pricing.rates??{}).map(([key,rate])=><div key={key}><dt>{key} / 1M Token</dt><dd className="tabular-nums">${rate}</dd></div>)}</dl>
+        <dl className="grid grid-cols-2 gap-2 p-2">{Object.entries(model.pricing.rates??{}).map(([key,rate])=><div key={key}><dt>{key} / 1M Token</dt><dd className="tabular-nums">{usd(rate)}</dd></div>)}</dl>
         <p className="break-words text-muted">{model.pricing.matchMethod} · {model.pricing.ruleReferences.join(' · ')}</p>
         {model.pricing.assumptions?.includes('grok-80-20')&&<p className="text-muted">{t('usage.insights.grokCostAssumption')}</p>}
-        {model.pricing.unpricedTokens>0&&<p className="text-warning">{t('usage.overview.unpriced')}: {model.pricing.unpricedTokens.toLocaleString(i18n.resolvedLanguage)} Token</p>}
+        {model.pricing.unpricedTokens>0&&<p className="text-warning">{t('usage.overview.unpriced')}: {formatSessionTokens(model.pricing.unpricedTokens)} Token</p>}
       </details>)}
     </div>
   </div>;
@@ -56,10 +64,10 @@ export function ContextAuditButton(){
     <Modal isOpen={open} onOpenChange={setOpen}><Modal.Backdrop><Modal.Container><Modal.Dialog className="max-w-3xl"><Modal.CloseTrigger/><Modal.Header><Modal.Heading>{t('usage.insights.contextAudit')}</Modal.Heading></Modal.Header><Modal.Body className="space-y-4">
       <p className="text-sm text-muted">{t('usage.insights.contextNote')}</p>
       {error?<p role="status">{t('usage.activity.readError')}</p>:!data?<p role="status">{t('usage.activity.loading')}</p>:<>
-        <p>{t('usage.insights.discoveredTokens')}: {data.estimatedDiscoveredTokens.toLocaleString()} · {t('usage.insights.actualUnknown')}</p>
+        <p>{t('usage.insights.discoveredTokens')}: {formatSessionTokens(data.estimatedDiscoveredTokens)} · {t('usage.insights.actualUnknown')}</p>
         <p className="text-xs text-muted">MCP: {data.mcp.declaredServerCount} · {data.discoveredBytes.toLocaleString()} bytes</p>
         {(data.truncated||data.unreadableCount>0)&&<p role="status" className="text-xs text-warning">{t('usage.insights.auditTruncated')}</p>}
-        <ul className="divide-y divide-separator">{data.items.map((item,index)=><li key={index} className="flex min-w-0 justify-between gap-3 py-2 text-xs"><span className="min-w-0 break-all">{item.name}</span><span className="shrink-0 tabular-nums">{item.bytes} B · {item.estimatedTokens??'—'} Token</span></li>)}</ul>
+        <ul className="divide-y divide-separator">{data.items.map((item,index)=><li key={index} className="flex min-w-0 justify-between gap-3 py-2 text-xs"><span className="min-w-0 break-all">{item.name}</span><span className="shrink-0 tabular-nums">{item.bytes} B · {formatSessionTokens(item.estimatedTokens)} Token</span></li>)}</ul>
       </>}
     </Modal.Body></Modal.Dialog></Modal.Container></Modal.Backdrop></Modal>
   </>;

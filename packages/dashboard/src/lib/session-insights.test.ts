@@ -14,6 +14,18 @@ test('browser export is formula-safe and does not export local directories',()=>
   const csv=sessionCsv([{...row('codex','a'),sessionTitle:'=1+1',insights:{workingDirectory:'PRIVATE_DIR'}} as SessionActivity]);
   assert.ok(csv.includes("'=1+1"));assert.ok(!csv.includes('PRIVATE_DIR'));
 });
+test('session CSV exports original Token counts and costs rather than rounded display values', () => {
+  const csv = sessionCsv([{
+    ...row('codex', 'precision'), tokens: 3_684_765, costUsd: 1.422123456789,
+    insights: { ownCostUsd: 1.422123456789, combinedTokens: 4_567_891, combinedCostUsd: 2.345678912345 },
+  } as SessionActivity]);
+  const lines = csv.trim().split('\r\n');
+  const cells = lines[1]!.split(',').map(value => value.slice(1, -1));
+  assert.equal(cells[5], '3684765');
+  assert.equal(cells[6], '1.422123456789');
+  assert.equal(cells[11], '4567891');
+  assert.equal(cells[12], '2.345678912345');
+});
 test('date groups use the statistics timezone at UTC midnight boundaries',()=>{
   const rows=[{...row('codex','a'),lastActivityAt:'2026-10-21T17:00:00Z'},{...row('codex','b'),lastActivityAt:'2026-10-22T01:00:00Z'}];
   const groups=sessionGroups(rows,'date','en-US');assert.equal(groups.length,1);assert.equal(groups[0]?.sessions.length,2);

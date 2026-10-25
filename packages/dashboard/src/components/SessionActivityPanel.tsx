@@ -16,8 +16,8 @@ import { createSessionPageSearch, sessionAttributionKey, type SessionPageSearch,
 import { getDashboardReturnState, rememberDashboardSessionView } from '../lib/dashboard-return-state';
 import { sessionThreads, sessionGroups, sessionIdentity, sessionCsv, sessionBranchRows, filterSessionBranches } from '../lib/session-insights';
 import { SessionInsightDetails, ContextAuditButton } from './SessionInsightDetails';
+import { formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
 
-const number = (value: number, locale: SupportedLocale) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 const sessionColumns = 'min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5';
 const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_7.5rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4';
 const sessionSortLabels = { recent: 'usage.activity.recent', tokens: 'usage.common.totalTokens', cost: 'usage.common.cost', duration: 'usage.explorer.taskTime' } as const;
@@ -41,7 +41,7 @@ function age(stamp: string, locale: SupportedLocale) {
 }
 function money(row: Pick<SessionActivity, 'costUsd' | 'costKind'>, locale: SupportedLocale) {
   return row.costUsd === null ? translate(locale, 'usage.activity.amountUnknown')
-    : `$${row.costUsd.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} · ${costLabel(row.costKind, locale)}`;
+    : `${formatSessionUsd(row.costUsd, locale)} · ${costLabel(row.costKind, locale)}`;
 }
 type SessionUsage = Pick<SessionActivitySnapshot, 'totalTokens' | 'otherTokens' | 'tokenTotalMismatch'>;
 function accountLabel(row: Pick<SessionActivity['billing'], 'accountRef' | 'accountLabel'>, locale: SupportedLocale, unknownKey = 'usage.activity.accountUnknown') {
@@ -103,9 +103,9 @@ function UsageAttribution({ snapshot, scope }: { snapshot: SessionActivitySnapsh
         <div className="min-w-0 flex-1 basis-48">
           <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{serviceLabel(row.service, locale)}</p><span className={`rounded-md px-2 py-0.5 text-[11px] ${row.mode === 'unknown' ? 'bg-warning/10 text-warning' : 'bg-surface-secondary text-muted'}`}>{modeLabel(row.mode, locale)}</span></div>
           <p className="mt-1 break-words text-xs text-muted" title={row.accountRef ? t('usage.activity.accountRef', { ref: row.accountRef }) : undefined}>{accountLabel(row, locale)}</p>
-          {row.service === 'unknown' && row.mode === 'unknown' && !row.accountRef && snapshot.otherTokens > 0 && <p className="mt-1 text-[11px] text-muted">{t('usage.activity.unlinkedTokens', { tokens: number(snapshot.otherTokens, locale) })}</p>}
+          {row.service === 'unknown' && row.mode === 'unknown' && !row.accountRef && snapshot.otherTokens > 0 && <p className="mt-1 text-[11px] text-muted">{t('usage.activity.unlinkedTokens', { tokens: formatSessionTokens(snapshot.otherTokens) })}</p>}
         </div>
-        <div className="shrink-0 text-right text-xs tabular-nums"><p>{number(row.tokens, locale)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
+        <div className="shrink-0 text-right text-xs tabular-nums"><p>{formatSessionTokens(row.tokens)} Token</p><p className="text-muted">{money(row, locale)}</p></div>
         {sessions.length ? <Link to="/sessions" search={{ ...createSessionPageSearch(scope), group: sessionAttributionKey(row) }} className="button button--sm button--secondary !h-7 !min-h-7 text-xs" aria-label={`${t('usage.activity.viewRelatedSessions', { count: sessions.length })} · ${serviceLabel(row.service, locale)} · ${modeLabel(row.mode, locale)} · ${accountLabel(row, locale)}`}>{t('usage.activity.viewRelatedSessions', { count: sessions.length })}</Link>
           : <Button size="sm" variant="secondary" className="!h-7 !min-h-7 text-xs" isDisabled>{row.sessionRefs ? t('usage.activity.viewRelatedSessions', { count: 0 }) : t('usage.activity.viewRelatedSessionsAction')}</Button>}
       </div>)}
@@ -259,9 +259,9 @@ function SessionRows({ rows, showTokenShare, sorting, childrenByParent, detailMo
               </p>
             </div>
           </div>
-          <div className="min-w-0 text-right text-xs tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4"><p className="whitespace-nowrap">{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${number(row.tokens, locale)} Token`}</p><div className="whitespace-nowrap text-[11px] text-muted"><Tooltip delay={200}>
+          <div className="min-w-0 text-right text-xs tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4"><p className="whitespace-nowrap">{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${formatSessionTokens(row.tokens)} Token`}</p><div className="whitespace-nowrap text-[11px] text-muted"><Tooltip delay={200}>
             <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">
-              {row.costUsd === null ? t('usage.activity.amountUnknown') : `$${row.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}
+              {row.costUsd === null ? t('usage.activity.amountUnknown') : formatSessionUsd(row.costUsd,locale)}
             </Tooltip.Trigger>
             <Tooltip.Content placement="top">{costLabel(row.costKind, locale)}</Tooltip.Content>
           </Tooltip></div></div>
@@ -291,7 +291,7 @@ function SessionRows({ rows, showTokenShare, sorting, childrenByParent, detailMo
             </div>
           </details>}
           {!!row.models?.length && <div className="min-w-0 max-w-full rounded-lg border border-separator">
-            <div className="overflow-x-auto"><table className="w-full text-left text-[11px]"><caption className="sr-only">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</caption><thead className="sticky top-0 bg-surface-secondary"><tr>{[t('usage.common.model'), t('usage.common.input'), t('usage.common.output'), t('usage.common.cache'), t('usage.distribution.cacheWrite'), t('usage.explorer.requests'), t('usage.common.cost')].map((label, i) => <th scope="col" key={i} className="whitespace-nowrap px-2 py-1 font-medium">{label}</th>)}</tr></thead><tbody>{row.models.map(model => <tr key={model.model} className="border-t border-separator"><th scope="row" className="max-w-48 truncate px-2 py-2 font-normal" title={model.model}>{model.model}{model.serviceTiers.some(tier => tier !== 'unknown' && tier !== 'standard') && <span className="block text-muted">{model.serviceTiers.filter(tier => tier !== 'unknown' && tier !== 'standard').join(' / ')}</span>}</th>{[model.input_tokens, model.output_tokens === null || model.reasoning_output_tokens === null ? null : model.output_tokens + model.reasoning_output_tokens, model.cached_input_tokens, model.cache_creation_input_tokens, model.requests].map((value, i) => <td key={i} className="whitespace-nowrap px-2 py-2 tabular-nums">{value === null ? '—' : number(value, locale)}</td>)}<td className="whitespace-nowrap px-2 py-2 tabular-nums" title={costLabel(model.costKind, locale)}>{model.costUsd === null ? `${t('usage.explorer.knownSubtotal')} $${model.knownCostUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}` : `$${model.costUsd.toLocaleString(locale, { maximumFractionDigits: 4 })}`}</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto"><table className="w-full text-left text-[11px]"><caption className="sr-only">{t('usage.explorer.modelDetails')} · {t('usage.explorer.range')}</caption><thead className="sticky top-0 bg-surface-secondary"><tr>{[t('usage.common.model'), t('usage.common.input'), t('usage.common.output'), t('usage.common.cache'), t('usage.distribution.cacheWrite'), t('usage.explorer.requests'), t('usage.common.cost')].map((label, i) => <th scope="col" key={i} className="whitespace-nowrap px-2 py-1 font-medium">{label}</th>)}</tr></thead><tbody>{row.models.map(model => <tr key={model.model} className="border-t border-separator"><th scope="row" className="max-w-48 truncate px-2 py-2 font-normal" title={model.model}>{model.model}{model.serviceTiers.some(tier => tier !== 'unknown' && tier !== 'standard') && <span className="block text-muted">{model.serviceTiers.filter(tier => tier !== 'unknown' && tier !== 'standard').join(' / ')}</span>}</th>{[model.input_tokens, model.output_tokens === null || model.reasoning_output_tokens === null ? null : model.output_tokens + model.reasoning_output_tokens, model.cached_input_tokens, model.cache_creation_input_tokens].map((value, i) => <td key={i} className="whitespace-nowrap px-2 py-2 tabular-nums">{value === null ? '—' : formatSessionTokens(value)}</td>)}<td className="whitespace-nowrap px-2 py-2 tabular-nums">{model.requests === null ? '—' : model.requests.toLocaleString(locale)}</td><td className="whitespace-nowrap px-2 py-2 tabular-nums" title={costLabel(model.costKind,locale)}>{model.costUsd === null ? `${t('usage.explorer.knownSubtotal')} ${formatSessionUsd(model.knownCostUsd,locale)}` : formatSessionUsd(model.costUsd,locale)}</td></tr>)}</tbody></table></div>
           </div>}
           {row.unallocatedCostUsd != null && <p>{t('usage.explorer.unallocatedCost')}</p>}
           <p>{t('usage.activity.recentDetails', { date: new Date(row.lastActivityAt).toLocaleString(locale), id: row.sessionId })}</p>

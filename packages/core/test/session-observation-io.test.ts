@@ -58,6 +58,7 @@ test('session ledger persists final call snapshots, retries safely and serves fi
   const response = await app.request('/functions/tud-session-activity?fromDate=2026-10-16&toDate=2026-10-16&sources=claude');
   assert.equal(response.status, 200);
   const result = (await response.json()).data;
+  assert.deepEqual(result.range, { fromDate: '2026-10-16', toDate: '2026-10-16', kind: 'selected' });
   assert.equal(result.sessions[0].sessionTitle, '修复 导出功能');
   await appendFile(input, JSON.stringify({ type: 'ai-title', sessionId: 'fixture-session', aiTitle: '自动名称' }) + '\n');
   await syncSessionSource(directory, 'claude', discovered);
@@ -65,6 +66,9 @@ test('session ledger persists final call snapshots, retries safely and serves fi
   assert.equal(result.sessions[0].tokens, 30); assert.equal(result.otherTokens, 1); assert.equal(result.sessions[0].context.usedTokens, null);
   const focused = await (await app.request('/functions/tud-session-activity?fromDate=2026-10-20&toDate=2026-10-21&sessionSource=claude&sessionId=fixture-session')).json();
   assert.equal(focused.data.sessions[0]?.sessionId, 'fixture-session', 'notification lookup must find a collected session outside the page date window');
+  assert.equal(focused.data.range.kind, 'collected');
+  assert.equal(focused.data.range.fromDate, '2026-01-01');
+  assert.notEqual(focused.data.range.toDate, '2026-10-21', 'targeted history must not claim the page date filter');
   const wrongSource = await (await app.request('/functions/tud-session-activity?sessionSource=codex&sessionId=fixture-session')).json();
   assert.equal(wrongSource.data.sessions.length, 0, 'the same id in another source must not match');
   assert.equal((await app.request('/functions/tud-session-activity?sessionSource=claude')).status, 400);

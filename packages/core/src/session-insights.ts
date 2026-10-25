@@ -3,6 +3,13 @@ import type { SessionActivity } from './session-observation.js';
 import type { SessionMessage } from './session-metrics.js';
 
 export type SessionRelationKind = 'fork' | 'subagent' | 'unknown';
+/** Non-recursive usage snapshot for details, including targeted history responses. */
+export type SessionRelatedUsage = Pick<SessionActivity, 'source' | 'sessionId' | 'sessionTitle' | 'tokens' | 'costUsd' | 'costKind' | 'models' | 'detailsComplete' | 'unallocatedCostUsd'> & {
+  relationKind: SessionRelationKind;
+  knownCostUsd: number;
+  agentRole: string | null;
+  agentNickname: string | null;
+};
 export interface SessionEvidence {
   source: string; sessionId: string; id: string; timestamp: string;
   kind: 'metadata' | 'request' | 'turn' | 'tool' | 'retry' | 'error' | 'compaction' | 'coverage';
@@ -17,6 +24,8 @@ export interface SessionInsights {
   firstActivityAt: string | null; messageCount: number | null; ownTokens: number | null; ownCostUsd: number | null;
   subagentTokens: number | null; subagentCostUsd: number | null; combinedTokens: number | null;
   combinedCostUsd: number | null; combinedKnownCostUsd: number; descendantCount: number;
+  /** Absent in older runtimes. Contains exactly the descendants included in combined totals. */
+  relatedUsage?: SessionRelatedUsage[];
   performance: { tokensPerSecond: number | null; estimatedRequestCount: number; estimatedDurationMs: number | null; ttftMs: number | null; ttftSampleCount: number; kind: 'estimated' };
   signals: { toolCalls: number | null; editTurns: number | null; retryTurns: number | null; firstPass: boolean | null; errorCount: number | null; compactionCount: number | null; costPerEdit: number | null; tokensPerEdit: number | null; coverage: 'complete' | 'partial' | 'unsupported' };
   resumeCommand: string | null;
@@ -155,6 +164,12 @@ export function enrichSessionInsights(rows: SessionActivity[], messages: readonl
     const visit = (parent: SessionActivity) => { for (const child of children.get(key(parent.source,parent.sessionId))??[]) if(!seen.has(child)){seen.add(child);descendants.push(child);visit(child);} };
     visit(row); const subagents=descendants.filter(r=>r.insights?.relationKind==='subagent'), all=[row,...descendants];
     Object.assign(row.insights!, { descendantCount: descendants.length, combinedTokens: sumKnown(all,'tokens'), combinedCostUsd: sumKnown(all,'costUsd'), combinedKnownCostUsd: all.reduce((s,r)=>s+(r.costUsd??0),0), subagentTokens: sumKnown(subagents,'tokens'), subagentCostUsd: sumKnown(subagents,'costUsd') });
+    row.insights!.relatedUsage = descendants.map(child => ({
+      source: child.source, sessionId: child.sessionId, sessionTitle: child.sessionTitle,
+      relationKind: child.insights!.relationKind, agentRole: child.insights!.agentRole, agentNickname: child.insights!.agentNickname,
+      tokens: child.tokens, costUsd: child.insights!.ownCostUsd, knownCostUsd: child.costUsd ?? 0, costKind: child.costKind,
+      models: child.models, detailsComplete: child.detailsComplete, unallocatedCostUsd: child.unallocatedCostUsd,
+    }));
   }
 }
 export { sessionsToCsv } from './session-csv.js';

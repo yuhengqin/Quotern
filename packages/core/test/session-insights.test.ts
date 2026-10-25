@@ -25,6 +25,22 @@ test('cycles are disconnected rather than dropping sessions or inflating totals'
   assert.equal(rows.reduce((sum, r) => sum + r.tokens!, 0), 30);
   assert.ok(rows.every(r => r.insights?.relationConflict));
 });
+test('detail usage keeps every typed descendant once without recursive insights or local metadata', () => {
+  const rows = [row('root', 100, 1), row('child', 40, null), row('fork', 20, 0.2), row('grandchild', 5, 0), row('other', 3, 0.1)];
+  rows[1]!.sessionTitle = 'Review';
+  const parents = ['root', 'root', 'child', 'root'];
+  enrichSessionInsights(rows, [], rows.slice(1).map((r, index) => ({ source: r.source, sessionId: r.sessionId, id: r.sessionId, timestamp: r.lastActivityAt, kind: 'metadata', parentId: parents[index], relationKind: index === 1 ? 'fork' : index === 3 ? 'unknown' : 'subagent', workingDirectory: 'C:/private-project' })));
+  const related = Reflect.get(rows[0]!.insights!, 'relatedUsage');
+  assert.ok(Array.isArray(related), 'details need a descendant usage snapshot even when only the root is returned');
+  assert.deepEqual(related.map(member => member.sessionId).sort(), ['child', 'fork', 'grandchild', 'other']);
+  assert.equal(related.find(member => member.sessionId === 'child')!.costUsd, null);
+  assert.equal(related.find(member => member.sessionId === 'grandchild')!.costUsd, 0);
+  assert.equal(related.find(member => member.sessionId === 'fork')!.relationKind, 'fork');
+  assert.equal(related.find(member => member.sessionId === 'child')!.sessionTitle, 'Review');
+  assert.ok(related.every(member => !('insights' in member) && !('workingDirectory' in member) && !('resumeCommand' in member)));
+  assert.ok(!JSON.stringify(related).includes('private-project'));
+  assert.deepEqual(Reflect.get(rows[2]!.insights!, 'relatedUsage'), []);
+});
 test('Codex nested spawn metadata and conflicting parent evidence retain typed lineage',()=>{
   const context={sessionId:'child'},timestamp='2026-10-22T10:00:00Z';
   const events=extractSessionEvidence('codex',{type:'session_meta',timestamp,payload:{id:'child',source:{subagent:{thread_spawn:{parent_thread_id:'root',agent_role:'reviewer',agent_nickname:'Ada'}}}}},context);

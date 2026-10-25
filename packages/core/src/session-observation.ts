@@ -262,6 +262,8 @@ export interface SessionActivity {
   context: SessionContextObservation | null; profileId?: string;
 }
 export interface SessionActivitySnapshot {
+  /** Actual server query bounds; notification targets read collected history instead of page filters. */
+  range?: { fromDate: string; toDate: string; fromTime?: string; toTime?: string; kind: 'selected' | 'collected' };
   sessions: SessionActivity[]; totalTokens: number; attributedTokens: number; otherTokens: number;
   tokenTotalMismatch: boolean; missingSources: string[]; observedAt: string;
   billing: { service: string; mode: SessionBilling['mode']; accountRef: string | null; accountLabel?: string; tokens: number; costUsd: number | null; costKind: SessionActivity['costKind'];

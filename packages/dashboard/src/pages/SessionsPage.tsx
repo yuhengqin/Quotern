@@ -60,7 +60,7 @@ export function SessionsPage() {
         <Button size="sm" variant="tertiary" onPress={() => update({ group: undefined })}>{t('usage.activity.allSessions')}</Button>
       </div>}
       {!data ? <p role="status" className="py-12 text-center text-sm text-muted">{t(error ? 'usage.activity.unavailable' : 'usage.activity.loading')}</p> : <>
-        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} /> : <SessionBrowser rows={rows} usage={search.group ? undefined : data} value={search} onChange={update} />}
+        {target ? <FocusedSession rows={rows} source={target.source} sessionId={target.sessionId} focusKey={search.sessionFocus} range={data.range} /> : <SessionBrowser rows={rows} usage={search.group ? undefined : data} value={search} onChange={update} range={data.range} />}
         <SessionCoverageNote snapshot={data} />
       </>}
     </>}

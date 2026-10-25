@@ -187,6 +187,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const missingSources = [...new Set([...history.missingSources, ...usageSources.filter(source => !observed.has(source))])];
     c.header('Cache-Control', 'no-store');
     const snapshot = aggregateSessionActivity(history.observations, history.messages, { ...options, missingSources, totalTokens: rows.reduce((sum, row) => sum + computeTokens(row), 0) });
+    snapshot.range = { fromDate, toDate: window.toDate, ...(bounds?.fromTime ? { fromTime: bounds.fromTime } : {}), ...(bounds?.toTime ? { toTime: bounds.toTime } : {}), kind: targeted ? 'collected' : 'selected' };
     await attachSessionTitles(snapshot.sessions, history.titles);
     const sessionKey = (source: string, id: string) => JSON.stringify([source, id]);
     const messages = new Map<string, SessionMessage[]>(), timings = new Map<string, SessionTimingEvent[]>();

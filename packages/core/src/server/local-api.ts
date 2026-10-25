@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
+import { registerSessionActionsApi } from './session-actions-api.js';
 
 import type { LocalApiDeps } from './state.js';
 import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
@@ -69,6 +70,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   registerShareBackgroundApi(app, deps.dataDir);
   registerAchievementsApi(app, deps.dataDir);
   registerQuotaApi(app, deps.quota);
+  registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {
@@ -229,7 +231,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.get('/functions/tud-session-directory',async c=>{
     if(!isLocalPanelOrigin(c.req.header('Origin'),c.req.url))return c.json({success:false,message:'SESSION_FORBIDDEN_ORIGIN',data:null},403);
     const source=c.req.query('source')??'',sessionId=c.req.query('sessionId')??'';
-    if(!['codex','claude','dsh'].includes(source)||!sessionId||sessionId.length>512||/[\u0000-\u001f]/.test(sessionId))return c.json({success:false,message:'INVALID_SESSION_TARGET',data:null},400);
+    if(!['codex','claude','dsh','pi','zcode','antigravity'].includes(source)||!sessionId||sessionId.length>512||/[\u0000-\u001f]/.test(sessionId))return c.json({success:false,message:'INVALID_SESSION_TARGET',data:null},400);
     c.header('Cache-Control','no-store');const{readSessionDirectory}=await import('../session-directory.js');
     return c.json(ok({directory:await readSessionDirectory(deps.dataDir,source,sessionId)}));
   });

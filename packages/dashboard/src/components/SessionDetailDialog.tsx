@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button, Modal, Popover, ToggleButton, ToggleButtonGroup, Tooltip } from '@heroui/react';
 import { ChevronRight, Copy, MoreHorizontal } from 'lucide-react';
@@ -18,6 +18,31 @@ import { DetailDisclosure, DetailValue, SessionModelBreakdown, SessionTokenBreak
 
 const groupLabels = { own: 'usage.detail.own', subagent: 'usage.insights.subagent', fork: 'usage.detail.forks', unknown: 'usage.detail.otherRelated' } as const;
 
+interface SessionActions {
+  key: string;
+  directory: string | null;
+  token: string | null;
+  canOpenDirectory: boolean;
+  canResume: boolean;
+  reason: string | null;
+  resumeCommand?: string | null;
+  resumeReason?: string | null;
+}
+
+function actionErrorKey(code: string): string {
+  switch (code) {
+    case 'SESSION_DIRECTORY_UNAVAILABLE': return 'usage.insights.directoryUnavailable';
+    case 'SESSION_CLI_UNAVAILABLE': return 'usage.insights.cliUnavailable';
+    case 'SESSION_ACTION_LOCAL_ONLY': return 'usage.insights.actionsLocalOnly';
+    case 'SESSION_ACTION_UNSUPPORTED': return 'usage.insights.terminalUnavailable';
+    case 'SESSION_ACTION_FORBIDDEN': return 'usage.insights.actionExpired';
+    case 'SESSION_RESUME_UNSUPPORTED': return 'usage.insights.resumeUnsupported';
+    case 'SESSION_RESUME_PROFILE_REQUIRED': return 'usage.insights.resumeProfileRequired';
+    case 'SESSION_RESUME_FILE_UNAVAILABLE': return 'usage.insights.resumeFileUnavailable';
+    default: return 'usage.insights.actionFailed';
+  }
+}
+
 /** One dedicated dialog, shared by the browser and Desktop renderers. */
 export function SessionDetailDialog({ row, range, showTokenShare = false, onClose }: { row: SessionActivity; range?: DetailRange; showTokenShare?: boolean; onClose(): void }) {
   const { t, i18n } = useTranslation();
@@ -29,25 +54,72 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
   const [directory, setDirectory] = useState<string | null>(null);
   const [directoryState, setDirectoryState] = useState<'loading' | 'ready' | 'error' | 'unsupported'>('loading');
   const [directoryAttempt, setDirectoryAttempt] = useState(0);
+  const [actions, setActions] = useState<SessionActions | null>(null);
+  const [pending, setPending] = useState<'resume' | 'open-directory' | null>(null);
+  const busy = useRef(false);
+  const sessionKey = JSON.stringify([row.source, row.sessionId]);
+  const currentSession = useRef<string | null>(sessionKey);
+  currentSession.current = sessionKey;
+  const hintId = useId();
+  const current = actions?.key === sessionKey ? actions : null;
   const detail = useMemo(() => buildSessionDetail(row, scope), [row, scope]);
   const insight = row.insights;
+  const resumeCommand = current?.resumeCommand === undefined ? insight?.resumeCommand : current.resumeCommand;
+  const resumeHint = current?.resumeReason ?? (!current?.canResume ? current?.reason : null);
+  const directoryHint = !current?.canOpenDirectory ? current?.reason : null;
 
   useEffect(() => {
     let active = true;
+    const key = JSON.stringify([row.source, row.sessionId]);
+    currentSession.current = key;
+    setFeedback('');
+    setActions(null);
     setDirectory(null);
-    if (!['codex', 'claude', 'dsh'].includes(row.source)) { setDirectoryState('unsupported'); return; }
     setDirectoryState('loading');
     const query = new URLSearchParams({ source: row.source, sessionId: row.sessionId });
-    void request<{ directory: string | null }>(`/functions/tud-session-directory?${query}`).then(result => {
-      if (active) { setDirectory(result.directory); setDirectoryState('ready'); }
-    }).catch(() => { if (active) setDirectoryState('error'); });
-    return () => { active = false; };
+    void request<Omit<SessionActions, 'key'>>(`/functions/tud-session-actions?${query}`).then(result => {
+      if (active) { setActions({ ...result, key }); setDirectory(result.directory); setDirectoryState('ready'); }
+    }).catch(async error => {
+      // Old/remote runtimes still permit copying known commands and directory metadata.
+      let directory: string | null = null;
+      let state: typeof directoryState = 'unsupported';
+      if (['codex', 'claude', 'dsh', 'pi', 'zcode', 'antigravity'].includes(row.source)) {
+        try { directory = (await request<{ directory: string | null }>(`/functions/tud-session-directory?${query}`)).directory; state = 'ready'; }
+        catch { state = 'error'; }
+      }
+      if (active) {
+        const reason = error instanceof Error ? error.message : 'SESSION_ACTION_UNAVAILABLE';
+        setActions({ key, directory, token: null, canOpenDirectory: false, canResume: false, reason, resumeReason: reason });
+        setDirectory(directory); setDirectoryState(state);
+      }
+    });
+    return () => { active = false; currentSession.current = null; };
   }, [row.source, row.sessionId, directoryAttempt]);
 
   const copy = async (value: string, label: string) => {
+    const key = sessionKey;
     setMoreOpen(false);
-    try { await navigator.clipboard.writeText(value); setFeedback(`${label} · ${t('usage.insights.copied')}`); }
-    catch { setFeedback(t('usage.insights.copyFailed')); }
+    try { await navigator.clipboard.writeText(value); if (currentSession.current === key) setFeedback(`${label} · ${t('usage.insights.copied')}`); }
+    catch { if (currentSession.current === key) setFeedback(t('usage.insights.copyFailed')); }
+  };
+  const runAction = async (action: 'resume' | 'open-directory') => {
+    if (busy.current || !current?.token || !(action === 'resume' ? current.canResume : current.canOpenDirectory)) return;
+    const key = sessionKey;
+    busy.current = true;
+    setPending(action);
+    setFeedback('');
+    try {
+      await request('/functions/tud-session-actions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': current.token },
+        body: JSON.stringify({ source: row.source, sessionId: row.sessionId, action }),
+      });
+      if (currentSession.current === key) setFeedback(t(action === 'resume' ? 'usage.insights.terminalOpened' : 'usage.insights.directoryOpened'));
+    } catch (error) {
+      if (currentSession.current === key) setFeedback(t(actionErrorKey(error instanceof Error ? error.message : '')));
+    } finally {
+      busy.current = false;
+      if (currentSession.current === key) setPending(null);
+    }
   };
   const format: DetailFormat = {
     tokens: value => exact ? formatExactSessionNumber(value, locale) : formatSessionTokens(value),
@@ -80,13 +152,15 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
   return <Modal isOpen onOpenChange={open => { if (!open) onClose(); }}>
     <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog className="max-w-3xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}>
       <Modal.CloseTrigger aria-label={t('usage.detail.close')} />
-      <Modal.Header className="border-b border-separator pb-3 pr-12">
-        <div className="flex min-w-0 items-start gap-3"><span className="mt-1 shrink-0"><ProviderIcon provider={row.source} size={22} /></span><div className="min-w-0">
+      <Modal.Header className="border-b border-separator pb-3">
+        <div className="flex min-w-0 items-start gap-3 pr-9"><span className="mt-1 shrink-0"><ProviderIcon provider={row.source} size={22} /></span><div className="min-w-0">
           <Modal.Heading className="break-words text-lg leading-7">{row.sessionTitle ?? t('usage.insights.detailTitle')}</Modal.Heading>
           <p className="mt-1 break-words text-xs text-muted">{sourceLabel(row.source)} · {row.projectLabel}</p>
         </div></div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {insight?.resumeCommand && <Button size="sm" variant="secondary" onPress={() => void copy(insight.resumeCommand!, t('usage.insights.copyResume'))}><Copy className="size-3.5" aria-hidden />{t('usage.insights.copyResume')}</Button>}
+          <Button size="sm" variant="primary" isDisabled={!current?.canResume || pending !== null} aria-busy={pending === 'resume'} aria-describedby={resumeHint ? `${hintId}-resume` : undefined} onPress={() => void runAction('resume')}>{t(pending === 'resume' ? 'usage.insights.opening' : 'usage.insights.resume')}</Button>
+          <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={directoryHint ? `${hintId}-directory` : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.insights.openDirectory')}</Button>
+          {resumeCommand && <Button size="sm" variant="secondary" onPress={() => void copy(resumeCommand, t('usage.insights.copyResume'))}><Copy className="size-3.5" aria-hidden />{t('usage.insights.copyResume')}</Button>}
           <Popover isOpen={moreOpen} onOpenChange={setMoreOpen}>
             <Button size="sm" variant="tertiary" aria-label={t('usage.detail.more')}><MoreHorizontal className="size-4" aria-hidden />{t('usage.detail.more')}</Button>
             <FilterMenuPopover placement="bottom start" className="w-56" bodyClassName="flex flex-col gap-1 p-2">
@@ -100,6 +174,11 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
         {feedback && <p role="status" className="mt-1 text-xs">{feedback}</p>}
       </Modal.Header>
       <Modal.Body className="space-y-6 overscroll-contain pt-4 text-sm leading-6 text-foreground">
+        {(resumeHint || directoryHint) && <div className="space-y-1 text-xs text-muted">
+          {resumeHint && <p id={`${hintId}-resume`}>{t(actionErrorKey(resumeHint))}</p>}
+          {directoryHint && directoryHint !== resumeHint && <p id={`${hintId}-directory`}>{t(actionErrorKey(directoryHint))}</p>}
+          {directoryHint && directoryHint === resumeHint && <span id={`${hintId}-directory`} className="sr-only">{t(actionErrorKey(directoryHint))}</span>}
+        </div>}
         <section aria-label={t('usage.detail.summary')} className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 text-xs text-muted"><p>{t(range?.kind === 'collected' ? 'usage.detail.collectedRange' : 'usage.detail.selectedRange')}: <span className="text-foreground">{period}</span></p><p>{getStatsTimezoneLabel()}</p></div>
@@ -161,7 +240,7 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
               <p className="break-all font-mono text-xs">{directory ?? t(directoryState === 'loading' ? 'usage.activity.loading' : directoryState === 'error' ? 'usage.detail.directoryError' : 'usage.insights.unknown')}</p>
               {directoryState === 'error' && <Button size="sm" variant="tertiary" onPress={() => setDirectoryAttempt(value => value + 1)}>{t('usage.detail.retry')}</Button>}
             </div>
-            {insight?.resumeCommand && <div><p className="mb-1 text-xs text-muted">{t('usage.detail.resumeCommand')}</p><code className="block break-all rounded-lg bg-surface-secondary p-3 text-xs">{insight.resumeCommand}</code></div>}
+            {resumeCommand && <div><p className="mb-1 text-xs text-muted">{t('usage.detail.resumeCommand')}</p><code className="block break-all rounded-lg bg-surface-secondary p-3 text-xs">{resumeCommand}</code></div>}
           </DetailDisclosure>
           <DetailDisclosure title={t('usage.detail.dataNotes')}>
             <p>{t('usage.detail.rangeNote')}</p><p>{t('usage.insights.priceNote')}</p><p>{t('usage.insights.evidenceNote')}</p>

@@ -8,7 +8,7 @@
 **Spec:** ../specs/2026-10-25-session-detail-ux.md
 
 ## Global Constraints
-- 仅修改本任务 worktree；不干扰 session-actions 工作区或现有服务，不合并或推送。
+- 实现和冲突整合仅在本任务 worktree；不干扰 session-actions 工作区或现有服务。用户后续明确授权提交并合并回 `codex/session-insights`；本轮不推送。
 - 安装和仓库脚本使用 corepack pnpm；沿用公共 FilterMenu 和 HeroUI 焦点管理。
 - 原始精度、未知/零、上报/估算、时间范围、父子关系和本机目录读取权限保持。
 
@@ -47,3 +47,11 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - 最终验收命令：`corepack pnpm --filter quotern-desktop exec electron scripts/session-detail-smoke.mjs ../../.quotern-dev/session-detail-acceptance`（Windows 先清除当前进程的 `ELECTRON_RUN_AS_NODE`）。10 组检查通过，涵盖范围联动、已知小计、恢复/精确数据/目录复制、模型与计价折叠、0 与未记录、Escape/焦点返回/Tab、深色、320/375 px、重复通知、浏览器 HTTP、英文空指标与目录错误重试。截图和 result.json 位于忽略目录 `.quotern-dev/session-detail-acceptance/`。
 - 已人工检查浅色首屏、深色窄屏模型区、320 px 摘要和英文会话信息截图；验收 helper 与 fixture server 均已退出。浏览器生产包在 Chromium 内加载，未另外覆盖 Firefox/Safari；未验证操作系统通知投递、真实来源扫描或安装包。
 - 首次交付时 UI 规范与 Changeset 已同步，`git diff --check` 通过；变更位于基于 `codex/session-insights` 的 `5f188b7…` 创建的 `codex/session-detail-ux`。后续用户明确要求提交并合并回 `codex/session-insights`，集成时需保留目标分支新加入的本机会话操作。
+
+## 合并验证（2026-10-25）
+
+- UX 改动先提交为 `c9879449`；随后整合目标分支 `3301e292`，包含本机动作 `5740bd25`、交互终端与来源修复 `f5122aa8`、Antigravity CLI 恢复 `aafb3ad2`。冲突仅在原详情组件和 UI 规范；本机动作迁入 SessionDetailDialog，原 SessionInsightDetails 保留兼容导出与上下文审计。
+- 保留运行端能力查询、token header、固定身份/action 请求、重复点击防护、成功/错误反馈、旧 runtime 复制回退及显式 null 命令禁止回退；Core 本机动作、安全校验、目录解析和启动逻辑与目标分支一致。补充 PI/ZCode/Antigravity 目录回退；长标题短窗口下，关闭按钮避让只作用于标题行。
+- 最终代码执行 `corepack pnpm test`，exit 0：1,926 项，1,890 通过、36 跳过、0 失败；含五包构建。另执行 `corepack pnpm --filter quotern-desktop typecheck`，exit 0。完整测试日志 `.quotern-dev/session-detail-merge-final-test.log`；模块类型、实验 SQLite 与分块/大包警告仍存在。
+- 合并实机脚本运行至 `.quotern-dev/session-detail-merged-final/`，13 组检查通过；新增 HTTP/IPC 动作请求、pending 防重复、错误恢复、runtime 命令覆盖/显式 null、旧服务目录与命令复制，以及 320×480 短窗口操作区和正文可达验证。已检查浅色完整头部和短窗口截图；操作端使用合成响应，不代表真实 Agent 恢复已验证。
+- 合并冲突解决已获独立只读审查，未发现可行动缺陷；最终 `git diff --check` 通过。目标工作区核查干净，旧开发记录中的主管/子进程已不存在，未修改旧锁或其他预览服务。用户仅授权本地提交与合并，不推送。

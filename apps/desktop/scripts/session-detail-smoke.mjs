@@ -31,9 +31,25 @@ const root = { source: 'codex', sessionId: 'fixture-root', sessionTitle: title, 
 const empty = { ...root, sessionId: 'fixture-empty', sessionTitle: 'Missing metrics / unknown usage', tokens: null, costUsd: null, costKind: 'unknown', models: [], detailsComplete: false, insights: undefined };
 let locale = 'zh-CN';
 let directoryFailure = false;
+let actionsUnavailable = false;
+let resumeBlocked = false;
+let actionFailure = false;
+const actionCalls = [];
 let navigation = null;
-const api = route => {
+const api = async (route, init) => {
   const url = new URL(route, 'http://fixture.local');
+  if (url.pathname === '/functions/tud-session-actions') {
+    if (directoryFailure || actionsUnavailable) return { status: 503, body: { success: false, message: 'FIXTURE_ACTIONS_UNAVAILABLE', data: null } };
+    if (init?.method === 'POST') {
+      const body = JSON.parse(init.body);
+      assert.deepEqual(Object.keys(body).sort(), ['action', 'sessionId', 'source']);
+      assert.equal(Object.entries(init.headers).find(([name]) => name.toLowerCase() === 'x-quotern-session-action')?.[1], 'fixture-action-token');
+      actionCalls.push(body);
+      await wait(350);
+      return actionFailure ? { status: 500, body: { success: false, message: 'SESSION_CLI_UNAVAILABLE', data: null } } : { status: 200, body: { success: true, data: { action: body.action } } };
+    }
+    return { status: 200, body: { success: true, data: { directory: fixtureDirectory, token: 'fixture-action-token', canOpenDirectory: true, canResume: !resumeBlocked, resumeCommand: resumeBlocked ? null : `codex resume ${url.searchParams.get('sessionId')}`, reason: null, resumeReason: resumeBlocked ? 'SESSION_RESUME_PROFILE_REQUIRED' : null } } };
+  }
   if (url.pathname === '/functions/tud-session-directory') return directoryFailure ? { status: 503, body: { success: false, message: 'FIXTURE_UNAVAILABLE', data: null } } : { status: 200, body: { success: true, data: { directory: fixtureDirectory } } };
   if (url.pathname === '/functions/tud-session-activity') {
     const id = url.searchParams.get('sessionId');
@@ -43,7 +59,7 @@ const api = route => {
   return { status: 503, body: { success: false, message: 'FIXTURE_NOT_PROVIDED', data: null } };
 };
 const until = async (predicate, label) => { for (let i = 0; i < 100; i++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
-const button = text => `[...document.querySelectorAll('[role="dialog"] button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
+const button = text => `[...document.querySelectorAll('[role="dialog"] button')].find(el=>el.textContent.trim()===${JSON.stringify(text)} && !el.closest('details:not([open])'))`;
 const summary = text => `[...document.querySelectorAll('[role="dialog"] summary')].find(el=>el.textContent.includes(${JSON.stringify(text)}))`;
 const dialog = 'document.querySelector("[role=dialog]")';
 const text = client => client.evaluate(`${dialog}?.innerText ?? ''`);
@@ -67,7 +83,7 @@ async function main() {
   ipcMain.handle('dashboard-range:set', (_event, value) => value);
   ipcMain.handle('dsh-pet:navigation-get', () => navigation);
   ipcMain.handle('dsh-pet:navigation-ack', (_event, id) => { if (navigation?.navigationId === id) navigation = null; });
-  ipcMain.handle('tud:api-request', (_event, route) => api(route));
+  ipcMain.handle('tud:api-request', (_event, route, init) => api(route, init));
   const window = new BrowserWindow({ width: 1080, height: 900, show: true, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: false, backgroundThrottling: false } }); windows.push(window);
   await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=initial' });
   const client = await connect(window);
@@ -78,6 +94,22 @@ async function main() {
   checks.push('desktop-target-autoopens-and-thread-known-subtotal');
   await noOverflow(client, 'wide dialog overflow');
   await client.screenshot(path.join(output, 'desktop-light.png'));
+  await until(() => client.evaluate(`!(${button('继续会话')}).disabled`), 'native actions ready');
+  await client.click(button('继续会话'));
+  assert.equal(await client.evaluate(`(${button('正在打开…')}).disabled && (${button('打开项目目录')}).disabled`), true);
+  await client.click(button('正在打开…'));
+  await until(async () => (await text(client)).includes('已打开终端'), 'resume feedback');
+  assert.deepEqual(actionCalls, [{ source: 'codex', sessionId: 'fixture-root', action: 'resume' }]);
+  await client.click(button('打开项目目录'));
+  await until(async () => (await text(client)).includes('已打开项目目录'), 'directory feedback');
+  assert.equal(actionCalls.length, 2);
+  assert.equal(actionCalls[1].action, 'open-directory');
+  actionFailure = true;
+  await client.click(button('继续会话'));
+  await until(async () => (await text(client)).includes('未找到此 Agent 的命令行程序'), 'native error feedback');
+  assert.equal(await client.evaluate(`(${button('继续会话')}).disabled`), false);
+  actionFailure = false;
+  checks.push('desktop-native-actions-token-body-pending-deduplication-success-and-error');
   await client.click(button('本会话'));
   await until(async () => !(await text(client)).includes('≥ $9.9'), 'own scope');
   assert.ok((await text(client)).includes('$6'));
@@ -131,7 +163,7 @@ async function main() {
   const dashboard = path.join(workspace, 'packages/dashboard/dist');
   server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
-    if (url.pathname.startsWith('/functions/')) { const result = api(req.url); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
+    if (url.pathname.startsWith('/functions/')) { const chunks = []; for await (const chunk of req) chunks.push(chunk); const result = await api(req.url, { method: req.method, headers: req.headers, body: Buffer.concat(chunks).toString() }); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
     const relative = url.pathname === '/sessions' || url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
     const file = path.resolve(dashboard, relative);
     if (!file.startsWith(dashboard + path.sep)) { res.writeHead(403).end(); return; }
@@ -147,11 +179,19 @@ async function main() {
   await noOverflow(browser, 'browser wide overflow');
   await browser.screenshot(path.join(output, 'browser-light.png'));
   assert.equal(await browser.evaluate('typeof window.tud'), 'undefined');
+  await browser.click(button('继续会话'));
+  await until(async () => (await text(browser)).includes('已打开终端'), 'browser native action over HTTP');
+  assert.equal(actionCalls.at(-1).source, 'codex');
   checks.push('browser-production-build-http-without-electron-bridge');
   await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
   await noOverflow(browser, '320px browser overflow');
   await browser.screenshot(path.join(output, 'browser-320.png'));
   checks.push('browser-320px-no-horizontal-overflow');
+  await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 480, deviceScaleFactor: 1, mobile: false });
+  await wait(100);
+  await browser.screenshot(path.join(output, 'browser-short.png'));
+  assert.equal(await browser.evaluate(`(() => { const d=${dialog}, header=d.querySelector('.modal__header'), body=d.querySelector('.modal__body'); return Boolean(header && body && body.clientHeight >= 60 && [...header.querySelectorAll('button')].every(el=>{const r=el.getBoundingClientRect(); return r.top>=0 && r.bottom<=innerHeight;})); })()`), true, 'short viewport keeps actions visible and a usable body scroll area');
+  checks.push('short-viewport-header-actions-and-body-remain-accessible');
   await browser.call('Emulation.clearDeviceMetricsOverride');
   await browser.evaluate('localStorage.setItem("quotern.locale.preference", "en"); true');
   directoryFailure = true;
@@ -163,8 +203,25 @@ async function main() {
   directoryFailure = false;
   await browser.click(button('Retry'));
   await until(async () => (await text(browser)).includes(fixtureDirectory), 'directory retry');
+  await browser.click(button('Copy resume command'));
+  await until(() => clipboard.readText() === 'codex resume fixture-empty', 'runtime command without insights');
   await browser.screenshot(path.join(output, 'browser-missing.png'));
   checks.push('english-no-insights-no-models-unknown-usage-and-directory-retry');
+  resumeBlocked = true;
+  await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=blocked`);
+  await until(async () => (await text(browser)).includes('no compatible resume entry'), 'source-specific unavailable reason');
+  assert.equal(await browser.evaluate(`Boolean(${button('Copy resume command')})`), false, 'explicit null must not use an old bulk command');
+  assert.equal(await browser.evaluate(`(${button('Continue session')}).disabled && !(${button('Open project directory')}).disabled`), true);
+  actionsUnavailable = true;
+  await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=legacy`);
+  await until(async () => (await text(browser)).includes('Could not open.'), 'legacy actions unavailable');
+  assert.equal(await browser.evaluate(`(${button('Continue session')}).disabled && (${button('Open project directory')}).disabled`), true);
+  await browser.click(button('Copy resume command'));
+  await until(() => clipboard.readText() === 'codex resume fixture-root', 'legacy command fallback');
+  await browser.click(button('More'));
+  await browser.click(button('Copy project directory'));
+  await until(() => clipboard.readText() === fixtureDirectory, 'legacy directory fallback');
+  checks.push('runtime-null-command-and-legacy-command-directory-copy-fallback');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
   assert.equal(browser.errors.length, 0, JSON.stringify(browser.errors));
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2));

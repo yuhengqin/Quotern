@@ -28,15 +28,17 @@
 
 Files: `packages/core/src/session-resume.ts`, `session-actions.ts`, `server/session-actions-api.ts`; modify `server/local-api.ts`, `server/state.ts`, `session-insights.ts`; tests `packages/core/test/session-actions-api.test.ts`, `session-actions.test.ts`.
 
-- [ ] Add route tests for valid actions, collected-directory resolution, rejected origins/tokens/body fields and missing directories; run and observe failure against absent routes.
-- [ ] Implement fixed resume argv, native launch adapters and API guards. Reuse resume generation in insights.
-- [ ] Run Core tests; verify safe quoting using a real inert Windows CLI fixture.
+- [x] Add route tests for valid actions, collected-directory resolution, rejected origins/tokens/body fields and missing directories; run and observe failure against absent routes.
+- [x] Implement fixed resume argv, native launch adapters and API guards. Reuse resume generation in insights.
+- [x] Run Core tests; verify safe quoting using a real inert Windows CLI fixture.
 
 ### Task 2: Shared session UI and documentation
 
 Files: `packages/dashboard/src/components/SessionInsightDetails.tsx`, `i18n/usage-messages.ts`, `docs/ui-guidelines.md`, changeset. Desktop already imports the shared component.
 
-- [ ] Add capability lookup and both buttons; disable while pending and announce success/errors near the actions. Preserve copy fallback for unavailable action APIs.
-- [ ] Add four-language labels and errors; update UI contract and changeset.
-- [ ] Run Dashboard/Desktop type checks, relevant tests, build and diff checks. Inspect the real page and exercise both operations using controlled fixtures.
-- [ ] Obtain independent review of the final diff and resolve material findings.
+- [x] Add capability lookup and both buttons; disable while pending and announce success/errors near the actions. Preserve copy fallback for unavailable action APIs.
+- [x] Add four-language labels and errors; update UI contract and changeset.
+- [x] Run Dashboard/Desktop type checks, relevant tests, build and diff checks. Inspect the real page and exercise runtime operations using controlled fixtures; visual and platform limits are recorded below.
+- [x] Obtain independent review of the final diff and resolve material findings.
+
+验收结果与限制见 [会话本机操作验证记录](../session-actions-validation.md)。

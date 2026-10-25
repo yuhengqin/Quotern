@@ -414,7 +414,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.cost.defaultPrice': ['使用默认价格', 'Using default prices', 'デフォルト価格を使用', '기본 가격 사용'],
   'usage.cost.noCollectedUsage': ['所选范围暂无已采集用量。', 'No collected usage in the selected range.', '選択した期間に収集済みの使用量はありません。', '선택한 범위에 수집된 사용량이 없습니다.'],
   'usage.cost.coverageSince': ['可查询数据始于 {{date}}；更早用量未包含。', 'Query data begins on {{date}}; earlier usage is not included.', '照会可能なデータは {{date}} からです。それ以前の使用量は含まれません。', '조회 가능한 데이터는 {{date}}부터 시작하며 이전 사용량은 포함되지 않습니다.'],
-  'usage.cost.viewPrices': ['查看模型参考价 →', 'View model reference prices →', 'モデル参考価格を表示 →', '모델 참고 가격 보기 →'],
+  'usage.cost.viewPrices': ['查看模型参考价', 'View model reference prices', 'モデル参考価格を表示', '모델 참고 가격 보기'],
   'usage.tokens.evidence': ['统计依据', 'Measurement basis', '集計の根拠', '집계 근거'],
   'usage.tokens.loadingEvidence': ['正在读取统计依据…', 'Loading measurement basis…', '集計の根拠を読み込み中…', '집계 근거를 불러오는 중…'],
   'usage.tokens.evidenceError': ['统计依据暂不可用，将自动重试。', 'Measurement basis is temporarily unavailable. It will retry automatically.', '集計の根拠を一時的に取得できません。自動的に再試行します。', '집계 근거를 일시적으로 사용할 수 없습니다. 자동으로 다시 시도합니다.'],

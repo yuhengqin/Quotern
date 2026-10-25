@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu, app, ipcMain, shell } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { installReferencePricingLinks, isReferencePricingWindow, updateReferencePricingTheme } from './reference-pricing-window.js';
 import {
   WINDOW_BACKGROUND_COLORS,
   titleBarOverlayFor,
@@ -172,11 +173,7 @@ export class DesktopWindow {
       });
     }
 
-    // External links open in OS default browser, not inside the app.
-    this.browserWindow.webContents.setWindowOpenHandler(({ url }) => {
-      void shell.openExternal(url);
-      return { action: 'deny' };
-    });
+    installReferencePricingLinks(this.browserWindow, { preloadPath: options.preloadPath, theme: options.theme ?? 'light' });
 
     void this.loadRenderer();
   }
@@ -205,6 +202,7 @@ export class DesktopWindow {
 
   setThemeBackground(theme: DesktopWindowTheme): void {
     this.browserWindow.setBackgroundColor(WINDOW_BACKGROUND_COLORS[theme]);
+    updateReferencePricingTheme(this.browserWindow, theme);
     // Keep the native Window Controls Overlay strip in sync with the theme
     // while the window is alive (setTitleBarOverlay throws after destroy).
     if (process.platform === 'win32' && !this.browserWindow.isDestroyed()) {
@@ -240,19 +238,23 @@ function registerWindowControlHandlers(
   ipcMain.removeHandler('window:close');
   ipcMain.removeAllListeners('window:show');
 
-  ipcMain.on('window:minimize', () => {
-    getWindow()?.minimize();
+  const senderWindow = (event: Electron.IpcMainEvent): BrowserWindow | null => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    return window && (window === getWindow() || isReferencePricingWindow(window)) ? window : null;
+  };
+  ipcMain.on('window:minimize', event => {
+    senderWindow(event)?.minimize();
   });
 
-  ipcMain.on('window:toggle-maximize', () => {
-    const w = getWindow();
+  ipcMain.on('window:toggle-maximize', event => {
+    const w = senderWindow(event);
     if (!w || !w.isMaximizable()) return;
     if (w.isMaximized()) w.unmaximize();
     else w.maximize();
   });
 
-  ipcMain.on('window:close', () => {
-    getWindow()?.close();
+  ipcMain.on('window:close', event => {
+    senderWindow(event)?.close();
   });
 
   ipcMain.on('window:show', () => {

@@ -14,7 +14,7 @@ import { parseSessionPageSearch } from '../lib/session-page';
 import { buildSessionDetail, type DetailRange, type DetailScope } from '../lib/session-detail';
 import { ProviderIcon } from './ProviderIcon';
 import { useAppToastQueue } from '@/components/AppToastContext';
-import { DetailDisclosure, DetailValue, SessionModelBreakdown, SessionPricingDetails, type DetailFormat } from './SessionUsageBreakdown';
+import { DetailValue, SessionModelBreakdown, SessionPricingDetails, type DetailFormat } from './SessionUsageBreakdown';
 import { HelpPopover } from './HelpPopover';
 
 const groupLabels = { own: 'usage.detail.own', subagent: 'usage.insights.subagent', fork: 'usage.detail.forks', unknown: 'usage.detail.otherRelated' } as const;
@@ -189,14 +189,23 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
             <div className={`${columnClass} pb-1 text-xs text-muted`} aria-hidden><span>{t('usage.detail.attribution')}</span><span className="text-right">Token</span><span className="text-right">{t('usage.common.cost')}</span></div>
             {detail.groups.map(group => group.kind === 'own' ? <div key={group.kind} className={`${columnClass} py-2`}><span>{t(groupLabels[group.kind])}</span><span className="break-all text-right tabular-nums">{format.tokens(group.tokens)}</span><span className="break-all text-right tabular-nums">{format.money(group.costUsd, group.knownCostUsd)}</span></div> : <details key={group.kind} className="group/related">
               <summary className={`${columnClass} cursor-pointer list-none rounded-md py-2 outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent`}><span className="flex min-w-0 items-center gap-1"><ChevronRight className="size-3.5 shrink-0 group-open/related:rotate-90" aria-hidden />{t(groupLabels[group.kind])} ({group.members.length})</span><span className="break-all text-right tabular-nums">{format.tokens(group.tokens)}</span><span className="break-all text-right tabular-nums">{format.money(group.costUsd, group.knownCostUsd)}</span></summary>
-              <ul className="space-y-2 rounded-lg bg-surface-secondary p-3">{group.members.map(member => <li key={`${member.source}:${member.sessionId}`} className="space-y-1 text-xs"><div className={columnClass}><span className="min-w-0 break-words">{member.sessionTitle ?? member.agentNickname ?? member.sessionId}{member.agentRole && <span className="block text-muted">{member.agentRole}</span>}</span><span className="break-all text-right tabular-nums">{format.tokens(member.tokens)}</span><span className="break-all text-right tabular-nums">{format.money(member.costUsd, member.knownCostUsd)}</span></div>{['codex', 'claude', 'dsh'].includes(member.source) && <Link to="/sessions" search={previous => ({ ...parseSessionPageSearch(previous), group: undefined, sessionSource: member.source, sessionId: member.sessionId, sessionFocus: String(Date.now()) })} onClick={onClose} className="text-accent underline underline-offset-2">{t('usage.detail.viewHistory')}</Link>}</li>)}</ul>
+              <ul className="rounded-lg bg-surface-secondary px-3 py-1">{group.members.map(member => {
+                const name = member.sessionTitle ?? member.agentNickname ?? member.sessionId;
+                return <li key={`${member.source}:${member.sessionId}`} className={`${columnClass} py-1 text-xs`}>
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 [overflow-wrap:anywhere]">
+                    {['codex', 'claude', 'dsh'].includes(member.source) ? <Link to="/sessions" search={previous => ({ ...parseSessionPageSearch(previous), group: undefined, sessionSource: member.source, sessionId: member.sessionId, sessionFocus: String(Date.now()) })} onClick={onClose} className="min-w-0 rounded py-0.5 text-accent underline underline-offset-2 outline-offset-2 focus-visible:outline-2">{name}</Link> : <span className="min-w-0">{name}</span>}
+                    {member.agentRole && <span className="text-muted">{member.agentRole}</span>}
+                  </span>
+                  <span className="break-all text-right tabular-nums">{format.tokens(member.tokens)}</span><span className="break-all text-right tabular-nums">{format.money(member.costUsd, member.knownCostUsd)}</span>
+                </li>;
+              })}</ul>
             </details>)}
           </div>}
           {detail.legacyCombined && <div className="space-y-2 rounded-lg bg-surface-secondary p-3 text-xs"><p>{t('usage.detail.legacyThread')}</p><dl className="space-y-2"><DetailValue label={t('usage.detail.thread')} value={`${format.tokens(detail.legacyCombined.tokens)} Token · ${format.money(detail.legacyCombined.costUsd, detail.legacyCombined.knownCostUsd)}`} /><DetailValue label={t('usage.insights.subagent')} value={`${format.tokens(detail.legacyCombined.subagentTokens)} Token · ${format.money(detail.legacyCombined.subagentCostUsd)}`} /></dl></div>}
           {row.insights?.relationConflict && <p className="text-xs text-warning">{t('usage.detail.relationConflict')}</p>}
         </section>
 
-        <SessionModelBreakdown usage={detail.usage} format={format} pricingModels={detail.pricingModels} onNavigate={onClose} />
+        <SessionModelBreakdown usage={detail.usage} format={format} pricingModels={detail.pricingModels} />
 
         <section aria-label={t('usage.detail.performance')}>
           <div className="mb-3 flex items-center gap-1"><h3 className="font-semibold">{t('usage.detail.performance')}{detail.scope === 'thread' && <span className="text-xs font-normal text-muted"> · {t('usage.detail.own')}</span>}</h3>
@@ -220,11 +229,12 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
             {available.length > 0 && <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">{available.map(metric => <DetailValue key={metric.label} label={t(metric.label)} value={typeof metric.value === 'boolean' ? t(metric.value ? 'usage.detail.signalPresent' : 'usage.detail.signalAbsent') : metric.label === 'usage.insights.costPerEdit' ? format.money(metric.value) : metric.label === 'usage.insights.tokensPerEdit' ? format.tokens(metric.value) : format.number(metric.value)} />)}</dl>}
             {!insight && <p className="text-muted">{t('usage.detail.noActivity')}</p>}
           </section>
-          <DetailDisclosure title={t('usage.detail.sessionInfo')}>
+          <section aria-label={t('usage.detail.sessionInfo')} className="space-y-3 border-t border-separator pt-4">
+            <h3 className="font-semibold">{t('usage.detail.sessionInfo')}</h3>
             <dl className="space-y-2">
               <DetailValue label={t('usage.activity.recent')} value={date(row.lastActivityAt)} />
               <DetailValue label={t('usage.insights.firstActivity')} value={date(insight?.firstActivityAt)} />
-              {row.taskSeconds != null && <DetailValue label={t('usage.explorer.taskTime')} value={`${taskDuration} · ${t(row.taskTimingKind === 'recorded' ? 'usage.session.recordedTime' : row.taskTimingKind === 'mixed' ? 'usage.session.includesEstimate' : 'usage.session.estimate')}`} />}
+              {row.taskSeconds != null && <DetailValue label={<span className="inline-flex items-center gap-1">{t('usage.explorer.taskTime')}<HelpPopover title={t('usage.explorer.taskTime')}><p>{t(row.taskTimingKind === 'recorded' ? 'usage.session.recordedTime' : row.taskTimingKind === 'mixed' ? 'usage.session.includesEstimate' : 'usage.session.estimate')}</p><p>{t('usage.session.taskHelp')}</p></HelpPopover></span>} value={`${taskDuration}${row.taskTimingKind === 'recorded' ? '' : ` · ${t(row.taskTimingKind === 'mixed' ? 'usage.session.includesEstimate' : 'usage.session.estimate')}`}`} />}
               <DetailValue label={t('usage.detail.billing')} value={`${serviceLabel(row.billing.service, locale)} · ${modeLabel(row.billing.mode, locale)}`} />
               <DetailValue label={t('usage.detail.account')} value={accountLabel(row.billing, locale, 'usage.activity.sessionAccountUnknown')} />
               {!row.models?.length && row.model !== 'unknown' && <DetailValue label={t('usage.common.model')} value={row.model} />}
@@ -233,7 +243,7 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
               {(insight?.agentNickname || insight?.agentRole) && <DetailValue label={t('usage.detail.agentIdentity')} value={[insight.agentNickname, insight.agentRole].filter(Boolean).join(' · ')} />}
             </dl>
             {insight?.orphan && <p className="text-xs text-muted">{t('usage.detail.orphan')}</p>}
-          </DetailDisclosure>
+          </section>
         </div>
       </Modal.Body>
     </Modal.Dialog></Modal.Container></Modal.Backdrop>

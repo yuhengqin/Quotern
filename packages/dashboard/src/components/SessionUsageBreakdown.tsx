@@ -26,7 +26,7 @@ export function DetailDisclosure({ title, summary, children, id }: { title: stri
   </details>;
 }
 
-export function DetailValue({ label, value }: { label: string; value: ReactNode }) {
+export function DetailValue({ label, value }: { label: ReactNode; value: ReactNode }) {
   return <div className="flex min-w-0 items-baseline justify-between gap-4"><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words text-right tabular-nums text-foreground">{value}</dd></div>;
 }
 
@@ -58,7 +58,7 @@ export function SessionPricingDetails({ usage, format }: { usage: ReturnType<typ
   </>;
 }
 
-export function SessionModelBreakdown({ usage, format, pricingModels, onNavigate }: { usage: ReturnType<typeof buildSessionDetail>['usage']; format: DetailFormat; pricingModels: PricingModelSelection[]; onNavigate(): void }) {
+export function SessionModelBreakdown({ usage, format, pricingModels }: { usage: ReturnType<typeof buildSessionDetail>['usage']; format: DetailFormat; pricingModels: PricingModelSelection[] }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const parts = usage.parts;
@@ -77,7 +77,7 @@ export function SessionModelBreakdown({ usage, format, pricingModels, onNavigate
         </HelpPopover>
         {!usage.detailsComplete && <span className="text-xs text-muted">{t('usage.detail.incompleteDetails')}</span>}
       </div>
-      {pricingModels.length > 0 && <Link to="/pricing" search={{ q: '', models: pricingModels }} onClick={onNavigate} className="inline-flex items-center gap-1 rounded text-xs text-accent outline-offset-2 focus-visible:outline-2">{t('usage.cost.viewPrices')}</Link>}
+      {pricingModels.length > 0 && <Link to="/pricing" search={{ q: '', models: pricingModels }} target="_blank" rel="noopener" className="inline-flex items-center gap-1 rounded text-xs text-accent outline-offset-2 focus-visible:outline-2">{t('usage.cost.viewPrices')}</Link>}
     </div>
       <Table variant="secondary" className="max-w-full text-xs">
         <Table.ScrollContainer tabIndex={0} role="region" aria-label={t('usage.detail.modelCosts')} className="max-w-full overflow-x-auto overscroll-x-contain">

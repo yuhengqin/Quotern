@@ -2,17 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createLocalApiApp } from '../src/server/local-api.js';
 import { BucketStore } from '../src/server/state.js';
 import { request as httpRequest } from 'node:http';
 import { createHttpServer, listenServer } from '../src/server/http-server.js';
 import type { TudConfig } from '../src/types.js';
+import { zstdCompressSync } from 'node:zlib';
 
 const route = '/functions/tud-session-actions';
 const target = { source: 'codex', sessionId: 'session-123' };
 
-async function fixture(run: (app: ReturnType<typeof createLocalApiApp>, directory: string, launches: unknown[]) => Promise<void>) {
+async function fixture(run: (app: ReturnType<typeof createLocalApiApp>, directory: string, launches: unknown[]) => Promise<void>, availability?: 'available' | 'SESSION_CLI_UNAVAILABLE' | 'SESSION_ACTION_UNSUPPORTED') {
   const root = await mkdtemp(join(tmpdir(), 'quotern-session-actions-'));
   const directory = join(root, "项目 ' & workspace");
   const launches: unknown[] = [];
@@ -25,6 +26,7 @@ async function fixture(run: (app: ReturnType<typeof createLocalApiApp>, director
     const deps = {
       dataDir: root, bucketStore: new BucketStore(), getConfig: () => ({ statsSince: '2020-01-01' } as TudConfig),
       sessionActions: {
+        ...(availability ? { resumeAvailability: async () => availability } : {}),
         openDirectory: async (path: string) => { launches.push({ action: 'open-directory', directory: path }); },
         resume: async (path: string, command: unknown) => { launches.push({ action: 'resume', directory: path, command }); },
       },
@@ -54,6 +56,73 @@ test('session actions use the collected project directory and fixed resume argv'
       { action: 'open-directory', directory },
       { action: 'resume', directory, command: { executable: 'codex', args: ['resume', 'session-123'] } },
     ]);
+  });
+});
+
+test('PI and ZCode have capability responses and missing CLIs are explained before launch', async () => {
+  await fixture(async (app, _directory, launches) => {
+    for (const source of ['pi', 'zcode', 'antigravity']) {
+      const response = await app.request(`${route}?${new URLSearchParams({ source, sessionId: 'safe-id' })}`);
+      assert.equal(response.status, 200, source);
+    }
+    const details = await capabilities(app);
+    assert.equal(details.canResume, false);
+    assert.equal((details as unknown as { resumeReason: string }).resumeReason, 'SESSION_CLI_UNAVAILABLE');
+    assert.equal(details.canOpenDirectory, true);
+    const response = await app.request(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': details.token }, body: JSON.stringify({ ...target, action: 'resume' }) });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).message, 'SESSION_CLI_UNAVAILABLE');
+    assert.deepEqual(launches, []);
+  }, 'SESSION_CLI_UNAVAILABLE');
+});
+
+test('PI uses the collected file path rather than guessing a path from its ID', async () => {
+  await fixture(async (app, directory, launches) => {
+    const root = dirname(directory), path = join(root, "pi ' & session.jsonl");
+    await writeFile(path, JSON.stringify({ type: 'session', id: 'pi-session', cwd: directory }) + '\n');
+    await writeFile(join(root, 'sessions', 'pi.json'), JSON.stringify({ files: { [path]: { context: { sessionId: 'pi-session' } } } }));
+    const response = await app.request(`${route}?${new URLSearchParams({ source: 'pi', sessionId: 'pi-session' })}`);
+    assert.equal(response.status, 200);
+    const details = (await response.json()).data;
+    assert.equal(details.canResume, true);
+    const action = await app.request(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': details.token }, body: JSON.stringify({ source: 'pi', sessionId: 'pi-session', action: 'resume' }) });
+    assert.equal(action.status, 200);
+    assert.deepEqual(launches, [{ action: 'resume', directory, command: { executable: 'pi', args: ['--session', path] } }]);
+  });
+});
+
+test('DSH explains the terminal-profile prerequisite instead of inventing a resume command', async () => {
+  await fixture(async (app) => {
+    const response = await app.request(`${route}?source=dsh&sessionId=safe-id`);
+    assert.equal(response.status, 200);
+    const details = (await response.json()).data;
+    assert.equal(details.canResume, false);
+    assert.equal(details.resumeReason, 'SESSION_RESUME_PROFILE_REQUIRED');
+    assert.equal(details.resumeCommand, null);
+  });
+});
+
+test('PI does not fall back to an ID when its verified JSONL is archived or disappears', async () => {
+  await fixture(async (app, directory, launches) => {
+    const root = dirname(directory), path = join(root, 'archived-pi.jsonl');
+    const query = new URLSearchParams({ source: 'pi', sessionId: 'archived-pi' });
+    const metadata = JSON.stringify({ type: 'session', id: 'archived-pi', cwd: directory }) + '\n';
+    await writeFile(join(root, 'sessions', 'pi.json'), JSON.stringify({ files: { [path]: { context: { sessionId: 'archived-pi' } } } }));
+    await writeFile(path + '.zstd', zstdCompressSync(metadata));
+    const archived = (await (await app.request(`${route}?${query}`)).json()).data;
+    assert.equal(archived.canOpenDirectory, true);
+    assert.equal(archived.canResume, false);
+    assert.equal(archived.resumeReason, 'SESSION_RESUME_FILE_UNAVAILABLE');
+    assert.equal(archived.resumeCommand, null);
+    const post = () => app.request(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Session-Action': archived.token }, body: JSON.stringify({ source: 'pi', sessionId: 'archived-pi', action: 'resume' }) });
+    assert.equal((await post()).status, 400);
+    await writeFile(path, metadata);
+    const present = (await (await app.request(`${route}?${query}`)).json()).data;
+    assert.equal(present.canResume, true);
+    await rm(path);
+    await rm(path + '.zstd');
+    assert.equal((await post()).status, 400);
+    assert.deepEqual(launches, []);
   });
 });
 

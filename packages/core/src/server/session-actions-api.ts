@@ -1,14 +1,16 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { readSessionDirectory } from '../session-directory.js';
+import { readSessionTarget } from '../session-directory.js';
 import { existingSessionDirectory, nativeSessionActions, type SessionActionRuntime } from '../session-actions.js';
-import { sessionResumeCommand, validSessionActionTarget } from '../session-resume.js';
+import { formatSessionResumeCommand, sessionResumeCommand, validSessionActionTarget } from '../session-resume.js';
 
 export const SESSION_ACTIONS_ROUTE = '/functions/tud-session-actions';
 const failure = (message: string) => ({ success: false as const, message, data: null });
 const ok = <T>(data: T) => ({ success: true as const, message: 'ok', data });
 const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
+const missingCommandReason = (source: string) => source === 'pi' ? 'SESSION_RESUME_FILE_UNAVAILABLE'
+  : source === 'dsh' ? 'SESSION_RESUME_PROFILE_REQUIRED' : 'SESSION_RESUME_UNSUPPORTED';
 
 function localRequest(url: string, origin: string | undefined, ipc: boolean): boolean {
   try {
@@ -37,9 +39,17 @@ export function registerSessionActionsApi(parent: Hono, dataDir: string, runtime
     const source = params.get('source'), sessionId = params.get('sessionId');
     if ([...params.keys()].some(key => !['source', 'sessionId'].includes(key) || params.getAll(key).length !== 1)
       || !validSessionActionTarget(source, sessionId)) return c.json(failure('INVALID_SESSION_TARGET'), 400);
-    const directory = await readSessionDirectory(dataDir, source!, sessionId!);
-    const available = await existingSessionDirectory(directory);
-    return c.json(ok({ directory, token, canOpenDirectory: Boolean(available), canResume: Boolean(available && sessionResumeCommand(source!, sessionId!)), reason: available ? null : 'SESSION_DIRECTORY_UNAVAILABLE' }));
+    const target = await readSessionTarget(dataDir, source!, sessionId!);
+    const available = await existingSessionDirectory(target.directory);
+    const command = sessionResumeCommand(source!, sessionId!, target);
+    let resumeReason: string | null = !command ? missingCommandReason(source!)
+      : !available ? 'SESSION_DIRECTORY_UNAVAILABLE' : null;
+    if (!resumeReason && command && available) {
+      const status = await runtime.resumeAvailability?.(available, command).catch(() => 'SESSION_ACTION_UNSUPPORTED') ?? 'available';
+      if (status !== 'available') resumeReason = status;
+    }
+    return c.json(ok({ directory: target.directory, token, canOpenDirectory: Boolean(available), canResume: !resumeReason,
+      resumeCommand: command ? formatSessionResumeCommand(command) : null, resumeReason, reason: available ? null : 'SESSION_DIRECTORY_UNAVAILABLE' }));
   });
   app.post('/', async c => {
     const supplied = Buffer.from(c.req.header('X-Quotern-Session-Action') ?? '');
@@ -54,16 +64,21 @@ export function registerSessionActionsApi(parent: Hono, dataDir: string, runtime
       || (body.action !== 'open-directory' && body.action !== 'resume')
       || !validSessionActionTarget(body.source, body.sessionId)) return c.json(failure('INVALID_SESSION_ACTION'), 400);
     const source = body.source as string, sessionId = body.sessionId as string;
-    const command = sessionResumeCommand(source, sessionId);
-    if (body.action === 'resume' && !command) return c.json(failure('SESSION_RESUME_UNSUPPORTED'), 400);
     const key = JSON.stringify([source, sessionId]);
     if (pending.has(key)) return c.json(failure('SESSION_ACTION_PENDING'), 409);
     pending.add(key);
     try {
-      const directory = await existingSessionDirectory(await readSessionDirectory(dataDir, source, sessionId));
+      const target = await readSessionTarget(dataDir, source, sessionId);
+      if (body.action === 'resume' && !sessionResumeCommand(source, sessionId, target)) return c.json(failure(missingCommandReason(source)), 400);
+      const directory = await existingSessionDirectory(target.directory);
       if (!directory) return c.json(failure('SESSION_DIRECTORY_UNAVAILABLE'), 400);
       if (body.action === 'open-directory') await runtime.openDirectory(directory);
-      else await runtime.resume(directory, command!);
+      else {
+        const command = sessionResumeCommand(source, sessionId, { ...target, directory })!;
+        const status = await runtime.resumeAvailability?.(directory, command) ?? 'available';
+        if (status !== 'available') return c.json(failure(status), 400);
+        await runtime.resume(directory, command);
+      }
       return c.json(ok({ action: body.action }));
     } catch (error) {
       const code = error instanceof Error ? error.message : '';

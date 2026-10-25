@@ -12,6 +12,8 @@ interface SessionActions {
   canOpenDirectory: boolean;
   canResume: boolean;
   reason: string | null;
+  resumeCommand?: string | null;
+  resumeReason?: string | null;
 }
 
 function actionErrorKey(code: string): string {
@@ -21,6 +23,9 @@ function actionErrorKey(code: string): string {
     case 'SESSION_ACTION_LOCAL_ONLY': return 'usage.insights.actionsLocalOnly';
     case 'SESSION_ACTION_UNSUPPORTED': return 'usage.insights.terminalUnavailable';
     case 'SESSION_ACTION_FORBIDDEN': return 'usage.insights.actionExpired';
+    case 'SESSION_RESUME_UNSUPPORTED': return 'usage.insights.resumeUnsupported';
+    case 'SESSION_RESUME_PROFILE_REQUIRED': return 'usage.insights.resumeProfileRequired';
+    case 'SESSION_RESUME_FILE_UNAVAILABLE': return 'usage.insights.resumeFileUnavailable';
     default: return 'usage.insights.actionFailed';
   }
 }
@@ -48,10 +53,10 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
       .catch(async error => {
         // Keep directory copying available with older runtimes and remote panels.
         let directory: string | null = null;
-        if (['codex', 'claude', 'dsh'].includes(row.source)) {
+        if (['codex', 'claude', 'dsh', 'pi', 'zcode'].includes(row.source)) {
           try { directory = (await request<{ directory: string | null }>(`/functions/tud-session-directory?${query}`)).directory; } catch { /* No directory metadata. */ }
         }
-        if (active) setActions({ key, directory, token: null, canOpenDirectory: false, canResume: false, reason: error instanceof Error ? error.message : 'SESSION_ACTION_UNAVAILABLE' });
+        if (active) setActions({ key, directory, token: null, canOpenDirectory: false, canResume: false, reason: error instanceof Error ? error.message : 'SESSION_ACTION_UNAVAILABLE', resumeReason: error instanceof Error ? error.message : 'SESSION_ACTION_UNAVAILABLE' });
       });
     return () => { active = false; };
   }, [row.source, row.sessionId]);
@@ -79,6 +84,9 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
     }
   };
   if(!insight)return <p className="text-xs text-muted">{t('usage.insights.unknown')}</p>;
+  const resumeCommand = current?.resumeCommand === undefined ? insight.resumeCommand : current.resumeCommand;
+  const resumeHint = current?.resumeReason ?? (!current?.canResume ? current?.reason : null);
+  const directoryHint = !current?.canOpenDirectory ? current?.reason : null;
   const locale = i18n.resolvedLanguage ?? 'zh-CN';
   const usd = (value: number | null | undefined) => formatSessionUsd(value, locale);
   const usage = (count: number | null, cost: number | null) => `${formatSessionTokens(count)} Token · ${usd(cost)}`;
@@ -101,14 +109,16 @@ export function SessionInsightDetails({ row }: { row: SessionActivity }) {
   ];
   return <div className="space-y-4">
     <div className="flex flex-wrap gap-2">
-      {insight.resumeCommand && <Button size="sm" variant="primary" isDisabled={!current?.canResume || pending !== null} aria-busy={pending === 'resume'} aria-describedby={current?.reason ? hintId : undefined} onPress={() => void runAction('resume')}>{t(pending === 'resume' ? 'usage.insights.opening' : 'usage.insights.resume')}</Button>}
-      {directory && <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={current?.reason ? hintId : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.insights.openDirectory')}</Button>}
-      {insight.resumeCommand&&<Button size="sm" variant="secondary" onPress={()=>void copy(insight.resumeCommand!)}>{t('usage.insights.copyResume')}</Button>}
+      <Button size="sm" variant="primary" isDisabled={!current?.canResume || pending !== null} aria-busy={pending === 'resume'} aria-describedby={resumeHint ? `${hintId}-resume` : undefined} onPress={() => void runAction('resume')}>{t(pending === 'resume' ? 'usage.insights.opening' : 'usage.insights.resume')}</Button>
+      <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={directoryHint ? `${hintId}-directory` : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.insights.openDirectory')}</Button>
+      {resumeCommand&&<Button size="sm" variant="secondary" onPress={()=>void copy(resumeCommand)}>{t('usage.insights.copyResume')}</Button>}
       {directory&&<Button size="sm" variant="secondary" onPress={()=>void copy(directory)}>{t('usage.insights.copyDirectory')}</Button>}
       <p role="status" className="self-center text-xs text-muted">{feedback}</p>
     </div>
-    {current?.reason && (insight.resumeCommand || directory) && <p id={hintId} className="text-xs text-muted">{t(actionErrorKey(current.reason))}</p>}
-    {insight.resumeCommand&&<code className="block break-all rounded-lg bg-surface-secondary p-3 text-xs">{insight.resumeCommand}</code>}
+    {resumeHint && <p id={`${hintId}-resume`} className="text-xs text-muted">{t(actionErrorKey(resumeHint))}</p>}
+    {directoryHint && directoryHint !== resumeHint && <p id={`${hintId}-directory`} className="text-xs text-muted">{t(actionErrorKey(directoryHint))}</p>}
+    {directoryHint && directoryHint === resumeHint && <span id={`${hintId}-directory`} className="sr-only">{t(actionErrorKey(directoryHint))}</span>}
+    {resumeCommand&&<code className="block break-all rounded-lg bg-surface-secondary p-3 text-xs">{resumeCommand}</code>}
     {directory&&<p className="break-all text-xs text-muted">{directory}</p>}
     {(insight.parentId||insight.agentRole||insight.agentNickname)&&<p className="break-all text-xs text-muted">{t(`usage.insights.${insight.relationKind==='fork'?'relationFork':insight.relationKind==='subagent'?'relationSubagent':'relationUnknown'}`)} · {[insight.agentNickname,insight.agentRole,insight.parentId].filter(Boolean).join(' · ')}</p>}
     <dl className="grid gap-3 rounded-xl border border-separator p-3 sm:grid-cols-2">{metrics.map(([label,value])=><div key={label} className="min-w-0"><dt className="text-xs text-muted">{t(label)}</dt><dd className="mt-1 break-words text-sm tabular-nums">{value}</dd></div>)}</dl>

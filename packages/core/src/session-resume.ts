@@ -8,17 +8,28 @@ const commands = new Map<string, readonly string[]>([
   ['claude', ['claude', '--resume']],
   ['opencode', ['opencode', '--session']],
   ['grok', ['grok', '--resume']],
+  ['pi', ['pi', '--session']],
+  ['zcode', ['zcode', '--resume']],
 ]);
 
 export function validSessionActionTarget(source: unknown, sessionId: unknown): source is string {
-  return typeof source === 'string' && (commands.has(source) || source === 'dsh')
+  return typeof source === 'string' && (commands.has(source) || source === 'dsh' || source === 'antigravity')
     && typeof sessionId === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(sessionId);
 }
 
 /** Fixed executable/argv only; never interpret a displayed command as shell text. */
-export function sessionResumeCommand(source: string, sessionId: string): SessionResumeCommand | null {
+export function sessionResumeCommand(source: string, sessionId: string, context?: { sessionFile?: string | null; directory?: string | null }): SessionResumeCommand | null {
   const command = commands.get(source);
-  return command && validSessionActionTarget(source, sessionId)
-    ? { executable: command[0]!, args: [...command.slice(1), sessionId] }
-    : null;
+  if (!command || !validSessionActionTarget(source, sessionId) || source === 'pi' && !context?.sessionFile) return null;
+  const args = [...command.slice(1), source === 'pi' ? context!.sessionFile! : sessionId];
+  if (source === 'zcode' && context?.directory) args.push('--cwd', context.directory);
+  return { executable: command[0]!, args };
+}
+
+/** Display/copy only. Execution always uses the structured argv above. */
+export function formatSessionResumeCommand(command: SessionResumeCommand, platform = process.platform): string {
+  const safe = platform === 'win32' ? /^[A-Za-z0-9_./:\\-]+$/ : /^[A-Za-z0-9_./:-]+$/;
+  const quote = (value: string) => safe.test(value) ? value
+    : platform === 'win32' ? `'${value.replace(/'/g, "''")}'` : `'${value.replace(/'/g, `'"'"'`)}'`;
+  return [command.executable, ...command.args].map(quote).join(' ');
 }

@@ -63,7 +63,7 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - [x] 精简为四按钮、统一数字格式、默认本会话；移除技术原文及重复摘要，复制改 Toast。
 - [x] 模型表格与常驻活动指标，补齐四语言文案及共享 UI 规范。
 - [x] 更新合成数据实机验收，验证四按钮、Toast、表格、删除项、范围和响应/活动口径；运行相关检查及独立审查。
-- [ ] 提交并合回 codex/session-insights，核对目标代码树与验证状态。
+- [x] 提交并合回 codex/session-insights，核对目标代码树与验证状态。
 
 ### 复审修订验证记录
 
@@ -71,3 +71,4 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - 更新后的 smoke 先对旧构建验证默认范围断言失败，再对新构建通过全部 13 组检查。最终截图及 result.json 位于 `.quotern-dev/session-detail-revision-acceptance-3/`；覆盖四按钮、Toast 出现/自动消失、表格与活动常驻、展开后无 ID/路径/命令、范围联动 Token 构成和模型且性能/活动保持 own、旧服务复制回退、能力禁用、目录重试、Escape/焦点返回、Tab、重复通知、浅深色、中英文和 320/375 px。窄屏表格用实际方向键验证横向滚动，短窗口操作和正文仍可达。
 - 独立审查未发现可行动缺陷。未补做屏幕阅读器实机、Safari/Firefox、安装包或真实 Agent 恢复；本机动作接口及 Core 均无改动。
 - 本工作区原共享依赖入口存在但内容缺失；按规定保留原 node_modules 为私有备份后，通过 pnpm 在 `.quotern-dev/revision-dependency-store` 初始化本次验证依赖，未改锁文件、版本或提交机器路径。备份保留于忽略目录 `.quotern-dev/dependency-backups/`，未删除共享存储或操作其他工作区。
+- 实现提交 `26b67e53` 已从 `a744ce64` 快进合入 `codex/session-insights`，无冲突；目标与实现分支代码一致、Git 状态干净，未推送。

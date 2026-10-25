@@ -19,13 +19,14 @@
 
 各订阅 reader 保留自己的 shared 类型与 Desktop 兼容 IPC。新增来源时同时核对 [Core reader](../packages/core/src/quota/readers)、[shared](../packages/core/src/quota/shared) 原始类型与规范映射，以及 [runtime.ts](../packages/core/src/quota/runtime.ts) 注册和调度间隔。HTTP 仅返回规范 `QuotaState`，不返回凭据、账号标识或上游原始对象；拒绝不受支持的网页 Origin，刷新及偏好写入要求 JSON 并校验参数。Cursor/Copilot 使用可选 Node SQLite 与只读 sqlite3 回退，缺少两者时保留读取失败状态，不阻止 CLI 启动。
 
-当前显示的订阅来源以 [subscription-channels.ts](../apps/desktop/src/shared/subscription-channels.ts) 为准，包括 Codex、Claude、Cursor、Copilot、Grok、Kimi、ZCode、Antigravity、Qoder、MiniMax、OpenCode、DeepSeek。Trae 和 WorkBuddy 的适配器文件不代表它们已经进入当前界面。
+当前显示的订阅来源以 [subscription-channels.ts](../apps/desktop/src/shared/subscription-channels.ts) 为准，包括 Codex、Claude、Gemini CLI、Cursor、Copilot、Grok、Kimi、ZCode、Antigravity、Qoder、MiniMax、OpenCode、DeepSeek。Trae 和 WorkBuddy 的适配器文件不代表它们已经进入当前界面。
 
 ## 读取方式
 
 | 方式 | 当前例子 | 注意事项 |
 | --- | --- | --- |
 | 本地认证文件加固定官方接口 | Codex | 只读 `CODEX_HOME/auth.json`，请求 wham usage，无需启动 Codex CLI |
+| Gemini CLI 明文 OAuth 缓存加固定 Cloud Code 接口 | Gemini CLI | 只复用仍有效的 access token；不刷新令牌、不写认证文件、不 onboarding |
 | Agent CLI | Claude | 在临时目录调用 `/usage`，限制工具、MCP、settings 和会话保存，并控制时间与输出大小 |
 | 本地登录数据库或认证文件加官方接口 | Cursor、Copilot 等 | 路径、账号匹配和失效状态按 reader 分别处理 |
 | 正在运行的 Agent 客户端提供本地 IPC | Kimi 桌面版 | 先取得当前账号与有效令牌，再访问对应区域接口 |
@@ -41,6 +42,7 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 | --- | --- | --- |
 | [Codex](../apps/desktop/src/shared/codex-subscription.ts) | `hasAccount`、`fiveHour`、`weekly`、`windows`、`resetCredits` | 动态窗口保留实际上报周期和模型限制；窗口可为空，重置次数独立展示 |
 | [Claude](../apps/desktop/src/shared/claude-subscription.ts) | `hasAccount`、`fiveHour`、`sevenDay`、`windows` | 从 CLI 结果保留总额度和模型分组，不新增直接读取认证的路径 |
+| [Gemini CLI](../packages/core/src/quota/readers/gemini-subscription.ts) | `buckets[].modelId/tokenType/remainingFraction/resetTime` → `windows` | 每个有效 bucket 单独保留；缺失比例为未知，0 为耗尽，周期长度未知 |
 | [Cursor](../apps/desktop/src/shared/cursor-subscription.ts) | `cursorModels`、`otherModels`、`plan` | 模型池与合并套餐额度，不能改名为泛化示例中的 `primaryModels` |
 | [Copilot](../apps/desktop/src/shared/copilot-subscription.ts) | `limits[].remainingPercent`、`unlimited`、可选 `exhausted` | 已是剩余比例；缺失比例可为 `null`，不能再次用 `100 - value` 解释 |
 | [Kimi](../apps/desktop/src/shared/kimi-subscription.ts) | `limits`、`region`、可选 `source` | 区分账号区域与读取来源 |
@@ -79,9 +81,21 @@ Kimi 桌面版与 Code 是独立来源，卡片选择有效读数，不拼接不
 
 ## 缓存和失败处理
 
+### Gemini CLI
+
+凭据目录为 `(GEMINI_CLI_HOME || 用户 home)/.gemini`；`GEMINI_CLI_HOME` 指向 home 而非 `.gemini` 本身。要求 `settings.json` 的 `security.auth.selectedType` 为 `oauth-personal`，且 `oauth_creds.json` 的 `access_token` 和毫秒有效期 `expiry_date` 均有效。认证模式缺失、API key/Vertex 等模式、`GEMINI_FORCE_ENCRYPTED_FILE_STORAGE=true`、缺明文缓存、损坏或过期都返回明确失败；请在 Gemini CLI 中完成登录或更新缓存。
+
+仅 POST 固定 `https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` 和 `:retrieveUserQuota`。已有 `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_PROJECT_ID` 可作为 loadCodeAssist 的项目提示，优先使用响应项目；若响应确认已有 currentTier 却未返回项目，则使用已校验的配置项目。两者都缺失或尚未初始化时拒绝继续；不枚举项目、不调用 onboarding、不使用 refresh token、不切换 Antigravity 或网页身份。文件和响应均限制为 1 MiB，每次请求超时 20 秒，禁止重定向。
+
+响应的 `remainingFraction` 只接受 [0,1] 内有限数，缺失/无效窗口不补零；model/tokenType 不相加，服务端 resetTime 单独保留，不猜 24 小时周期。套餐名称优先 paidTier.name，其次 currentTier.name/id，不按名称猜权益。未从响应获得验证身份，公开 `identityVerified=false`，内部仅以凭据指纹阻止跨凭据缓存继承；不写分析历史或发预测提醒。
+
+实现依据是官方 Gemini CLI 固定提交 [`b041de017` 的存储路径](https://github.com/google-gemini/gemini-cli/blob/b041de017/packages/core/src/config/storage.ts)、[认证存储](https://github.com/google-gemini/gemini-cli/blob/b041de017/packages/core/src/code_assist/oauth-credential-storage.ts)、[请求契约](https://github.com/google-gemini/gemini-cli/blob/b041de017/packages/core/src/code_assist/types.ts) 和 [项目初始化](https://github.com/google-gemini/gemini-cli/blob/b041de017/packages/core/src/code_assist/setup.ts)。`v1internal` 是内部接口，不承诺第三方长期兼容；自动化验证使用脱敏模拟响应，不代表真实账号已完成联调。
+
+### 通用缓存
+
 当前读取器提供 `forceRefresh`，通常合并进行中的请求；绕过缓存不等于取消进行中的请求，也不保证上游提供新数据。各适配器的缓存语义不同：
 
-- Codex / Claude 使用 [subscription-cache.ts](../apps/desktop/src/main/subscription-cache.ts)，按身份键区分，返回状态缓存 60 秒。只有临时失败才沿用最近成功数据并标记 `stale`；账号变化或认证等状态会清除成功缓存，generation 防止旧请求回填缓存。
+- Codex / Claude / Gemini 使用 [subscription-cache.ts](../packages/core/src/quota/readers/subscription-cache.ts)，按身份键区分，返回状态缓存 60 秒。只有临时失败才沿用最近成功数据并标记 `stale`；账号变化或认证等状态会清除当前成功展示，generation 防止旧请求回填缓存。
 - Copilot、Kimi 的 reader 有各自的身份与来源检查，行为以相应测试为准。
 - Cursor、ZCode、MiniMax 等 reader 使用各自的 `lastSuccess`，可能先命中 TTL 再读取凭据；不能声称它们都已具备与 Codex / Claude 相同的身份隔离机制。
 

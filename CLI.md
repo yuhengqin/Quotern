@@ -68,6 +68,8 @@ quotern start
 | `quotern doctor` | 检查运行环境、本地数据源及服务状态 |
 | `quotern usage [period]` | 只读查询已采集用量，支持文本、JSON、CSV |
 | `quotern statusline` | 从 Claude stdin 显示会话费用、今日估价、上下文和会话平均费用速率 |
+| `quotern quota [status\|forecast\|diagnostics]` | 只读查询额度、预测或安全来源诊断，支持 JSON |
+| `quotern mcp` | stdio MCP，只提供三个只读额度工具 |
 | `quotern help` | 显示帮助 |
 
 ## 常用选项
@@ -101,6 +103,47 @@ JSON 使用 `schemaVersion: 1`，包含 `summary`、`rows`、`filters` 和 `cove
 `overview` 额外返回 `breakdowns.daily`、`breakdowns.models`、`breakdowns.projects`：同一次读取后筛选的记录生成全部维度，共用顶层范围、筛选和覆盖说明，不能将不同维度相加。`rows` 保留总计行；CSV 的 `period` 列分别标识 `summary/daily/models/projects`。Skill 将“查看用量信息”等宽泛请求默认交付为 Quotern 样式的综合 HTML 概览；明确的单项查询仍按问题简洁回答。
 
 Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)。推荐通过 `npx skills` 跨工具安装，见 [安装方法](./README.md#推荐使用-npx-skills-安装)；也可让 Agent 按 [安装助手说明](./README_AI.md) 执行。手动复制完整 Skill 文件夹作为备用。Skill 只调用上述 JSON 查询，不维护第二套解析器，也不会隐式启动或修复服务。
+
+## 额度查询与只读 MCP
+
+```bash
+quotern quota --json
+quotern quota status --provider gemini --runtime desktop
+quotern quota diagnostics --provider codex --json
+quotern quota forecast --runtime cli --data-dir /path/to/data --json
+quotern quota --refresh --port 8252 --provider codex --json
+```
+
+默认只读 `<data-dir>/quota-snapshots/cli.json` 与 `desktop.json`，不初始化采集服务、不读取凭据、不修复配置、不联网。`--runtime latest` 为默认值，选择生成时间最新的一个有效快照，不拼接两端读数；也可固定为 `cli` 或 `desktop`。Desktop 不需要启动 HTTP 服务即可供查询。服务需要升级到支持快照的版本并完成至少一次额度查询，才会出现这些文件。快照只包含启用的渠道，`--provider` 按渠道筛选，包括该渠道已配置的监控目录。
+
+`--refresh` 是显式例外：通过 loopback POST 请求**已运行的 CLI** 刷新，可能调用供应商接口或现有 Agent CLI，不启动新服务。端口优先使用 `--port`，其次现有 config 的 `serverPort`，否则为 8252；服务端校验数据目录摘要，拒绝刷新另一个数据目录。仅有 Desktop 时请在 Desktop 内刷新，`--runtime desktop --refresh` 会报错。不要将目录摘要当作身份认证机制。
+
+JSON 使用 `schemaVersion: 1`，`generatedAt` 为发布时刻、`readAt` 为读取时刻，时间戳均为 Unix 秒。先检查 `availability`（`ready/missing/invalid`）、`stale`、provider 状态与观察时间；文件缺失/损坏不会变成额度 0，正常返回结构化未知结果。参数错误或显式刷新失败退出码为 1。快照与 provider 观察超过 30 分钟标记陈旧；窗口经过重置时刻后单独标记陈旧。陈旧窗口不返回预测，`forecast: null` 不代表额度充足。诊断只包含固定阶段、错误码、HTTP 状态、耗时、查询/退避时间和缓存/OMP 回退标记，不包含原始错误、邮箱、认证信息或监控目录。
+
+百分比窗口的 `kind` 为 `percentage`；余额窗口为 `balance`，`usedPercent: null`，通过 `balance.currency/remaining` 表达金额，真实零余额保留为 0。无限或已耗尽的非百分比池放在 `providers[].details` 的 `valueKind` 中。公开报告不透传供应商自由文本或配置备注。
+
+启动 MCP：
+
+```bash
+quotern mcp --runtime latest
+```
+
+在支持 stdio MCP 的客户端中，启动命令设为已安装的 `quotern`，参数为 `mcp`；需要时追加 `--data-dir` 和 `--runtime`。例如支持 `mcpServers` 格式的客户端可合入：
+
+```json
+{
+  "mcpServers": {
+    "quotern-quota": {
+      "command": "quotern",
+      "args": ["mcp", "--runtime", "latest"]
+    }
+  }
+}
+```
+
+工具固定为 `quota_status`、`quota_forecast`、`quota_diagnostics`，参数仅接受可选的 `provider`，如 `{"provider":"gemini"}`；不接受任意文件路径或刷新参数。结果同时提供 JSON 文本和 `structuredContent`，stdout 只承载 MCP 消息。没有登录、切换账号、刷新或修改设置工具；stdin EOF、SIGINT/SIGTERM 会关闭服务。
+
+Gemini CLI 的认证和内部 API 限制见 [订阅数据说明](docs/subscription-plan-design.md#gemini-cli)。
 
 ## Claude statusline
 

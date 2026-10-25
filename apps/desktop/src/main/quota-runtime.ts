@@ -5,6 +5,7 @@ import { SUBSCRIPTION_CHANNELS } from '../shared/subscription-channels';
 import type { SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaWindowLabel } from 'quotern-i18n/quota';
 import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
+import { resolveDataDir } from 'quotern-core';
 import { quotaFetch, recoverQuotaNetwork } from './quota-fetch';
 import { nativeText } from './native-messages';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
@@ -14,6 +15,7 @@ export function getQuotaRuntimeState(): QuotaState | null { return activeManager
 export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; getLocale(): SupportedLocale }) {
   const notifications = new Set<Notification>();
   const manager = await createQuotaRuntime({ directory: path.join(app.getPath('userData'), 'quota'), fetch: quotaFetch,
+    snapshot: { directory: resolveDataDir(), runtime: 'desktop' },
     onChanged: state => {
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(QUOTA_CHANGED, state);
       options.onChanged(state);

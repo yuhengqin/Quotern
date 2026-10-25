@@ -7,6 +7,7 @@ import { guiCliEnvironment } from './cli-runtime.js';
 import { claudePlanLabel, type ClaudeSubscriptionSnapshot } from '../shared/claude-subscription.js';
 import { parseClaudeUsageResult } from './claude-usage-parser.js';
 import { createSubscriptionCache } from './subscription-cache.js';
+import { recordQuotaAttempt } from './quota-fetch-state.js';
 
 const CUSTOM_ENV_KEYS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'] as const;
 type ClaudeAuthKind = 'official' | 'not-signed-in' | 'custom-provider';
@@ -57,6 +58,10 @@ interface ReadClaudeSubscriptionOptions {
 export interface ClaudeCommandResult { stdout: string; code: number | null }
 class CommandFailure extends Error {
   constructor(readonly kind: 'not-installed' | 'failed' | 'timeout' | 'output-limit') { super(kind); }
+}
+function recordCommandFailure(error: unknown): void {
+  const code = error instanceof CommandFailure ? ({ 'not-installed': 'NOT_INSTALLED', failed: 'COMMAND_FAILED', timeout: 'TIMEOUT', 'output-limit': 'OUTPUT_LIMIT' } as const)[error.kind] : error instanceof SyntaxError ? 'INVALID_RESPONSE' : 'COMMAND_FAILED';
+  recordQuotaAttempt({ stage: 'cli', outcome: 'failure', code });
 }
 export function resolveClaudeCommand(home = homedir(), env = process.env): string {
   const override = env.CLAUDE_CLI_PATH?.trim();
@@ -116,6 +121,7 @@ export function createClaudeSubscriptionReader(deps: {
       let auth: Record<string, unknown> | null;
       try { auth = asRecord(JSON.parse((await deps.auth()).stdout)); }
       catch (error) {
+        recordCommandFailure(error);
         if (error instanceof CommandFailure && error.kind === 'not-installed') {
           hadAccount = false;
           return cache('missing', async () => unavailable('not-installed', '未检测到本机 Claude Code CLI'));
@@ -123,6 +129,7 @@ export function createClaudeSubscriptionReader(deps: {
         return unavailable('temporarily-unavailable', '暂时无法确认 Claude Code 登录状态', hadAccount);
       }
       const kind = classifyClaudeAuthStatus(auth);
+      recordQuotaAttempt({ stage: 'credentials', outcome: kind === 'official' ? 'success' : 'failure', code: kind === 'official' ? null : kind === 'not-signed-in' ? 'NOT_SIGNED_IN' : kind === 'custom-provider' ? 'UNSUPPORTED_AUTH' : 'INVALID_RESPONSE' });
       if (kind === 'not-signed-in') { hadAccount = false; return cache('signed-out', async () => unavailable('not-signed-in', '请先登录 Claude Code')); }
       if (kind === 'custom-provider') { hadAccount = false; return cache('custom', async () => unavailable('custom-provider', '自定义模型无法获取配额')); }
       if (kind !== 'official') return unavailable('temporarily-unavailable', '暂时无法确认 Claude Code 登录状态', hadAccount);
@@ -138,11 +145,13 @@ export function createClaudeSubscriptionReader(deps: {
         try {
           const output = await deps.usage();
           const parsed = parseClaudeUsageResult(output.stdout, new Date(now()));
+          const code = parsed.denied ? 'AUTH_EXPIRED' : output.code !== 0 || parsed.isError ? 'COMMAND_FAILED' : !parsed.windows?.length ? 'INVALID_RESPONSE' : null;
+          recordQuotaAttempt({ stage: 'cli', outcome: code ? 'failure' : 'success', code });
           if (parsed.denied) return fail('expired', 'Claude 登录或额度访问受限，请检查 Claude Code 登录状态');
           if (output.code !== 0 || parsed.isError) return fail('temporarily-unavailable', 'Claude /usage 读取失败，请稍后重试');
           if (!parsed.windows?.length) return fail('temporarily-unavailable', 'Claude /usage 暂未返回可用额度');
           return annotate({ status: 'ready' as const, hasAccount: true, planLabel, windows: parsed.windows, fiveHour: parsed.fiveHour, sevenDay: parsed.sevenDay, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, Math.floor(now() / 1000));
-        } catch { return fail('temporarily-unavailable', 'Claude /usage 读取超时或启动失败，请稍后重试'); }
+        } catch (error) { recordCommandFailure(error); return fail('temporarily-unavailable', 'Claude /usage 读取超时或启动失败，请稍后重试'); }
       }, options.forceRefresh);
     })();
     const current = pending;

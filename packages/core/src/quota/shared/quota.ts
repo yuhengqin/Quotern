@@ -1,4 +1,5 @@
 import type { SubscriptionChannelId } from './subscription-channels.js';
+import type { QuotaReadDiagnostic } from './quota-diagnostic.js';
 
 export type QuotaPaceModel = 'uniform' | 'workdays' | 'automatic';
 export interface QuotaProfile {
@@ -30,6 +31,8 @@ export interface QuotaWindow {
   limit?: number;
   unit?: 'tokens' | 'requests' | 'credits';
   valueText?: string;
+  /** Structured monetary balance; the legacy ring percentage is not a quota ratio. */
+  balance?: { currency: 'CNY'; remaining: number | null };
   analysisEligible?: boolean;
 }
 /** Resolve cycle length from explicit metadata, numeric duration, or a stable period ID. */
@@ -66,6 +69,7 @@ export interface QuotaProviderState {
   providerId?: string;
   profileLabel?: string;
   provenance?: QuotaProvenance;
+  diagnostic?: QuotaReadDiagnostic;
   label: string;
   status: string;
   planLabel: string | null;

@@ -68,7 +68,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   app.use('*', cors());
   registerShareBackgroundApi(app, deps.dataDir);
   registerAchievementsApi(app, deps.dataDir);
-  registerQuotaApi(app, deps.quota);
+  registerQuotaApi(app, deps.quota, deps.dataDir);
 
   app.get('/health', (c) => {
     if (process.env.QUOTERN_DEV_ISOLATED === '1' && process.env.QUOTERN_DEV_INSTANCE_ID) {

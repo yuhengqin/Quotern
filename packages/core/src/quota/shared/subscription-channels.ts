@@ -10,6 +10,7 @@ export const SUBSCRIPTION_CHANNEL_VISIBILITY_EVENT =
 export const SUBSCRIPTION_CHANNELS = [
   { id: 'codex', label: 'Codex' },
   { id: 'claude', label: 'Claude' },
+  { id: 'gemini', label: 'Gemini CLI' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'copilot', label: 'Copilot' },
   { id: 'grok', label: 'Grok' },

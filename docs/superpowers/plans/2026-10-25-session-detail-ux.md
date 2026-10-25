@@ -72,3 +72,12 @@ Files: docs/ui-guidelines.md; 限定本任务的 smoke 脚本/合成 fixture 与
 - 独立审查未发现可行动缺陷。未补做屏幕阅读器实机、Safari/Firefox、安装包或真实 Agent 恢复；本机动作接口及 Core 均无改动。
 - 本工作区原共享依赖入口存在但内容缺失；按规定保留原 node_modules 为私有备份后，通过 pnpm 在 `.quotern-dev/revision-dependency-store` 初始化本次验证依赖，未改锁文件、版本或提交机器路径。备份保留于忽略目录 `.quotern-dev/dependency-backups/`，未删除共享存储或操作其他工作区。
 - 实现提交 `26b67e53` 已从 `a744ce64` 快进合入 `codex/session-insights`，无冲突；目标与实现分支代码一致、Git 状态干净，未推送。
+
+## Token 表格合并
+
+- [x] 删除独立 Token 构成区块；模型费用表首行增加当前口径合计，保留分类、推理包含关系和未知/未分类/未分配说明。
+- [x] 验证范围联动、无模型及缺分类、未分配费用、零值、响应式和旧交互，完成独立审查；按既定流程提交并本地合并。
+
+- 基于 `4524d535`，变更只涉及共享详情组件、合成验收脚本及对应文档。独立审查未发现产品缺陷，指出的 smoke 预期文案错误已修正并通过实测。
+- Dashboard/Desktop 构建及 Desktop typecheck 均通过，Dashboard 255 项测试全部通过，`git diff --check` 通过。日志为 `.quotern-dev/unified-token-table-*.log`；Dashboard 大包警告仍存在。本次不重复 Core/CLI 测试。
+- smoke 在旧构建上因缺少合计行失败；新构建通过 14 组检查。`.quotern-dev/session-detail-unified-table-3/` 保存结果及截图，覆盖首行合计与范围联动、输出包含推理、零值、无模型、分类未知、未分配费用、未分类 Token、中英文、浅深色、320/375 px、表格键盘横向滚动及原有动作/复制/焦点行为。实际操作使用合成 API，未启动真实 Agent 会话。

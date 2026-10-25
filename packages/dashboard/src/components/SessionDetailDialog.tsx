@@ -14,7 +14,7 @@ import { parseSessionPageSearch } from '../lib/session-page';
 import { buildSessionDetail, type DetailRange, type DetailScope } from '../lib/session-detail';
 import { ProviderIcon } from './ProviderIcon';
 import { useAppToastQueue } from '@/components/AppToastContext';
-import { DetailDisclosure, DetailValue, SessionModelBreakdown, SessionTokenBreakdown, type DetailFormat } from './SessionUsageBreakdown';
+import { DetailDisclosure, DetailValue, SessionModelBreakdown, type DetailFormat } from './SessionUsageBreakdown';
 
 const groupLabels = { own: 'usage.detail.own', subagent: 'usage.insights.subagent', fork: 'usage.detail.forks', unknown: 'usage.detail.otherRelated' } as const;
 
@@ -192,7 +192,6 @@ export function SessionDetailDialog({ row, range, showTokenShare = false, onClos
           {row.insights?.relationConflict && <p className="text-xs text-warning">{t('usage.detail.relationConflict')}</p>}
         </section>
 
-        <SessionTokenBreakdown usage={detail.usage} format={format} />
         <SessionModelBreakdown usage={detail.usage} format={format} />
 
         <section aria-label={t('usage.detail.performance')}>

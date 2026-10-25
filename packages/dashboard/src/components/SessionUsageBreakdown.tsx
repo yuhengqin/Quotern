@@ -26,28 +26,6 @@ export function DetailValue({ label, value }: { label: string; value: ReactNode 
   return <div className="flex min-w-0 items-baseline justify-between gap-4"><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words text-right tabular-nums text-foreground">{value}</dd></div>;
 }
 
-export function SessionTokenBreakdown({ usage, format }: { usage: ReturnType<typeof buildSessionDetail>['usage']; format: DetailFormat }) {
-  const { t } = useTranslation();
-  const parts = usage.parts;
-  const output = parts.output_tokens === null || parts.reasoning_output_tokens === null ? null : parts.output_tokens + parts.reasoning_output_tokens;
-  return <section aria-label={t('usage.detail.tokenBreakdown')}>
-    <h3 className="mb-3 font-semibold">{t('usage.detail.tokenBreakdown')}</h3>
-    <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-      <dl className="space-y-2">
-        <DetailValue label={t('usage.detail.uncachedInput')} value={format.tokens(parts.input_tokens)} />
-        <DetailValue label={t('usage.detail.cacheRead')} value={format.tokens(parts.cached_input_tokens)} />
-        <DetailValue label={t('usage.distribution.cacheWrite')} value={format.tokens(parts.cache_creation_input_tokens)} />
-      </dl>
-      <dl className="space-y-2">
-        <DetailValue label={t('usage.detail.outputTotal')} value={format.tokens(output)} />
-        <div className="border-l-2 border-separator pl-3"><DetailValue label={t('usage.detail.includingReasoning')} value={format.tokens(parts.reasoning_output_tokens)} /></div>
-        {usage.unclassifiedTokens !== null && usage.unclassifiedTokens > 0 && <DetailValue label={t('usage.detail.unclassified')} value={format.tokens(usage.unclassifiedTokens)} />}
-      </dl>
-    </div>
-    {!usage.detailsComplete && <p className="mt-3 text-xs text-muted">{t('usage.detail.partialTokens')}</p>}
-  </section>;
-}
-
 function ModelPricing({ model, format }: { model: DetailModel; format: DetailFormat }) {
   const { t, i18n } = useTranslation();
   const rateKeys: Record<string, string> = { input: 'usage.detail.uncachedInput', output: 'usage.detail.outputTotal', cache_read: 'usage.detail.cacheRead', cache_write: 'usage.distribution.cacheWrite' };
@@ -69,9 +47,12 @@ function ModelPricing({ model, format }: { model: DetailModel; format: DetailFor
 export function SessionModelBreakdown({ usage, format }: { usage: ReturnType<typeof buildSessionDetail>['usage']; format: DetailFormat }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+  const parts = usage.parts;
+  const output = parts.output_tokens === null || parts.reasoning_output_tokens === null ? null : parts.output_tokens + parts.reasoning_output_tokens;
+  const requests = usage.models.length > 0 && usage.missingModelTokens === 0 && usage.models.every(model => model.requests != null)
+    ? usage.models.reduce((total, model) => total + model.requests!, 0) : null;
   return <section aria-label={t('usage.detail.modelCosts')}>
     <h3 className="mb-3 font-semibold">{t('usage.detail.modelCosts')}</h3>
-    {usage.models.length > 0 ? <>
       <Table variant="secondary" className="max-w-full text-xs">
         <Table.ScrollContainer tabIndex={0} role="region" aria-label={t('usage.detail.modelCosts')} className="max-w-full overflow-x-auto overscroll-x-contain">
           <Table.Content aria-label={t('usage.detail.modelCosts')} className="min-w-[50rem]">
@@ -85,7 +66,18 @@ export function SessionModelBreakdown({ usage, format }: { usage: ReturnType<typ
               <Table.Column className="text-right">{t('usage.explorer.requests')}</Table.Column>
               <Table.Column className="text-right">{t('usage.common.cost')}</Table.Column>
             </Table.Header>
-            <Table.Body>{usage.models.map(model => <Table.Row key={model.model} id={model.model}>
+            <Table.Body>
+            <Table.Row id="usage:total" className="bg-surface-secondary font-semibold">
+              <Table.Cell>{t('usage.common.total')}</Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(usage.tokens)}</Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(parts.input_tokens)}</Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(parts.cached_input_tokens)}</Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(parts.cache_creation_input_tokens)}</Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(output)}<span className="block text-xs font-normal text-muted">{t('usage.detail.includingReasoning')}: {format.tokens(parts.reasoning_output_tokens)}</span></Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.number(requests)}</Table.Cell>
+              <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.money(usage.costUsd, usage.knownCostUsd)}<span className="block text-xs font-normal text-muted">{costLabel(usage.costKind, locale)}</span></Table.Cell>
+            </Table.Row>
+            {usage.models.map(model => <Table.Row key={model.model} id={`model:${model.model}`}>
               <Table.Cell className="max-w-52 break-words font-medium [overflow-wrap:anywhere]">{model.model}<span className="mt-1 block text-xs font-normal text-muted">{model.serviceTiers.filter(tier => tier !== 'unknown').join(' / ')}</span></Table.Cell>
               <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(model.tokens)}</Table.Cell>
               <Table.Cell className="whitespace-nowrap text-right tabular-nums">{format.tokens(model.input_tokens)}</Table.Cell>
@@ -98,8 +90,9 @@ export function SessionModelBreakdown({ usage, format }: { usage: ReturnType<typ
           </Table.Content>
         </Table.ScrollContainer>
       </Table>
-      <DetailDisclosure title={t('usage.detail.priceBasis')}>{usage.models.map(model => <ModelPricing key={model.model} model={model} format={format} />)}</DetailDisclosure>
-    </> : <p className="text-muted">{t('usage.activity.modelNotRecorded')}</p>}
+    {usage.unclassifiedTokens !== null && usage.unclassifiedTokens > 0 && <p className="mt-2 text-xs text-muted">{t('usage.detail.unclassified')}: {format.tokens(usage.unclassifiedTokens)}</p>}
+    {!usage.detailsComplete && <p className="mt-2 text-xs text-muted">{t('usage.detail.partialTokens')}</p>}
+    {usage.models.length > 0 ? <DetailDisclosure title={t('usage.detail.priceBasis')}>{usage.models.map(model => <ModelPricing key={model.model} model={model} format={format} />)}</DetailDisclosure> : <p className="mt-2 text-muted">{t('usage.activity.modelNotRecorded')}</p>}
     {usage.missingModelTokens !== null && usage.missingModelTokens > 0 && <p className="mt-2 text-xs text-muted">{t('usage.detail.unassignedModel', { tokens: format.tokens(usage.missingModelTokens) })}</p>}
     {usage.unallocatedCostUsd !== null && <p className="mt-2 rounded-lg bg-surface-secondary p-3 text-xs">{t('usage.explorer.unallocatedCost')}: {format.money(usage.unallocatedCostUsd)}. {t('usage.detail.modelCostCaution')}</p>}
   </section>;

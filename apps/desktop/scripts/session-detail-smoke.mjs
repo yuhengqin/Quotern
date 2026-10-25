@@ -29,6 +29,8 @@ const root = { source: 'codex', sessionId: 'fixture-root', sessionTitle: title, 
   ], performance: { tokensPerSecond: 60.444, estimatedRequestCount: 3, estimatedDurationMs: 33403, ttftMs: 2790.5, ttftSampleCount: 4, kind: 'estimated' }, signals: { toolCalls: 0, editTurns: null, retryTurns: null, firstPass: null, errorCount: null, compactionCount: null, costPerEdit: null, tokensPerEdit: null, coverage: 'partial' }, resumeCommand: 'codex resume fixture-root' },
 };
 const empty = { ...root, sessionId: 'fixture-empty', sessionTitle: 'Missing metrics / unknown usage', tokens: null, costUsd: null, costKind: 'unknown', models: [], detailsComplete: false, insights: undefined };
+const unassigned = { ...root, sessionId: 'fixture-unassigned', sessionTitle: 'Partial model allocation', tokens: 1000, costUsd: 6, unallocatedCostUsd: 2, models: [model(800, 4)], detailsComplete: false, insights: undefined };
+const unclassified = { ...root, sessionId: 'fixture-unclassified', sessionTitle: 'Unclassified token remainder', tokens: 1000, costUsd: 0, models: [{ ...model(1000, 0), requests: 0, cached_input_tokens: 880 }], detailsComplete: false, insights: undefined };
 let locale = 'zh-CN';
 let directoryFailure = false;
 let actionsUnavailable = false;
@@ -53,7 +55,7 @@ const api = async (route, init) => {
   if (url.pathname === '/functions/tud-session-directory') return directoryFailure ? { status: 503, body: { success: false, message: 'FIXTURE_UNAVAILABLE', data: null } } : { status: 200, body: { success: true, data: { directory: fixtureDirectory } } };
   if (url.pathname === '/functions/tud-session-activity') {
     const id = url.searchParams.get('sessionId');
-    const row = id === empty.sessionId ? empty : root;
+    const row = [empty, unassigned, unclassified].find(row => row.sessionId === id) ?? root;
     return { status: 200, body: { success: true, data: { sessions: [row], totalTokens: 21_100_000, attributedTokens: 21_100_000, otherTokens: 0, tokenTotalMismatch: false, missingSources: [], observedAt: '2026-10-25T05:40:00Z', billing: [], range: { fromDate: '2026-10-01', toDate: '2026-10-25', kind: id ? 'collected' : 'selected' } } } };
   }
   return { status: 503, body: { success: false, message: 'FIXTURE_NOT_PROVIDED', data: null } };
@@ -96,8 +98,9 @@ async function main() {
   assert.ok((await text(client)).includes('2026-10-01'));
   const ownPerformance = await client.evaluate(`${dialog}.querySelector('section[aria-label="响应表现"]').innerText`);
   const ownActivity = await client.evaluate(`${dialog}.querySelector('section[aria-label="已记录的活动"]').innerText`);
-  assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
-  assert.ok(await client.evaluate(`${dialog}.querySelector('section[aria-label="Token 构成"]').innerText.includes('1,960万')`));
+  assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 2);
+  assert.equal(await client.evaluate(`Boolean(${dialog}.querySelector('section[aria-label="Token 构成"]'))`), false);
+  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['合计', '2,000万', '20万', '1,960万', '0', '20万\n其中推理: 6万', '111', '$6\n价格估算']);
   checks.push('desktop-target-autoopens-own-scope-with-four-header-actions');
   await noOverflow(client, 'wide dialog overflow');
   await client.screenshot(path.join(output, 'desktop-light.png'));
@@ -122,7 +125,7 @@ async function main() {
   assert.ok((await text(client)).includes('$6'));
   await client.click(button('含关联会话'));
   await until(async () => (await text(client)).includes('≥ $9.9'), 'thread scope');
-  assert.ok(await client.evaluate(`${dialog}.querySelector('section[aria-label="Token 构成"]').innerText.includes('2,068万')`));
+  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['合计', '2,110万', '21.1万', '2,068万', '0', '21.1万\n其中推理: 6.33万', '333', '≥ $9.9\n部分估算或缺失']);
   assert.equal(await client.evaluate(`${dialog}.querySelector('section[aria-label="响应表现"]').innerText`), ownPerformance);
   assert.equal(await client.evaluate(`${dialog}.querySelector('section[aria-label="已记录的活动"]').innerText`), ownActivity);
   checks.push('scope-switch-updates-totals');
@@ -134,7 +137,7 @@ async function main() {
   await client.click(button('复制项目路径'));
   await until(() => clipboard.readText() === fixtureDirectory, 'directory clipboard');
   checks.push('top-level-command-and-path-copy-with-transient-toast');
-  assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 2);
+  assert.equal(await client.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 3);
   assert.equal(await client.evaluate(`Boolean(${summary('已记录的活动')})`), false);
   assert.equal(await client.evaluate(`(${summary('会话信息')}).textContent.trim()`), '会话信息');
   assert.ok((await text(client)).includes('未记录'));
@@ -213,6 +216,8 @@ async function main() {
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-empty&sessionFocus=empty`);
   await until(async () => (await text(browser)).includes(empty.sessionTitle), 'unknown fixture');
   assert.ok((await text(browser)).includes('No valid samples'));
+  assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1);
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '—', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', 'Amount unknown\nAmount unknown']);
   await until(() => browser.evaluate(`Boolean(${button('Retry')})`), 'directory retry available');
   directoryFailure = false;
   await browser.click(button('Retry'));
@@ -221,6 +226,17 @@ async function main() {
   await until(() => clipboard.readText() === 'codex resume fixture-empty', 'runtime command without insights');
   await browser.screenshot(path.join(output, 'browser-missing.png'));
   checks.push('english-no-insights-no-models-unknown-usage-and-directory-retry');
+  await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-unassigned&sessionFocus=unassigned`);
+  await until(async () => (await text(browser)).includes(unassigned.sessionTitle), 'unassigned fixture');
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '1K', '—', '—', '—', '—\nOf which reasoning: —', 'Not recorded', '$6\nPrice estimate']);
+  assert.ok((await text(browser)).includes('200 additional tokens have no model details.'));
+  assert.ok((await text(browser)).includes('$2'));
+  await browser.screenshot(path.join(output, 'browser-unassigned.png'));
+  await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-unclassified&sessionFocus=unclassified`);
+  await until(async () => (await text(browser)).includes(unclassified.sessionTitle), 'unclassified fixture');
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('table tbody tr').cells].map(cell=>cell.innerText)`), ['Total', '1K', '10', '880', '0', '10\nOf which reasoning: 3', '0', '$0\nPrice estimate']);
+  assert.ok((await text(browser)).includes('Unclassified tokens: 100'));
+  checks.push('summary-retains-unknown-parts-unallocated-cost-unclassified-tokens-and-zero');
   resumeBlocked = true;
   await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=blocked`);
   await until(async () => (await text(browser)).includes('no compatible resume entry'), 'source-specific unavailable reason');

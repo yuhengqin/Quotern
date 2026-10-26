@@ -21,9 +21,10 @@ import { selectKimiSubscription } from './shared/kimi-selection.js';
 import { createOMPQuotaObservationReader, selectQuotaObservation, type OMPQuotaObservation } from './readers/quota-observations.js';
 import { createQuotaSnapshotPublisher } from './snapshot.js';
 import { projectQuotaReport, type QuotaRuntimeSource } from './report.js';
+import { QUOTA_PROVIDER_DESCRIPTORS, getQuotaProviderDescriptor, type QuotaProviderId } from './shared/provider-descriptors.js';
 
 export { QuotaManager } from './readers/quota-manager.js';
-const STATUS_URLS: Record<string, string> = { codex: 'https://status.openai.com/', claude: 'https://status.claude.com/', cursor: 'https://status.cursor.com/', copilot: 'https://www.githubstatus.com/' };
+const STATUS_URLS: Record<string, string> = Object.fromEntries(QUOTA_PROVIDER_DESCRIPTORS.filter(p => p.statusPage).map(p => [p.id, p.statusPage!.url]));
 
 export function parseQuotaServiceStatus(value: unknown): QuotaServiceStatus['level'] {
   const indicator = (value as { status?: { indicator?: unknown } } | null)?.status?.indicator;
@@ -51,7 +52,7 @@ export async function createQuotaRuntime(options: {
     if (!native || typeof native !== 'object') return native;
     return selectQuotaObservation(native, observations.filter(item => item.provider === provider).map(item => item.snapshot));
   };
-  const reads: Record<string, () => Promise<unknown>> = {
+  const reads = {
     codex: () => codex(force), claude: () => claude(force), gemini: () => gemini(force),
     cursor: () => readCursorSubscription(force), copilot: () => readCopilotSubscription(force),
     grok: () => readGrokSubscription(force), zcode: () => readZcodeSubscription(force),
@@ -59,9 +60,9 @@ export async function createQuotaRuntime(options: {
     antigravity: () => readAntigravitySubscription(force), qoder: () => readQoderSubscription(force),
     minimax: () => readMiniMaxSubscription(force), deepseek: () => readDeepSeekSubscription(force),
     opencode: () => readOpenCodeSubscription(force),
-  };
+  } satisfies Record<QuotaProviderId, () => Promise<unknown>>;
   const readers: QuotaReader[] = SUBSCRIPTION_CHANNELS.map(channel => ({ ...channel,
-    interval: channel.id === 'codex' ? 180 : channel.id === 'copilot' ? 900 : channel.id === 'antigravity' ? 600 : 300,
+    interval: getQuotaProviderDescriptor(channel.id).refreshIntervalSeconds,
     read: () => captureQuotaRead(withObservations(channel.id, reads[channel.id])), statusUrl: STATUS_URLS[channel.id] }));
   const profiles = new Map<string, QuotaReader>();
   const observers = new Map<string, QuotaReader>();
@@ -75,7 +76,7 @@ export async function createQuotaRuntime(options: {
       if (existing) return existing;
       const read = profile.provider === 'codex' ? createDefaultCodexSubscriptionReader(options.fetch, profile.directory) : createDefaultClaudeSubscriptionReader(profile.directory);
       const reader: QuotaReader = { id: profile.provider, key: `${profile.provider}@${profile.id}`, profileId: profile.id, profileLabel: profile.label,
-        label: profile.provider === 'codex' ? 'Codex' : 'Claude', interval: profile.provider === 'codex' ? 180 : 300,
+        label: getQuotaProviderDescriptor(profile.provider).label, interval: getQuotaProviderDescriptor(profile.provider).refreshIntervalSeconds,
         read: () => captureQuotaRead(withObservations(profile.provider, () => read(force))), statusUrl: STATUS_URLS[profile.provider] };
       profiles.set(configuration, reader); return reader;
     });

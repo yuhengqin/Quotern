@@ -92,6 +92,7 @@ export class BucketStore {
 }
 
 export interface LocalApiDeps {
+  billingFetch?: import('../billing/openai-costs.js').BillingFetch;
   sessionActions?: import('../session-actions.js').SessionActionRuntime;
   /** Only the in-process Desktop transport may use the synthetic tud.local Host. */
   sessionActionsIpc?: boolean;

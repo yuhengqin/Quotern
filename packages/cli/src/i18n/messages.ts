@@ -9,7 +9,7 @@ const entries: Record<string, [string, string, string, string]> = {
   'quota.desktopRefresh': ['请在 Desktop 中刷新额度；命令行不能直接刷新 Desktop', 'Refresh quota in Desktop; the CLI cannot directly refresh Desktop', 'Desktop でクォータを更新してください。CLI から直接更新できません', 'Desktop에서 할당량을 새로고침하세요. CLI에서 직접 새로고침할 수 없습니다'],
   'quota.refreshUnavailable': ['无法刷新指定数据目录的 CLI 额度服务。请确认已有 CLI 服务和端口；仅使用 Desktop 时请在 Desktop 中刷新。', 'Cannot refresh the CLI quota runtime for this data directory. Check the running CLI and port; for Desktop-only use, refresh in Desktop.', 'このデータ保存先の CLI クォータを更新できません。実行中の CLI とポートを確認してください。Desktop のみの場合は Desktop で更新してください。', '이 데이터 디렉터리의 CLI 할당량을 새로고침할 수 없습니다. 실행 중인 CLI와 포트를 확인하세요. Desktop만 사용하면 Desktop에서 새로고침하세요.'],
   'quota.help': ['默认只读本地快照。--refresh 仅请求已有 CLI 服务；额度未知或过期不等于可用。', 'Reads local snapshots by default. --refresh requests an existing CLI runtime. Unknown or stale quota does not imply availability.', '既定ではローカルスナップショットを読み取ります。--refresh は実行中の CLI に要求します。不明・古いクォータは利用可能とは限りません。', '기본적으로 로컬 스냅샷만 읽습니다. --refresh는 실행 중인 CLI에 요청합니다. 알 수 없거나 오래된 할당량은 사용 가능함을 뜻하지 않습니다.'],
-  'quota.mcpHelp': ['stdio MCP：quota_status、quota_forecast、quota_diagnostics；只读，不刷新、登录或修改设置。', 'stdio MCP: quota_status, quota_forecast, quota_diagnostics; read only, without refresh, login or settings changes.', 'stdio MCP: quota_status、quota_forecast、quota_diagnostics。読取専用で、更新・ログイン・設定変更を行いません。', 'stdio MCP: quota_status, quota_forecast, quota_diagnostics. 읽기 전용이며 새로고침, 로그인, 설정 변경을 하지 않습니다.'],
+  'quota.mcpHelp': ['stdio MCP：quota_status、quota_forecast、quota_diagnostics / quota_recommend；只读，不刷新、登录或修改设置。', 'stdio MCP: quota_status, quota_forecast, quota_diagnostics / quota_recommend; read only, without refresh, login or settings changes.', 'stdio MCP: quota_status、quota_forecast、quota_diagnostics / quota_recommend。読取専用で、更新・ログイン・設定変更を行いません。', 'stdio MCP: quota_status, quota_forecast, quota_diagnostics / quota_recommend. 읽기 전용이며 새로고침, 로그인, 설정 변경을 하지 않습니다.'],
   'quota.stale': ['已过期', 'stale', '古いデータ', '오래된 데이터'],
   'quota.used': ['已用', 'used', '使用済み', '사용됨'],
   'quota.balance': ['余额', 'balance', '残高', '잔액'],
@@ -214,8 +214,9 @@ Commands:
                         查询已落盘的本地用量数据（只读，不触发同步）
   sessions              查询已采集会话；支持模型／项目筛选及 JSON／CSV 导出
   statusline            从 stdin 读取 Claude 状态并显示会话费用、今日估价与上下文
-  quota [status|forecast|diagnostics] 只读额度快照（详见 quota --help）
+  quota [status|forecast|diagnostics|recommend|providers] 只读额度快照（详见 quota --help）
   mcp                   只读额度 MCP 服务（stdio；详见 mcp --help）
+  prompt                通用终端额度摘要（只读缓存；详见 prompt --help）
   service <action>      后台服务与开机自启（macOS / Windows / Linux）
                         action: start | stop | status
   doctor                诊断系统环境与本地数据源
@@ -261,8 +262,9 @@ Commands:
                         Query persisted local usage (read only; does not sync)
   sessions              Query collected sessions with model/project filters and JSON/CSV export
   statusline            Show Claude session cost, local daily estimate and context from stdin
-  quota [status|forecast|diagnostics] Read quota snapshots (see quota --help)
+  quota [status|forecast|diagnostics|recommend|providers] Read quota snapshots (see quota --help)
   mcp                   Read-only quota MCP server (stdio; see mcp --help)
+  prompt                Terminal quota summary (cached; see prompt --help)
   service <action>      Background service and login startup (macOS / Windows / Linux)
                         action: start | stop | status
   doctor                Diagnose the system and local data sources
@@ -308,8 +310,9 @@ Examples:
                         保存済みの使用量を参照（読取専用。同期は行いません）
   sessions              保存済みセッションを絞り込み、JSON/CSV で出力
   statusline            stdin の Claude 状態から費用とコンテキストを表示
-  quota [status|forecast|diagnostics] クォータ参照（quota --help を参照）
+  quota [status|forecast|diagnostics|recommend|providers] クォータ参照（quota --help を参照）
   mcp                   読取専用クォータ MCP（stdio; mcp --help を参照）
+  prompt                キャッシュから端末クォータ摘要（prompt --help を参照）
   service <action>      バックグラウンドサービスとログイン時の自動起動
                         action: start | stop | status
   doctor                システムとローカルデータソースを診断
@@ -355,8 +358,9 @@ Examples:
                         저장된 로컬 사용량 조회 (읽기 전용, 동기화하지 않음)
   sessions              수집된 세션 필터링 및 JSON/CSV 내보내기
   statusline            stdin의 Claude 상태로 비용 및 컨텍스트 표시
-  quota [status|forecast|diagnostics] 할당량 조회 (quota --help 참조)
+  quota [status|forecast|diagnostics|recommend|providers] 할당량 조회 (quota --help 참조)
   mcp                   읽기 전용 할당량 MCP (stdio; mcp --help 참조)
+  prompt                캐시된 터미널 할당량 요약 (prompt --help 참조)
   service <action>      백그라운드 서비스 및 로그인 시 자동 시작
                         action: start | stop | status
   doctor                시스템 및 로컬 데이터 소스 진단

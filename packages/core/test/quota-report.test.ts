@@ -10,6 +10,8 @@ import { DEFAULT_QUOTA_PREFERENCES, type QuotaState } from '../src/quota/shared/
 import { createQuotaRuntime } from '../src/quota/runtime.js';
 import { SUBSCRIPTION_CHANNELS } from '../src/quota/shared/subscription-channels.js';
 import { mapDeepSeekBalance } from '../src/quota/shared/deepseek-subscription.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const now = 1792800000;
 function fixture(): QuotaState {
@@ -115,6 +117,32 @@ test('coalesced publication retains the newest state and leaves no temporary fil
     await Promise.all(Array.from({ length: 50 }, (_, i) => publisher.publish(projectQuotaReport(fixture(), 'cli', now + i))));
     await publisher.flush();
     assert.equal((await readQuotaReport(dir, { now: now + 50 })).generatedAt, now + 49);
+    assert.deepEqual(await readdir(path.join(dir, 'quota-snapshots')), ['cli.json']);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('snapshot directory failures reject the batch and allow a later explicit publication', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'quotern-snapshot-failure-'));
+  // Isolate the broken publisher: the regression otherwise leaves endless filesystem work.
+  const source = `
+    import assert from 'node:assert/strict';
+    import { writeFile, unlink } from 'node:fs/promises';
+    import { createQuotaSnapshotPublisher, readQuotaReport } from ${JSON.stringify(new URL('../src/quota/snapshot.js', import.meta.url).href)};
+    const directory = ${JSON.stringify(dir)};
+    const collision = ${JSON.stringify(path.join(dir, 'quota-snapshots'))};
+    const report = ${JSON.stringify(projectQuotaReport(fixture(), 'cli', now))};
+    await writeFile(collision, 'directory collision');
+    const publisher = createQuotaSnapshotPublisher(directory, 'cli');
+    const deadline = setTimeout(() => { console.error('PUBLISH_STILL_PENDING'); process.exit(2); }, 2000);
+    await assert.rejects(publisher.publish(report), error => ['EEXIST', 'ENOTDIR'].includes(error.code));
+    await publisher.flush();
+    await unlink(collision);
+    await publisher.publish({ ...report, generatedAt: report.generatedAt + 1 });
+    assert.equal((await readQuotaReport(directory, { now: report.generatedAt + 1 })).generatedAt, report.generatedAt + 1);
+    clearTimeout(deadline);
+  `;
+  try {
+    await promisify(execFile)(process.execPath, ['--input-type=module', '-e', source], { timeout: 5000 });
     assert.deepEqual(await readdir(path.join(dir, 'quota-snapshots')), ['cli.json']);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

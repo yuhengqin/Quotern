@@ -50,11 +50,25 @@ CLI 将额度历史与设置保存在其数据目录的 `quota/` 下（正式运
 
 `quota diagnostics` 将本次读取的固定阶段、HTTP 状态及错误码导出。通用 HTTP 层记录网络和限流，Codex/Claude/Gemini 另外记录认证与解析阶段；其余 reader 的未细分失败使用 `UNAVAILABLE`，不声称已重建所有内部尝试。`retainedFrom` 区分缓存保留和 OMP 替补，来源是实际展示数据的来源；native 失败后采用 OMP 时仍保留先前失败轨迹。`retryAt` 是后台失败退避时间，手动刷新仍沿用现有可主动重试规则。
 
+快照发布失败会结束并报告当前批次，不自动循环重试文件系统错误；后续状态发布仍可再次尝试。Gemini 设置兼容 CLI 的 JSON 注释格式，认证缓存继续只读。
+
 CLI 的 Node 网络与 Desktop 的 Chromium 网络配置不同。若网络需要代理，已设置 `HTTP_PROXY` / `HTTPS_PROXY` 仍可能不足；使用 Node 24 时，在启动 CLI 的同一终端先设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY = '1'`）。这让 Node 的 `fetch` 使用已有环境代理，不会修改系统代理，见 [Node 官方说明](https://nodejs.org/docs/v24.0.2/api/cli.html#node_use_env_proxy1)。该开关不适用于所有早期 Node 版本。
 
 写入采用串行原子替换。设置读取失败时暂停提醒并拒绝覆盖未知设置；保存失败不应用新选择。历史写入失败会提示，但不阻断当前额度展示。临时失败只在确认同账号时沿用旧值；账号切换或身份未知时清除旧账号展示与分析。
 
 具体数据源限制及只读凭据边界见 [订阅数据说明](subscription-plan-design.md)。系统通知能否送达还取决于操作系统、应用打包身份与用户通知设置。
+
+## Agent 建议、终端与扩展契约
+
+`quotern quota recommend` / MCP `quota_recommend` 基于已有快照提供精确模型组或功能池的监控账号建议；`quotern prompt` 提供只读终端摘要。模型池未知、身份未知、陈旧、失败、OMP 观察或旧快照不强行推荐；不执行登录或切换。命令与限制见 [CLI 使用说明](../CLI.md#账号建议渠道描述与终端摘要)。
+
+Claude 缺少五小时或共享周窗口时，推荐保守返回未知，原有部分额度展示保留。Codex 单共享窗口仍可参与判断，功能池的全部已知周期均参与瓶颈计算。
+
+`packages/core/src/quota/shared/provider-descriptors.ts` 是浏览器安全、版本化的渠道元数据契约：平台/策略限制、认证类别、刷新间隔、状态页、数值/诊断/profile 能力集中登记。`subscription-channels.ts` 从表投影兼容的 ID/名称；runtime reader 绑定使用穷尽类型检查。`quota providers --json` 可检查该契约。
+
+新增来源仍需显式实现 reader、注册绑定、双端品牌图标与测试。该表不执行脚本、读取外部插件或推断实际账号权限。能力表示结构上限，不代替窗口自身的身份/周期/新鲜度证据；basic 诊断不宣称重建全部内部尝试。原 native 间隔、profile 间隔、OMP 独立 60 秒和四个状态页不变。
+
+平台费用与余额另见 [平台费用说明](platform-costs.md)，不进入额度百分比或本机费用累计。
 
 ## 上游协议复核
 

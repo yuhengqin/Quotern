@@ -14,6 +14,8 @@ export interface QuotaReportWindow {
 export interface QuotaReportProvider {
   id: string; provider: SubscriptionChannelId; label: string; status: string; fetchedAt: number | null; queriedAt: number | null;
   stale: boolean; source: 'native' | 'omp'; identityVerified: boolean;
+  /** Snapshot-local provider ID for a verified account; never the private identity hash. */
+  canonicalId?: string | null;
   details: { id: string; valueKind: 'unlimited' | 'exhausted'; resetsAt: number | null; stale: boolean }[];
   windows: QuotaReportWindow[]; diagnostic: QuotaReadDiagnostic | null;
 }
@@ -60,6 +62,16 @@ function diagnosis(value: unknown): QuotaReadDiagnostic | null {
 /** Deliberately excludes preferences, account/profile labels, paths, errors and raw provider payloads. */
 export function projectQuotaReport(state: QuotaState, runtime: QuotaRuntimeSource, now = Date.now() / 1000): QuotaReport {
   const providers: QuotaReportProvider[] = [];
+  const accounts = new Map<string, typeof state.providers[number]>();
+  const accountKey = (p: typeof state.providers[number]) => p.provenance?.identityVerified && p.provenance.accountRef ? `${p.providerId ?? p.id.split('@')[0]}:${p.provenance.accountRef}` : null;
+  for (const p of state.providers.slice(0, 100)) {
+    const provider = p.providerId ?? p.id.split('@')[0];
+    if (!isSubscriptionChannelId(provider) || !new RegExp(`^${provider}(?:@[a-zA-Z0-9_-]{1,80})?$`).test(p.id)) continue;
+    const key = accountKey(p); if (!key) continue;
+    const old = accounts.get(key);
+    const score = (p: typeof state.providers[number]) => (p.provenance?.source === 'native' && p.status === 'ready' && !p.stale && !p.diagnostic?.code ? 1e15 : 0) + (p.fetchedAt ?? 0);
+    if (!old || score(p) > score(old)) accounts.set(key, p);
+  }
   for (const p of state.providers.slice(0, 100)) {
     const provider = p.providerId ?? p.id.split('@')[0];
     if (!isSubscriptionChannelId(provider) || !new RegExp(`^${provider}(?:@[a-zA-Z0-9_-]{1,80})?$`).test(p.id)) continue;
@@ -67,6 +79,7 @@ export function projectQuotaReport(state: QuotaState, runtime: QuotaRuntimeSourc
     providers.push({ id: p.id, provider, label: SUBSCRIPTION_CHANNELS.find(c => c.id === provider)!.label,
       status: statuses.includes(p.status) ? p.status : 'unavailable', fetchedAt: stamp(p.fetchedAt), queriedAt: stamp(p.queriedAt), stale,
       source: p.provenance?.source === 'omp' ? 'omp' : 'native', identityVerified: p.provenance?.identityVerified === true,
+      canonicalId: accountKey(p) ? accounts.get(accountKey(p)!)?.id ?? null : null,
       details: p.details.filter(d => windowId(d.id) && (d.valueKind === 'unlimited' || d.valueKind === 'exhausted')).slice(0, 128).map(d => ({ id: d.id,
         valueKind: d.valueKind as 'unlimited' | 'exhausted', resetsAt: stamp(d.resetsAt), stale: stale || d.resetsAt !== null && d.resetsAt <= now })),
       diagnostic: diagnosis(p.diagnostic), windows: p.windows.filter(w => windowId(w.id) && number(w.usedPercent)).slice(0, 128).map(w => {
@@ -96,8 +109,9 @@ export function parseQuotaReport(value: unknown, runtime: QuotaRuntimeSource, no
     const fetchedAt = nullableStamp(p.fetchedAt), queriedAt = nullableStamp(p.queriedAt);
     const providerStale = stale || p.stale === true || fetchedAt === null || fetchedAt < now - QUOTA_REPORT_MAX_AGE || fetchedAt > now + 300;
     const status = enumValue(p.status, statuses);
+    const canonicalId = typeof p.canonicalId === 'string' && new RegExp(`^${p.provider}(?:@[a-zA-Z0-9_-]{1,80})?$`).test(p.canonicalId) ? p.canonicalId : null;
     return { id: p.id, provider: p.provider, label: SUBSCRIPTION_CHANNELS.find(c => c.id === p.provider)!.label, status,
-      fetchedAt, queriedAt, stale: providerStale, source: enumValue(p.source, ['native', 'omp']), identityVerified: p.identityVerified === true,
+      fetchedAt, queriedAt, stale: providerStale, source: enumValue(p.source, ['native', 'omp']), identityVerified: p.identityVerified === true, canonicalId,
       details: p.details.map(item => {
         const d = record(item); if (!windowId(d.id)) throw new Error('invalid quota snapshot');
         const resetsAt = nullableStamp(d.resetsAt);

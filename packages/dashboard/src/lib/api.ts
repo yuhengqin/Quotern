@@ -3,6 +3,13 @@ import { LEADERBOARD_DEFAULT_LIMIT } from 'quotern-core/leaderboard';
 import type { PricingCatalogResponse } from './pricing-data.ts';
 import { readDemoBootstrap } from './demo-bootstrap.ts';
 import type { PricingData, PricingStatus } from 'quotern-core';
+import type { BillingReport } from 'quotern-core/billing/types';
+export async function fetchBillingReport(days: number, refresh = false): Promise<BillingReport> {
+  return request<BillingReport>(`/functions/tud-billing${refresh ? '/refresh' : `?days=${days}`}`, {
+    method: refresh ? 'POST' : 'GET', headers: { ...authHeaders(), ...(refresh ? { 'Content-Type': 'application/json' } : {}) },
+    ...(refresh ? { body: JSON.stringify({ days }) } : {}), signal: AbortSignal.timeout(50000), cache: 'no-store',
+  });
+}
 export type { PricingCatalogRow, PricingCatalogResponse } from './pricing-data.ts';
 
 /** The runtime owns prices; a standalone/offline panel can still use its bundle. */

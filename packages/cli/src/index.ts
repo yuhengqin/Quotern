@@ -527,10 +527,11 @@ async function main(): Promise<void> {
       } catch (error) { throw new CliUserError(error instanceof Error ? error.message : '演示操作失败'); }
       return;
     }
-    if (commandLine.args[0] === 'quota' || commandLine.args[0] === 'mcp') {
+    if (commandLine.args[0] === 'quota' || commandLine.args[0] === 'mcp' || commandLine.args[0] === 'prompt') {
       quotaQueryMode = true;
       const quota = await import('./quota-command.js');
-      if (commandLine.args[0] === 'quota') await quota.runQuotaCommand(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
+      if (commandLine.args[0] === 'prompt') await quota.runQuotaPrompt(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
+      else if (commandLine.args[0] === 'quota') await quota.runQuotaCommand(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
       else {
         const options = quota.parseQuotaArgs(commandLine.args.slice(1), commandLine.lang ?? activeLocale, true);
         if (options.help) console.log(quota.quotaHelp(commandLine.lang ?? activeLocale, true));

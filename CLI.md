@@ -71,7 +71,9 @@ quotern start
 | `quotern demo export --out <文件>` | 将已采集数据匿名化导出为独立演示快照 |
 | `quotern demo start --file <文件>` | 只读运行演示快照，默认端口 8253 |
 | `quotern quota [status\|forecast\|diagnostics]` | 只读查询额度、预测或安全来源诊断，支持 JSON |
-| `quotern mcp` | stdio MCP，只提供三个只读额度工具 |
+| `quotern quota recommend` / `quotern quota providers` | 只读账号建议 / 版本化渠道描述 |
+| `quotern prompt` | 通用终端单行额度摘要，只读缓存 |
+| `quotern mcp` | stdio MCP，提供四个只读额度工具 |
 | `quotern help` | 显示帮助 |
 
 ## 常用选项
@@ -143,9 +145,37 @@ quotern mcp --runtime latest
 }
 ```
 
-工具固定为 `quota_status`、`quota_forecast`、`quota_diagnostics`，参数仅接受可选的 `provider`，如 `{"provider":"gemini"}`；不接受任意文件路径或刷新参数。结果同时提供 JSON 文本和 `structuredContent`，stdout 只承载 MCP 消息。没有登录、切换账号、刷新或修改设置工具；stdin EOF、SIGINT/SIGTERM 会关闭服务。
+状态工具为 `quota_status`、`quota_forecast`、`quota_diagnostics`，参数接受可选的 `provider`，如 `{"provider":"gemini"}`。另有 `quota_recommend`，要求 `provider`，可选互斥的 `model` / `feature`（精确上游分组标识）。所有工具拒绝任意文件路径、刷新及设置参数。结果同时提供 JSON 文本和 `structuredContent`，stdout 只承载 MCP 消息；stdin EOF、SIGINT/SIGTERM 会关闭服务。
 
 Gemini CLI 的认证和内部 API 限制见 [订阅数据说明](docs/subscription-plan-design.md#gemini-cli)。
+
+### 账号建议、渠道描述与终端摘要
+
+```bash
+quotern quota recommend --provider claude --model opus --json
+quotern quota recommend --provider codex --feature EXACT_UPSTREAM_POOL --json
+quotern quota providers --json
+quotern prompt --provider codex --runtime desktop
+```
+
+推荐只使用新鲜、读取成功且身份已验证的原生监控账号，按已知受影响池中最小剩余比例排序，返回候选、固定原因和各池重置时间。Claude `model` 使用实际返回的分组（如 `opus`），Codex `feature` 使用接口实际返回的功能标识；不猜具体模型版本的池归属。指定目标时仍检查共享池，其他模型池不参与。省略目标只检查共享账号池，不表示任意模型均可用；缺必要证据返回 `unknown`，已知池耗尽返回 `blocked`。OMP 观察不是可切换账号候选。建议不会登录、修改凭据、切换供应商 CLI，也不保证请求成功。
+
+Claude 推荐要求同时观察到五小时和共享周额度；单个窗口仍可展示，但不足以推荐。Codex 保留上游单共享窗口的情况，指定功能时检查该功能的全部已知周期，不要求功能周期与账号周期相同。
+
+新版快照仅用已有 provider ID 表达本次快照内重复账号的引用，不导出身份哈希、备注或目录。旧快照缺该引用时不推荐；请在原 Quotern runtime 刷新一次。`recommend` 与 `providers` 不接受 `--refresh`。
+
+`prompt` 不读取 stdin、不联网、不写数据或初始化后台采样，输出最多 512 字符的一行纯文本（无 ANSI），保留真实零值、未知与陈旧状态。默认最多显示三个来源；`--provider` 选择一个。它有独立轻量入口，避免加载服务与日志解析器。现有 Claude `statusline` 保留原有 stdin 行为。
+
+PowerShell 可在自己的提示符函数中调用；Quotern 不自动修改 `$PROFILE`。例如：
+
+```powershell
+function prompt {
+  $quotaHint = & quotern prompt --provider codex
+  "$quotaHint`nPS $($executionContext.SessionState.Path.CurrentLocation)> "
+}
+```
+
+可自行按 30–60 秒缓存上述短句，减少重复启动进程。平台账单不进入终端额度摘要；费用与余额页面的配置及权限见 [平台费用说明](docs/platform-costs.md)。
 
 ## Claude statusline
 

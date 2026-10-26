@@ -91,7 +91,11 @@ export function createGeminiSubscriptionReader(deps: {
     try {
       const settingsText = await deps.readSettings();
       if (Buffer.byteLength(settingsText) > MAX_BYTES) throw new SyntaxError();
-      settings = object(JSON.parse(settingsText));
+      // Gemini CLI settings are JSON with comments. Match strings first so URL,
+      // escaped quote and comment-marker contents are preserved verbatim.
+      const uncommented = settingsText.replace(/"(?:[^"\\]|\\[\s\S])*"|\/\/[^\r\n]*|\/\*[\s\S]*?\*\//g,
+        token => token.startsWith('"') ? token : ' ');
+      settings = object(JSON.parse(uncommented));
       if (object(object(settings.security).auth).selectedType !== 'oauth-personal') return fail('unsupported-account', 'UNSUPPORTED_AUTH');
       const raw = await deps.readCredentials();
       if (Buffer.byteLength(raw) > MAX_BYTES) throw new SyntaxError();

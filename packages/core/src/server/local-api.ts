@@ -4,6 +4,8 @@ import { cors } from 'hono/cors';
 import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
+import { registerBillingApi } from './billing-api.js';
+import { createBillingService } from '../billing/service.js';
 import { registerSessionActionsApi } from './session-actions-api.js';
 import { SessionQueryService, type SessionRangeQuery } from '../session-query.js';
 import type { SessionListQuery } from '../session-list.js';
@@ -105,6 +107,15 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     registerShareBackgroundApi(app, deps.dataDir);
     registerAchievementsApi(app, deps.dataDir);
     registerQuotaApi(app, deps.quota, deps.dataDir);
+    registerBillingApi(app, { service: createBillingService({ fetch: deps.billingFetch }), ipc: deps.sessionActionsIpc,
+      quota: () => deps.getQuotaState?.() ?? deps.quota?.getState() ?? null,
+      local: range => {
+        const config = deps.getConfig();
+        const report = buildUsageReport(deps.bucketStore.getRows(), { period: 'summary', fromTime: new Date(range.startTime * 1000).toISOString(), toTime: new Date(range.endTime * 1000).toISOString() },
+          { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime' });
+        return { costUsd: report.summary.costUsd, knownCostUsd: report.summary.knownCostUsd, estimatedCostUsd: report.summary.costExplanation.estimatedCostUsd,
+          reportedCostUsd: report.summary.costExplanation.reportedCostUsd, coverage: report.coverage, scope: 'all-local-agents', fromTime: report.fromTime, toTime: report.toTime };
+      } });
     registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
   }
 

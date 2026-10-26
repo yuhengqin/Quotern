@@ -56,7 +56,11 @@ export function createQuotaSnapshotPublisher(directory: string, runtime: QuotaRu
         try { await writeFile(temporary, body, { mode: 0o600, flag: 'wx' }); await rename(temporary, target); }
         finally { await unlink(temporary).catch(() => {}); }
       }
-    })().finally(() => {
+    })().catch(error => {
+      // All callers in this batch observe the failure; retry only on a new publish.
+      queued = null;
+      throw error;
+    }).finally(() => {
       pending = null;
       // A state emission can arrive between the drain completing and this microtask.
       if (queued) return publish(queued);

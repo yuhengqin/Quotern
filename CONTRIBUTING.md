@@ -115,6 +115,7 @@ PR 会自动带出模板，按模板填完即可。几个容易踩的点：
 - **跨端改动**在 PR 正文写清影响范围。
 - 合并前确保 `pnpm build` 和 `pnpm test` 通过。`pnpm test` 会先构建再跑四个包的测试；只想跑单个包时用 `pnpm --filter quotern-core test`（把包名换成 `quotern` / `quotern-dashboard` / `quotern-desktop` 即可）。
 - 改动会话详情、帮助浮层或会话模型价格跳转后，在两端构建完成后执行 `corepack pnpm test:session-detail-ui`。脚本使用合成 API 与独立临时目录，检查默认标签、重复汇总、说明按需查看、价格筛选以及键盘/窄屏；截图和结果写入 `.quotern-dev/session-detail-ui-*`。Windows CI 自动运行同一命令，视觉层级仍须人工看截图。
+- 改动费用与余额页面后，两端构建完成再执行 `corepack pnpm test:billing-ui`；它使用合成平台响应验收真实 HTTP/IPC 页面，覆盖长金额、原币种、错误、期间和键盘，截图位于 `.quotern-dev/billing-ui-*`。Windows CI 执行同一命令。
 
 PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Windows + Node 22 上跑同一套命令：`pnpm build` → 桌面端 `typecheck` → 四个包的测试。Windows 另执行 `pnpm test:session-detail-ui` 合成界面回归。CI 红了先看是哪个包哪一步挂的，本地用上面对应命令复现。
 

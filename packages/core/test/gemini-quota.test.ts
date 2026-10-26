@@ -35,6 +35,29 @@ test('Gemini queries only loadCodeAssist and retrieveUserQuota and preserves mod
   assert.doesNotMatch(JSON.stringify(result), /fixture-secret|never-use-this|fixture-project/);
 });
 
+test('Gemini accepts commented CLI settings while preserving comment markers inside strings', async () => {
+  const commented = `{
+    // Existing Gemini CLI settings allow comments.
+    "security": { "auth": { /* selected Google login */ "selectedType": "oauth-personal" } },
+    "unused": "https://example.test/path/*literal*/?quoted=\\\"//literal\\\""
+  }`;
+  let calls = 0, reads = 0;
+  const result = await reader(async url => { calls++; return url.endsWith('loadCodeAssist') ? json({ cloudaicompanionProject: 'fixture-project' }) : json({ buckets: [bucket] }); },
+    { readSettings: async () => commented, readCredentials: async () => { reads++; return credentials(); } })();
+  assert.equal(result.status, 'ready'); assert.equal(result.windows[0].usedPercent, 58.00000000000001);
+  assert.equal(calls, 2); assert.equal(reads, 1);
+});
+
+test('Gemini still rejects malformed comments or strings before reading credentials', async () => {
+  for (const raw of ['{/* unterminated', '{"security":"unterminated // comment}', '{"security":1/*comment*/2}']) {
+    let reads = 0;
+    const result = await captureQuotaRead(() => reader(async () => { throw new Error('no network'); },
+      { readSettings: async () => raw, readCredentials: async () => { reads++; return credentials(); } })());
+    assert.equal(result.status, 'access-denied'); assert.equal(reads, 0);
+    assert.equal(quotaReadAttempts(result)[0].code, 'INVALID_CREDENTIALS');
+  }
+});
+
 test('Gemini rejects expired, malformed, missing and unsupported credentials without network or token refresh', async () => {
   for (const options of [
     { readCredentials: async () => credentials('token', now - 1) },

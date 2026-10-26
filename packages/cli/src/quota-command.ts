@@ -1,18 +1,22 @@
 import { readFile, stat } from 'node:fs/promises';
 import { request } from 'node:http';
 import { join, resolve } from 'node:path';
-import { DEFAULT_PORT, resolveDataDir } from 'quotern-core';
+import { DEFAULT_PORT, resolveDataDir } from 'quotern-core/paths';
 import { filterQuotaReport, projectQuotaReport, type QuotaReport, type QuotaRuntimeSource } from 'quotern-core/quota/report';
 import { quotaDirectoryKey, readQuotaReport } from 'quotern-core/quota/snapshot';
 import { isSubscriptionChannelId, type SubscriptionChannelId } from 'quotern-core/quota/shared/subscription-channels';
 import type { QuotaState } from 'quotern-core/quota/shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
 import { cliT, userError } from './i18n/locale.js';
+import { recommendQuota, validQuotaTarget } from 'quotern-core/quota/recommend';
+import { formatQuotaPrompt } from 'quotern-core/quota/prompt';
+import { QUOTA_PROVIDER_DESCRIPTORS, QUOTA_PROVIDER_DESCRIPTOR_SCHEMA_VERSION } from 'quotern-core/quota/shared/provider-descriptors';
 
-export type QuotaView = 'status' | 'forecast' | 'diagnostics';
+export type QuotaView = 'status' | 'forecast' | 'diagnostics' | 'recommend' | 'providers';
 export interface QuotaCommandOptions {
   view: QuotaView; runtime: QuotaRuntimeSource | 'latest'; provider?: SubscriptionChannelId;
   directory: string; refresh: boolean; port?: number; format: 'text' | 'json'; help: boolean;
+  model?: string; feature?: string;
 }
 export function parseQuotaArgs(args: string[], locale: SupportedLocale, mcp = false): QuotaCommandOptions {
   const options: QuotaCommandOptions = { view: 'status', runtime: 'latest', directory: resolveDataDir(), refresh: false, format: 'text', help: false };
@@ -27,7 +31,7 @@ export function parseQuotaArgs(args: string[], locale: SupportedLocale, mcp = fa
       if (key === '--json') options.format = 'json'; else if (key === '--refresh') options.refresh = true; else options.help = true;
       continue;
     }
-    if (['--data-dir', '--runtime', ...(!mcp ? ['--provider', '--format', '--port'] : [])].includes(key)) {
+    if (['--data-dir', '--runtime', ...(!mcp ? ['--provider', '--format', '--port', '--model', '--feature'] : [])].includes(key)) {
       const value = split < 0 ? args[++i] : token.slice(split + 1);
       if (!value || value.startsWith('-')) throw userError(locale, 'usage.missing', { option: key });
       if (key === '--data-dir') options.directory = resolve(resolveDataDir(value));
@@ -35,18 +39,21 @@ export function parseQuotaArgs(args: string[], locale: SupportedLocale, mcp = fa
       else if (key === '--provider' && isSubscriptionChannelId(value)) options.provider = value;
       else if (key === '--format' && ['json', 'text'].includes(value)) options.format = value as 'json' | 'text';
       else if (key === '--port' && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) options.port = Number(value);
+      else if ((key === '--model' || key === '--feature') && validQuotaTarget(value)) options[key === '--model' ? 'model' : 'feature'] = value;
       else throw userError(locale, 'quota.invalidValue', { option: key });
       continue;
     }
-    if (!mcp && !hasView && ['status', 'forecast', 'diagnostics'].includes(token)) { options.view = token as QuotaView; hasView = true; }
+    if (!mcp && !hasView && ['status', 'forecast', 'diagnostics', 'recommend', 'providers'].includes(token)) { options.view = token as QuotaView; hasView = true; }
     else throw userError(locale, token.startsWith('-') ? 'arg.unknownOption' : 'arg.unknownCommand', { value: token });
   }
   if (options.port !== undefined && !options.refresh) throw userError(locale, 'quota.portRefresh');
   if (options.refresh && options.runtime === 'desktop') throw userError(locale, 'quota.desktopRefresh');
+  if (!options.help && (options.view === 'recommend' && (!options.provider || options.refresh) || options.model && options.feature
+    || (options.model || options.feature) && options.view !== 'recommend' || options.view === 'providers' && options.refresh)) throw userError(locale, 'quota.invalidValue', { option: 'recommend/providers' });
   return options;
 }
 export function quotaHelp(locale: SupportedLocale, mcp = false): string {
-  return `${mcp ? 'quotern mcp [--data-dir PATH] [--runtime latest|cli|desktop]' : 'quotern quota [status|forecast|diagnostics] [--json] [--provider ID]\n  [--runtime latest|cli|desktop] [--data-dir PATH] [--refresh [--port PORT]]'}\n${cliT(locale, mcp ? 'quota.mcpHelp' : 'quota.help')}`;
+  return `${mcp ? 'quotern mcp [--data-dir PATH] [--runtime latest|cli|desktop]' : 'quotern quota [status|forecast|diagnostics|providers] [--json] [--provider ID]\n  [--runtime latest|cli|desktop] [--data-dir PATH] [--refresh [--port PORT]]\nquotern quota recommend --provider ID [--model EXACT_GROUP | --feature EXACT_POOL] [--json]\nquotern prompt [--provider ID] [--runtime latest|cli|desktop] [--data-dir PATH]'}\n${cliT(locale, mcp ? 'quota.mcpHelp' : 'quota.help')}`;
 }
 export function quotaView(report: QuotaReport, view: QuotaView): Record<string, unknown> {
   if (view === 'status') return { ...report, view };
@@ -109,6 +116,23 @@ async function refreshQuota(options: QuotaCommandOptions, locale: SupportedLocal
 export async function runQuotaCommand(args: string[], locale: SupportedLocale): Promise<void> {
   const options = parseQuotaArgs(args, locale);
   if (options.help) { console.log(quotaHelp(locale)); return; }
+  if (options.view === 'providers') {
+    const providers = QUOTA_PROVIDER_DESCRIPTORS.filter(p => !options.provider || p.id === options.provider);
+    console.log(options.format === 'json' ? JSON.stringify({ schemaVersion: QUOTA_PROVIDER_DESCRIPTOR_SCHEMA_VERSION, providers }, null, 2)
+      : providers.map(p => `${p.id}: ${p.label} · ${p.refreshIntervalSeconds}s · ${p.strategies.map(s => s.kind).join(', ')}`).join('\n'));
+    return;
+  }
   const report = filterQuotaReport(options.refresh ? await refreshQuota(options, locale) : await readQuotaReport(options.directory, { runtime: options.runtime }), options.provider);
+  if (options.view === 'recommend') {
+    const result = recommendQuota(report, { provider: options.provider!, ...(options.model ? { model: options.model } : {}), ...(options.feature ? { feature: options.feature } : {}) });
+    console.log(options.format === 'json' ? JSON.stringify(result, null, 2) : [`${result.result}: ${result.recommendedId ?? '—'}`, ...result.candidates.map(c => `${c.id}: ${c.reason} · ${c.remainingPercent ?? '—'}%`)].join('\n')); return;
+  }
   console.log(options.format === 'json' ? JSON.stringify(quotaView(report, options.view), null, 2) : formatQuota(report, options.view, locale));
+}
+
+export async function runQuotaPrompt(args: string[], locale: SupportedLocale): Promise<void> {
+  const options = parseQuotaArgs(args, locale);
+  if (options.help) { console.log('quotern prompt [--provider ID] [--runtime latest|cli|desktop] [--data-dir PATH]'); return; }
+  if (options.refresh || options.view !== 'status' || options.format !== 'text') throw userError(locale, 'quota.invalidValue', { option: 'prompt' });
+  console.log(formatQuotaPrompt(filterQuotaReport(await readQuotaReport(options.directory, { runtime: options.runtime }), options.provider)));
 }

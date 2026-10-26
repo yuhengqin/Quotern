@@ -9,7 +9,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 const bin = fileURLToPath(new URL(process.env.QUOTERN_CLI_TEST_DIST ? `${process.env.QUOTERN_CLI_TEST_DIST}/index.js` : '../bin/quotern.js', import.meta.url));
 
-test('MCP lists exactly three read-only tools, validates parameters and leaves missing storage untouched', { timeout: 15000 }, async () => {
+test('MCP lists four read-only tools, validates parameters and leaves missing storage untouched', { timeout: 15000 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'quotern-mcp-'));
   const transport = new StdioClientTransport({ command: process.execPath, args: [bin, 'mcp', '--data-dir', dir], stderr: 'pipe' });
   let stderr = ''; transport.stderr?.on('data', part => { stderr += part; });
@@ -17,11 +17,12 @@ test('MCP lists exactly three read-only tools, validates parameters and leaves m
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.deepEqual(tools.map(t => t.name).sort(), ['quota_diagnostics', 'quota_forecast', 'quota_status']);
+    assert.deepEqual(tools.map(t => t.name).sort(), ['quota_diagnostics', 'quota_forecast', 'quota_recommend', 'quota_status']);
     for (const tool of tools) {
       assert.equal(tool.annotations.readOnlyHint, true); assert.equal(tool.annotations.openWorldHint, false);
       const result = await client.callTool({ name: tool.name, arguments: { provider: 'codex' } });
-      assert.equal(result.structuredContent.availability, 'missing');
+      if (tool.name === 'quota_recommend') assert.equal(result.structuredContent.result, 'unknown');
+      else assert.equal(result.structuredContent.availability, 'missing');
       assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
     }
     const invalid = await client.callTool({ name: 'quota_status', arguments: { refresh: true } });

@@ -40,6 +40,7 @@ import {
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
 import { getQuotaRuntimeState } from './quota-runtime';
+import { billingFetch } from './billing-fetch';
 import { createRecoverableSync } from './sync-recovery';
 import {
   invalidateSyncWorkerCursors,
@@ -255,6 +256,7 @@ function buildApp(state: {
 }): LocalApiApp {
   return createLocalApiApp({
     sessionActionsIpc: true,
+    billingFetch,
     getQuotaState: getQuotaRuntimeState,
     dataDir: state.dir,
     getConfig: state.getConfig,

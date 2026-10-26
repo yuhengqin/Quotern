@@ -1,4 +1,5 @@
 /** Dashboard / tray subscription channel ids and display preferences. */
+import { QUOTA_PROVIDER_DESCRIPTORS, type QuotaProviderId } from './provider-descriptors.js';
 
 export const SUBSCRIPTION_CHANNEL_VISIBILITY_KEY =
   'tud.subscriptionChannelVisibility';
@@ -7,24 +8,9 @@ export const SUBSCRIPTION_CHANNEL_VISIBILITY_EVENT =
   'tud:subscription-channel-visibility';
 
 /** Channels with a working local subscription adapter (excludes Trae / WorkBuddy stubs). */
-export const SUBSCRIPTION_CHANNELS = [
-  { id: 'codex', label: 'Codex' },
-  { id: 'claude', label: 'Claude' },
-  { id: 'gemini', label: 'Gemini CLI' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'copilot', label: 'Copilot' },
-  { id: 'grok', label: 'Grok' },
-  { id: 'kimi', label: 'Kimi' },
-  { id: 'zcode', label: 'ZCode' },
-  { id: 'antigravity', label: 'Antigravity' },
-  { id: 'qoder', label: 'Qoder' },
-  { id: 'minimax', label: 'MiniMax' },
-  { id: 'opencode', label: 'OpenCode' },
-  { id: 'deepseek', label: 'DeepSeek' },
-] as const;
+export const SUBSCRIPTION_CHANNELS = QUOTA_PROVIDER_DESCRIPTORS.map(({ id, label }) => ({ id, label }));
 
-export type SubscriptionChannelId =
-  (typeof SUBSCRIPTION_CHANNELS)[number]['id'];
+export type SubscriptionChannelId = QuotaProviderId;
 
 /** Missing keys default to visible (`true`). */
 export type SubscriptionChannelVisibility = Partial<

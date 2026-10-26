@@ -9,6 +9,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { createLocalApiApp, BucketStore } from '../../../packages/core/dist/index.js';
 import { buildAchievementFacts } from '../../../packages/core/dist/achievements/facts.js';
 import { evaluateAchievements } from '../../../packages/core/dist/achievements/evaluate.js';
+import { DEFAULT_QUOTA_PREFERENCES } from '../../../packages/core/dist/quota/shared/quota.js';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,6 +24,7 @@ app.commandLine.appendSwitch('remote-debugging-port', String(debugPort));
 const referenceTime = '2026-10-25T12:00:00Z';
 const longProject = 'https://ghuntley.com/allocations/a-very-long-project-name-with-a-recognizable-ending';
 const parentTitle = '评估桌面宠物复刻可行性';
+const longModel = 'model-with-a-very-long-selected-name-for-compact-related-session-filters';
 const displayTitles = { 74: parentTitle, 72: '检查 REA MCP 可用性', 71: '规划云服务器演示部署', 70: '查找 Windows 安装目录选项', 69: '分析 AgentGauge 可吸收功能', 68: '适配桌面宠物交互', 79: '调研交互方案' };
 const messages = [], observations = [], evidence = [], titles = [];
 for (let index = 0; index < 84; index++) {
@@ -30,7 +32,7 @@ for (let index = 0; index < 84; index++) {
   const parentId = index === 75 ? 'fixture-0' : index >= 80 ? `fixture-${index - 1}` : 'fixture-74';
   const tokens = index === 83 ? 9_999_999_999 : (100 + index) * 100_000;
   messages.push({ source: 'claude', sessionId, id: sessionId, role: 'assistant', timestamp, projectLabel: index === 72 ? longProject : index === 74 || child ? 'Quotern' : index % 2 ? 'Alpha' : 'Beta' });
-  observations.push({ source: 'claude', sessionId, id: sessionId, timestamp, model: index >= 80 ? 'model-b' : index % 2 ? 'model-a' : 'model-b', tokens, usageKnown: true, costUsd: index === 83 ? 123456.78 : index / 4, costKind: 'recorded', tokenParts: { input_tokens: tokens - 20, output_tokens: 20, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 }, billing: { service: 'anthropic', mode: 'api', accountRef: null, evidence: 'recorded' } });
+  observations.push({ source: 'claude', sessionId, id: sessionId, timestamp, model: index === 79 ? longModel : index >= 80 ? 'model-b' : index % 2 ? 'model-a' : 'model-b', tokens, usageKnown: true, costUsd: index === 83 ? 123456.78 : index / 4, costKind: 'recorded', tokenParts: { input_tokens: tokens - 20, output_tokens: 20, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 }, billing: { service: 'anthropic', mode: 'api', accountRef: null, evidence: 'recorded' } });
   evidence.push({ source: 'claude', sessionId, id: 'meta', timestamp, kind: 'metadata', ...(child ? { parentId, relationKind: 'subagent' } : {}),
     ...(index === 76 ? { agentNickname: 'Ada', agentRole: 'explorer' } : index === 77 ? { agentRole: 'reviewer' } : index === 80 ? { agentNickname: 'Grace-with-a-very-long-trusted-agent-nickname', agentRole: 'code_explorer-with-a-very-long-role' } : {}) });
   if (index !== 73 && (index < 76 || index === 79)) titles.push([JSON.stringify(['claude', sessionId]), { title: displayTitles[index] ?? (child ? `Child ${index}` : `Fixture ${index}`), priority: 2 }]);
@@ -46,6 +48,9 @@ let failurePage = 0, server;
 async function api(route, init = {}) {
   const url = new URL(route, 'http://localhost');
   calls.push({ path: url.pathname, query: Object.fromEntries(url.searchParams) });
+  // Opening the ordinary dashboard asks to ensure its collection range. Keep
+  // this synthetic, read-only fixture in place instead of starting collection.
+  if (url.pathname === '/functions/tud-ensure-local-range') return { status: 200, body: { success: true, message: 'ok', data: { expanded: false, localCollectSince: demo.collectSince, statsSince: demo.collectSince, sync: null, message: 'fixture' } } };
   if (url.pathname === '/functions/tud-session-list' && Number(url.searchParams.get('page')) === failurePage) return { status: 500, body: { success: false, message: 'FIXTURE_PAGE_FAILURE', data: null } };
   const response = await hono.request(route, init);
   return { status: response.status, body: await response.json() };
@@ -69,8 +74,25 @@ async function connect(window) {
 }
 const activePage = `document.querySelector('footer [aria-current="page"]')?.textContent.trim()`;
 const pageButton = page => `document.querySelector('footer button[aria-label="转到第 ${page} 页"]')`;
+async function assertSelectTextFits(client, trigger, label) {
+  const values = await client.evaluate(`(() => {
+    const target = (${trigger}), buttons = target instanceof Element ? [target] : [...target];
+    return buttons.filter(button => button.getClientRects().length).map(button => {
+      const value = button.querySelector('.select__value, .autocomplete__value');
+      const outer = button.getBoundingClientRect(), inner = value.getBoundingClientRect();
+      return { text: value.textContent, height: value.clientHeight, scrollHeight: value.scrollHeight,
+        lineHeight: parseFloat(getComputedStyle(value).lineHeight),
+        centerDelta: Math.abs(inner.top + inner.height / 2 - outer.top - outer.height / 2) };
+    });
+  })()`);
+  assert.ok(values.length > 0, label + ' has visible picker text');
+  for (const geometry of values) assert.ok(geometry.height >= geometry.lineHeight && geometry.scrollHeight <= geometry.height + 1 && geometry.centerDelta <= 1,
+    label + ' keeps its text complete and vertically centered: ' + JSON.stringify(geometry));
+}
+const allPickers = 'document.querySelectorAll(".select__trigger, .autocomplete__trigger")';
 async function exercise(window, client, mode) {
   await until(() => client.evaluate(`${activePage}==='4' && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' initial server page');
+  await assertSelectTextFits(client, allPickers, mode + ' session filters and pagination');
   assert.ok(calls.some(call => call.path.endsWith('session-list') && call.query.page === '4'));
   assert.equal(calls.some(call => call.path.endsWith('session-detail')), false, 'list loading must not fetch details');
   assert.equal(await client.evaluate('document.querySelectorAll("[data-session-trigger]").length'), 12);
@@ -146,6 +168,7 @@ async function exercise(window, client, mode) {
   assert.ok(treeIndent.arrow >= 16 && Math.abs(treeIndent.icon - treeIndent.arrow) <= 1, 'the child disclosure and icon indent together: ' + JSON.stringify(treeIndent));
   const toolbarGap = await client.evaluate(`(()=>{const bar=(${children}).querySelector('[data-related-toolbar]'),label=bar.querySelector('p').getBoundingClientRect(),control=bar.querySelector('[aria-haspopup=listbox]').getBoundingClientRect();return control.left-label.right;})()`);
   assert.ok(toolbarGap >= 0 && toolbarGap <= 70, 'the local model filter stays beside its heading: ' + toolbarGap);
+  await assertSelectTextFits(client, `(${children}).querySelector('[aria-haspopup=listbox]')`, mode + ' related model filter');
   assert.equal(await client.evaluate(`getComputedStyle((${child76}).querySelector('[data-session-short-id]')).fontSize`), '12px', 'short identities stay readable');
   assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-short-id]').getBoundingClientRect().top>(${child76}).querySelector('[data-session-title]').getBoundingClientRect().top`), true, 'IDs occupy a separate line');
   await client.click(nestedDisclosure);
@@ -184,6 +207,15 @@ async function exercise(window, client, mode) {
   await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), 'clear related model filter');
   await client.click(`[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.trim()==='全部模型')`);
   await until(() => client.evaluate(`(${children}).querySelectorAll('[data-session-depth="1"]').length===4 && (${children}).querySelector('[aria-haspopup=listbox]').textContent.includes('全部')`), mode + ' related all-model results');
+  await client.click(`(${children}).querySelector('[aria-haspopup=listbox]')`);
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), mode + ' long model menu');
+  await client.click(`[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.trim()===${JSON.stringify(longModel)})`);
+  await until(() => client.evaluate(`(${children}).querySelectorAll('[data-session-depth="1"]').length===1`), mode + ' long model selection');
+  await assertSelectTextFits(client, `(${children}).querySelector('[aria-haspopup=listbox]')`, mode + ' long selected model');
+  await client.click(`(${children}).querySelector('[aria-haspopup=listbox]')`);
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), mode + ' restore all models menu');
+  await client.click(`[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.trim()==='全部模型')`);
+  await until(() => client.evaluate(`(${children}).querySelectorAll('[data-session-depth="1"]').length===4`), mode + ' restore all models');
   const childTrigger = `(${nestedDisclosure}).parentElement.querySelector('[data-session-trigger]')`;
   const hoverPoint = await client.evaluate(`(()=>{const el=(${childTrigger});el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:r.right-8,y:r.top+r.height/2}})()`);
   await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...hoverPoint });
@@ -211,6 +243,7 @@ async function exercise(window, client, mode) {
   await client.evaluate('document.querySelector("h1").scrollIntoView({block:"start"}); true');
   await wait(150);
   assert.equal(await client.evaluate('document.querySelector("[data-session-tokens] > span").getBoundingClientRect().width>1'), true, 'stacked rows retain the Token unit');
+  await assertSelectTextFits(client, 'document.querySelector("[data-session-sort]")', mode + ' narrow sort filter');
   await client.click('document.querySelector("[data-session-sort]")');
   await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), mode + ' narrow combined sorting');
   assert.equal(await client.evaluate('document.querySelectorAll("[role=option]").length'), 8, 'all four sort fields retain both directions');
@@ -222,6 +255,7 @@ async function exercise(window, client, mode) {
   await until(() => client.evaluate('document.querySelector("section[aria-label=全部会话]")?.getAttribute("aria-busy")==="false" && !document.querySelector("[role=listbox]")'), mode + ' restore narrow recent sorting');
   await client.click(disclosure);
   await until(() => client.evaluate(`(${disclosure}).getAttribute('aria-expanded')==='true'`), mode + ' narrow related disclosure');
+  await assertSelectTextFits(client, `(${children}).querySelector('[aria-haspopup=listbox]')`, mode + ' narrow related model filter');
   await client.click(nestedDisclosure);
   await until(() => client.evaluate(`Boolean(document.querySelector('[data-session-depth="2"]'))`), mode + ' narrow second-level disclosure');
   assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-tokens] > span').getBoundingClientRect().width>1`), true, 'narrow descendants keep the Token unit');
@@ -255,24 +289,75 @@ async function exercise(window, client, mode) {
   await client.click(`(${single}).querySelector('[data-session-disclosure]')`);
   assert.equal(await client.evaluate(`(${single}).querySelector('[data-related-model]').textContent.includes('model-a')`), true, 'one model is a static readable label');
   assert.equal(await client.evaluate(`(${single}).querySelector('[data-session-related] [aria-haspopup=listbox]')===null`), true, 'one model needs no ineffective filter');
+  const agentFilter = 'document.querySelector("[aria-label=会话筛选] .select__trigger")';
+  await client.click(agentFilter);
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), mode + ' Agent filter menu');
+  await client.click('[...document.querySelectorAll("[role=option]")].find(el => el.textContent.includes("Claude"))');
+  await client.key('Escape');
+  await until(() => client.evaluate(`(${agentFilter}).textContent.includes('Claude') && !document.querySelector('[role=listbox]') && document.querySelector('section[aria-label=全部会话]')?.getAttribute('aria-busy')==='false'`), mode + ' selected Agent icon');
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: false });
+  await assertSelectTextFits(client, agentFilter, mode + ' narrow selected Agent icon');
+  await client.call('Emulation.clearDeviceMetricsOverride');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
   checks.push(mode + '-server-paging-keyboard-history-jump-capacity-search-detail-error-narrow', mode + '-counts-inline-relations-labels-units-responsive-sorting', mode + '-related-identities-columns-nesting-models-narrow');
+}
+
+async function exerciseCompactFilters(window, client, mode) {
+  const navigate = async route => {
+    if (mode === 'browser') await window.loadURL(`http://127.0.0.1:${server.address().port}${route}`);
+    else await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: route });
+    await window.webContents.insertCSS('*, *::before, *::after { animation: none !important; transition: none !important; }');
+  };
+  for (const width of [1120, 375]) {
+    await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await navigate('/');
+    await until(() => client.evaluate('Boolean(document.querySelector("[role=group][aria-label=时间粒度] .select__trigger"))'), mode + ' dashboard trend filters');
+    await assertSelectTextFits(client, allPickers, mode + ' dashboard filters ' + width);
+    await client.click('document.querySelector("button[aria-label=分享]")');
+    await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog] .select__trigger"))'), mode + ' share filters');
+    await assertSelectTextFits(client, 'document.querySelectorAll("[role=dialog] .select__trigger")', mode + ' share filters ' + width);
+    await captureSettled(window, path.join(output, `${mode}-compact-share-${width}.png`));
+    await client.key('Escape');
+    await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), mode + ' close share');
+    await navigate('/pricing');
+    await until(() => client.evaluate('Boolean(document.querySelector("[aria-label=价格筛选条件] .autocomplete__trigger"))'), mode + ' pricing filters');
+    await assertSelectTextFits(client, allPickers, mode + ' pricing filters ' + width);
+    const providerFilter = 'document.querySelector("[aria-label=价格筛选条件] .autocomplete__trigger")';
+    await client.click(providerFilter);
+    await until(() => client.evaluate('Boolean(document.querySelector("[role=option]"))'), mode + ' provider options');
+    await client.click('document.querySelector("[role=option]")');
+    await client.key('Escape');
+    await assertSelectTextFits(client, providerFilter, mode + ' selected provider ' + width);
+    await client.click('document.querySelector("button[aria-label=清空提供商筛选]")');
+    assert.equal(await client.evaluate(`document.activeElement === (${providerFilter}).querySelector('button')`), true, 'clearing a provider restores trigger focus');
+    await client.click('[...document.querySelectorAll("[data-slot=popover-trigger]")].find(el => el.textContent.trim() === "更多筛选")');
+    await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog] .select__trigger"))'), mode + ' context-window filter');
+    await assertSelectTextFits(client, allPickers, mode + ' expanded pricing filters ' + width);
+    await captureSettled(window, path.join(output, `${mode}-compact-pricing-${width}.png`));
+    await client.key('Escape');
+    await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), mode + ' close pricing filters');
+  }
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
+  checks.push(mode + '-compact-dashboard-share-pricing-text-wide-narrow');
 }
 
 async function main() {
   await mkdir(output, { recursive: true });
   server = createServer(async (req, res) => {
-    if (req.url.startsWith('/functions/')) { const result = await api(req.url); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
+    if (req.url.startsWith('/functions/')) { const result = await api(req.url, { method: req.method }); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
     const root = path.join(workspace, 'packages/dashboard/dist');
     const pathname = new URL(req.url, 'http://localhost').pathname;
-    const file = path.resolve(root, pathname === '/sessions' || pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''));
+    const file = path.resolve(root, ['/', '/dashboard', '/sessions', '/pricing'].includes(pathname) ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''));
     if (!file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
     try { const body = await readFile(file); res.writeHead(200, { 'Content-Type': ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' })[path.extname(file)] ?? 'application/octet-stream' }).end(body); } catch { res.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } }); windows.push(browser);
   await browser.loadURL(`http://127.0.0.1:${server.address().port}/sessions?page=4`);
-  await exercise(browser, await connect(browser), 'browser'); browser.destroy();
+  const browserClient = await connect(browser);
+  await exercise(browser, browserClient, 'browser');
+  await exerciseCompactFilters(browser, browserClient, 'browser'); browser.destroy();
   calls.length = 0;
   ipcMain.handle('locale:get', () => ({ preference: 'zh-CN', resolved: 'zh-CN', systemLocale: 'zh-CN' }));
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' }));
@@ -282,13 +367,17 @@ async function main() {
   ipcMain.handle('dsh-pet:navigation-get', () => null);
   ipcMain.handle('dsh-pet:navigation-ack', () => {});
   ipcMain.handle('tud:api-request', (_event, route, init) => api(route, init));
+  ipcMain.handle('quota:get', () => ({ providers: [], preferences: DEFAULT_QUOTA_PREFERENCES, notice: null }));
+  ipcMain.handle('share-backgrounds:request', (_event, request) => { assert.deepEqual(request, { operation: 'legacy' }); return []; });
   const window = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
   await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/sessions?page=4' });
-  await exercise(window, await connect(window), 'desktop');
+  const desktopClient = await connect(window);
+  await exercise(window, desktopClient, 'desktop');
+  await exerciseCompactFilters(window, desktopClient, 'desktop');
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2));
   console.log(JSON.stringify({ ok: true, checks, output }));
 }
-const deadline = setTimeout(() => app.exit(2), 100_000);
+const deadline = setTimeout(() => { console.error('Session and compact-filter acceptance exceeded 180 seconds'); app.exit(2); }, 180_000);
 void app.whenReady().then(main).catch(async error => {
   console.error(error); await mkdir(output, { recursive: true }); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error));
   for (let index = 0; index < clients.length; index++) try { await writeFile(path.join(output, `failure-${index}.txt`), await clients[index].evaluate('document.body.innerText')); } catch {}

@@ -165,6 +165,7 @@ import { FilterSelectPopover } from './FilterMenu';
 - 浮层默认最大高度为 `FILTER_MENU_MAX_HEIGHT = 320`，由 HeroUI 的 `maxHeight` 接口结合可用视口定位；窗口更矮时自动缩小。调用者不用重复填写高度。
 - 超长列表只在选项区域滚动，沿用主题滚动条并包含 overscroll；避免嵌套多个纵向滚动区。短菜单按内容自然收缩。
 - 宽度可以按内容设置，公共入口默认限制在视口内。长名称按业务选择截断、换行或完整名称提示，不能挤掉选中标记与计数。
+- 紧凑 Select / Autocomplete 不只缩小 Trigger 高度：固定高度时配套垂直居中及内边距，内部 Value 显式设置预期字号和行高（现役 28/32/36px 紧凑筛选为 12px / 16px）。不能依靠 Trigger 的字号覆盖 Value 自身样式。验收检查 Value 的可见高度容纳完整行高，带图标、长名称及窄屏时不发生纵向裁切；水平截断仍按原业务规则保留。
 - 搜索、全选、清除及底部动作保持可达；关闭、Escape、键盘导航和焦点恢复沿用原宿主契约。公共层不改变选中后是否关闭。
 - 公共层不编码业务值，不把空数组、`all` 或 `null` 解释为统一含义；不承担筛选查询和持久化。
 - 不在调用者通过 `style.maxHeight`、`!max-h-*` 或 overflow 类覆盖公共尺寸/滚动约束。特殊需求先评估扩展公共组件，再按总则记录例外。
@@ -184,6 +185,7 @@ import { FilterSelectPopover } from './FilterMenu';
 3. 有固定头尾时，滚到底检查搜索/动作仍可见；嵌套 Modal 的菜单要单独检查。级联列、Desktop 托盘与原生窗口按实际可用环境补验，未实测必须说明。
 4. 执行相关类型检查和测试。菜单公共入口策略由 [ui-menu-contracts.test.ts](../packages/dashboard/src/lib/ui-menu-contracts.test.ts) 检查两个 renderer 的直接 Select/Autocomplete 浮层用法（含命名导入别名）；它随 Dashboard 现有测试进入 CI。该检查不能代替视觉、滚动和键盘验收，自定义 Popover 的语义及复用由代码审查核对。
 5. 按本节信息呈现矩阵验收默认界面和按需展开后的界面。单/多模型、完整/部分归属、standard/非默认档位、说明隐藏与打开、价格筛选/清除/未匹配都要检查；不能只测“字段存在”。[session-detail-presentation.test.ts](../packages/dashboard/src/lib/session-detail-presentation.test.ts) 和 [pricing-selection.test.ts](../packages/dashboard/src/lib/pricing-selection.test.ts) 随 Dashboard 测试进入三平台 CI；两端构建后运行 `corepack pnpm test:session-detail-ui`，由 [session-detail-smoke.mjs](../apps/desktop/scripts/session-detail-smoke.mjs) 实测 DOM、键盘、Popover 和窄屏。Windows CI 自动执行同一界面脚本。查看截图确认表头圆角、合计行与信息层级；自动断言不能替代视觉判断。
+6. 调整紧凑筛选尺寸后，两端构建并运行 `corepack pnpm test:session-pagination-ui`；[session-pagination-smoke.mjs](../apps/desktop/scripts/session-pagination-smoke.mjs) 同时检查会话列表与总览、分享、价格页的文本可见高度、长模型名称、Agent 图标、厂商选择/清除及焦点返回，覆盖 HTTP / IPC 与宽窄布局。核对生成的截图，不能仅凭字号类名断言文字完整。
 
 ```bash
 pnpm --filter quotern-dashboard exec tsc --noEmit

@@ -27,8 +27,8 @@ export function PricingProviderFilter({ providers, value, onChange }: {
       if (Array.isArray(keys)) onChange(keys.map(String));
     }} placeholder={t('pricing.filters.allProviders')} variant="secondary" className="min-w-0 max-w-48">
       <Label className="sr-only">{t('pricing.filters.provider')}</Label>
-      <Autocomplete.Trigger ref={trigger} className={`!h-8 !min-h-8 !w-fit max-w-48 !text-xs [&>button]:absolute [&>button]:inset-0 [&>button]:w-full [&>button]:rounded-[inherit] ${value.length ? '!rounded-r-none' : '!rounded-full'}`}>
-        <Autocomplete.Value className="truncate">{() => label}</Autocomplete.Value><Autocomplete.Indicator />
+      <Autocomplete.Trigger ref={trigger} className={`!h-8 !min-h-8 !w-fit max-w-48 !items-center !py-0 !text-xs [&>button]:absolute [&>button]:inset-0 [&>button]:w-full [&>button]:rounded-[inherit] ${value.length ? '!rounded-r-none' : '!rounded-full'}`}>
+        <Autocomplete.Value className="truncate !text-xs !leading-4">{() => label}</Autocomplete.Value><Autocomplete.Indicator />
       </Autocomplete.Trigger>
       <FilterAutocompletePopover className="w-64 max-w-[calc(100vw-2rem)]" placement="bottom start">
         <Autocomplete.Filter filter={contains}>
@@ -70,7 +70,7 @@ export function PricingSortSelect({ value, onChange }: { value: PricingSortDescr
     if (option) onChange({ column: option.column, direction: option.direction });
   }} variant="secondary" className="min-w-0 max-w-52">
     <Label className="sr-only">{t('pricing.filters.sort')}</Label>
-    <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate" /><Select.Indicator /></Select.Trigger>
+    <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !items-center !py-0 !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate !text-xs !leading-4" /><Select.Indicator /></Select.Trigger>
     <FilterSelectPopover className="w-52"><ListBox aria-label={t('pricing.filters.sortOptions')}>
       {SORT_OPTIONS.map(option => <ListBox.Item id={option.id} key={option.id} textValue={t(option.labelKey)} className="text-xs">{t(option.labelKey)}<ListBox.ItemIndicator /></ListBox.Item>)}
     </ListBox></FilterSelectPopover>

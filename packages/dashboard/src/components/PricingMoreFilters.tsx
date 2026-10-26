@@ -141,7 +141,7 @@ export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, 
             if (typeof key === 'string') applyFilters({ ...filters, minContext: Number(key) });
           }} variant="secondary">
             <Label className="text-xs">{t('pricing.filters.minContext')}</Label>
-            <Select.Trigger className="!h-9 !min-h-9 !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
+            <Select.Trigger className="!h-9 !min-h-9 !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4" /><Select.Indicator /></Select.Trigger>
             <FilterSelectPopover><ListBox aria-label={t('pricing.filters.minContextOptions')}>
               {[[0, t('pricing.filters.unlimited')], [8000, '8K'], [128000, '128K'], [1000000, '1M']].map(([value, label]) => (
                 <ListBox.Item id={String(value)} key={String(value)} textValue={String(label)}>{label}<ListBox.ItemIndicator /></ListBox.Item>

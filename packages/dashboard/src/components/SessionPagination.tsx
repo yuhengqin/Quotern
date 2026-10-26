@@ -27,7 +27,7 @@ export function SessionPagination({ page, pages, pageSize, totalRoots, loading, 
     <div className="flex min-w-0 flex-wrap items-center gap-3">
       <Select aria-label={t('usage.activity.pageSize')} value={String(pageSize)} onChange={value => onChange({ pageSize: Number(value) })} variant="secondary" className="w-32" isDisabled={loading}>
         <Label className="sr-only">{t('usage.activity.pageSize')}</Label>
-        <Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
+        <Select.Trigger className="!h-8 !min-h-8 !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4" /><Select.Indicator /></Select.Trigger>
         <FilterSelectPopover><ListBox>{[12, 24, 48].map(size => <ListBox.Item key={size} id={String(size)} textValue={t('usage.activity.perPage', { count: size })}>{t('usage.activity.perPage', { count: size })}<ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></FilterSelectPopover>
       </Select>
       <form className="flex items-center gap-2" noValidate onSubmit={event => { event.preventDefault(); if (target !== null) { onChange({ page: target }); setJump(''); } }}>

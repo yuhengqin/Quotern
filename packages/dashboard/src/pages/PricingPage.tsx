@@ -169,7 +169,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
         <PricingProviderFilter providers={providers} value={providerFilters} onChange={setProviderFilters} />
         <Select aria-label={t('pricing.filters.currency')} value={currency} variant="secondary" onChange={key => { if (key === 'USD' || key === 'CNY') setCurrency(key); }} className="min-w-0 text-xs">
           <Label className="sr-only">{t('pricing.filters.currency')}</Label>
-          <Select.Trigger className="!h-8 !min-h-8 !w-fit !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger>
+          <Select.Trigger className="!h-8 !min-h-8 !w-fit !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4" /><Select.Indicator /></Select.Trigger>
           <FilterSelectPopover><ListBox aria-label={t('pricing.filters.currencyOptions')}><ListBox.Item id="USD" textValue="USD">{t('pricing.filters.usd')}<ListBox.ItemIndicator /></ListBox.Item><ListBox.Item id="CNY" textValue="CNY">{t('pricing.filters.cny')}<ListBox.ItemIndicator /></ListBox.Item></ListBox></FilterSelectPopover>
         </Select>
         <PricingSortSelect value={sort} onChange={setSort} />

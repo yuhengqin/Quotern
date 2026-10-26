@@ -92,8 +92,8 @@ function TrendSelect({ label, value, options, onChange }: {
 }) {
   return <Select aria-label={label} value={value} onChange={key => { if (typeof key === 'string') onChange(key); }} variant="secondary" className="w-fit min-w-0 max-w-full">
     <Label className="sr-only">{label}</Label>
-    <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !rounded-full ps-3 pe-8 !text-xs font-normal">
-      <Select.Value className="min-w-0 truncate" /><Select.Indicator className="size-3.5 text-muted" />
+    <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !items-center !rounded-full !py-0 ps-3 pe-8 !text-xs font-normal">
+      <Select.Value className="min-w-0 truncate !text-xs !leading-4" /><Select.Indicator className="size-3.5 text-muted" />
     </Select.Trigger>
     <FilterSelectPopover className="min-w-36 rounded-xl bg-surface shadow-md" placement="bottom end">
       <ListBox aria-label={label}>{options.map(option => <ListBox.Item id={option.value} key={option.value} textValue={option.label} className="rounded-lg px-2 py-1.5 text-xs">

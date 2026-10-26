@@ -81,8 +81,8 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             }}
           >
             <Label className="sr-only">{t('share.dateRangeShort')}</Label>
-            <Select.Trigger className="!h-8 !min-h-8 !w-fit ps-3 pe-8 !text-xs">
-              <Select.Value />
+            <Select.Trigger className="!h-8 !min-h-8 !w-fit !items-center !py-0 ps-3 pe-8 !text-xs">
+              <Select.Value className="!text-xs !leading-4" />
               <Select.Indicator />
             </Select.Trigger>
             <FilterSelectPopover className="w-44" placement="bottom start">

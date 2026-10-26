@@ -118,11 +118,11 @@ export function ToolChannelSelect({
         <Label className="sr-only">Agent</Label>
         <Select.Trigger
           ref={triggerRef}
-          className={`!h-8 !min-h-8 !w-fit max-w-52 ps-3 pe-8 !text-xs font-normal ${
+          className={`!h-8 !min-h-8 !w-fit max-w-52 !items-center !py-0 ps-3 pe-8 !text-xs font-normal ${
             hasSelection ? '!rounded-r-none' : '!rounded-full'
           }`}
         >
-          <Select.Value className="min-w-0 max-w-40 !text-xs">
+          <Select.Value className="min-w-0 max-w-40 !text-xs !leading-4">
             {({ state }) => {
               const selected = state.selectedItems
                 .map((item) => tools.find((tool) => tool.source === item.key))

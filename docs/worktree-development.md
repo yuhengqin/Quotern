@@ -21,6 +21,8 @@
 corepack pnpm install --frozen-lockfile --prefer-offline
 ```
 
+`package.json` 脚本再次调用 pnpm 时也使用 `corepack pnpm`，不能假设外层通过 Corepack 启动就会固定嵌套命令的版本；裸 `pnpm` 仍可能命中 PATH 中的全局旧版本，使安装与测试使用不同的配置语义。
+
 - `--prefer-offline` 优先复用缓存，缺失时仍可下载；实际共享布局由 `enableGlobalVirtualStore` 管理。不要在仓库中提交某台机器的绝对 store 路径。
 - `--frozen-lockfile` 失败时先核对固定的 pnpm 版本、安装配置与依赖声明。只有任务明确需要调整依赖时，才使用 `corepack pnpm add` / `remove` / `update` 并同步检查清单和锁文件；不要为绕过失败删除锁文件或切换包管理器。
 - 已有安装可能沿用 `node_modules/.modules.yaml` 记录的旧 `virtualStoreDir`，仅修改配置后执行 `install`（包括 `--force`）不保证迁移。先确认目录归属并停止本会话使用依赖的服务；将当前 worktree 根及各 workspace 包的 `node_modules` 改名保留为迁移备份，再执行上述安装命令。确认共享真实路径、构建和测试后，才清理这些本会话的备份。其他会话仍在使用时，保留原安装，改在独立 worktree 验证。

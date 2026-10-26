@@ -9,7 +9,7 @@ export const SESSION_PAGE_SIZE = 12;
 export function filterSessionActivity(rows: SessionActivity[], query: string, source: string | readonly string[], project = ''): SessionActivity[] {
   const needle = query.trim().toLocaleLowerCase();
   const sources = typeof source === 'string' ? source === 'all' ? [] : [source] : source;
-  return rows.filter(row => (!sources.length || sources.includes(row.source)) && (!project || row.projectLabel === project) && (!needle || [row.sessionTitle, row.projectLabel, row.model, row.source, row.sessionId, ...(row.models?.map(model => model.model) ?? [])].some(value => value?.toLocaleLowerCase().includes(needle))));
+  return rows.filter(row => (!sources.length || sources.includes(row.source)) && (!project || row.projectLabel === project) && (!needle || [row.sessionTitle, row.relation?.agentNickname ?? row.insights?.agentNickname, row.relation?.agentRole ?? row.insights?.agentRole, row.projectLabel, row.model, row.source, row.sessionId, ...(row.models?.map(model => model.model) ?? [])].some(value => value?.toLocaleLowerCase().includes(needle))));
 }
 
 function sessionFilterOptions(rows: SessionActivity[], key: 'source' | 'projectLabel', selected: string | readonly string[]) {

@@ -44,7 +44,7 @@ export function selectSessionList(snapshot: SessionActivitySnapshot, query: Sess
     (ignore === 'source' || !query.filterSources?.length || query.filterSources.includes(row.source)) &&
     (ignore === 'project' || !query.project || row.projectLabel === query.project) &&
     (!query.model || row.model === query.model || modelNames(row).includes(query.model)) &&
-    (!needle || [row.sessionTitle, row.projectLabel, row.source, row.sessionId, row.model, ...modelNames(row)].some(value => value?.toLocaleLowerCase().includes(needle)));
+    (!needle || [row.sessionTitle, row.relation?.agentNickname ?? row.insights?.agentNickname, row.relation?.agentRole ?? row.insights?.agentRole, row.projectLabel, row.source, row.sessionId, row.model, ...modelNames(row)].some(value => value?.toLocaleLowerCase().includes(needle)));
   const options = (key: 'source' | 'projectLabel', selected: readonly string[], ignore: 'source' | 'project') => {
     const counts = new Map<string, number>();
     for (const row of rows) if (matches(row, ignore)) counts.set(row[key], (counts.get(row[key]) ?? 0) + 1);

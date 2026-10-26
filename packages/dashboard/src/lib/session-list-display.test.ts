@@ -8,6 +8,15 @@ test('session titles prefer named metadata and use an explicit unnamed identity 
   assert.equal(sessionDisplayTitle({ sessionTitle: '  ', sessionId: 'short' }, 'Untitled session'), 'Untitled session · short');
 });
 
+test('unnamed sessions use trusted nicknames and roles from summaries or legacy details', () => {
+  const sessionId = 'abcdef1234567890';
+  assert.equal(sessionDisplayTitle({ sessionId, relation: { agentNickname: ' Ada ', agentRole: 'explorer' } }, '未命名会话'), 'Ada · 34567890');
+  assert.equal(sessionDisplayTitle({ sessionId, relation: { agentRole: 'reviewer' } }, '未命名会话'), 'reviewer · 34567890');
+  assert.equal(sessionDisplayTitle({ sessionId, relation: {}, insights: { agentNickname: 'Grace', agentRole: 'reviewer' } }, '未命名会话'), 'Grace · 34567890');
+  assert.equal(sessionDisplayTitle({ sessionId, sessionTitle: '真实标题', relation: { agentNickname: 'Ada' } }, '未命名会话'), '真实标题');
+  assert.equal(sessionDisplayTitle({ sessionId, relation: { agentRole: 'default', agentNickname: '  ' } }, '未命名会话'), '未命名会话 · 34567890');
+});
+
 test('project display shortens explicit paths and URLs without rewriting literal project names', () => {
   assert.equal(sessionProjectDisplay('D:\\AgentPro\\Quotern\\'), 'Quotern');
   assert.equal(sessionProjectDisplay('/home/user/project%2F2026'), 'project%2F2026');

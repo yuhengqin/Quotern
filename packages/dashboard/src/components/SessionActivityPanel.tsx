@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
 import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
@@ -21,9 +21,9 @@ import { formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-form
 import { accountLabel, costLabel, modeLabel, serviceLabel } from '../lib/session-labels';
 import type { DetailRange } from '../lib/session-detail';
 import { SessionPagination } from './SessionPagination';
-import { sessionDisplayTitle, sessionProjectDisplay } from '../lib/session-list-display';
+import { sessionDisplayIdentity, sessionDisplayTitle, sessionProjectDisplay } from '../lib/session-list-display';
 
-const sessionColumns = 'min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-1 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5 @3xl/session-list:px-2';
+const sessionColumns = 'min-w-0 items-center gap-2 px-1 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5 @3xl/session-list:px-2';
 const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_6rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4';
 const sessionSortLabels = { recent: 'usage.activity.recent', tokens: 'usage.common.totalTokens', cost: 'usage.common.cost', duration: 'usage.explorer.taskTime' } as const;
 type SessionSorting = Pick<SessionPageSearch, 'sort' | 'direction'> & { onSort(sort: SessionSort): void };
@@ -256,7 +256,7 @@ function SessionSortButton({ label, column, sorting }: { label: string; column: 
   </Button>;
 }
 
-function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, childrenByParent, range, autoOpenKey, depth=0 }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting; childrenByParent?: Map<string,SessionActivity[]>; range?: DetailRange; autoOpenKey?: string; depth?:number }) {
+function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, childrenByParent, range, autoOpenKey, depth=0, metricHeaders=false }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting; childrenByParent?: Map<string,SessionActivity[]>; range?: DetailRange; autoOpenKey?: string; depth?:number; metricHeaders?: boolean }) {
   const { t } = useTranslation();
   const [selected,setSelected]=useState<Pick<SessionActivity,'source'|'sessionId'>|null>(null);
   const detailRow=rows.find(row=>selected&&row.source===selected.source&&row.sessionId===selected.sessionId);
@@ -268,22 +268,19 @@ function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, 
     setSelected({ source: targetSource, sessionId: targetId });
   }, [autoOpenKey, targetSource, targetId]);
   useEffect(()=>{if(selected&&!detailRow)setSelected(null);},[selected,detailRow]);
-  return <div ref={container} className="@container/session-list divide-y divide-separator">
+  return <div ref={container} className={`${depth === 0 ? '@container/session-list ' : ''}divide-y divide-separator`}>
       {sorting && <div role="group" aria-label={t('usage.explorer.sort')} className="hidden grid-cols-[3rem_minmax(0,1fr)] rounded-lg bg-surface-secondary py-1 text-xs font-medium text-muted @3xl/session-list:grid">
         <span aria-hidden />
-        <div className={`grid ${sessionColumns}`}><div className="flex min-w-0 items-center gap-2.5">
-          <span className="w-5 shrink-0" aria-hidden />
-          <div className={sessionIdentityColumns}>
-            <span>{t('usage.activity.sessionColumn')}</span><span>{t('usage.explorer.project')}</span>
+        <div className={`grid ${sessionColumns}`}><div className={sessionIdentityColumns}>
+            <span className="pl-[1.875rem]">{t('usage.activity.sessionColumn')}</span><span>{t('usage.explorer.project')}</span>
             <div className="-ml-1"><SessionSortButton label={t('usage.activity.recent')} column="recent" sorting={sorting} /></div>
-          </div>
         </div>
         <div className="grid grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] items-center gap-x-4">
           <div className="flex justify-end"><SessionSortButton label="Token" column="tokens" sorting={sorting} /></div>
           <div className="flex justify-end"><SessionSortButton label={t('usage.common.cost')} column="cost" sorting={sorting} /></div>
         </div></div>
       </div>}
-      {rows.map(row => <SessionRow key={sessionIdentity(row)} row={row} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} range={range} depth={depth} showMetricHeaders={Boolean(sorting)} onOpen={() => setSelected(row)} />)}
+      {rows.map(row => <SessionRow key={sessionIdentity(row)} row={row} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} range={range} depth={depth} showMetricHeaders={Boolean(sorting) || metricHeaders} onOpen={() => setSelected(row)} />)}
       {detailRow && <SessionInsightDetails key={sessionIdentity(detailRow)} row={detailRow} sessions={availableSessions} showTokenShare={showTokenShare} range={range} onClose={() => setSelected(null)} />}
     </div>;
 }
@@ -297,40 +294,59 @@ function SessionRow({ row, availableSessions, childrenByParent, showTokenShare, 
   const models = [...new Set(sessionBranchRows(children, childrenByParent ?? new Map()).flatMap(child => child.modelNames ?? child.models?.map(usage => usage.model) ?? [child.model]))].sort();
   const visible = filterSessionBranches(children, childrenByParent ?? new Map(), model);
   const title = sessionDisplayTitle(row, t('usage.activity.untitledSession'));
-  return <div className="py-1" data-session-row>
-    <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center @3xl/session-list:grid-cols-[3rem_minmax(0,1fr)]">
-      {children.length ? <Button data-session-disclosure size="sm" variant="ghost" className="!h-8 !min-h-8 !w-full !min-w-0 !px-0 !text-xs tabular-nums text-muted" aria-expanded={open} aria-controls={childrenId} aria-label={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${title} · ${children.length}`} onPress={() => setOpen(!open)}><span className="flex items-center gap-0.5" title={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${children.length}`}><ChevronRight className={`size-3.5 shrink-0 ${open ? 'rotate-90' : ''}`} aria-hidden /><span>{children.length}</span></span></Button> : <span aria-hidden />}
-      <button type="button" data-session-trigger aria-haspopup="dialog" onClick={onOpen} className={`grid w-full cursor-pointer rounded-xl py-2 text-left outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
-        <div className="flex min-w-0 items-center gap-2 @3xl/session-list:gap-2.5">
-          <ProviderIcon provider={row.source} size={20} />
-          <div className={sessionIdentityColumns}>
-            <p className="truncate text-sm font-medium" title={row.sessionTitle || `${sourceLabel(row.source)} · ${row.sessionId}`}>{title}</p>
-            <p className="flex min-w-0 items-center gap-1 text-xs text-muted @3xl/session-list:contents">
+  const identity = sessionDisplayIdentity(row, t('usage.activity.untitledSession'));
+  return <div className="py-1 [--session-step:1rem] @3xl/session-list:[--session-step:1.5rem]" style={{ '--session-depth': Math.min(depth, 3), '--session-child-depth': Math.min(depth + 1, 3) } as CSSProperties} data-session-row data-session-depth={depth}>
+    <div data-session-open-row={open} className={`relative grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] items-start rounded-lg @3xl/session-list:grid-cols-[3rem_minmax(0,1fr)] ${open ? 'bg-accent/5' : ''}`}>
+      {open && <span data-session-expanded-mark aria-hidden className="pointer-events-none absolute inset-y-1 left-[calc(var(--session-depth)*var(--session-step))] w-0.5 rounded-full bg-accent" />}
+      {children.length ? <Button data-session-disclosure size="sm" variant="ghost" className={`relative z-10 translate-x-[calc(var(--session-depth)*var(--session-step))] ${identity.shortId ? 'mt-2' : 'mt-1.5'} !h-8 !min-h-8 !w-full !min-w-0 !px-0 !text-xs tabular-nums @3xl/session-list:mt-2 ${open ? 'text-accent' : 'text-muted'}`} aria-expanded={open} aria-controls={childrenId} aria-label={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${title} · ${children.length}`} onPress={() => setOpen(!open)}><span className="flex items-center gap-0.5" title={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${children.length}`}><ChevronRight className={`size-3.5 shrink-0 ${open ? 'rotate-90' : ''}`} aria-hidden /><span>{children.length}</span></span></Button> : <span aria-hidden />}
+      <button type="button" data-session-trigger aria-haspopup="dialog" onClick={onOpen} className={`grid min-h-12 w-full cursor-pointer rounded-lg py-1.5 text-left outline-offset-2 ${depth >= 2 ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_auto]'} ${open ? 'hover:bg-accent/10' : 'hover:bg-surface-secondary/60'} focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
+        <div className={sessionIdentityColumns}>
+            <div data-session-name className={`flex min-w-0 items-center gap-2 pl-[calc(var(--session-depth)*var(--session-step))] ${children.length ? 'min-h-8' : ''} @3xl/session-list:min-h-0 @3xl/session-list:gap-2.5`}>
+              <ProviderIcon provider={row.source} size={20} />
+              <div className="relative min-w-0 flex-1 overflow-hidden" title={`${title}${identity.role ? ` · ${t('usage.detail.agentRole')}: ${identity.role}` : ''} · ${sourceLabel(row.source)} · ${row.sessionId}`}>
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span data-session-title title={`${identity.name}${identity.role ? ` · ${t('usage.detail.agentRole')}: ${identity.role}` : ''}`} className={`min-w-0 truncate text-sm font-medium ${open ? 'text-accent' : ''}`}>{identity.name}</span>
+                  {identity.role && <><span className="sr-only">{t('usage.detail.agentRole')}: {identity.role}</span><span data-session-role aria-hidden className="hidden min-w-0 max-w-[55%] truncate text-xs text-foreground/70 @3xl/session-list:inline" title={`${t('usage.detail.agentRole')}: ${identity.role}`}>{t('usage.detail.agentRole')}: {identity.role}</span></>}
+                </div>
+                {identity.shortId && <p className="relative flex min-w-0 items-baseline gap-1 text-xs leading-4 text-foreground/70"><span className="sr-only">ID</span><span aria-hidden className="hidden shrink-0 text-muted @3xl/session-list:inline">ID</span><span data-session-short-id className="min-w-0 truncate font-mono" title={row.sessionId}>{identity.shortId}</span></p>}
+              </div>
+            </div>
+            <p className={`${depth >= 2 ? 'pl-[calc(var(--session-depth)*var(--session-step))] @3xl/session-list:pl-0' : ''} flex min-w-0 items-center gap-1 text-xs text-muted @3xl/session-list:contents`}>
               <SessionProjectLabel project={row.projectLabel} />
               <span aria-hidden className="shrink-0 @3xl/session-list:hidden">·</span>
-              <time className="shrink-0 whitespace-nowrap" dateTime={row.lastActivityAt} title={new Date(row.lastActivityAt).toLocaleString(locale)}>{age(row.lastActivityAt, locale)}</time>
+              <time data-session-activity className="shrink-0 whitespace-nowrap" dateTime={row.lastActivityAt} title={new Date(row.lastActivityAt).toLocaleString(locale)}>{age(row.lastActivityAt, locale)}</time>
             </p>
-          </div>
         </div>
-        <div className="min-w-0 text-right text-sm tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4">
+        <div className={`${depth >= 2 ? 'flex flex-wrap items-baseline justify-between gap-x-3 pl-[calc(var(--session-depth)*var(--session-step))] @3xl/session-list:pl-0' : ''} min-w-0 text-right text-sm tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4`}>
           <p data-session-tokens className="whitespace-nowrap font-medium">{row.tokens === null ? t('usage.activity.usageNotRecorded') : <>{formatSessionTokens(row.tokens)}<span className={showMetricHeaders ? '@3xl/session-list:sr-only' : undefined}> Token</span></>}</p>
-          <div className="whitespace-nowrap font-medium"><Tooltip delay={200}>
+          <div data-session-cost className="whitespace-nowrap font-medium"><Tooltip delay={200}>
             <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">{row.costUsd === null ? t('usage.activity.amountUnknown') : formatSessionUsd(row.costUsd, locale)}</Tooltip.Trigger>
             <Tooltip.Content placement="top">{costLabel(row.costKind, locale)}</Tooltip.Content>
           </Tooltip></div>
         </div>
       </button>
     </div>
-    {children.length > 0 && <div id={childrenId} hidden={!open} className="mb-2 ml-6 border-l border-separator pl-3">
-      {open && <><Select aria-label={t('usage.common.model')} value={model} onChange={key => setModel(String(key))} variant="secondary" className="my-2 max-w-56"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator /></ListBox.Item>{models.map(value => <ListBox.Item id={value} key={value} textValue={value}><span className="truncate" title={value}>{value}</span><ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
-        <SessionRows rows={visible} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth + 1} range={range} /></>}
+    {children.length > 0 && <div id={childrenId} hidden={!open} data-session-related className="relative mb-1 min-w-0 bg-surface-secondary/30">
+      <span data-session-tree-line aria-hidden className="pointer-events-none absolute inset-y-0 left-[calc(var(--session-child-depth)*var(--session-step))] border-l border-separator" />
+      {open && <>
+        <div data-related-toolbar role="group" aria-label={`${t('usage.activity.relatedSessions')} · ${title}`} className="relative flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 py-1.5 pl-[calc(2.75rem+var(--session-depth)*var(--session-step))] pr-1 @3xl/session-list:pl-[calc(3.5rem+var(--session-depth)*var(--session-step))] @3xl/session-list:pr-2">
+          <p className="shrink-0 text-xs font-medium text-muted">{t('usage.activity.relatedSessions')}</p>
+          {models.length > 1 || model !== 'all' ? <div className="flex min-w-0 max-w-60 flex-1 items-center gap-1.5 text-xs text-muted"><span className="shrink-0">{t('usage.common.model')}:</span><Select aria-label={t('usage.common.model')} value={model} onChange={key => setModel(String(key))} variant="secondary" className="min-w-0 max-w-full">
+            <Label className="sr-only">{t('usage.common.model')}</Label>
+            <Select.Trigger className="!h-7 !min-h-7 !w-fit max-w-full !text-xs"><Select.Value className="min-w-0 truncate">{model === 'all' ? t('usage.common.all') : model}</Select.Value><Select.Indicator /></Select.Trigger>
+            <FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator /></ListBox.Item>{models.map(value => <ListBox.Item id={value} key={value} textValue={value}><span className="truncate" title={value}>{value}</span><ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></FilterSelectPopover>
+          </Select></div> : <span data-related-model className="flex h-7 min-w-0 max-w-full items-center gap-1.5 text-xs text-muted"><span className="shrink-0">{t('usage.common.model')}:</span><span className="truncate" title={models[0]}>{models[0] ?? '—'}</span></span>}
+        </div>
+        <SessionRows rows={visible} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth + 1} metricHeaders={showMetricHeaders} range={range} />
+        {!visible.length && <p className="py-3 pl-11 text-xs text-muted @3xl/session-list:pl-14">{t('usage.activity.noMatches')}</p>}
+      </>}
     </div>}
   </div>;
 }
 
 function SessionProjectLabel({ project }: { project: string }) {
   const display = sessionProjectDisplay(project), split = display.lastIndexOf('…');
-  return <span className="relative flex min-w-0 overflow-hidden" title={project}>
+  return <span data-session-project className="relative flex min-w-0 overflow-hidden" title={project}>
     <span aria-hidden className={split < 0 ? 'truncate' : 'min-w-0 overflow-hidden whitespace-nowrap'}>{split < 0 ? display : display.slice(0, split)}</span>
     {split >= 0 && <span aria-hidden className="max-w-[60%] shrink-0 truncate">{display.slice(split)}</span>}
     <span className="sr-only">{project}</span>

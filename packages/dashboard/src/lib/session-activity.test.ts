@@ -16,6 +16,15 @@ test('session search combines source and named metadata while pages remain bound
   assert.equal(sessionActivityPage([], 26).pages, 1);
 });
 
+test('session name search includes trusted summary identities and legacy insight identities', () => {
+  const rows = [
+    { source: 'codex', sessionId: 'a', relation: { agentNickname: 'Ada', agentRole: 'explorer' } },
+    { source: 'codex', sessionId: 'b', insights: { agentNickname: 'Grace', agentRole: 'reviewer' } },
+  ] as SessionActivity[];
+  assert.deepEqual(filterSessionActivity(rows, 'ada', 'all'), [rows[0]]);
+  assert.deepEqual(filterSessionActivity(rows, 'reviewer', 'all'), [rows[1]]);
+});
+
 test('session browser filters projects and sorts known costs ahead of unknown without mutating input', () => {
   const rows = [{ source: 'claude', sessionId: 'a', projectLabel: 'A', model: 'one', lastActivityAt: '2026-10-18T01:00Z', costUsd: null }, { source: 'codex', sessionId: 'b', projectLabel: 'B', model: 'two', lastActivityAt: '2026-10-18T00:00Z', costUsd: 0 }] as SessionActivity[];
   const filtered = (filterSessionActivity as any)(rows, '', 'all', 'B');

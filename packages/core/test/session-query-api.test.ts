@@ -154,6 +154,35 @@ test('root pagination keeps children on their parent page and exact details reta
   assert.equal(child.insights.orphan, false);
 });
 
+test('summary identities use cached naming metadata outside the window and refresh after metadata-only changes', async t => {
+  const { app, dataDir } = await fixture(t);
+  const sessionId = 'named-agent', input = join(dataDir, 'named-agent.jsonl');
+  const records = [
+    { type: 'session_meta', timestamp: '2026-10-15T03:00:00Z', payload: { id: sessionId, source: { subagent: { thread_spawn: { parent_thread_id: 'parent', agent_nickname: 'Ada', agent_role: 'explorer' } } } } },
+    { type: 'turn_context', timestamp: '2026-10-16T03:00:00Z', payload: { cwd: 'C:/fixture' } },
+    { type: 'event_msg', timestamp: '2026-10-16T04:00:00Z', payload: { type: 'token_count', info: { last_token_usage: { input_tokens: 10, output_tokens: 2 } } } },
+  ];
+  const discovered = { complete: true, inputs: [{ path: input, sessionId, kind: 'jsonl' as const }] };
+  const sync = async () => {
+    await writeFile(input, records.map(row => JSON.stringify(row)).join('\n') + '\n');
+    await syncSessionSource(dataDir, 'codex', discovered);
+  };
+  const list = async () => (await (await app.request(`/functions/tud-session-list?${scope}&sources=codex`)).json()).data.sessions[0];
+  await sync();
+  const first = await list();
+  assert.equal(first.relation.agentNickname, 'Ada');
+  assert.equal(first.relation.agentRole, 'explorer');
+  assert.equal(first.insights, undefined, 'identity does not require full detail enrichment');
+  assert.equal(first.models, undefined);
+  records[0]!.payload.source!.subagent.thread_spawn.agent_nickname = 'Grace';
+  await sync();
+  const updated = await list();
+  assert.equal(updated.relation.agentNickname, 'Grace');
+  assert.equal(updated.tokens, first.tokens, 'metadata-only updates retain usage');
+  const searched = (await (await app.request(`/functions/tud-session-list?${scope}&sources=codex&q=Grace`)).json()).data;
+  assert.equal(searched.sessions[0]?.sessionId, sessionId, 'the displayed nickname remains searchable');
+});
+
 test('on-demand details retain detected relationship conflicts even when only one cycle member is requested', async t => {
   const { app, dataDir } = await fixture(t);
   const inputs = [];

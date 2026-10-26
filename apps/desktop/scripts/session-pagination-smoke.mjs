@@ -22,14 +22,18 @@ const debugPort = await unusedPort();
 app.commandLine.appendSwitch('remote-debugging-port', String(debugPort));
 const referenceTime = '2026-10-25T12:00:00Z';
 const longProject = 'https://ghuntley.com/allocations/a-very-long-project-name-with-a-recognizable-ending';
+const parentTitle = '评估桌面宠物复刻可行性';
+const displayTitles = { 74: parentTitle, 72: '检查 REA MCP 可用性', 71: '规划云服务器演示部署', 70: '查找 Windows 安装目录选项', 69: '分析 AgentGauge 可吸收功能', 68: '适配桌面宠物交互', 79: '调研交互方案' };
 const messages = [], observations = [], evidence = [], titles = [];
-for (let index = 0; index < 77; index++) {
+for (let index = 0; index < 84; index++) {
   const child = index >= 75, sessionId = `fixture-${index}`, timestamp = new Date(Date.parse('2026-10-25T03:00:00Z') + index * 60_000).toISOString();
-  const parentId = index === 75 ? 'fixture-0' : 'fixture-74';
-  messages.push({ source: 'claude', sessionId, id: sessionId, role: 'assistant', timestamp, projectLabel: index === 74 ? longProject : index % 2 ? 'Alpha' : 'Beta' });
-  observations.push({ source: 'claude', sessionId, id: sessionId, timestamp, model: index % 2 ? 'model-a' : 'model-b', tokens: 100 + index, usageKnown: true, costUsd: index / 100, costKind: 'recorded', tokenParts: { input_tokens: 80 + index, output_tokens: 20, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 }, billing: { service: 'anthropic', mode: 'api', accountRef: null, evidence: 'recorded' } });
-  evidence.push({ source: 'claude', sessionId, id: 'meta', timestamp, kind: 'metadata', ...(child ? { parentId, relationKind: 'subagent' } : {}) });
-  if (index !== 73) titles.push([JSON.stringify(['claude', sessionId]), { title: child ? `Child ${index}` : `Fixture ${index}`, priority: 2 }]);
+  const parentId = index === 75 ? 'fixture-0' : index >= 80 ? `fixture-${index - 1}` : 'fixture-74';
+  const tokens = index === 83 ? 9_999_999_999 : (100 + index) * 100_000;
+  messages.push({ source: 'claude', sessionId, id: sessionId, role: 'assistant', timestamp, projectLabel: index === 72 ? longProject : index === 74 || child ? 'Quotern' : index % 2 ? 'Alpha' : 'Beta' });
+  observations.push({ source: 'claude', sessionId, id: sessionId, timestamp, model: index >= 80 ? 'model-b' : index % 2 ? 'model-a' : 'model-b', tokens, usageKnown: true, costUsd: index === 83 ? 123456.78 : index / 4, costKind: 'recorded', tokenParts: { input_tokens: tokens - 20, output_tokens: 20, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 }, billing: { service: 'anthropic', mode: 'api', accountRef: null, evidence: 'recorded' } });
+  evidence.push({ source: 'claude', sessionId, id: 'meta', timestamp, kind: 'metadata', ...(child ? { parentId, relationKind: 'subagent' } : {}),
+    ...(index === 76 ? { agentNickname: 'Ada', agentRole: 'explorer' } : index === 77 ? { agentRole: 'reviewer' } : index === 80 ? { agentNickname: 'Grace-with-a-very-long-trusted-agent-nickname', agentRole: 'code_explorer-with-a-very-long-role' } : {}) });
+  if (index !== 73 && (index < 76 || index === 79)) titles.push([JSON.stringify(['claude', sessionId]), { title: displayTitles[index] ?? (child ? `Child ${index}` : `Fixture ${index}`), priority: 2 }]);
 }
 const bucketStore = new BucketStore();
 const facts = buildAchievementFacts([], [], [], new Date(referenceTime));
@@ -47,7 +51,18 @@ async function api(route, init = {}) {
   return { status: response.status, body: await response.json() };
 }
 const until = async (predicate, label) => { for (let i = 0; i < 100; i++) { if (await predicate()) return; await wait(75); } throw Error('Timed out: ' + label); };
+async function captureSettled(window, filename) {
+  // A hidden window can still hold the previous compositor frame. Prime capture,
+  // invalidate it, then record the repainted state rather than a stale selection.
+  await window.webContents.capturePage();
+  window.webContents.invalidate();
+  await wait(150);
+  await writeFile(filename, (await window.webContents.capturePage()).toPNG());
+}
 async function connect(window) {
+  // These snapshots verify static layout; hidden-window compositor clocks must
+  // not freeze a menu halfway through its exit animation over the next state.
+  await window.webContents.insertCSS('*, *::before, *::after { animation: none !important; transition: none !important; }');
   let target;
   await until(async () => { target = (await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json()).find(item => item.type === 'page' && item.url === window.webContents.getURL()); return Boolean(target); }, 'debugger');
   const client = await connectPage(target); clients.push(client); return client;
@@ -59,7 +74,7 @@ async function exercise(window, client, mode) {
   assert.ok(calls.some(call => call.path.endsWith('session-list') && call.query.page === '4'));
   assert.equal(calls.some(call => call.path.endsWith('session-detail')), false, 'list loading must not fetch details');
   assert.equal(await client.evaluate('document.querySelectorAll("[data-session-trigger]").length'), 12);
-  assert.equal(await client.evaluate('document.querySelector("[data-session-count]")?.textContent.trim()'), '75 条主会话 · 含关联共 77 条');
+  assert.equal(await client.evaluate('document.querySelector("[data-session-count]")?.textContent.trim()'), '75 条主会话 · 含关联共 84 条');
   await client.evaluate(`(${pageButton(7)}).focus(); true`);
   await client.key('Enter');
   await until(() => client.evaluate(`${activePage}==='7'`), mode + ' keyboard last page');
@@ -75,7 +90,7 @@ async function exercise(window, client, mode) {
   await until(() => client.evaluate(`${activePage}==='1' && (location.search+location.hash).includes('pageSize=24')`), mode + ' capacity resets page');
   assert.equal(await client.evaluate('document.querySelectorAll("[data-session-trigger]").length'), 24);
   const search = `document.querySelector('input[placeholder="名称、项目、模型或会话 ID"]')`;
-  await client.fill(search, 'Fixture 74');
+  await client.fill(search, parentTitle);
   await until(() => client.evaluate('document.querySelectorAll("[data-session-trigger]").length===1 && document.querySelector("[data-session-count]")?.textContent.trim()==="1 条主会话"'), mode + ' search before paging');
   assert.equal(await client.evaluate(`document.activeElement===${search}`), true, 'search retains focus during asynchronous queries');
   const before = calls.filter(call => call.path.endsWith('session-detail')).length;
@@ -101,30 +116,85 @@ async function exercise(window, client, mode) {
   await client.click('document.querySelector(".search-field__clear-button")');
   assert.equal(await client.evaluate(`(${search}).value`), '', 'the search clear action restores its placeholder');
   await until(() => client.evaluate('document.querySelector("section[aria-label=全部会话]")?.getAttribute("aria-busy")==="false"'), mode + ' stable first page');
-  const row74 = `[...document.querySelectorAll('[data-session-row]')].find(el=>el.querySelector('[data-session-trigger]')?.textContent.includes('Fixture 74'))`;
+  const row74 = `[...document.querySelectorAll('[data-session-row]')].find(el=>el.querySelector('[data-session-title]')?.textContent===${JSON.stringify(parentTitle)})`;
   const disclosure = `(${row74}).querySelector('[data-session-disclosure]')`;
   assert.equal(await client.evaluate(`Boolean(document.querySelector('button button'))`), false, 'disclosure and detail triggers must not be nested');
   assert.equal(await client.evaluate('document.querySelector("[data-session-sort]").getClientRects().length'), 0, 'wide sorting uses the column headers');
-  assert.ok(await client.evaluate('Boolean(document.querySelector("[data-session-trigger]") && [...document.querySelectorAll("[data-session-trigger]")].some(el=>el.textContent.includes("未命名会话 · xture-73")))'), 'unnamed sessions retain a short identity');
-  assert.equal(await client.evaluate(`(${row74}).querySelector('[data-session-trigger] span[title]')?.getAttribute('title')`), longProject, 'full project identity remains available');
-  assert.equal(await client.evaluate(`[...(${row74}).querySelectorAll('[data-session-trigger] span[title] > [aria-hidden]')].map(el=>el.textContent).join('').includes('…')`), true, 'long project display preserves both ends');
+  assert.ok(await client.evaluate('Boolean([...document.querySelectorAll("[data-session-trigger]")].some(el=>el.querySelector("[data-session-title]")?.textContent==="未命名会话" && el.querySelector("[data-session-short-id]")?.textContent==="xture-73"))'), 'unnamed sessions retain a separate short identity');
+  const longProjectRow = `[...document.querySelectorAll('[data-session-row]')].find(el=>el.querySelector('[data-session-title]')?.textContent===${JSON.stringify(displayTitles[72])})`;
+  assert.equal(await client.evaluate(`(${longProjectRow}).querySelector('[data-session-project]')?.getAttribute('title')`), longProject, 'full project identity remains available');
+  assert.equal(await client.evaluate(`[...(${longProjectRow}).querySelectorAll('[data-session-project] > [aria-hidden]')].map(el=>el.textContent).join('').includes('…')`), true, 'long project display preserves both ends');
   assert.equal(await client.evaluate('document.querySelector("[data-session-tokens] > span").getBoundingClientRect().width<=1'), true, 'wide rows do not repeat the Token suffix');
   const heights = await client.evaluate('[...document.querySelectorAll("[data-session-row]")].map(el=>el.firstElementChild.getBoundingClientRect().height)');
   assert.ok(Math.max(...heights) - Math.min(...heights) <= 1, 'collapsed related and standalone rows have equal heights');
   const detailsBeforeDisclosure = calls.filter(call => call.path.endsWith('session-detail')).length;
   await client.evaluate(`(${disclosure}).focus(); true`);
   await client.key('Enter');
-  await until(() => client.evaluate(`(${disclosure}).getAttribute('aria-expanded')==='true' && document.querySelectorAll('[data-session-trigger]').length===25`), mode + ' inline keyboard disclosure');
+  await until(() => client.evaluate(`(${disclosure}).getAttribute('aria-expanded')==='true' && document.querySelectorAll('[data-session-trigger]').length===28`), mode + ' inline keyboard disclosure');
   assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), false, 'disclosure must not open details');
   assert.equal(calls.filter(call => call.path.endsWith('session-detail')).length, detailsBeforeDisclosure, 'disclosure uses the summary rows');
   const children = `document.getElementById((${disclosure}).getAttribute('aria-controls'))`;
+  assert.equal(await client.evaluate(`(${children}).querySelector('[data-related-toolbar] p').textContent`), '关联会话', 'the local filter has a visible scope');
+  const child76 = `[...(${children}).querySelectorAll('[data-session-trigger]')].find(el=>el.querySelector('[data-session-short-id]')?.textContent==='xture-76')`;
+  assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-title]').textContent`), 'Ada', 'trusted nickname arrives through the lightweight API');
+  assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-short-id]').textContent`), 'xture-76');
+  const aligned = await client.evaluate(`['project','activity','tokens','cost'].map(name=>{ const a=(${row74}).querySelector('[data-session-'+name+']').getBoundingClientRect(),b=(${child76}).querySelector('[data-session-'+name+']').getBoundingClientRect();return {name,delta:Math.abs((name==='tokens'||name==='cost'?a.right:a.left)-(name==='tokens'||name==='cost'?b.right:b.left))}; })`);
+  assert.ok(aligned.every(item => item.delta <= 1), mode + ' parent/child column alignment: ' + JSON.stringify(aligned));
+  assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-tokens] > span').getBoundingClientRect().width<=1`), true, 'wide descendants inherit the Token header');
+  const nestedDisclosure = `(${children}).querySelector('[data-session-disclosure]')`;
+  const treeIndent = await client.evaluate(`({arrow:(${nestedDisclosure}).getBoundingClientRect().left-(${disclosure}).getBoundingClientRect().left,icon:(${nestedDisclosure}).parentElement.querySelector('[data-session-name] > :first-child').getBoundingClientRect().left-(${row74}).querySelector('[data-session-name] > :first-child').getBoundingClientRect().left})`);
+  assert.ok(treeIndent.arrow >= 16 && Math.abs(treeIndent.icon - treeIndent.arrow) <= 1, 'the child disclosure and icon indent together: ' + JSON.stringify(treeIndent));
+  const toolbarGap = await client.evaluate(`(()=>{const bar=(${children}).querySelector('[data-related-toolbar]'),label=bar.querySelector('p').getBoundingClientRect(),control=bar.querySelector('[aria-haspopup=listbox]').getBoundingClientRect();return control.left-label.right;})()`);
+  assert.ok(toolbarGap >= 0 && toolbarGap <= 70, 'the local model filter stays beside its heading: ' + toolbarGap);
+  assert.equal(await client.evaluate(`getComputedStyle((${child76}).querySelector('[data-session-short-id]')).fontSize`), '12px', 'short identities stay readable');
+  assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-short-id]').getBoundingClientRect().top>(${child76}).querySelector('[data-session-title]').getBoundingClientRect().top`), true, 'IDs occupy a separate line');
+  await client.click(nestedDisclosure);
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-session-depth="2"]'))`), mode + ' second-level disclosure');
+  assert.equal(await client.evaluate(`document.querySelector('[data-session-depth="2"] [data-session-project]').getBoundingClientRect().left===(${row74}).querySelector('[data-session-project]').getBoundingClientRect().left`), true, 'grandchildren retain column alignment');
+  assert.equal(await client.evaluate(`(${children}).querySelector('[data-related-model]').textContent.includes('model-b')`), true, 'nested single-model branches also use a static label');
+  const assertHit = async expression => {
+    assert.equal(await client.evaluate(`(()=>{const el=(${expression});el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return [r.left+3,r.left+r.width/2,r.right-3].every(x=>document.elementFromPoint(x,r.top+r.height/2)?.closest('[data-session-disclosure]')===el)})()`), true, 'the entire shifted disclosure remains a separate hit target');
+  };
+  const expandDeep = async () => {
+    for (const level of [2, 3, 4]) {
+      const target = `document.querySelector('[data-session-depth="${level}"] [data-session-disclosure]')`;
+      await assertHit(target);
+      await client.click(target);
+      await until(() => client.evaluate(`Boolean(document.querySelector('[data-session-depth="${level + 1}"]'))`), mode + ' deep disclosure ' + level);
+    }
+    assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), false, 'deep disclosure cannot hit the overlapping detail target');
+    assert.equal(calls.filter(call => call.path.endsWith('session-detail')).length, detailsBeforeDisclosure, 'deep expansion never fetches details');
+    const lines = await client.evaluate(`[...document.querySelectorAll('[data-session-disclosure][aria-expanded=true]')].map(el=>{const region=document.getElementById(el.getAttribute('aria-controls')),child=region.querySelector('[data-session-disclosure]'),line=region.querySelector('[data-session-tree-line]');return !child || line.getBoundingClientRect().left<=child.getBoundingClientRect().left+1})`);
+    assert.ok(lines.every(Boolean), 'tree lines stay outside the child disclosure content even after indent caps');
+    const nodeGeometry = await client.evaluate(`[...document.querySelectorAll('[data-session-row]')].flatMap(row=>{const arrow=row.querySelector(':scope > [data-session-open-row] > [data-session-disclosure]');if(!arrow)return [];const a=arrow.getBoundingClientRect(),icon=row.querySelector('[data-session-name] > :first-child').getBoundingClientRect(),p=row.querySelector('[data-session-project]').getBoundingClientRect();return [{depth:row.dataset.sessionDepth,centerDelta:Math.abs(a.top+a.height/2-icon.top-icon.height/2),coversProject:a.left<p.right-1&&a.right>p.left+1&&a.top<p.bottom-1&&a.bottom>p.top+1}]})`);
+    assert.ok(nodeGeometry.every(node => node.centerDelta <= 1 && !node.coversProject), 'disclosures align with icons and never cover project text: ' + JSON.stringify(nodeGeometry));
+    const lineOverlaps = await client.evaluate(`(()=>{const text=[...document.querySelectorAll('[data-session-project],[data-session-activity],[data-session-tokens],[data-session-cost]')].map(el=>el.getBoundingClientRect());return [...document.querySelectorAll('[data-session-expanded-mark],[data-session-tree-line]')].map(el=>el.getBoundingClientRect()).some(line=>text.some(r=>line.left<r.right && line.right>r.left && line.top<r.bottom && line.bottom>r.top))})()`);
+    assert.equal(lineOverlaps, false, 'expanded marks and tree guides never cross metadata or numeric text');
+  };
+  await expandDeep();
+  await client.click(`document.querySelector('[data-session-depth="2"] [data-session-disclosure]')`);
+  await client.click(nestedDisclosure);
   await client.click(`(${children}).querySelector('[aria-haspopup=listbox]')`);
   await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), 'related model filter');
   await client.click(`[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.trim()==='model-b')`);
   await client.click(disclosure);
   await client.click(disclosure);
   assert.equal(await client.evaluate(`(${children}).querySelector('[aria-haspopup=listbox]').textContent.includes('model-b')`), true, 'collapsing preserves the child model filter');
-  await writeFile(path.join(output, mode + '-related.png'), (await window.webContents.capturePage()).toPNG());
+  await client.click(`(${children}).querySelector('[aria-haspopup=listbox]')`);
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), 'clear related model filter');
+  await client.click(`[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.trim()==='全部模型')`);
+  await until(() => client.evaluate(`(${children}).querySelectorAll('[data-session-depth="1"]').length===4 && (${children}).querySelector('[aria-haspopup=listbox]').textContent.includes('全部')`), mode + ' related all-model results');
+  const childTrigger = `(${nestedDisclosure}).parentElement.querySelector('[data-session-trigger]')`;
+  const hoverPoint = await client.evaluate(`(()=>{const el=(${childTrigger});el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:r.right-8,y:r.top+r.height/2}})()`);
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...hoverPoint });
+  assert.notEqual(await client.evaluate(`getComputedStyle((${disclosure}).parentElement).backgroundColor`), await client.evaluate(`getComputedStyle(${childTrigger}).backgroundColor`), 'expanded and hovered rows have distinct backgrounds');
+  await captureSettled(window, path.join(output, mode + '-related-hover.png'));
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 });
+  await captureSettled(window, path.join(output, mode + '-related.png'));
+  await client.evaluate('document.documentElement.classList.add("dark"); true');
+  await wait(100);
+  await captureSettled(window, path.join(output, mode + '-related-dark.png'));
+  await client.evaluate('document.documentElement.classList.remove("dark"); true');
   await client.click(disclosure);
   await client.click(`document.querySelector('button[aria-label="Token · 降序"]')`);
   await until(() => client.evaluate('(location.search+location.hash).includes("sort=tokens") && document.querySelector("section[aria-label=全部会话]")?.getAttribute("aria-busy")==="false"'), mode + ' column sorting');
@@ -136,7 +206,7 @@ async function exercise(window, client, mode) {
   await until(() => client.evaluate('!document.querySelector("section[aria-label=全部会话]")?.getAttribute("aria-busy")?.includes("true") && document.querySelector("[data-session-count]")?.textContent.includes("75")'), mode + ' restore recent sorting');
   await client.evaluate('document.querySelector("h1").scrollIntoView({block:"start"}); true');
   await wait(150);
-  await writeFile(path.join(output, mode + '-pagination.png'), (await window.webContents.capturePage()).toPNG());
+  await captureSettled(window, path.join(output, mode + '-pagination.png'));
   await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: false });
   await client.evaluate('document.querySelector("h1").scrollIntoView({block:"start"}); true');
   await wait(150);
@@ -150,17 +220,43 @@ async function exercise(window, client, mode) {
   await until(() => client.evaluate('Boolean(document.querySelector("[role=listbox]"))'), mode + ' narrow recent menu');
   await client.click(`[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.trim()==='最近活动 · 降序')`);
   await until(() => client.evaluate('document.querySelector("section[aria-label=全部会话]")?.getAttribute("aria-busy")==="false" && !document.querySelector("[role=listbox]")'), mode + ' restore narrow recent sorting');
+  await client.click(disclosure);
+  await until(() => client.evaluate(`(${disclosure}).getAttribute('aria-expanded')==='true'`), mode + ' narrow related disclosure');
+  await client.click(nestedDisclosure);
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-session-depth="2"]'))`), mode + ' narrow second-level disclosure');
+  assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-tokens] > span').getBoundingClientRect().width>1`), true, 'narrow descendants keep the Token unit');
+  await expandDeep();
+  const overlaps = await client.evaluate(`[...document.querySelectorAll('[data-session-depth]')].flatMap(row=>{const trigger=row.querySelector('[data-session-trigger]'),tokens=trigger.querySelector('[data-session-tokens]').getBoundingClientRect();return [...trigger.querySelectorAll('[data-session-name],[data-session-short-id],[data-session-role]')].filter(el=>el.getClientRects().length).map(el=>{const r=el.getBoundingClientRect();return r.left<tokens.right-1 && r.right>tokens.left+1 && r.top<tokens.bottom-1 && r.bottom>tokens.top+1})})`);
+  assert.ok(overlaps.every(value => !value), 'deep narrow identity text never overlaps numeric text');
+  assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-title]').scrollWidth<=(${child76}).querySelector('[data-session-title]').clientWidth`), true, 'a short trusted nickname stays fully readable');
+  assert.equal(await client.evaluate(`[...document.querySelectorAll('[data-session-short-id]')].every(el=>el.scrollWidth<=el.clientWidth)`), true, 'short IDs remain complete in narrow deep rows');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 });
+  await captureSettled(window, path.join(output, mode + '-related-deep-narrow.png'));
+  await client.click(`document.querySelector('[data-session-depth="2"] [data-session-disclosure]')`);
+  await until(() => client.evaluate(`!document.querySelector('[data-session-depth="3"]')`), mode + ' restore the ordinary narrow subtree');
+  await client.evaluate(`(${row74}).style.scrollMarginTop='16px';(${row74}).scrollIntoView({block:'start'});true`);
+  await wait(100);
+  assert.equal(await client.evaluate(`(${row74}).firstElementChild.getBoundingClientRect().top>=0`), true, 'the narrow screenshot includes the complete parent row');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 });
+  await wait(100);
+  await captureSettled(window, path.join(output, mode + '-related-narrow.png'));
   await client.evaluate('document.querySelector("h1").scrollIntoView({block:"start"}); true');
   await wait(150);
-  await writeFile(path.join(output, mode + '-pagination-narrow.png'), (await window.webContents.capturePage()).toPNG());
+  await captureSettled(window, path.join(output, mode + '-pagination-narrow.png'));
   await client.evaluate('document.querySelector("footer").scrollIntoView({block:"end"}); true');
   await wait(150);
-  await writeFile(path.join(output, mode + '-pagination-footer-narrow.png'), (await window.webContents.capturePage()).toPNG());
+  await captureSettled(window, path.join(output, mode + '-pagination-footer-narrow.png'));
   const overflow = await client.evaluate(`({ viewport: innerWidth, width: document.documentElement.scrollWidth, offenders: [...document.querySelectorAll('body *')].filter(el=>{const rect=el.getBoundingClientRect();return rect.width>0&&rect.right>innerWidth+1}).slice(0,12).map(el=>({tag:el.tagName,classes:el.className,text:el.textContent?.slice(0,80),right:el.getBoundingClientRect().right})) })`);
   assert.ok(overflow.width <= overflow.viewport + 1, mode + ' narrow overflow: ' + JSON.stringify(overflow));
   await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.click(pageButton(4));
+  await until(() => client.evaluate(`${activePage}==='4' && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' single-model parent page');
+  const single = `[...document.querySelectorAll('[data-session-row]')].find(el=>el.querySelector('[data-session-title]')?.textContent==='Fixture 0')`;
+  await client.click(`(${single}).querySelector('[data-session-disclosure]')`);
+  assert.equal(await client.evaluate(`(${single}).querySelector('[data-related-model]').textContent.includes('model-a')`), true, 'one model is a static readable label');
+  assert.equal(await client.evaluate(`(${single}).querySelector('[data-session-related] [aria-haspopup=listbox]')===null`), true, 'one model needs no ineffective filter');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
-  checks.push(mode + '-server-paging-keyboard-history-jump-capacity-search-detail-error-narrow', mode + '-counts-inline-relations-labels-units-responsive-sorting');
+  checks.push(mode + '-server-paging-keyboard-history-jump-capacity-search-detail-error-narrow', mode + '-counts-inline-relations-labels-units-responsive-sorting', mode + '-related-identities-columns-nesting-models-narrow');
 }
 
 async function main() {

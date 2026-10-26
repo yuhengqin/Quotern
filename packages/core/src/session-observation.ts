@@ -252,7 +252,9 @@ export interface SessionActivity {
   /** Explicit transport completeness; accounting detailsComplete has a different meaning. */
   detailLevel?: 'summary' | 'full';
   modelNames?: string[];
-  relation?: { parentId: string | null; relationKind: import('./session-insights.js').SessionRelationKind; relationConflict: boolean };
+  relation?: { parentId: string | null; relationKind: import('./session-insights.js').SessionRelationKind; relationConflict: boolean;
+    /** Trusted naming metadata, available without full detail enrichment. Optional for older runtimes. */
+    agentNickname?: string | null; agentRole?: string | null };
   insights?: SessionInsights;
   models?: SessionModelUsage[];
   detailsComplete?: boolean;

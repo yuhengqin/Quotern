@@ -83,7 +83,9 @@ export class SessionQueryService {
       const events = (metadata.get(sessionKey(row)) ?? []).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       const parentId = [...events].reverse().find(event => event.parentId)?.parentId ?? null;
       const relationKind = [...events].reverse().find(event => event.relationKind)?.relationKind ?? 'unknown';
-      row.relation = { parentId, relationKind, relationConflict: events.some(event => event.relationConflict) || new Set(events.map(event => event.parentId).filter(Boolean)).size > 1 };
+      row.relation = { parentId, relationKind, relationConflict: events.some(event => event.relationConflict) || new Set(events.map(event => event.parentId).filter(Boolean)).size > 1,
+        agentNickname: [...events].reverse().find(event => event.agentNickname?.trim())?.agentNickname ?? null,
+        agentRole: [...events].reverse().find(event => event.agentRole?.trim())?.agentRole ?? null };
     }
     markRelationCycles(snapshot.sessions);
     const state = { history, prepared, options, snapshot, modelRows: new Map(), durations: new Map() };

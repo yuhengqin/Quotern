@@ -31,6 +31,13 @@ interface SessionActions {
   resumeReason?: string | null;
 }
 
+/** Shell-friendly paths for copying; native actions keep the original directory. */
+function projectPathForClipboard(directory: string): string {
+  if (/^\\\\\?\\[a-z]:\\/i.test(directory)) return directory.slice(4);
+  if (/^\\\\\?\\UNC\\[^\\]+\\[^\\]+(?:\\|$)/i.test(directory)) return '\\\\' + directory.slice(8);
+  return directory;
+}
+
 function actionErrorKey(code: string): string {
   switch (code) {
     case 'SESSION_DIRECTORY_UNAVAILABLE': return 'usage.insights.directoryUnavailable';
@@ -262,7 +269,7 @@ function SessionDetailContent({ row, range, showTokenShare, navigation, onNaviga
           <Button size="sm" variant="primary" isDisabled={!current?.canResume || pending !== null} aria-busy={pending === 'resume'} aria-describedby={resumeHint ? `${hintId}-resume` : undefined} onPress={() => void runAction('resume')}>{t(pending === 'resume' ? 'usage.insights.opening' : 'usage.insights.resume')}</Button>
           <Button size="sm" variant="secondary" isDisabled={!current?.canOpenDirectory || pending !== null} aria-busy={pending === 'open-directory'} aria-describedby={directoryHint ? `${hintId}-directory` : undefined} onPress={() => void runAction('open-directory')}>{t(pending === 'open-directory' ? 'usage.insights.opening' : 'usage.detail.openFolder')}</Button>
           <Button size="sm" variant="tertiary" isDisabled={!resumeCommand} onPress={() => resumeCommand && void copy(resumeCommand, t('usage.insights.copyResume'))}><Copy className="size-3.5" aria-hidden />{t('usage.insights.copyResume')}</Button>
-          <Button size="sm" variant="tertiary" isDisabled={!directory} onPress={() => directory && void copy(directory, t('usage.detail.copyPath'))}><Copy className="size-3.5" aria-hidden />{t('usage.detail.copyPath')}</Button>
+          <Button size="sm" variant="tertiary" isDisabled={!directory} onPress={() => directory && void copy(projectPathForClipboard(directory), t('usage.detail.copyPath'))}><Copy className="size-3.5" aria-hidden />{t('usage.detail.copyPath')}</Button>
         </div>
         {feedback && <p role="status" className="mt-1 text-xs">{feedback}</p>}
       </Modal.Header>

@@ -19,7 +19,8 @@ app.on('window-all-closed', () => {});
 await mkdir(path.join(output, 'profile'), { recursive: true });
 const debugPort = await unusedPort();
 app.commandLine.appendSwitch('remote-debugging-port', String(debugPort));
-const fixtureDirectory = 'D:\\Fixture\\Quotern\\a-long-project-directory-for-session-detail-acceptance';
+const fixtureClipboardDirectory = 'D:\\Fixture\\Quotern\\a-long-project-directory-for-session-detail-acceptance';
+let fixtureDirectory = '\\\\?\\' + fixtureClipboardDirectory;
 const title = '评估用量统计的显示格式 · 多层子代理与分叉会话';
 const price = { matchedModel: 'fixture-model', table: 'fixture', matchMethod: 'exact', rates: { input: 2, output: 10, cache_read: 0.2, cache_write: 2 }, unpricedTokens: 0, ruleReferences: [], assumptions: [] };
 const model = (tokens, cost, name = 'gpt-fixture-model-with-a-long-name') => ({ model: name, tokens, costUsd: cost, knownCostUsd: cost ?? 0.5, costKind: cost == null ? 'mixed' : 'estimated', requests: 111, input_tokens: tokens * 0.01, cached_input_tokens: tokens * 0.98, cache_creation_input_tokens: 0, output_tokens: tokens * 0.007, reasoning_output_tokens: tokens * 0.003, serviceTiers: ['standard'], pricing: price });
@@ -259,8 +260,10 @@ async function main() {
   await until(() => client.evaluate(`document.body.innerText.includes('复制恢复命令 · 已复制')`), 'copy toast');
   assert.equal(await client.evaluate(`${dialog}.querySelector('.modal__header').innerText.includes('已复制')`), false);
   await until(() => client.evaluate(`!document.body.innerText.includes('复制恢复命令 · 已复制')`), 'copy toast auto dismisses');
+  clipboard.clear();
   await client.click(button('复制项目路径'));
-  await until(() => clipboard.readText() === fixtureDirectory, 'directory clipboard');
+  await until(() => clipboard.readText().length > 0, 'directory clipboard');
+  assert.equal(clipboard.readText(), fixtureClipboardDirectory, 'copy a regular drive path from namespaced metadata');
   await until(() => client.evaluate(`document.body.innerText.includes('复制项目路径 · 已复制')`), 'path toast appears');
   await until(() => client.evaluate(`!document.body.innerText.includes('复制项目路径 · 已复制')`), 'path toast auto dismisses before later overlay checks');
   checks.push('top-level-command-and-path-copy-with-transient-toast');
@@ -527,6 +530,25 @@ async function main() {
   await until(async () => (await text(browser)).includes('已打开终端'), 'browser native action over HTTP');
   assert.equal(actionCalls.at(-1).source, 'codex');
   checks.push('browser-production-build-http-without-electron-bridge');
+  const copyPaths = [
+    [fixtureDirectory, fixtureClipboardDirectory],
+    [String.raw`\\?\UNC\server\share\项目 文件`, String.raw`\\server\share\项目 文件`],
+    [fixtureClipboardDirectory, fixtureClipboardDirectory],
+    [String.raw`\\server\share\项目 文件`, String.raw`\\server\share\项目 文件`],
+    ['/home/user/项目 文件', '/home/user/项目 文件'],
+    [String.raw`\\?\Volume{fixture}\project`, String.raw`\\?\Volume{fixture}\project`],
+  ];
+  for (const [index, [directory, expected]] of copyPaths.entries()) {
+    fixtureDirectory = directory;
+    await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=copy-${index}`);
+    await until(() => browser.evaluate(`Boolean(${button('复制项目路径')}) && !(${button('复制项目路径')}).disabled`), 'copy path ready');
+    clipboard.clear();
+    await browser.click(button('复制项目路径'));
+    await until(() => clipboard.readText().length > 0, 'browser directory clipboard');
+    assert.equal(clipboard.readText(), expected, 'copy path from ' + directory);
+  }
+  fixtureDirectory = copyPaths[0][0];
+  checks.push('browser-copy-normalizes-drive-and-unc-paths-and-preserves-other-paths');
   await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
   await noOverflow(browser, '320px browser overflow');
   await browser.screenshot(path.join(output, 'browser-320.png'));
@@ -701,7 +723,7 @@ async function main() {
   await browser.click(button('Copy resume command'));
   await until(() => clipboard.readText() === 'codex resume fixture-root', 'legacy command fallback');
   await browser.click(button('Copy project path'));
-  await until(() => clipboard.readText() === fixtureDirectory, 'legacy directory fallback');
+  await until(() => clipboard.readText() === fixtureClipboardDirectory, 'legacy directory fallback');
   checks.push('runtime-null-command-and-legacy-command-directory-copy-fallback');
   await browser.click(button('With related sessions'));
   await until(async () => (await text(browser)).includes('≥ $9.9'), 'browser pricing uses related scope');

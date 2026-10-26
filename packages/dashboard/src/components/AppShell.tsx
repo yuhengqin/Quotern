@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
-import { Toast, ToastQueue } from '@heroui/react';
+import { ToastQueue } from '@heroui/react';
 import { AboutModal } from './AboutModal';
 import { AppToastProvider } from './AppToastContext';
+import { AppToastRegion } from './AppToastRegion';
 import { BackendConfigModal } from './BackendConfigModal';
 import { ShareActivityModal } from './ShareActivityModal';
 import { ShareSnapshotProvider } from '@/hooks/ShareSnapshotContext';
@@ -36,7 +37,7 @@ export function AppShell() {
       <ShareSnapshotProvider>
         <AchievementProvider request={updateAchievements} readOnly={isDemoMode()}>
         <div className="flex h-svh min-w-0 max-w-full flex-col overflow-hidden bg-background text-foreground">
-          <Toast.Provider placement="top end" queue={toastQueue} />
+          <AppToastRegion queue={toastQueue} />
           <div data-dashboard-scroll-container className={cn('relative min-h-0 flex-1 overflow-x-hidden overscroll-contain', pathname === '/pricing' ? 'overflow-y-hidden' : 'overflow-y-auto', pathname === '/dashboard' && '[overflow-anchor:none]')}>
             <div className="relative mx-auto w-full max-w-300 px-4 py-4 pb-12 sm:py-6 md:px-8 2xl:max-w-360">
               <main className="min-w-0 w-full">{demo && <div className="mb-4"><StatusBanner title={t('shell.demo.title')} description={t('shell.demo.description', { date: localDateNow(undefined, new Date(demo.referenceTime)) })} /></div>}<Outlet /></main>

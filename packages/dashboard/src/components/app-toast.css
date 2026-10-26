@@ -1,0 +1,17 @@
+@layer components {
+  .toast-region.app-toast-region {
+    width: var(--toast-width);
+    min-width: 0;
+  }
+
+  .app-toast-region .toast {
+    inset-inline-start: auto;
+    width: max-content;
+    max-width: 100%;
+  }
+
+  .app-toast-region .toast__content {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

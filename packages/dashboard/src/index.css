@@ -1,6 +1,7 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 @import "@heroui/styles";
+@import "./components/app-toast.css";
 
 :root {
   --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;

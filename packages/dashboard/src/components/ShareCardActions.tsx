@@ -1,5 +1,5 @@
 import { ArrowDownToLine } from '@gravity-ui/icons';
-import { Button, Toast, ToastQueue } from '@heroui/react';
+import { Button, ToastQueue } from '@heroui/react';
 import { Copy } from 'lucide-react';
 import { normalizeLocale, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
@@ -14,6 +14,7 @@ import {
   SHARE_CARD_DESIGN_WIDTH,
 } from '../lib/share-card-image';
 import { ShareCardArtwork } from './ShareCardCarousel';
+import { AppToastRegion } from './AppToastRegion';
 import type { SharePosterDetails, ShareCardTheme } from './SharePosterArtwork';
 
 type ShareAction = 'copy' | 'download';
@@ -218,7 +219,7 @@ export function ShareCardActions({
 
   return (
     <>
-      <Toast.Provider placement="top end" queue={toastQueue} />
+      <AppToastRegion queue={toastQueue} />
       <Button
         isDisabled={disabled || activeAction === 'copy'}
         isPending={activeAction === 'download'}

@@ -1,6 +1,7 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 @import "@heroui/styles";
+@import "../../../../packages/dashboard/src/components/app-toast.css";
 @source "../../../../packages/dashboard/src/components/ThemePreferenceControl.tsx";
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
 @source "../../../../packages/dashboard/src/components/UsageTrendExplorer.tsx";
@@ -172,7 +173,7 @@
 @layer base {
   /* Dedicated title-bar space for dragging the frameless desktop window.
      The height tracks the shared TITLEBAR_HEIGHT constant, published by
-     AppShell as `--desktop-titlebar-height`; the fallback keeps the strip
+     main.tsx on the document root as `--desktop-titlebar-height`; the fallback keeps the strip
      usable in any context that does not render the shell. */
   .desktop-window-drag-region {
     height: var(--desktop-titlebar-height, 32px);
@@ -280,5 +281,10 @@
 
   .toast-region {
     z-index: 100010;
+  }
+
+  /* Toast regions are portalled to body, including those inside share/settings. */
+  .toast-region.app-toast-region {
+    top: calc(var(--desktop-titlebar-height, 0px) + 1rem);
   }
 }

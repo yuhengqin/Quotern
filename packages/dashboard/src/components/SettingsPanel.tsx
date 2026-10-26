@@ -6,7 +6,6 @@ import {
   RadioGroup,
   Surface,
   Tabs,
-  Toast,
   ToastQueue,
 } from '@heroui/react';
 import {
@@ -14,6 +13,7 @@ import {
   type TudConfigView,
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
+import { AppToastRegion } from './AppToastRegion';
 import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
 import { ThemePreferenceControl } from '@/components/ThemePreferenceControl';
 import { StatusBanner } from '@/components/StatusBanner';
@@ -58,7 +58,7 @@ export function SettingsPanel({
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      <Toast.Provider placement="top end" queue={toastQueue} />
+      <AppToastRegion queue={toastQueue} />
       <Tabs
         className="flex min-h-0 w-full flex-1 flex-col text-center"
         selectedKey={resolvedTab}

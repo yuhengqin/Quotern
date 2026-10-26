@@ -11,6 +11,7 @@ import { desktopSubscriptionMessages } from './i18n/desktop-subscription-message
 import { dispatchDataSynced } from './lib/shell-events';
 import { router } from './router';
 import { TrayPopoverView } from './components/TrayPopoverView';
+import { TITLEBAR_HEIGHT } from '../shared/window-chrome';
 import './index.css';
 
 /** Bridge main-process Core sync → same CustomEvent pages already listen for. */
@@ -21,6 +22,11 @@ if (typeof window.tud?.onDataSynced === 'function') {
 }
 
 const isTrayPopover = new URLSearchParams(window.location.search).get('view') === 'tray-popover';
+
+// Publish on the document root so body portals also avoid native window controls.
+if (!isTrayPopover) {
+  document.documentElement.style.setProperty('--desktop-titlebar-height', `${TITLEBAR_HEIGHT}px`);
+}
 
 async function startRenderer() {
   registerDashboardMessages();

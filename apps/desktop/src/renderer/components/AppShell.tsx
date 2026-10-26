@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { ToastQueue } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
@@ -30,15 +30,6 @@ import { AchievementOverlays } from '../../../../../packages/dashboard/src/achie
 import { updateAchievements } from '@/lib/api';
 import { TITLEBAR_HEIGHT } from '../../shared/window-chrome';
 import { parseSessionPageSearch } from '../../../../../packages/dashboard/src/lib/session-page';
-
-/**
- * Publish the shared title-bar height to CSS so `.desktop-window-drag-region`
- * and the native Window Controls Overlay (which the main process sizes from the
- * same constant) cannot drift apart.
- */
-const TITLEBAR_STYLE = {
-  '--desktop-titlebar-height': `${TITLEBAR_HEIGHT}px`,
-} as CSSProperties;
 
 /** Root shell: filter chrome actions + nested route outlet. */
 export function AppShell() {
@@ -129,7 +120,6 @@ export function AppShell() {
         <AchievementProvider request={updateAchievements}>
         <div
           className="flex min-h-svh flex-col bg-background text-foreground"
-          style={TITLEBAR_STYLE}
         >
         <AppToastProvider queue={toastQueue} />
         <AutoUpdateNotice toastQueue={toastQueue} />

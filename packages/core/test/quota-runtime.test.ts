@@ -10,6 +10,7 @@ import { SUBSCRIPTION_CHANNELS } from '../src/quota/shared/subscription-channels
 import { createLocalApiApp } from '../src/server/local-api.js';
 import { BucketStore } from '../src/server/state.js';
 import type { TudConfig } from '../src/types.js';
+import { quotaDirectoryKey } from '../src/quota/snapshot.js';
 
 test('Node-only quota runtime registers all desktop channels without starting network reads', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'quotern-quota-runtime-'));
@@ -24,12 +25,12 @@ test('Node-only quota runtime registers all desktop channels without starting ne
 test('HTTP manual refresh returns normalized quota and never returns raw account credentials', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'quotern-quota-http-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  let used = 25;
+  let used = 25, reads = 0;
   const manager = new QuotaManager({ store: await openQuotaStore(directory), notify() {}, readers: [{
     id: 'codex', label: 'Codex', interval: 180,
-    read: async () => markQuotaIdentity({ status: 'ready', hasAccount: true, planLabel: 'Plus', fetchedAt: Date.now() / 1000,
+    read: async () => { reads++; return markQuotaIdentity({ status: 'ready', hasAccount: true, planLabel: 'Plus', fetchedAt: Date.now() / 1000,
       fiveHour: { usedPercent: used, resetsAt: Date.now() / 1000 + 3600, windowDurationMins: 300 },
-      accessToken: 'secret-token', accountId: 'private-account', email: 'private@example.test' }, 'private-account'),
+      accessToken: 'secret-token', accountId: 'private-account', email: 'private@example.test' }, 'private-account'); },
   }] });
   t.after(() => manager.dispose());
   const app = createLocalApiApp({ dataDir: directory, bucketStore: new BucketStore(), getConfig: () => ({} as TudConfig), quota: manager });
@@ -41,4 +42,9 @@ test('HTTP manual refresh returns normalized quota and never returns raw account
   assert.doesNotMatch(JSON.stringify(body), /secret-token|private-account|private@example|accessToken|accountId|email/);
   used = 40;
   assert.equal((await (await refresh()).json()).data.providers[0].windows[0].usedPercent, 40);
+  const priorReads = reads;
+  const guarded = (key: string) => app.request('/functions/tud-quota/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'codex', directoryKey: key }) });
+  assert.equal((await guarded(quotaDirectoryKey(join(directory, 'different')))).status, 409);
+  assert.equal(reads, priorReads);
+  assert.equal((await guarded(quotaDirectoryKey(directory))).status, 200);
 });

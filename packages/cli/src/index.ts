@@ -70,6 +70,8 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let syncWatcherStop: (() => void) | null = null;
 let pricingRefreshStop: (() => void) | null = null;
 let quotaRuntime: QuotaManager | null = null;
+let quotaQueryMode = false;
+let closeMcp: (() => Promise<void>) | null = null;
 let runSyncFn: ((reason: string, source?: string) => Promise<SyncResult[]>) | null =
   null;
 let runtime: {
@@ -291,7 +293,7 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
   const getConfig = () => runtime!.config;
 
   // CLI owns its quota history; Electron keeps its existing userData store.
-  quotaRuntime = await createQuotaRuntime({ directory: join(dir, 'quota') });
+  quotaRuntime = await createQuotaRuntime({ directory: join(dir, 'quota'), snapshot: { directory: dir, runtime: 'cli' } });
 
   const app = createLocalApiApp({
     quota: quotaRuntime,
@@ -525,6 +527,17 @@ async function main(): Promise<void> {
       } catch (error) { throw new CliUserError(error instanceof Error ? error.message : '演示操作失败'); }
       return;
     }
+    if (commandLine.args[0] === 'quota' || commandLine.args[0] === 'mcp') {
+      quotaQueryMode = true;
+      const quota = await import('./quota-command.js');
+      if (commandLine.args[0] === 'quota') await quota.runQuotaCommand(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
+      else {
+        const options = quota.parseQuotaArgs(commandLine.args.slice(1), commandLine.lang ?? activeLocale, true);
+        if (options.help) console.log(quota.quotaHelp(commandLine.lang ?? activeLocale, true));
+        else closeMcp = await (await import('./quota-mcp.js')).startQuotaMcp(options);
+      }
+      return;
+    }
     if (commandLine.args[0] === 'statusline') {
       await runStatusline(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
       return;
@@ -590,7 +603,8 @@ async function main(): Promise<void> {
 }
 
 async function shutdownFromSignal(): Promise<void> {
-  await cmdStop();
+  if (quotaQueryMode) await closeMcp?.();
+  else await cmdStop();
   process.exit(0);
 }
 

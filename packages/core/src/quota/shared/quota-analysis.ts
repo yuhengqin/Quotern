@@ -27,7 +27,9 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
       ...(finite(row.periodSeconds) && row.periodSeconds > 0 ? { periodSeconds: row.periodSeconds } : {}),
       ...(id === 'qoder' ? { timeKind: 'expiry' as const } : {}),
       ...(typeof row.groupLabel === 'string' ? { groupLabel: row.groupLabel } : {}),
-      ...(id === 'deepseek' ? { valueText: finite(row.remaining) ? `¥${row.remaining.toFixed(2)}` : '余额未知', analysisEligible: false } : {}),
+      ...(row.analysisEligible === false ? { analysisEligible: false } : {}),
+      ...(id === 'deepseek' ? { valueText: finite(row.remaining) ? `¥${row.remaining.toFixed(2)}` : '余额未知',
+        balance: { currency: 'CNY' as const, remaining: finite(row.remaining) && row.remaining >= 0 ? row.remaining : null }, analysisEligible: false } : {}),
       ...(finite(row.used) && finite(row.limit) && row.limit > 0 ? { used: row.used, limit: row.limit,
         unit: row.unit === 'requests' || row.unit === 'credits' ? row.unit : 'tokens' } : {}),
     };

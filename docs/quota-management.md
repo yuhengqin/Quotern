@@ -2,7 +2,7 @@
 
 主窗口与 macOS / Windows 托盘面板共用额度管理状态，Windows 宠物也复用这份读数。额度来自既有订阅读取器，Token 与费用仍由 Core 本地统计链路计算。
 
-CLI 浏览器面板也提供同一套卡片、详情、趋势和手动刷新。CLI 可独立读取现有 12 个订阅通道，无需运行 Quotern Desktop；仍需各 Agent 自身的有效登录状态，依赖 Agent 客户端/CLI 的来源保留原要求。网页显示的是提供 HTTP 服务的那台机器的额度。网页在可见时每 15 秒读取本地快照，回到页面时更新；上游读取仍受管理器间隔和退避约束。
+CLI 浏览器面板也提供同一套卡片、详情、趋势和手动刷新。CLI 可独立读取现有 13 个订阅通道（含 Gemini CLI），无需运行 Quotern Desktop；仍需各 Agent 自身的有效登录状态，依赖 Agent 客户端/CLI 的来源保留原要求。网页显示的是提供 HTTP 服务的那台机器的额度。网页在可见时每 15 秒读取本地快照，回到页面时更新；上游读取仍受管理器间隔和退避约束。
 
 额度采集、归一化、历史和分析位于 `packages/core/src/quota`。Desktop 保留 Electron 网络适配、IPC、系统电源事件与通知；CLI 使用 Node 网络，当前不发送系统额度通知。Desktop 运行时，CLI 的 observer 仅在网页请求或手动刷新时读取额度，不启动额外额度轮询。
 
@@ -24,6 +24,8 @@ OMP 的 `~/.omp/agent/agent.db` 中 `usage_history` 可自动发现多个订阅�
 
 ## 提醒与分析口径
 
+Gemini CLI 保留有效的 model/tokenType 窗口和服务端重置时间，不合并模型池或推测固定日周期。当前协议未提供周期长度，也未提供可验证的账号归属，因此该渠道只展示额度，不生成趋势、耗尽预测或阈值通知。认证与版本边界见 [Gemini CLI](subscription-plan-design.md#gemini-cli)。
+
 5h 等短周期在已用 90% 时提醒；长周期在 70% 和 90% 时提醒。首次观察、账号变化、重新启用通知或通道时建立新基线，不补发旧提醒；同一周期每个阈值各提醒一次。利用率回调不重新触发阈值。只有供应商重置时间推进且消耗明显下降时才发送恢复提醒；套餐到期不当成额度重置。
 
 节奏在界面显示为「使用较慢」「使用偏快」「节奏正常」，悬停查看「当前已用 X%，按当前周期进度预计使用 Y%」及工作日/历史习惯等实际参考依据。内部仍以参考曲线与已用比例之间的百分点差值计算，不代表近期消耗速度或耗尽时间。工作日按系统本地日历的周一至周五计算，短于两天的窗口仍按均匀节奏。自动参考曲线需要近 28 天内至少 14 个不同日期的观察，否则退回均匀；长时间未观察的增量不会直接全部归到醒来的那一天。
@@ -43,6 +45,10 @@ Desktop 使用独立的内存 Chromium session 读取额度，沿用系统代理
 历史保存在 Electron `userData/quota/history.json`，设置在同目录的 `preferences.json`。开发模式位于本 worktree 的 `.quotern-dev/electron/` 下。历史只保存不可逆账号键、来源、窗口身份、时间、百分比和重置时间，保留 90 天；不保存令牌或原始供应商响应。凭据指纹与历史账号键分离，稳定账号 ID 优先；只有不透明凭据时保守使用指纹，凭据更新可能开启新的历史序列。无法确认账号的本地引擎只显示当前额度。
 
 CLI 将额度历史与设置保存在其数据目录的 `quota/` 下（正式运行默认 `~/.quotern/quota/`，隔离开发为 `.quotern-dev/data/quota/`）。两端不共享这两个可写文件，也不自动迁移对方的偏好和历史，避免同时运行时互相覆盖。
+
+两端另将安全查询快照发布到 Core dataDir 下的 `quota-snapshots/cli.json` 和 `desktop.json`，按 runtime 分文件串行原子替换；Desktop 使用 `resolveDataDir()`，同样遵守开发隔离。`quotern quota` 与 `quotern mcp` 只读这些文件，既不打开偏好/历史 store，也不触发网页 GET 所带的交互刷新。默认选最近生成的有效文件；文件上限 1 MiB，读坏文件不修复。观察时间和文件生成时间分别校验 30 分钟新鲜度，已重置窗口清除预测。查询命令和 JSON 语义见 [CLI 文档](../CLI.md#额度查询与只读-mcp)。
+
+`quota diagnostics` 将本次读取的固定阶段、HTTP 状态及错误码导出。通用 HTTP 层记录网络和限流，Codex/Claude/Gemini 另外记录认证与解析阶段；其余 reader 的未细分失败使用 `UNAVAILABLE`，不声称已重建所有内部尝试。`retainedFrom` 区分缓存保留和 OMP 替补，来源是实际展示数据的来源；native 失败后采用 OMP 时仍保留先前失败轨迹。`retryAt` 是后台失败退避时间，手动刷新仍沿用现有可主动重试规则。
 
 CLI 的 Node 网络与 Desktop 的 Chromium 网络配置不同。若网络需要代理，已设置 `HTTP_PROXY` / `HTTPS_PROXY` 仍可能不足；使用 Node 24 时，在启动 CLI 的同一终端先设置 `NODE_USE_ENV_PROXY=1`（PowerShell：`$env:NODE_USE_ENV_PROXY = '1'`）。这让 Node 的 `fetch` 使用已有环境代理，不会修改系统代理，见 [Node 官方说明](https://nodejs.org/docs/v24.0.2/api/cli.html#node_use_env_proxy1)。该开关不适用于所有早期 Node 版本。
 

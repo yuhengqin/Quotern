@@ -3,7 +3,8 @@ import { analyzeQuota, evaluateQuotaAlerts, normalizeQuotaSnapshot, type QuotaAl
 import { quotaWindowPeriodSeconds, type QuotaPreferences, type QuotaPreferencePatch, type QuotaProfile, type QuotaProviderState, type QuotaServiceStatus, type QuotaState } from '../shared/quota.js';
 import type { SubscriptionChannelId } from '../shared/subscription-channels.js';
 import { quotaIdentity, quotaEvidence } from './quota-identity.js';
-import { quotaReadRetryAfter } from './quota-fetch-state.js';
+import { captureQuotaRead, quotaReadAttempts, quotaReadRetryAfter } from './quota-fetch-state.js';
+import type { QuotaDiagnosticCode } from '../shared/quota-diagnostic.js';
 import { validQuotaPatch, pruneQuotaHistory, assertQuotaProfileDirectories, type QuotaStore } from './quota-store.js';
 
 export interface QuotaReader {
@@ -154,8 +155,10 @@ export class QuotaManager {
     const generation = this.generation, slotGeneration = slot.generation;
     const pending = (async () => {
       let raw: unknown;
-      try { raw = await slot.reader.read(); }
-      catch { raw = { status: 'temporarily-unavailable', message: '暂时无法读取额度，请稍后重试' }; }
+      raw = await captureQuotaRead(async () => {
+        try { return await slot.reader.read(); }
+        catch { return { status: 'temporarily-unavailable', message: '暂时无法读取额度，请稍后重试' }; }
+      });
       if (this.disposed || this.paused || generation !== this.generation || slotGeneration !== slot.generation || !this.enabled(slot)) return;
       const normalized = this.project(slot.reader, raw);
       normalized.queriedAt = this.now();
@@ -169,13 +172,25 @@ export class QuotaManager {
       const temporary = ['unavailable', 'temporarily-unavailable'].includes(normalized.status) || normalized.stale;
       const metadata = raw as { retryAfterSeconds?: unknown } | null;
       const declaredRetry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : null);
+      const statusCodes: Record<string, QuotaDiagnosticCode> = { 'not-signed-in': 'NOT_SIGNED_IN', expired: 'AUTH_EXPIRED', 'access-denied': 'ACCESS_DENIED', 'unsupported-account': 'UNSUPPORTED_AUTH', 'custom-provider': 'UNSUPPORTED_AUTH', 'not-installed': 'NOT_INSTALLED' };
+      const attempts = quotaReadAttempts(raw);
+      const retainedFrom = normalized.provenance?.source === 'omp' ? 'omp' : normalized.stale && identity || attempts.some(a => a.stage === 'cache') ? 'cache' : null;
+      if (retainedFrom === 'omp') { attempts.push({ stage: 'observation', outcome: 'retained', code: null }); if (attempts.length > 24) attempts.shift(); }
+      normalized.diagnostic = { source: normalized.provenance?.source ?? 'native', queriedAt: normalized.queriedAt,
+        durationMs: Math.max(0, Math.round(this.mono() - mono)), retainedFrom,
+        retryAt: declaredRetry === null ? null : this.now() + Math.max(1, Math.min(3600, declaredRetry)),
+        code: [...attempts].reverse().find(attempt => attempt.code !== null)?.code ?? (normalized.status === 'ready' && !normalized.stale ? null : statusCodes[normalized.status] ?? 'UNAVAILABLE'), attempts };
       if (declaredRetry !== null) slot.serverBlockedUntil = Math.max(slot.serverBlockedUntil, this.mono() + Math.max(1, Math.min(3600, declaredRetry)) * 1000);
       if (temporary) {
         slot.failures++;
         const retry = quotaReadRetryAfter(raw) ?? (typeof metadata?.retryAfterSeconds === 'number' && Number.isFinite(metadata.retryAfterSeconds) ? metadata.retryAfterSeconds : Math.min(1800, 120 * 2 ** Math.min(slot.failures - 1, 4)));
         slot.blockedUntil = Math.max(slot.blockedUntil, this.mono() + Math.max(1, Math.min(3600, retry)) * 1000);
+        normalized.diagnostic.retryAt = this.now() + Math.max(0, slot.blockedUntil - this.mono()) / 1000;
         if (identity && identity === slot.identity && !normalized.windows.length && !normalized.details.length && slot.state.fetchedAt !== null) {
-          slot.state = { ...slot.state, queriedAt: normalized.queriedAt, stale: true, message: normalized.message, refreshing: true, analyses: {} };
+          normalized.diagnostic.retainedFrom = 'cache';
+          normalized.diagnostic.attempts.push({ stage: 'cache', outcome: 'retained', code: null });
+          if (normalized.diagnostic.attempts.length > 24) normalized.diagnostic.attempts.shift();
+          slot.state = { ...slot.state, queriedAt: normalized.queriedAt, stale: true, message: normalized.message, refreshing: true, analyses: {}, diagnostic: normalized.diagnostic };
           return;
         }
       } else {

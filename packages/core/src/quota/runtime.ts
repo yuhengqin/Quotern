@@ -6,6 +6,7 @@ import { openQuotaStore } from './readers/quota-store.js';
 import { captureQuotaRead, quotaNodeFetch } from './readers/quota-fetch-state.js';
 import { createDefaultCodexSubscriptionReader } from './readers/codex-subscription.js';
 import { createDefaultClaudeSubscriptionReader } from './readers/claude-subscription.js';
+import { createDefaultGeminiSubscriptionReader } from './readers/gemini-subscription.js';
 import { readCursorSubscription } from './readers/cursor-subscription.js';
 import { readCopilotSubscription } from './readers/copilot-subscription.js';
 import { readGrokSubscription } from './readers/grok-subscription.js';
@@ -18,6 +19,8 @@ import { readDeepSeekSubscription } from './readers/deepseek-subscription.js';
 import { readOpenCodeSubscription } from './readers/opencode-subscription.js';
 import { selectKimiSubscription } from './shared/kimi-selection.js';
 import { createOMPQuotaObservationReader, selectQuotaObservation, type OMPQuotaObservation } from './readers/quota-observations.js';
+import { createQuotaSnapshotPublisher } from './snapshot.js';
+import { projectQuotaReport, type QuotaRuntimeSource } from './report.js';
 
 export { QuotaManager } from './readers/quota-manager.js';
 const STATUS_URLS: Record<string, string> = { codex: 'https://status.openai.com/', claude: 'https://status.claude.com/', cursor: 'https://status.cursor.com/', copilot: 'https://www.githubstatus.com/' };
@@ -34,10 +37,13 @@ export async function createQuotaRuntime(options: {
   onChanged?(state: QuotaState): void;
   notify?(notification: QuotaNotification): void;
   fetch?: (url: string, init: RequestInit) => Promise<Response>;
+  snapshot?: { directory: string; runtime: QuotaRuntimeSource };
 }) {
+  const publisher = options.snapshot && createQuotaSnapshotPublisher(options.snapshot.directory, options.snapshot.runtime);
   const force = { forceRefresh: true };
   const codex = createDefaultCodexSubscriptionReader(options.fetch);
   const claude = createDefaultClaudeSubscriptionReader();
+  const gemini = createDefaultGeminiSubscriptionReader(options.fetch);
   const readObservations = createOMPQuotaObservationReader();
   let observations: OMPQuotaObservation[] = [];
   const withObservations = (provider: string, read: () => Promise<unknown>) => async () => {
@@ -46,7 +52,7 @@ export async function createQuotaRuntime(options: {
     return selectQuotaObservation(native, observations.filter(item => item.provider === provider).map(item => item.snapshot));
   };
   const reads: Record<string, () => Promise<unknown>> = {
-    codex: () => codex(force), claude: () => claude(force),
+    codex: () => codex(force), claude: () => claude(force), gemini: () => gemini(force),
     cursor: () => readCursorSubscription(force), copilot: () => readCopilotSubscription(force),
     grok: () => readGrokSubscription(force), zcode: () => readZcodeSubscription(force),
     kimi: async () => selectKimiSubscription(await readKimiSubscriptions(force)),
@@ -93,7 +99,15 @@ export async function createQuotaRuntime(options: {
   };
   return new QuotaManager({ readers, store: await openQuotaStore(options.directory),
     profileReaders,
-    notify: options.notify ?? (() => {}), onChanged: options.onChanged,
+    notify: options.notify ?? (() => {}), onChanged: state => {
+      options.onChanged?.(state);
+      // Construction and the first in-flight emission must not erase the previous run's snapshot.
+      if (publisher && options.snapshot && (state.providers.length === 0 || state.providers.some(p => p.queriedAt !== null))) {
+        void publisher.publish(projectQuotaReport(state, options.snapshot.runtime)).catch(() => {
+          console.warn('[quotern] quota snapshot publication failed');
+        });
+      }
+    },
     fetchStatus: async url => {
       if (!Object.values(STATUS_URLS).includes(url)) throw new Error('unsupported status source');
       const response = await (options.fetch ?? quotaNodeFetch)(new URL('api/v2/status.json', url).toString(), { signal: AbortSignal.timeout(15000), credentials: 'omit', redirect: 'error', cache: 'no-store' });

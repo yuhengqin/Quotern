@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { quotaNodeFetch } from './quota-fetch-state.js';
+import { quotaNodeFetch, observeQuotaResponse, observeQuotaError, recordQuotaAttempt } from './quota-fetch-state.js';
 import { codexPlanLabel, mapCodexRateLimitWindows, type CodexSubscriptionSnapshot } from '../shared/codex-subscription.js';
 import { createSubscriptionCache } from './subscription-cache.js';
 
@@ -60,13 +60,19 @@ export function createCodexSubscriptionReader(deps: {
     try { raw = await deps.readAuth(); }
     catch (error) {
       const denied = (error as NodeJS.ErrnoException).code === 'EACCES' || (error as NodeJS.ErrnoException).code === 'EPERM';
+      recordQuotaAttempt({ stage: 'credentials', outcome: 'failure', code: denied ? 'ACCESS_DENIED' : 'NOT_SIGNED_IN' });
       return cache('missing', async () => unavailable(denied ? 'access-denied' : 'not-signed-in', denied ? '无法读取 Codex 登录信息，请检查文件权限' : '请先使用 ChatGPT 账号登录 Codex', denied));
     }
     const key = createHash('sha256').update(raw).digest('hex');
     return cache(key, async () => {
       let auth: unknown;
-      try { auth = JSON.parse(raw); } catch { return unavailable('access-denied', 'Codex 登录信息损坏，请重新登录', true); }
+      try { auth = JSON.parse(raw); } catch {
+        recordQuotaAttempt({ stage: 'credentials', outcome: 'failure', code: 'INVALID_CREDENTIALS' });
+        return unavailable('access-denied', 'Codex 登录信息损坏，请重新登录', true);
+      }
       const credentials = parseCodexCredentials(auth);
+      const authCode = credentials.unsupported ? 'UNSUPPORTED_AUTH' : !credentials.accessToken ? 'NOT_SIGNED_IN' : credentials.expiresAt !== null && credentials.expiresAt <= now() ? 'AUTH_EXPIRED' : !credentials.accountId ? 'INVALID_CREDENTIALS' : null;
+      recordQuotaAttempt({ stage: 'credentials', outcome: authCode ? 'failure' : 'success', code: authCode });
       const annotate = <T extends object>(snapshot: T, at: number | null) => markQuotaEvidence(markQuotaIdentity(snapshot, credentials.accountId || null),
         { source: 'native', observer: 'Codex 官方查询', observedAt: at, identityVerified: Boolean(credentials.accountId) }, { service: 'openai', accountId: credentials.accountId });
       const fail = (status: CodexSubscriptionSnapshot['status'], message: string) => annotate(unavailable(status, message, true, credentials.planLabel), null);
@@ -79,6 +85,7 @@ export function createCodexSubscriptionReader(deps: {
           headers: { Authorization: `Bearer ${credentials.accessToken}`, 'ChatGPT-Account-Id': credentials.accountId, Accept: 'application/json' },
           signal: AbortSignal.timeout(20_000), redirect: 'error', credentials: 'omit', cache: 'no-store',
         });
+        observeQuotaResponse(response);
         if (response.status === 401) return fail('expired', 'Codex 登录已过期，请重新登录');
         if (response.status === 403) return fail('access-denied', 'Codex 额度访问受限，请检查账号权限');
         if (response.status === 429) {
@@ -88,9 +95,13 @@ export function createCodexSubscriptionReader(deps: {
         }
         if (!response.ok) return fail('unavailable', '暂时无法读取 Codex 额度');
         const windows = mapCodexUsage(await response.json());
-        if (!windows.windows.length) return fail('unavailable', 'Codex 暂未返回可用额度');
+        if (!windows.windows.length) {
+          recordQuotaAttempt({ stage: 'parse', outcome: 'failure', code: 'INVALID_RESPONSE' });
+          return fail('unavailable', 'Codex 暂未返回可用额度');
+        }
         return annotate({ status: 'ready' as const, hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, Math.floor(now() / 1000));
       } catch (error) {
+        observeQuotaError(error);
         logCodexRequestError(error);
         return fail('unavailable', '网络异常或读取超时，暂时无法读取 Codex 额度');
       }

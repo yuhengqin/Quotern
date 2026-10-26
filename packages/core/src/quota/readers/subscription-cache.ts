@@ -1,4 +1,5 @@
 import { copyQuotaIdentity, markQuotaIdentity, quotaIdentity } from './quota-identity.js';
+import { recordQuotaAttempt } from './quota-fetch-state.js';
 
 /** One minute cache shared by tray and main window; credentials never leave the caller. */
 export function createSubscriptionCache<T extends { status: string; stale: boolean; message: string | null }>(now = Date.now) {
@@ -10,7 +11,10 @@ export function createSubscriptionCache<T extends { status: string; stale: boole
   return async (key: string, read: () => Promise<T>, force = false): Promise<T> => {
     if (identity !== key) { identity = key; generation++; lastSuccess = null; cached = null; pending = null; }
     if (pending?.identity === key) return pending.promise;
-    if (!force && cached && now() - cached.at < 60_000) return cached.value;
+    if (!force && cached && now() - cached.at < 60_000) {
+      recordQuotaAttempt({ stage: 'cache', outcome: 'retained', code: null });
+      return cached.value;
+    }
     const readingGeneration = generation;
     const promise = (async () => {
       const fresh = await read();
@@ -19,8 +23,11 @@ export function createSubscriptionCache<T extends { status: string; stale: boole
       if (identity === key && generation === readingGeneration) {
         if (fresh.status === 'ready') lastSuccess = fresh;
         else if (fresh.status === 'unavailable' || fresh.status === 'temporarily-unavailable') {
-          if (lastSuccess) value = copyQuotaIdentity(lastSuccess, { ...lastSuccess, stale: true, message: fresh.message,
-            ...('retryAfterSeconds' in fresh ? { retryAfterSeconds: fresh.retryAfterSeconds } : {}) });
+          if (lastSuccess) {
+            recordQuotaAttempt({ stage: 'cache', outcome: 'retained', code: null });
+            value = copyQuotaIdentity(lastSuccess, { ...lastSuccess, stale: true, message: fresh.message,
+              ...('retryAfterSeconds' in fresh ? { retryAfterSeconds: fresh.retryAfterSeconds } : {}) });
+          }
         } else lastSuccess = null;
         cached = { at: now(), value };
       }

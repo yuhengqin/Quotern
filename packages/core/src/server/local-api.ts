@@ -104,7 +104,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   } else {
     registerShareBackgroundApi(app, deps.dataDir);
     registerAchievementsApi(app, deps.dataDir);
-    registerQuotaApi(app, deps.quota);
+    registerQuotaApi(app, deps.quota, deps.dataDir);
     registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
   }
 

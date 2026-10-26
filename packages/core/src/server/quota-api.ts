@@ -3,6 +3,7 @@ import { bodyLimit } from 'hono/body-limit';
 import type { QuotaManager } from '../quota/readers/quota-manager.js';
 import { validQuotaPatch } from '../quota/readers/quota-store.js';
 import { isSubscriptionChannelId } from '../quota/shared/subscription-channels.js';
+import { quotaDirectoryKey } from '../quota/snapshot.js';
 
 export type LocalQuotaRuntime = Pick<QuotaManager, 'getState' | 'refresh' | 'setPreferences'>;
 const ROUTE = '/functions/tud-quota';
@@ -18,7 +19,7 @@ export function isLocalPanelOrigin(origin: string | undefined, target: string): 
   } catch { return false; }
 }
 
-export function registerQuotaApi(parent: Hono, quota?: LocalQuotaRuntime): void {
+export function registerQuotaApi(parent: Hono, quota?: LocalQuotaRuntime, directory?: string): void {
   const app = new Hono();
   app.onError((_error, c) => c.json(failure('QUOTA_REQUEST_FAILED'), 500));
   app.use('*', async (c, next) => {
@@ -40,8 +41,9 @@ export function registerQuotaApi(parent: Hono, quota?: LocalQuotaRuntime): void 
     if (!input || typeof input !== 'object' || Array.isArray(input)) return c.json(failure('QUOTA_INVALID_REQUEST'), 400);
     if (c.req.param('operation') === 'refresh') {
       const body = input as Record<string, unknown>;
-      if (Object.keys(body).some(key => key !== 'provider') || (body.provider !== undefined && !isSubscriptionChannelId(body.provider)
+      if (Object.keys(body).some(key => key !== 'provider' && key !== 'directoryKey') || (body.provider !== undefined && !isSubscriptionChannelId(body.provider)
         && !(typeof body.provider === 'string' && quota!.getState().providers.some(provider => provider.id === body.provider)))) return c.json(failure('QUOTA_INVALID_PROVIDER'), 400);
+      if (body.directoryKey !== undefined && (!directory || body.directoryKey !== quotaDirectoryKey(directory))) return c.json(failure('QUOTA_RUNTIME_MISMATCH'), 409);
       return c.json(ok(await quota!.refresh('manual', body.provider as string | undefined)));
     }
     if (c.req.param('operation') === 'preferences') {

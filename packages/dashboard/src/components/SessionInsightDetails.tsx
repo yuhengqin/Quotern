@@ -10,7 +10,7 @@ export { SessionDetailDialog as SessionInsightDetails } from './SessionDetailDia
 export function ContextAuditButton(){
   const {t}=useTranslation();const [open,setOpen]=useState(false),[data,setData]=useState<ContextAudit|null>(null),[error,setError]=useState(false);
   const load=async()=>{setOpen(true);setError(false);try{setData(await request<ContextAudit>('/functions/tud-context-audit'));}catch{setError(true);}};
-  return <><Button size="sm" variant="tertiary" onPress={()=>void load()}>{t('usage.insights.contextAudit')}</Button>
+  return <><Button size="sm" variant="ghost" className="!h-8 !min-h-8 !px-2 !text-xs" onPress={()=>void load()}>{t('usage.insights.contextAudit')}</Button>
     <Modal isOpen={open} onOpenChange={setOpen}><Modal.Backdrop><Modal.Container><Modal.Dialog className="max-w-3xl"><Modal.CloseTrigger/><Modal.Header><Modal.Heading>{t('usage.insights.contextAudit')}</Modal.Heading></Modal.Header><Modal.Body className="space-y-4">
       <p className="text-sm text-muted">{t('usage.insights.contextNote')}</p>
       {error?<p role="status">{t('usage.activity.readError')}</p>:!data?<p role="status">{t('usage.activity.loading')}</p>:<>

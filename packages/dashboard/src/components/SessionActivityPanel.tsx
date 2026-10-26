@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
 import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
-import { ArrowDown, ArrowDownUp, ArrowUp, ChevronUp, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, ChevronUp, Download, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SessionActivity, SessionActivitySnapshot, SessionListPage } from 'quotern-core';
@@ -21,9 +21,10 @@ import { formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-form
 import { accountLabel, costLabel, modeLabel, serviceLabel } from '../lib/session-labels';
 import type { DetailRange } from '../lib/session-detail';
 import { SessionPagination } from './SessionPagination';
+import { sessionDisplayTitle, sessionProjectDisplay } from '../lib/session-list-display';
 
-const sessionColumns = 'min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5';
-const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_7.5rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4';
+const sessionColumns = 'min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-1 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5 @3xl/session-list:px-2';
+const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_6rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4';
 const sessionSortLabels = { recent: 'usage.activity.recent', tokens: 'usage.common.totalTokens', cost: 'usage.common.cost', duration: 'usage.explorer.taskTime' } as const;
 type SessionSorting = Pick<SessionPageSearch, 'sort' | 'direction'> & { onSort(sort: SessionSort): void };
 function age(stamp: string, locale: SupportedLocale) {
@@ -121,6 +122,8 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
   const models=useMemo(()=>pageData?.facets.models??[...new Set(rows.flatMap(row=>row.modelNames??row.models?.map(model=>model.model)??[row.model]))].filter(model=>model!=='unknown').sort(),[pageData,rows]);
   const threads=useMemo(()=>sessionThreads(filtered),[filtered]);
   const result = pageData ? { ...pageData.pagination, rows: threads.roots } : sessionActivityPage(threads.roots, page, value.pageSize);
+  const totalRoots = pageData?.pagination.totalRoots ?? threads.roots.length;
+  const totalSessions = pageData?.pagination.totalSessions ?? filtered.length;
   const groups=sessionGroups(result.rows,value.groupBy??'none',i18n.resolvedLanguage??'zh-CN');
   const hasFilters = Boolean(query.trim() || sources.length || project || value.model);
   const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState(false);
@@ -145,10 +148,10 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
     } catch { setExportError(true); }
     finally { setExporting(false); }
   };
-  return <section aria-label={t('usage.activity.allSessions')} aria-busy={loading} className="min-w-0 rounded-2xl border border-separator bg-surface p-4 sm:p-5">
+  return <section aria-label={t('usage.activity.allSessions')} aria-busy={loading} className="@container/session-browser min-w-0 rounded-2xl border border-separator bg-surface p-4 sm:p-5">
     <div className="flex flex-col gap-3">
       <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 flex-wrap items-center gap-2">
-        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto" value={query} onChange={q => onChange({ q })}>
+        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full @3xl/session-browser:basis-56" value={query} onChange={q => onChange({ q })}>
           <Label className="sr-only">{t('usage.activity.search')}</Label>
           <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
         </SearchField>
@@ -165,22 +168,13 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
         </Select>
         <Select aria-label={t('usage.explorer.project')} value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') onChange({ project: key === 'all' ? '' : key.slice('project:'.length) }); }} variant="secondary" className="min-w-0 max-w-56">
           <Label className="sr-only">{t('usage.explorer.project')}</Label>
-          <Select.Trigger ref={projectTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="truncate">{project || t('usage.explorer.allProjects')}</Select.Value><Select.Indicator /></Select.Trigger>
+          <Select.Trigger ref={projectTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><Select.Value className="truncate"><span title={project || undefined}>{project ? sessionProjectDisplay(project) : t('usage.explorer.allProjects')}</span></Select.Value><Select.Indicator /></Select.Trigger>
           <FilterSelectPopover className="w-64 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.project')}>
             <ListBox.Item id="all" textValue={t('usage.explorer.allProjects')} className="text-xs">{t('usage.explorer.allProjects')}<ListBox.ItemIndicator /></ListBox.Item>
-            {facets.projects.map(({ value, count }) => <ListBox.Item id={`project:${value}`} key={value} textValue={value} className="text-xs"><span className="min-w-0 truncate" title={value}>{value}</span><span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
+            {facets.projects.map(({ value, count }) => <ListBox.Item id={`project:${value}`} key={value} textValue={value} className="text-xs"><span className="min-w-0 truncate" title={value}>{sessionProjectDisplay(value)}</span><span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></FilterSelectPopover>
         </Select>
-        <Select aria-label={t('usage.explorer.sort')} value={sort} onChange={key => { if (typeof key === 'string') onChange({ sort: key as SessionSort, direction: 'descending' }); }} variant="secondary" className="min-w-0 max-w-52">
-          <Label className="sr-only">{t('usage.explorer.sort')}</Label>
-          <Select.Trigger className="!h-8 !min-h-8 !w-fit max-w-full !text-xs"><ArrowDownUp className="size-3.5 shrink-0" aria-hidden /><Select.Value className="truncate" /><Select.Indicator /></Select.Trigger>
-          <FilterSelectPopover className="w-52 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.sort')}>
-            {(['recent', 'tokens', 'cost', 'duration'] as const).map(value => <ListBox.Item id={value} key={value} textValue={t(sessionSortLabels[value])} className="text-xs">{t(sessionSortLabels[value])}<ListBox.ItemIndicator /></ListBox.Item>)}
-          </ListBox></FilterSelectPopover>
-        </Select>
-        <Button size="sm" variant="tertiary" isIconOnly className="!size-8 !min-h-8 !min-w-8" aria-label={t(direction === 'ascending' ? 'usage.activity.sortDescending' : 'usage.activity.sortAscending')} onPress={() => onChange({ direction: direction === 'ascending' ? 'descending' : 'ascending' })}>
-          {direction === 'ascending' ? <ArrowUp className="size-3.5" aria-hidden /> : <ArrowDown className="size-3.5" aria-hidden />}
-        </Button>
+        <Select aria-label={t('usage.common.model')} value={value.model??'all'} onChange={key=>onChange({model:key==='all'?undefined:String(key)})} variant="secondary" className="min-w-0 max-w-60"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value className="truncate"/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(model=><ListBox.Item key={model} id={model} textValue={model}><span className="truncate" title={model}>{model}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
         {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
@@ -189,16 +183,27 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
         {value.model&&<SessionFilterChip label={value.model} onRemove={()=>onChange({model:undefined})}/>}
         <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Select aria-label={t('usage.common.model')} value={value.model??'all'} onChange={key=>onChange({model:key==='all'?undefined:String(key)})} variant="secondary" className="max-w-60"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(model=><ListBox.Item key={model} id={model} textValue={model}><span className="truncate" title={model}>{model}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
-        <Select aria-label={t('usage.insights.groupLabel')} value={value.groupBy??'none'} onChange={key=>onChange({groupBy:key as 'none'|'date'|'project'})} variant="secondary" className="max-w-44"><Label className="sr-only">{t('usage.insights.groupLabel')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox>{(['none','date','project'] as const).map(mode=><ListBox.Item key={mode} id={mode} textValue={t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}>{t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}<ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
-        <Button size="sm" variant="tertiary" onPress={() => { void exportCsv(); }} isDisabled={exporting || loading}>{t('usage.insights.exportCsv')}</Button><ContextAuditButton/>
+      <div ref={resultTop} className="flex min-w-0 scroll-mt-4 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p role="status" data-session-count className="text-xs tabular-nums text-muted">
+          {loading ? t('usage.activity.loading') : <>
+            {t('usage.activity.rootSessionCount', { count: totalRoots })}
+            {totalSessions > totalRoots && <> · {t('usage.activity.includingRelated', { count: totalSessions })}</>}
+          </>}
+        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <div role="group" aria-label={t('usage.activity.viewOptions')} className="flex min-w-0 flex-wrap items-center gap-2">
+            <Select aria-label={t('usage.insights.groupLabel')} value={value.groupBy??'none'} onChange={key=>onChange({groupBy:key as 'none'|'date'|'project'})} variant="secondary" className="max-w-44"><Label className="sr-only">{t('usage.insights.groupLabel')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox>{(['none','date','project'] as const).map(mode=><ListBox.Item key={mode} id={mode} textValue={t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}>{t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}<ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
+            <SessionSortControl sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} onChange={onChange} />
+          </div>
+          <div role="group" aria-label={t('usage.activity.listActions')} className="flex items-center gap-1 border-l border-separator pl-3">
+            <Button size="sm" variant="ghost" className="!h-8 !min-h-8 !gap-1.5 !px-2 !text-xs" onPress={() => { void exportCsv(); }} isDisabled={exporting || loading}><Download className="size-3.5" aria-hidden />{t('usage.insights.exportCsv')}</Button><ContextAuditButton/>
+          </div>
+        </div>
       </div>
       {exportError && <p role="status" className="text-xs text-warning">{t('usage.activity.exportFailed')}</p>}
-      <div ref={resultTop} className="scroll-mt-4"><p role="status" className="text-xs text-muted">{loading ? t('usage.activity.loading') : t('usage.activity.sessionCount', { count: pageData?.pagination.totalSessions ?? filtered.length })}</p></div>
       {filtered.length ? groups.map(group=><section key={group.label}>{group.label&&<h2 className="my-3 break-words text-sm font-medium">{group.label}</h2>}<SessionRows rows={group.sessions} availableSessions={availableSessions} childrenByParent={threads.children} showTokenShare={Boolean(usage)} range={range} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /></section>) : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
     </div>
-    <SessionPagination page={result.page} pages={result.pages} pageSize={value.pageSize} totalRoots={pageData?.pagination.totalRoots ?? threads.roots.length} loading={loading} onChange={onChange} />
+    <SessionPagination page={result.page} pages={result.pages} pageSize={value.pageSize} totalRoots={totalRoots} loading={loading} onChange={onChange} />
   </section>;
 }
 
@@ -218,17 +223,41 @@ function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): voi
   </Button>;
 }
 
+function SessionSortControl({ sorting, onChange }: { sorting: SessionSorting; onChange(patch: Partial<SessionPageSearch>): void }) {
+  const { t } = useTranslation();
+  return <>
+    <Select aria-label={t('usage.explorer.sort')} value={`${sorting.sort}:${sorting.direction}`} onChange={key => {
+      if (typeof key !== 'string') return;
+      const [sort, direction] = key.split(':') as [SessionSort, SessionPageSearch['direction']];
+      onChange({ sort, direction });
+    }} variant="secondary" className="min-w-0 max-w-64 @3xl/session-browser:hidden">
+      <Label className="sr-only">{t('usage.explorer.sort')}</Label>
+      <Select.Trigger data-session-sort className="!h-8 !min-h-8 !w-fit max-w-full !gap-1.5 !text-xs">
+        {sorting.direction === 'ascending' ? <ArrowUp className="size-3.5 shrink-0" aria-hidden /> : <ArrowDown className="size-3.5 shrink-0" aria-hidden />}
+        <Select.Value className="truncate" /><Select.Indicator />
+      </Select.Trigger>
+      <FilterSelectPopover className="w-64"><ListBox aria-label={t('usage.explorer.sort')}>
+        {(['recent', 'tokens', 'cost', 'duration'] as const).flatMap(sort => (['descending', 'ascending'] as const).map(direction => {
+          const label = `${t(sessionSortLabels[sort])} · ${t(direction === 'ascending' ? 'usage.activity.sortAscending' : 'usage.activity.sortDescending')}`;
+          return <ListBox.Item key={`${sort}:${direction}`} id={`${sort}:${direction}`} textValue={label} className="text-xs">{label}<ListBox.ItemIndicator /></ListBox.Item>;
+        }))}
+      </ListBox></FilterSelectPopover>
+    </Select>
+    <div className="hidden @3xl/session-browser:block"><SessionSortButton label={t('usage.explorer.taskTime')} column="duration" sorting={sorting} /></div>
+  </>;
+}
+
 function SessionSortButton({ label, column, sorting }: { label: string; column: SessionSort; sorting: SessionSorting }) {
   const { t } = useTranslation();
   const active = sorting.sort === column;
   const nextDirection = active && sorting.direction === 'descending' ? 'ascending' : 'descending';
-  return <Button size="sm" variant="tertiary" className={`!h-7 !min-h-7 !min-w-0 !gap-1 !rounded-md !px-1 !text-[11px] !font-medium ${active ? 'text-foreground' : 'text-muted'}`} aria-pressed={active} aria-label={`${label} · ${t(nextDirection === 'ascending' ? 'usage.activity.sortAscending' : 'usage.activity.sortDescending')}`} onPress={() => sorting.onSort(column)}>
+  return <Button size="sm" variant="ghost" className={`!h-8 !min-h-8 !min-w-0 !gap-1 !rounded-md !px-1.5 !text-xs !font-medium ${active ? 'text-foreground' : 'text-muted'}`} aria-pressed={active} aria-label={`${label} · ${t(nextDirection === 'ascending' ? 'usage.activity.sortAscending' : 'usage.activity.sortDescending')}`} onPress={() => sorting.onSort(column)}>
     <Table.SortableColumnHeader className="table__sortable-column-header !gap-1" sortDirection={active ? sorting.direction : undefined} indicator={<ChevronUp className="table__sortable-column-indicator !size-3" aria-hidden />}>{label}</Table.SortableColumnHeader>
   </Button>;
 }
 
 function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, childrenByParent, range, autoOpenKey, depth=0 }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; showTokenShare: boolean; sorting?: SessionSorting; childrenByParent?: Map<string,SessionActivity[]>; range?: DetailRange; autoOpenKey?: string; depth?:number }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [selected,setSelected]=useState<Pick<SessionActivity,'source'|'sessionId'>|null>(null);
   const detailRow=rows.find(row=>selected&&row.source===selected.source&&row.sessionId===selected.sessionId);
   const container = useRef<HTMLDivElement>(null);
@@ -239,10 +268,10 @@ function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, 
     setSelected({ source: targetSource, sessionId: targetId });
   }, [autoOpenKey, targetSource, targetId]);
   useEffect(()=>{if(selected&&!detailRow)setSelected(null);},[selected,detailRow]);
-  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   return <div ref={container} className="@container/session-list divide-y divide-separator">
-      {sorting && <div role="group" aria-label={t('usage.explorer.sort')} className={`hidden rounded-lg bg-surface-secondary py-1 text-[11px] font-medium text-muted @3xl/session-list:grid ${sessionColumns}`}>
-        <div className="flex min-w-0 items-center gap-2.5">
+      {sorting && <div role="group" aria-label={t('usage.explorer.sort')} className="hidden grid-cols-[3rem_minmax(0,1fr)] rounded-lg bg-surface-secondary py-1 text-xs font-medium text-muted @3xl/session-list:grid">
+        <span aria-hidden />
+        <div className={`grid ${sessionColumns}`}><div className="flex min-w-0 items-center gap-2.5">
           <span className="w-5 shrink-0" aria-hidden />
           <div className={sessionIdentityColumns}>
             <span>{t('usage.activity.sessionColumn')}</span><span>{t('usage.explorer.project')}</span>
@@ -252,40 +281,58 @@ function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, 
         <div className="grid grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] items-center gap-x-4">
           <div className="flex justify-end"><SessionSortButton label="Token" column="tokens" sorting={sorting} /></div>
           <div className="flex justify-end"><SessionSortButton label={t('usage.common.cost')} column="cost" sorting={sorting} /></div>
-        </div>
+        </div></div>
       </div>}
-      {rows.map(row => <div key={`${row.source}:${row.sessionId}`} className="py-1">
-        <button type="button" data-session-trigger aria-haspopup="dialog" onClick={()=>setSelected(row)} className={`grid w-full cursor-pointer rounded-xl py-2 text-left outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
-          <div className="flex min-w-0 items-center gap-2.5">
-            <ProviderIcon provider={row.source} size={20} />
-            <div className={sessionIdentityColumns}>
-              <p className="truncate text-sm font-medium" title={row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId}`}>{row.sessionTitle ?? `${sourceLabel(row.source)} · ${row.sessionId.slice(-8)}`}</p>
-              <p className="flex min-w-0 items-center gap-1 text-[11px] text-muted @3xl/session-list:contents">
-                <span className="truncate" title={row.projectLabel}>{row.projectLabel}</span>
-                <span aria-hidden className="shrink-0 @3xl/session-list:hidden">·</span>
-                <time className="shrink-0 whitespace-nowrap" dateTime={row.lastActivityAt} title={new Date(row.lastActivityAt).toLocaleString(locale)}>{age(row.lastActivityAt, locale)}</time>
-              </p>
-            </div>
-          </div>
-          <div className="min-w-0 text-right text-xs tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4"><p className="whitespace-nowrap">{row.tokens === null ? t('usage.activity.usageNotRecorded') : `${formatSessionTokens(row.tokens)} Token`}</p><div className="whitespace-nowrap text-[11px] text-muted"><Tooltip delay={200}>
-            <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">
-              {row.costUsd === null ? t('usage.activity.amountUnknown') : formatSessionUsd(row.costUsd,locale)}
-            </Tooltip.Trigger>
-            <Tooltip.Content placement="top">{costLabel(row.costKind, locale)}</Tooltip.Content>
-          </Tooltip></div></div>
-        </button>
-        {childrenByParent?.has(sessionIdentity(row))&&<SessionChildren rows={childrenByParent.get(sessionIdentity(row))!} availableSessions={availableSessions} childrenByParent={childrenByParent} showTokenShare={showTokenShare} range={range} depth={depth+1}/>}
-      </div>)}
+      {rows.map(row => <SessionRow key={sessionIdentity(row)} row={row} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} range={range} depth={depth} showMetricHeaders={Boolean(sorting)} onOpen={() => setSelected(row)} />)}
       {detailRow && <SessionInsightDetails key={sessionIdentity(detailRow)} row={detailRow} sessions={availableSessions} showTokenShare={showTokenShare} range={range} onClose={() => setSelected(null)} />}
     </div>;
 }
 
-function SessionChildren({rows,availableSessions,childrenByParent,showTokenShare,depth,range}:{rows:SessionActivity[];availableSessions:SessionActivity[];childrenByParent:Map<string,SessionActivity[]>;showTokenShare:boolean;depth:number;range?:DetailRange}){
-  const {t}=useTranslation();const [open,setOpen]=useState(false),[model,setModel]=useState('all');
-  const models=[...new Set(sessionBranchRows(rows,childrenByParent).flatMap(row=>row.modelNames??row.models?.map(m=>m.model)??[row.model]))].sort();
-  const visible=filterSessionBranches(rows,childrenByParent,model);
-  return <div className="mb-2 ml-6 border-l border-separator pl-3"><Button variant="tertiary" size="sm" aria-expanded={open} onPress={()=>setOpen(!open)}>{t(open?'usage.insights.collapse':'usage.insights.expand')} · {rows.length}</Button>
-    {open&&<><Select aria-label={t('usage.common.model')} value={model} onChange={key=>setModel(String(key))} variant="secondary" className="my-2 max-w-56"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(value=><ListBox.Item id={value} key={value} textValue={value}><span className="truncate">{value}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
-    <SessionRows rows={visible} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth} range={range}/></>}
+function SessionRow({ row, availableSessions, childrenByParent, showTokenShare, depth, range, showMetricHeaders, onOpen }: { row: SessionActivity; availableSessions: SessionActivity[]; childrenByParent?: Map<string, SessionActivity[]>; showTokenShare: boolean; depth: number; range?: DetailRange; showMetricHeaders: boolean; onOpen(): void }) {
+  const { t, i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
+  const [open, setOpen] = useState(false), [model, setModel] = useState('all');
+  const childrenId = useId();
+  const children = childrenByParent?.get(sessionIdentity(row)) ?? [];
+  const models = [...new Set(sessionBranchRows(children, childrenByParent ?? new Map()).flatMap(child => child.modelNames ?? child.models?.map(usage => usage.model) ?? [child.model]))].sort();
+  const visible = filterSessionBranches(children, childrenByParent ?? new Map(), model);
+  const title = sessionDisplayTitle(row, t('usage.activity.untitledSession'));
+  return <div className="py-1" data-session-row>
+    <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center @3xl/session-list:grid-cols-[3rem_minmax(0,1fr)]">
+      {children.length ? <Button data-session-disclosure size="sm" variant="ghost" className="!h-8 !min-h-8 !w-full !min-w-0 !px-0 !text-xs tabular-nums text-muted" aria-expanded={open} aria-controls={childrenId} aria-label={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${title} · ${children.length}`} onPress={() => setOpen(!open)}><span className="flex items-center gap-0.5" title={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${children.length}`}><ChevronRight className={`size-3.5 shrink-0 ${open ? 'rotate-90' : ''}`} aria-hidden /><span>{children.length}</span></span></Button> : <span aria-hidden />}
+      <button type="button" data-session-trigger aria-haspopup="dialog" onClick={onOpen} className={`grid w-full cursor-pointer rounded-xl py-2 text-left outline-offset-2 hover:bg-surface-secondary focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
+        <div className="flex min-w-0 items-center gap-2 @3xl/session-list:gap-2.5">
+          <ProviderIcon provider={row.source} size={20} />
+          <div className={sessionIdentityColumns}>
+            <p className="truncate text-sm font-medium" title={row.sessionTitle || `${sourceLabel(row.source)} · ${row.sessionId}`}>{title}</p>
+            <p className="flex min-w-0 items-center gap-1 text-xs text-muted @3xl/session-list:contents">
+              <SessionProjectLabel project={row.projectLabel} />
+              <span aria-hidden className="shrink-0 @3xl/session-list:hidden">·</span>
+              <time className="shrink-0 whitespace-nowrap" dateTime={row.lastActivityAt} title={new Date(row.lastActivityAt).toLocaleString(locale)}>{age(row.lastActivityAt, locale)}</time>
+            </p>
+          </div>
+        </div>
+        <div className="min-w-0 text-right text-sm tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4">
+          <p data-session-tokens className="whitespace-nowrap font-medium">{row.tokens === null ? t('usage.activity.usageNotRecorded') : <>{formatSessionTokens(row.tokens)}<span className={showMetricHeaders ? '@3xl/session-list:sr-only' : undefined}> Token</span></>}</p>
+          <div className="whitespace-nowrap font-medium"><Tooltip delay={200}>
+            <Tooltip.Trigger<'span'> render={props => <span {...props} />} className="cursor-help rounded outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent">{row.costUsd === null ? t('usage.activity.amountUnknown') : formatSessionUsd(row.costUsd, locale)}</Tooltip.Trigger>
+            <Tooltip.Content placement="top">{costLabel(row.costKind, locale)}</Tooltip.Content>
+          </Tooltip></div>
+        </div>
+      </button>
+    </div>
+    {children.length > 0 && <div id={childrenId} hidden={!open} className="mb-2 ml-6 border-l border-separator pl-3">
+      {open && <><Select aria-label={t('usage.common.model')} value={model} onChange={key => setModel(String(key))} variant="secondary" className="my-2 max-w-56"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !text-xs"><Select.Value /><Select.Indicator /></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator /></ListBox.Item>{models.map(value => <ListBox.Item id={value} key={value} textValue={value}><span className="truncate" title={value}>{value}</span><ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
+        <SessionRows rows={visible} availableSessions={availableSessions} showTokenShare={showTokenShare} childrenByParent={childrenByParent} depth={depth + 1} range={range} /></>}
+    </div>}
   </div>;
+}
+
+function SessionProjectLabel({ project }: { project: string }) {
+  const display = sessionProjectDisplay(project), split = display.lastIndexOf('…');
+  return <span className="relative flex min-w-0 overflow-hidden" title={project}>
+    <span aria-hidden className={split < 0 ? 'truncate' : 'min-w-0 overflow-hidden whitespace-nowrap'}>{split < 0 ? display : display.slice(0, split)}</span>
+    {split >= 0 && <span aria-hidden className="max-w-[60%] shrink-0 truncate">{display.slice(split)}</span>}
+    <span className="sr-only">{project}</span>
+  </span>;
 }

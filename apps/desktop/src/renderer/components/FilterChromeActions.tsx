@@ -6,6 +6,7 @@ import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
 import { AutoUpdateAction } from '@/components/AutoUpdateAction';
 import { useAppToastQueue } from '@/components/AppToastContext';
+import { CHROME_ICON_BUTTON_CLASS_NAME } from '../../../../../packages/dashboard/src/components/chrome-action-styles';
 import { isCliBackend, triggerSync } from '@/lib/api';
 import {
   dispatchDataSynced,
@@ -62,7 +63,7 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
     <div className="flex items-center gap-1">
       <AutoUpdateAction className={primaryChromeBtn} />
       {cliBackend && sessionScope && <Tooltip closeDelay={80} delay={100}>
-        <Tooltip.Trigger aria-label={t('usage.activity.pageTitle')} className="button button--sm button--tertiary button--icon-only inline-flex size-8 min-h-8 min-w-8 shrink-0 p-0" render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/sessions" search={createSessionPageSearch(sessionScope)} />}>
+        <Tooltip.Trigger aria-label={t('usage.activity.pageTitle')} className={CHROME_ICON_BUTTON_CLASS_NAME} render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/sessions" search={createSessionPageSearch(sessionScope)} />}>
           <RotateCcwClock className="size-4" aria-hidden />
         </Tooltip.Trigger>
         <Tooltip.Content placement="bottom"><p>{t('usage.activity.pageTitle')}</p></Tooltip.Content>
@@ -70,7 +71,7 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
       <Tooltip closeDelay={80} delay={100}>
         <Tooltip.Trigger
           aria-label={t('shell.pricing')}
-          className="button button--sm button--tertiary button--icon-only inline-flex size-8 min-h-8 min-w-8 shrink-0 p-0"
+          className={CHROME_ICON_BUTTON_CLASS_NAME}
           render={(props) => (
             <Link
               {...(props as ComponentPropsWithRef<'a'>)}
@@ -86,7 +87,18 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
           <p>{t('shell.pricing')}</p>
         </Tooltip.Content>
       </Tooltip>
-      {cliBackend && <Tooltip><Tooltip.Trigger aria-label={t('billing.title')} className="button button--sm button--tertiary button--icon-only size-8" render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} to="/billing" />}><Wallet aria-hidden className="size-4" /></Tooltip.Trigger><Tooltip.Content>{t('billing.title')}</Tooltip.Content></Tooltip>}
+      {cliBackend && (
+        <Tooltip closeDelay={80} delay={100}>
+          <Tooltip.Trigger
+            aria-label={t('billing.title')}
+            className={CHROME_ICON_BUTTON_CLASS_NAME}
+            render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/billing" />}
+          >
+            <Wallet aria-hidden className="size-4" />
+          </Tooltip.Trigger>
+          <Tooltip.Content placement="bottom"><p>{t('billing.title')}</p></Tooltip.Content>
+        </Tooltip>
+      )}
       <AchievementEntry />
       <ChromeAction
         icon={<Share2 className="size-4" aria-hidden />}
@@ -132,7 +144,7 @@ function ChromeAction({
     <Tooltip closeDelay={80} delay={100}>
       <Button
         aria-label={label}
-        className="size-8 min-h-8 min-w-8 shrink-0 p-0"
+        className={CHROME_ICON_BUTTON_CLASS_NAME}
         isDisabled={disabled}
         isIconOnly
         onPress={onPress}

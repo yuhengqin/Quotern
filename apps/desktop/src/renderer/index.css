@@ -4,6 +4,7 @@
 @import "@heroui/styles";
 @import "../../../../packages/dashboard/src/components/app-toast.css";
 @source "../../../../packages/dashboard/src/components/ThemePreferenceControl.tsx";
+@source "../../../../packages/dashboard/src/components/chrome-action-styles.ts";
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";
 @source "../../../../packages/dashboard/src/components/UsageTrendExplorer.tsx";
 @source "../../../../packages/dashboard/src/components/SessionActivityPanel.tsx";

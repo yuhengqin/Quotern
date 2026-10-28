@@ -77,6 +77,7 @@
 | 能力 | Dashboard 入口与使用点 | 适用边界 | Desktop 方式 |
 | --- | --- | --- | --- |
 | 页面布局 | [AppShell](../packages/dashboard/src/components/AppShell.tsx)，由 `routes/__root.tsx` 注册 | 根路由的宽度、滚动容器、Provider 与全局弹层；页面通过 Outlet 接入 | 独立 `AppShell`，保留窗口/托盘差异 |
+| 顶栏图标操作 | [FilterChromeActions](../packages/dashboard/src/components/FilterChromeActions.tsx) 与 [AchievementEntry](../packages/dashboard/src/achievements/AchievementEntry.tsx) 共用 [chrome-action-styles](../packages/dashboard/src/components/chrome-action-styles.ts) | 图标按钮与导航链接统一 32×32、16px 图标、圆形 tertiary 背景和居中布局；保留链接语义、Tooltip、焦点、禁用状态及成就未读点。Desktop 更新文字按钮保留独立状态与样式 | 独立 FilterChromeActions 引用同一样式；AchievementEntry re-export，index.css 登记共享样式 `@source` |
 | 筛选菜单浮层 | [FilterMenu](../packages/dashboard/src/components/FilterMenu.tsx)，价格、会话、总览 Agent、趋势、分享范围等使用 | 单选、多选、可搜索列表和自定义选项列表的公共尺寸/滚动外壳；详见下一节 | [本地 re-export](../apps/desktop/src/renderer/components/FilterMenu.tsx)，共用同一实现 |
 | 持续状态提示 | [StatusBanner](../packages/dashboard/src/components/StatusBanner.tsx)，DashboardPage、PricingPage、SettingsPanel 使用 | `info/warn/error/success` 状态与说明；操作完成的短暂反馈使用 Toast | 同名独立副本 |
 | 设置帮助说明 | 浏览器设置维持现有说明布局 | 标题旁的独立信息按钮，悬停显示入口名称，点击打开可阅读、可含链接的说明浮层；触发器不放入 Checkbox / Label 的点击区域，关闭与焦点恢复沿用 HeroUI Popover。规则与背景可按需查看，实际状态、错误和操作反馈仍直接显示 | [SettingsHelpPopover](../apps/desktop/src/renderer/components/SettingsHelpPopover.tsx)，用于 QuotaSettings 的提醒与分析、周额度参考节奏、订阅通道，以及 SettingsPanel 的 Token 数量格式和 PetSettingsCard 的导入宠物；解释性浮层不套用 FilterMenu |

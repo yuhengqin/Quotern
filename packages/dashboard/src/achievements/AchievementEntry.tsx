@@ -1,18 +1,24 @@
+import type { ComponentPropsWithRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Tooltip } from '@heroui/react';
 import { Award, ArrowUpRight } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAchievements } from './AchievementProvider';
+import { CHROME_ICON_BUTTON_CLASS_NAME } from '../components/chrome-action-styles';
 
 export function AchievementEntry() {
   const { t } = useTranslation();
   const { snapshot } = useAchievements();
   const unread = (snapshot?.unreadIds.length ?? 0) > 0;
   return <Tooltip closeDelay={80} delay={100}>
-    <Link to="/achievements" aria-label={t(unread ? 'achievement.entry.unreadAria' : 'achievement.page.title')} className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors hover:bg-default focus-visible:outline-2 focus-visible:outline-accent">
-      <Award size={17} aria-hidden="true" />
+    <Tooltip.Trigger
+      aria-label={t(unread ? 'achievement.entry.unreadAria' : 'achievement.page.title')}
+      className={CHROME_ICON_BUTTON_CLASS_NAME}
+      render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/achievements" />}
+    >
+      <Award className="size-4" aria-hidden="true" />
       {unread && <span aria-hidden="true" className="absolute right-1 top-1 size-1.5 rounded-full bg-accent ring-2 ring-background" />}
-    </Link>
+    </Tooltip.Trigger>
     <Tooltip.Content placement="bottom"><p>{t(unread ? 'achievement.entry.unreadTooltip' : 'achievement.page.title')}</p></Tooltip.Content>
   </Tooltip>;
 }

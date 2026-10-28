@@ -1,6 +1,6 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2, Wallet } from 'lucide-react';
+import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
@@ -15,9 +15,6 @@ import {
 } from '@/lib/shell-events';
 import { cn } from '@/lib/utils';
 import { createSessionPageSearch, type SessionScope } from '../../../../../packages/dashboard/src/lib/session-page';
-import { registerMessages } from 'quotern-i18n';
-import { billingMessages } from '../../../../../packages/dashboard/src/i18n/billing-messages';
-registerMessages(billingMessages);
 
 const primaryChromeBtn =
   'inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[#1e80ff] px-2.5 text-[12px] font-medium text-white outline-none transition-colors hover:bg-[#1171ee] focus-visible:ring-2 focus-visible:ring-[#1e80ff]/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-[#4b9cff] dark:hover:bg-[#3a8ff0]';
@@ -87,18 +84,6 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
           <p>{t('shell.pricing')}</p>
         </Tooltip.Content>
       </Tooltip>
-      {cliBackend && (
-        <Tooltip closeDelay={80} delay={100}>
-          <Tooltip.Trigger
-            aria-label={t('billing.title')}
-            className={CHROME_ICON_BUTTON_CLASS_NAME}
-            render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/billing" />}
-          >
-            <Wallet aria-hidden className="size-4" />
-          </Tooltip.Trigger>
-          <Tooltip.Content placement="bottom"><p>{t('billing.title')}</p></Tooltip.Content>
-        </Tooltip>
-      )}
       <AchievementEntry />
       <ChromeAction
         icon={<Share2 className="size-4" aria-hidden />}

@@ -1,6 +1,5 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
-@source "../../../../packages/dashboard/src/pages/BillingPage.tsx";
 @import "@heroui/styles";
 @import "../../../../packages/dashboard/src/components/app-toast.css";
 @source "../../../../packages/dashboard/src/components/ThemePreferenceControl.tsx";

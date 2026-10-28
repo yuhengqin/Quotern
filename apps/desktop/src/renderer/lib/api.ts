@@ -3,12 +3,6 @@ import type { LocalUsageMetrics } from 'quotern-core/local-metrics';
 import type { SessionMetrics, UsageReport } from 'quotern-core';
 import type { AchievementSnapshot, AchievementOperation, AchievementNotice } from 'quotern-core/achievements';
 import type { PricingData, PricingStatus } from 'quotern-core';
-import type { BillingReport } from 'quotern-core/billing/types';
-export async function fetchBillingReport(days: number, refresh = false): Promise<BillingReport> {
-  return request<BillingReport>(`/functions/tud-billing${refresh ? '/refresh' : `?days=${days}`}`, {
-    method: refresh ? 'POST' : 'GET', ...(refresh ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }) } : {}),
-  });
-}
 import type { PricingCatalogResponse } from '../../../../../packages/dashboard/src/lib/pricing-data';
 
 export async function fetchPricingCatalog(): Promise<PricingCatalogResponse> {

@@ -1,6 +1,6 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2, Wallet } from 'lucide-react';
+import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
@@ -15,9 +15,6 @@ import {
 import { cn } from '@/lib/utils';
 import { createSessionPageSearch, type SessionScope } from '../lib/session-page';
 import { isDemoMode } from '../lib/demo-runtime';
-import { registerMessages } from 'quotern-i18n';
-import { billingMessages } from '../i18n/billing-messages';
-registerMessages(billingMessages);
 
 /**
  * Page actions and an always-available settings entry for browser preferences.
@@ -89,18 +86,6 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
           <p>{t('shell.pricing')}</p>
         </Tooltip.Content>
       </Tooltip>
-      {cliBackend && !isDemoMode() && (
-        <Tooltip closeDelay={80} delay={100}>
-          <Tooltip.Trigger
-            aria-label={t('billing.title')}
-            className={CHROME_ICON_BUTTON_CLASS_NAME}
-            render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/billing" />}
-          >
-            <Wallet aria-hidden className="size-4" />
-          </Tooltip.Trigger>
-          <Tooltip.Content placement="bottom"><p>{t('billing.title')}</p></Tooltip.Content>
-        </Tooltip>
-      )}
       <AchievementEntry />
       <ChromeAction
         icon={<Share2 className="size-4" aria-hidden />}

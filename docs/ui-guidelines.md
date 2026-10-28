@@ -99,8 +99,6 @@
 
 ### 业务内复用入口
 
-「费用与余额」由 Dashboard 的 `pages/BillingPage.tsx` 共用，双端 `/billing` 路由分别注入 HTTP/IPC `fetchBillingReport`。筛选沿用 `FilterSelectPopover`，范围与接入说明沿用 `HelpPopover`，操作错误就地保留。平台金额/DeepSeek 余额由 `lib/format.ts:formatMoney` 按原币种展示，USD 复用 `formatUsd`；本机部分计价保留已知小计和覆盖提示。平台与本机不合计或求差。Desktop `index.css` 登记共享页面 `@source`；demo 隐藏入口且 API 不接入。明细使用有表头、折叠入口和可键盘滚动区域的表格，窄屏不挤压金额。
-
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动打开详情弹窗；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史及服务端实际范围；缺记录时保留目标等待常规同步。关闭详情后焦点回到会话行，常规数据刷新不重新打开已关闭的弹窗。Dashboard 与 Desktop 使用同一页面和详情组件，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与关联展开行为保留。
 关联会话详情复用同一 `SessionDetailDialog` 内的查看栈：名字点击在当前弹窗显示完整子会话详情，顶部“返回上一会话”逐层恢复父会话的范围选择、原生折叠项、滚动和触发器焦点；关闭退出整个查看链，底层路由与列表保持。辅助独立打开链接在浏览器新标签页、Desktop 同文档 `/sessions` 精确目标窗口打开，保留 IPC；窗口 URL 携带 `sessionPeriod=selected` 和实际期间；共享 `session-activity-query` 将其转换为原有来源＋时间边界查询，再由 `FocusedSession` 按身份定位，兼容旧 runtime。原通知链接仍查询已采集历史。`session-detail-cache` 仅在本次弹窗期间缓存完整会话行，摘要行不作为完整详情；打开主会话、关联名称悬停或键盘聚焦时按精确身份、实际期间及列表来源范围读取，最多并发两个请求，重复身份合并。旧 runtime 404 回退来源快照，并复用其中完整兄弟行；关联用量投影不作为完整活动或操作信息。加载、缺记录和失败仍可返回，失败/缺记录可重试；隐藏的父内容不参与焦点和可访问名称。
 
@@ -189,7 +187,6 @@ import { FilterSelectPopover } from './FilterMenu';
 4. 执行相关类型检查和测试。菜单公共入口策略由 [ui-menu-contracts.test.ts](../packages/dashboard/src/lib/ui-menu-contracts.test.ts) 检查两个 renderer 的直接 Select/Autocomplete 浮层用法（含命名导入别名）；它随 Dashboard 现有测试进入 CI。该检查不能代替视觉、滚动和键盘验收，自定义 Popover 的语义及复用由代码审查核对。
 5. 按本节信息呈现矩阵验收默认界面和按需展开后的界面。单/多模型、完整/部分归属、standard/非默认档位、说明隐藏与打开、价格筛选/清除/未匹配都要检查；不能只测“字段存在”。[session-detail-presentation.test.ts](../packages/dashboard/src/lib/session-detail-presentation.test.ts) 和 [pricing-selection.test.ts](../packages/dashboard/src/lib/pricing-selection.test.ts) 随 Dashboard 测试进入三平台 CI；两端构建后运行 `corepack pnpm test:session-detail-ui`，由 [session-detail-smoke.mjs](../apps/desktop/scripts/session-detail-smoke.mjs) 实测 DOM、键盘、Popover 和窄屏。Windows CI 自动执行同一界面脚本。查看截图确认表头圆角、合计行与信息层级；自动断言不能替代视觉判断。
 6. 调整紧凑筛选尺寸后，两端构建并运行 `corepack pnpm test:session-pagination-ui`；[session-pagination-smoke.mjs](../apps/desktop/scripts/session-pagination-smoke.mjs) 同时检查会话列表与总览、分享、价格页的文本可见高度、长模型名称、Agent 图标、厂商选择/清除及焦点返回，覆盖 HTTP / IPC 与宽窄布局。核对生成的截图，不能仅凭字号类名断言文字完整。
-7. 修改费用与余额页面后，两端构建并运行 `corepack pnpm test:billing-ui`。使用真实 Core 路由和合成平台响应，检查显式刷新、期间与键盘、原币种、正常账单项、失败清除、零与未知，以及浏览器 375/390/800/1120px 和 Desktop 800/1120px 的长金额。逐项检查金额元素的文本宽度及截图，文档无横向滚动不代表卡片内金额没有被遮挡。共享卡片按可用空间排列，数字保持完整且不拆散分组。
 
 ```bash
 pnpm --filter quotern-dashboard exec tsc --noEmit

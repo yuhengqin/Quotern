@@ -24,10 +24,6 @@
   "types": "./dist/index.d.ts",
   "exports": {
     "./paths": { "types": "./dist/paths.d.ts", "import": "./dist/paths.js" },
-    "./billing/*": {
-      "types": "./dist/billing/*.d.ts",
-      "import": "./dist/billing/*.js"
-    },
     "./quota/*": {
       "types": "./dist/quota/*.d.ts",
       "import": "./dist/quota/*.js",

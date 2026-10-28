@@ -5,6 +5,33 @@ import { BucketStore } from '../src/server/state.js';
 import { localDateNow, addLocalDays } from '../src/timezone.js';
 import type { TudConfig } from '../src/types.js';
 
+test('usage and cost reports remain available after removing platform billing endpoints', async () => {
+  const today = localDateNow();
+  const store = new BucketStore();
+  store.apply(['cursor', 'codex'].map(source => ({
+    hour_start: `${today}T00:00:00+08:00`, source, model: 'unlisted-test-model', project: 'Example',
+    input_tokens: 100, output_tokens: 20, cached_input_tokens: 0, cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 0, total_tokens: 120, conversation_count: 1,
+    ...(source === 'cursor' ? { reported_cost_usd: 0.5 } : {}),
+  })));
+  const config = { statsSince: '2020-01-01', localCollectSince: '2020-01-01' } as TudConfig;
+  const app = createLocalApiApp({ dataDir: 'unused-report-test', getConfig: () => config, bucketStore: store,
+    runSyncViaRunner: async () => { throw new Error('must not sync'); } });
+  const response = await app.request(`/functions/tud-usage-report?fromDate=${today}&toDate=${today}`);
+  assert.equal(response.status, 200);
+  const { data } = await response.json();
+  assert.equal(data.summary.tokens, 240);
+  assert.equal(data.summary.costExplanation.reportedCostUsd, 0.5);
+  assert.ok(data.summary.costExplanation.estimatedCostUsd > 0);
+  assert.equal(data.summary.costUsd, data.summary.knownCostUsd);
+  assert.ok(data.summary.costUsd > 0.5);
+  assert.equal((await app.request('/functions/tud-pricing')).status, 200);
+  assert.equal((await app.request('http://localhost/functions/tud-billing?days=30')).status, 404);
+  assert.equal((await app.request('http://localhost/functions/tud-billing/refresh', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"days":30}',
+  })).status, 404);
+});
+
 test('read-only report endpoint scopes explanations to the selected date and sources', async () => {
   const today = localDateNow();
   const store = new BucketStore();

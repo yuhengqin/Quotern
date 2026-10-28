@@ -13,7 +13,6 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as BillingRouteImport } from './routes/billing'
 import { Route as AchievementsRouteImport } from './routes/achievements'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -37,11 +36,6 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BillingRoute = BillingRouteImport.update({
-  id: '/billing',
-  path: '/billing',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AchievementsRoute = AchievementsRouteImport.update({
   id: '/achievements',
   path: '/achievements',
@@ -56,7 +50,6 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
-  '/billing': typeof BillingRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
   '/sessions': typeof SessionsRoute
@@ -65,7 +58,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
-  '/billing': typeof BillingRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
   '/sessions': typeof SessionsRoute
@@ -75,7 +67,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/achievements': typeof AchievementsRoute
-  '/billing': typeof BillingRoute
   '/dashboard': typeof DashboardRoute
   '/pricing': typeof PricingRoute
   '/sessions': typeof SessionsRoute
@@ -86,7 +77,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/achievements'
-    | '/billing'
     | '/dashboard'
     | '/pricing'
     | '/sessions'
@@ -95,7 +85,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/achievements'
-    | '/billing'
     | '/dashboard'
     | '/pricing'
     | '/sessions'
@@ -104,7 +93,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/achievements'
-    | '/billing'
     | '/dashboard'
     | '/pricing'
     | '/sessions'
@@ -114,7 +102,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AchievementsRoute: typeof AchievementsRoute
-  BillingRoute: typeof BillingRoute
   DashboardRoute: typeof DashboardRoute
   PricingRoute: typeof PricingRoute
   SessionsRoute: typeof SessionsRoute
@@ -151,13 +138,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/billing': {
-      id: '/billing'
-      path: '/billing'
-      fullPath: '/billing'
-      preLoaderRoute: typeof BillingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/achievements': {
       id: '/achievements'
       path: '/achievements'
@@ -178,7 +158,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AchievementsRoute: AchievementsRoute,
-  BillingRoute: BillingRoute,
   DashboardRoute: DashboardRoute,
   PricingRoute: PricingRoute,
   SessionsRoute: SessionsRoute,

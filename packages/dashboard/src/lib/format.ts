@@ -24,14 +24,3 @@ export function formatPct(n: number): string {
   if (!Number.isFinite(n)) return '0.0%';
   return `${n.toFixed(1)}%`;
 }
-
-/** Monetary balances/platform costs retain their original currency. USD uses the usage contract. */
-export function formatMoney(n: number | null | undefined, currency: string, locale?: string): string {
-  if (currency.toLowerCase() === 'usd') return formatUsd(n, locale);
-  if (n == null || !Number.isFinite(n) || !/^[a-zA-Z]{3}$/.test(currency)) return '—';
-  try {
-    const format = new Intl.NumberFormat(locale, { style: 'currency', currency: currency.toUpperCase(), minimumFractionDigits: 0, maximumFractionDigits: 2 });
-    if (n !== 0 && Math.abs(n) < .01) return `${n < 0 ? '>' : '<'}${format.format(n < 0 ? -.01 : .01)}`;
-    return format.format(n);
-  } catch { return '—'; }
-}

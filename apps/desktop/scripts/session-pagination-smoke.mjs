@@ -313,6 +313,12 @@ async function exerciseCompactFilters(window, client, mode) {
     await navigate('/');
     await until(() => client.evaluate('Boolean(document.querySelector("[role=group][aria-label=时间粒度] .select__trigger"))'), mode + ' dashboard trend filters');
     await assertSelectTextFits(client, allPickers, mode + ' dashboard filters ' + width);
+    assert.equal(await client.evaluate('document.querySelectorAll("a[href*=billing], [aria-label=费用与余额]").length'), 0, mode + ' removes the platform billing entry');
+    assert.equal(await client.evaluate('Boolean(document.querySelector("a[href*=pricing]"))'), true, mode + ' keeps model pricing navigation');
+    assert.equal(await client.evaluate('Boolean(document.querySelector("a[href*=sessions]"))'), true, mode + ' keeps session navigation');
+    assert.equal(await client.evaluate('Boolean(document.querySelector("button[aria-label=设置]"))'), true, mode + ' keeps settings');
+    assert.equal(calls.some(call => call.path.startsWith('/functions/tud-billing')), false, mode + ' does not request removed billing endpoints');
+    await captureSettled(window, path.join(output, `${mode}-dashboard-${width}.png`));
     await client.click('document.querySelector("button[aria-label=分享]")');
     await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog] .select__trigger"))'), mode + ' share filters');
     await assertSelectTextFits(client, 'document.querySelectorAll("[role=dialog] .select__trigger")', mode + ' share filters ' + width);
@@ -340,6 +346,7 @@ async function exerciseCompactFilters(window, client, mode) {
   await client.call('Emulation.clearDeviceMetricsOverride');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
   checks.push(mode + '-compact-dashboard-share-pricing-text-wide-narrow');
+  checks.push(mode + '-dashboard-navigation-without-platform-billing');
 }
 
 async function main() {

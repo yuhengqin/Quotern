@@ -82,9 +82,5 @@ jobs:
         if: runner.os == 'Windows'
         run: pnpm test:session-detail-ui
 
-      - name: 费用与余额界面回归（合成数据）
-        if: runner.os == 'Windows'
-        run: corepack pnpm test:billing-ui
-
       - name: 测试 desktop
         run: pnpm --filter quotern-desktop test

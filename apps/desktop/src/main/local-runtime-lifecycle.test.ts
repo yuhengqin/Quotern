@@ -40,7 +40,6 @@ test('a failed worker stop cannot masquerade as an active runtime during update 
     if (id === './sync-worker-host') return worker;
     if (id === './evict-cli-autostart') return { evictCliAutostart: noOp };
     if (id === './quota-runtime') return { getQuotaRuntimeState: () => null };
-    if (id === './billing-fetch') return { billingFetch: async () => { throw new Error('billing network is forbidden in lifecycle tests'); } };
     if (id === './sync-recovery') return require('./sync-recovery.js');
     return require(id);
   }, module, module.exports, { log() {}, warn() {}, error() {} });

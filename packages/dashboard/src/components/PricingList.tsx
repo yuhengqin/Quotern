@@ -42,9 +42,9 @@ function getComparisonRow(event: { target: EventTarget | null; currentTarget: HT
   return row && event.currentTarget.contains(row) ? row : null;
 }
 
-function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, currency, exchangeRate, query, selected, selectionStarted, onCompare }: {
+function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, currency, exchangeRate, query, selected, onCompare }: {
   item: DisplayRow; sort: PricingSortDescriptor; hasUsage: boolean; expanded: boolean; onToggle: () => void; compact: boolean;
-  query: string; selected: boolean; selectionStarted: boolean; onCompare: () => void;
+  query: string; selected: boolean; onCompare: () => void;
 } & PriceDisplay) {
   const { t, i18n } = useTranslation();
   const { group, variant, kind } = item;
@@ -67,7 +67,7 @@ function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, curr
   const sameApiPrice = group.apiVariants.length === 1 && variant.regions.length > 1
     && [variant.row.input, variant.row.output, variant.row.cacheRead, variant.row.cacheWrite].every(value => value !== null);
   return <div className="flex min-w-0 flex-1 items-start gap-2">
-    <Checkbox aria-label={t('pricing.list.compare', { name, provider: providerLabel })} isSelected={selected} onChange={onCompare} className={`mt-1 shrink-0 ${selectionStarted ? '' : '[@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover/pricing-row:opacity-100 group-focus-within/pricing-row:opacity-100'}`}>
+    <Checkbox aria-label={t('pricing.list.compare', { name, provider: providerLabel })} isSelected={selected} onChange={onCompare} className="mt-1 shrink-0">
       <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control></Checkbox.Content>
     </Checkbox>
     <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-surface sm:size-8">
@@ -143,7 +143,7 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
   });
   const mobile = width > 0 && width < 640;
   const wide = width >= (scenario ? 1040 : 960);
-  const identity = (item: DisplayRow) => <ModelIdentity item={item} sort={sort} hasUsage={hasUsage} expanded={expanded.has(item.group.id)} onToggle={() => toggle(item.group.id)} compact={!wide} currency={currency} exchangeRate={exchangeRate} query={query} selected={selected.includes(item.group.id)} selectionStarted={selected.length > 0} onCompare={() => onCompare(item.group.id)} />;
+  const identity = (item: DisplayRow) => <ModelIdentity item={item} sort={sort} hasUsage={hasUsage} expanded={expanded.has(item.group.id)} onToggle={() => toggle(item.group.id)} compact={!wide} currency={currency} exchangeRate={exchangeRate} query={query} selected={selected.includes(item.group.id)} onCompare={() => onCompare(item.group.id)} />;
   const columns: TableColumn[] = [...(wide ? WIDE_COLUMNS : COMPACT_COLUMNS), ...(wide && scenario ? [{ id: 'estimate' as const, labelKey: 'pricing.list.estimate', minWidth: 112, width: 120 }] : [])];
   const handleSort = (descriptor: SortDescriptor) => {
     const column = columns.find(column => column.id === descriptor.column)?.id;

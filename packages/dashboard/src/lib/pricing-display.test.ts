@@ -30,7 +30,7 @@ describe('pricing display', () => {
     assert.equal(formatPricingReleaseDate('2026-10-14', 'en'), '10/14/2026');
     assert.equal(formatPricingReleaseDate('2026-10', 'ja'), '2026/10');
     assert.equal(formatPricingReleaseDate('2026-10-14', 'ko'), '2026. 10. 14.');
-    assert.equal(formatPricingTokens(10_000_000, 'ja'), '1000万');
+    assert.equal(formatPricingTokens(10_000_000, 'ja'), '1,000万');
   });
 
   it('keeps full calling IDs behind shortened labels, including equal labels across regions', () => {

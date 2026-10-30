@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
-import { Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip } from '@heroui/react';
+import { Autocomplete, Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip, useFilter } from '@heroui/react';
 import { ArrowDown, ArrowUp, ChevronRight, ChevronUp, Download, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
@@ -12,7 +12,7 @@ import { isCliBackend } from '@/lib/api';
 import type { DashboardDateRange } from '@/lib/dashboard-date-range';
 import { ProviderIcon } from './ProviderIcon';
 import { filterSessionActivity, relatedSessionActivity, sessionActivityFacets, sessionActivityPage, sortSessionActivity, type SessionSort } from '../lib/session-activity';
-import { FilterSelectPopover } from './FilterMenu';
+import { FilterAutocompletePopover, FilterSelectPopover } from './FilterMenu';
 import { createSessionPageSearch, sessionAttributionKey, type SessionPageSearch, type SessionScope } from '../lib/session-page';
 import { getDashboardReturnState, rememberDashboardSessionView } from '../lib/dashboard-return-state';
 import { sessionThreads, sessionGroups, sessionIdentity, sessionCsv, sessionBranchRows, filterSessionBranches } from '../lib/session-insights';
@@ -116,7 +116,8 @@ function SessionList({ rows, total, scope, range }: { rows: SessionActivity[]; t
 export function SessionBrowser({ rows, availableSessions = rows, usage, value, onChange, range, pageData, loading = false, onExport, onNormalizePage }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void; range?: DetailRange; pageData?: SessionListPage; loading?: boolean; onExport?(): Promise<string>; onNormalizePage?(page: number): void }) {
   const { t, i18n } = useTranslation();
   const { q: query, sources, page, project, sort, direction } = value;
-  const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLButtonElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLDivElement>(null);
+  const { contains } = useFilter({ sensitivity: 'base' });
   const facets = useMemo(() => pageData?.facets ?? sessionActivityFacets(rows, query, sources, project), [pageData, rows, query, sources, project]);
   const filtered = useMemo(() => pageData ? rows : sortSessionActivity(filterSessionActivity(rows, query, sources, project).filter(row=>!value.model||row.model===value.model||row.models?.some(model=>model.model===value.model)), sort, direction), [pageData, rows, query, sources, project, sort, direction,value.model]);
   const models=useMemo(()=>pageData?.facets.models??[...new Set(rows.flatMap(row=>row.modelNames??row.models?.map(model=>model.model)??[row.model]))].filter(model=>model!=='unknown').sort(),[pageData,rows]);
@@ -166,20 +167,26 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
             {facets.sources.map(({ value, count }) => <ListBox.Item id={value} key={value} textValue={sourceLabel(value)} className="gap-2 pe-8! text-xs"><span className="flex size-6 shrink-0 items-center justify-center"><ProviderIcon provider={value} size={18} /></span><span className="min-w-0 flex-1 truncate" title={sourceLabel(value)}>{sourceLabel(value)}</span><span className="shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
           </ListBox></FilterSelectPopover>
         </Select>
-        <Select aria-label={t('usage.explorer.project')} value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') onChange({ project: key === 'all' ? '' : key.slice('project:'.length) }); }} variant="secondary" className="min-w-0 max-w-56">
+        <Autocomplete aria-label={t('usage.explorer.project')} selectionMode="single" value={project ? `project:${project}` : 'all'} onChange={key => { if (typeof key === 'string') onChange({ project: key === 'all' ? '' : key.slice('project:'.length) }); }} variant="secondary" className="min-w-0 max-w-56">
           <Label className="sr-only">{t('usage.explorer.project')}</Label>
-          <Select.Trigger ref={projectTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !items-center !py-0 !text-xs"><Select.Value className="truncate !text-xs !leading-4"><span title={project || undefined}>{project ? sessionProjectDisplay(project) : t('usage.explorer.allProjects')}</span></Select.Value><Select.Indicator /></Select.Trigger>
-          <FilterSelectPopover className="w-64 max-w-[calc(100vw-2rem)]"><ListBox aria-label={t('usage.explorer.project')}>
+          <Autocomplete.Trigger ref={projectTrigger} className="!h-8 !min-h-8 !w-fit max-w-full !items-center !py-0 !text-xs [&>button]:absolute [&>button]:inset-0 [&>button]:w-full [&>button]:rounded-[inherit]"><Autocomplete.Value className="truncate !text-xs !leading-4">{() => <span title={project || undefined}>{project ? sessionProjectDisplay(project) : t('usage.explorer.allProjects')}</span>}</Autocomplete.Value><Autocomplete.Indicator /></Autocomplete.Trigger>
+          <FilterAutocompletePopover className="w-72 max-w-[calc(100vw-2rem)]">
+            <Autocomplete.Filter filter={contains}>
+              <SearchField aria-label={t('usage.activity.searchProjects')} autoFocus variant="secondary"><SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input className="!text-xs" placeholder={t('usage.activity.searchProjects')} /><SearchField.ClearButton /></SearchField.Group></SearchField>
+              <ListBox aria-label={t('usage.explorer.project')} renderEmptyState={() => <p className="p-3 text-xs text-muted">{t('usage.activity.noMatchingProjects')}</p>}>
             <ListBox.Item id="all" textValue={t('usage.explorer.allProjects')} className="text-xs">{t('usage.explorer.allProjects')}<ListBox.ItemIndicator /></ListBox.Item>
             {facets.projects.map(({ value, count }) => <ListBox.Item id={`project:${value}`} key={value} textValue={value} className="text-xs"><span className="min-w-0 truncate" title={value}>{sessionProjectDisplay(value)}</span><span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted">{t('usage.activity.sessionCount', { count })}</span><ListBox.ItemIndicator /></ListBox.Item>)}
-          </ListBox></FilterSelectPopover>
-        </Select>
+              </ListBox>
+            </Autocomplete.Filter>
+            {project && <Button slot={null} size="sm" variant="tertiary" className="mt-1 w-full shrink-0 !text-xs" onPress={() => onChange({ project: '' })}>{t('usage.activity.clearProject')}</Button>}
+          </FilterAutocompletePopover>
+        </Autocomplete>
         <Select aria-label={t('usage.common.model')} value={value.model??'all'} onChange={key=>onChange({model:key==='all'?undefined:String(key)})} variant="secondary" className="min-w-0 max-w-60"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !items-center !py-0 !text-xs"><Select.Value className="truncate !text-xs !leading-4"/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(model=><ListBox.Item key={model} id={model} textValue={model}><span className="truncate" title={model}>{model}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
         {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
         {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { onChange({ sources: sources.filter(value => value !== source) }); sourceTrigger.current?.focus(); }} />)}
-        {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { onChange({ project: '' }); projectTrigger.current?.focus(); }} />}
+        {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { onChange({ project: '' }); projectTrigger.current?.querySelector<HTMLButtonElement>('button')?.focus(); }} />}
         {value.model&&<SessionFilterChip label={value.model} onRemove={()=>onChange({model:undefined})}/>}
         <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}

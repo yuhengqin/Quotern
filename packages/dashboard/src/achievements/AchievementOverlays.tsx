@@ -6,7 +6,7 @@ import { normalizeLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAchievements } from './AchievementProvider';
 import { BadgeArtwork } from './BadgeArtwork';
-import { achievementProgressText, formatAchievementAmount, formatAchievementDate, achievementUnit, achievementDisplayName, achievementDescription } from './view-model';
+import { achievementPeriodState, achievementProgressText, formatAchievementAmount, formatAchievementDate, achievementUnit, achievementDisplayName, achievementDescription } from './view-model';
 import { AchievementShareModal } from './AchievementShareModal';
 import { AchievementSeriesModal } from './AchievementSeriesModal';
 
@@ -21,6 +21,7 @@ export function AchievementOverlays() {
   const item = items[Math.min(activeIndex, Math.max(0, items.length - 1))];
   const owned = item ? snapshot?.earned.find(earned => earned.id === item.id) : undefined;
   const pinned = Boolean(owned && snapshot?.preferences.showcaseIds.includes(owned.id));
+  const periodState = item && snapshot ? achievementPeriodState(item, snapshot.coverage.asOfDate) : 'current';
   return <>
     {familyDetail && <AchievementSeriesModal key={familyDetail}/>}
     <Modal.Backdrop isOpen={Boolean(item)} onOpenChange={open => { if (!open) closeDetails(); }}>
@@ -29,11 +30,12 @@ export function AchievementOverlays() {
           <Modal.CloseTrigger aria-label={t('achievement.detail.close')} />
           <Modal.Body className="px-5 pb-2 pt-8 text-center">
             {item && <>
-              <p className="text-[10px] uppercase tracking-[.25em] text-muted">{t(owned ? 'achievement.detail.ownedEyebrow' : 'achievement.detail.goalEyebrow')}</p>
+              <p className="text-[10px] uppercase tracking-[.25em] text-muted">{t(owned ? 'achievement.detail.ownedEyebrow' : periodState === 'current' ? 'achievement.detail.goalEyebrow' : `achievement.detail.${periodState}`)}</p>
               <BadgeArtwork family={item.family} tier={item.tier} locked={!owned} size={168} className="mx-auto my-2" />
               <h2 className="break-words text-2xl font-semibold tracking-tight">{achievementDisplayName(item, true, locale)}</h2>
               <p className="mt-3 flex items-center justify-center gap-1.5 text-sm text-accent">{owned ? <><Check size={15} />{t('achievement.detail.earnedOn', { date: formatAchievementDate(owned.achievedOn ?? owned.unlockedAt.slice(0, 10), locale) })}</> : achievementProgressText(item, locale)}</p>
               <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-muted">{achievementDescription(item, locale)}</p>
+              {!owned && periodState !== 'current' && <p className="mx-auto mt-3 max-w-sm text-xs leading-5 text-muted">{t(`achievement.detail.${periodState}Note`)}</p>}
               {owned && <p className="mt-3 text-xs text-muted">{t('achievement.detail.earnedSnapshot', { amount: formatAchievementAmount(owned.snapshot.value, owned.family, locale), unit: achievementUnit(owned, locale) })}</p>}
               {items.length > 1 && <div className="mt-5 flex flex-wrap justify-center gap-2" aria-label={t('achievement.detail.batchAria')}>
                 {items.map((badge, index) => <button type="button" key={badge.id} aria-label={t('achievement.page.viewBadge', { name: achievementDisplayName(badge, true, locale) })} aria-pressed={activeIndex === index} onClick={() => setActiveIndex(index)} className={'rounded-xl border p-1 transition-colors ' + (activeIndex === index ? 'border-accent bg-accent/10' : 'border-border')}>

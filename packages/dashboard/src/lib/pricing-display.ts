@@ -1,4 +1,6 @@
 import type { PricingCurrency } from './pricing-currency.ts';
+import { formatCost } from './format.ts';
+import { formatCompactTokenCount } from './utils.ts';
 
 /** Release dates are calendar dates, not instants. Keep their day stable across time zones. */
 export function formatPricingReleaseDate(value: string | undefined, locale: string): string {
@@ -10,8 +12,14 @@ export function formatPricingReleaseDate(value: string | undefined, locale: stri
 }
 
 export function formatPricingTokens(value: number, locale: string): string {
-  if (!Number.isFinite(value)) return '0';
-  return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  return formatCompactTokenCount(value, undefined, locale);
+}
+
+/** Scenario totals and signed differences are costs, not per-unit rates. */
+export function formatPricingCost(value: number | null, currency: PricingCurrency = 'USD', exchangeRate: number | null = null, locale = 'en-US'): string {
+  if (value === null || !Number.isFinite(value)) return '—';
+  if (currency === 'CNY' && (exchangeRate === null || !Number.isFinite(exchangeRate) || exchangeRate <= 0)) return '—';
+  return formatCost(value * (currency === 'CNY' ? exchangeRate! : 1), currency, locale);
 }
 
 /** Keep source suffixes verbatim; unrelated calling IDs are shown whole. */

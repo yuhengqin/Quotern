@@ -41,8 +41,11 @@
 | Token 数量与保存的偏好 | [lib/utils.ts](../packages/dashboard/src/lib/utils.ts) 的 `formatCompactTokenCount`、`getTokenUnitMode`，以及 [lib/format.ts](../packages/dashboard/src/lib/format.ts) 的 `formatTokens` | Desktop 的同名入口位于 `apps/desktop/src/renderer/lib`；修改前核对独立副本或 re-export。缺失值由业务按数据语义处理，不能用格式化工具的数值 fallback 代替未知状态 |
 | USD 费用 | [lib/format.ts](../packages/dashboard/src/lib/format.ts) 的 `formatUsd`；Desktop 有同名入口 | 修改或扩展时必须满足本节的精度、去零、阈值和未知值规则。业务组件不自行拼接货币单位或调用 `toFixed` / `toLocaleString` 决定费用格式 |
 | 模型单价 | [lib/pricing-display.ts](../packages/dashboard/src/lib/pricing-display.ts) 的 `formatPricingDisplayRate`，由 [PricingDetails](../packages/dashboard/src/components/PricingDetails.tsx) 等调用 | 只负责单价与币种换算，不作为累计费用格式化入口；Desktop 随共享价格组件复用 |
+| 价格场景总费用及差额 | 同文件 `formatPricingCost` 先换算再调用 `lib/format.ts` 的 `formatCost`；`formatUsd` 保持 USD 包装 | `formatCost` 两端有独立副本；金额和差额统一最多两位小数、极小非零阈值及未知值。单价继续使用上一行入口 |
 
 现有入口不适用时先扩展或组合公共能力；经典 DOM、主进程等运行环境不能直接导入 renderer 模块时，说明适配边界并保持同一展示契约，不能各自另定规则。审查新增格式化函数及其调用点时，同步核对这些入口与两端副本。
+
+`formatCompactTokenCount` 可通过第三个参数指定界面语言，仍默认读取同一个单位偏好；价格页上下文、场景摘要与个人用量、成就进度与分享均复用此入口。固定报价基准和可编辑输入的百万 Token 基准不随偏好改变。
 
 验收至少覆盖：切换本地化/K/M/B/T 后相关展示实际更新；零、极小非零、普通金额、未知值和部分计价；同一数据跨组件与两端同格式；模型单价、报价基准和 USD/CNY 切换保留；CSV/API 数值精度不受展示舍入影响。文档更新本身不能代替代码检查或真实页面验收。
 
@@ -128,6 +131,13 @@
 | 用量分享 | [ShareActivityModal](../packages/dashboard/src/components/ShareActivityModal.tsx)、[ShareBackgroundPicker](../packages/dashboard/src/components/ShareBackgroundPicker.tsx)、[ShareCardCarousel](../packages/dashboard/src/components/ShareCardCarousel.tsx)、[ShareCardActions](../packages/dashboard/src/components/ShareCardActions.tsx) | 绑定分享快照、背景库和海报导出；Desktop 分享弹窗 re-export Dashboard。组件不作为任意轮播或上传器 |
 
 当前没有统一的全页面 EmptyState；无数据、无匹配结果、读取失败由对应业务表达。新增页面先复用合适的 HeroUI 原件或现有业务表达，确有重复契约时再抽取。
+
+三页的补充交互约定：
+
+- 会话项目筛选通过 `Autocomplete` 与 `FilterAutocompletePopover` 提供可见搜索、无匹配结果、全部项目和清除项目筛选；计数与 URL 筛选键保持原始项目身份。关闭菜单或移除页内条件后恢复触发按钮焦点；菜单内清除项目后保持打开，焦点回到搜索框。关联详情标题、读取占位和可访问名称复用 `sessionDisplayIdentity` 的标题、昵称、角色及未命名顺序；旧运行端缺少身份时保留进入时的名称，不重新暴露完整会话 ID。
+- 价格比较的复选框持续可见；比较表在自身纵横滚动区内固定模型表头和指标列。更多筛选即时应用并保持外层打开，自定义日期确认/取消返回筛选层，完成或外层 Escape 关闭。
+- 成就的周期可达成性依据统计日期和当前采集的活跃日；今天尚未结束时允许当天继续达成，历史漏采可在补采后更新。当前记录下已无法完成的周期不进入首页推荐，历史记录不删除；详情明确已结束或本期无法达成，进度仍可查看。
+- 上下文审计保留已发现内容估算与实际加载量未知的区别。异常正文显示跳过文件/目录及读取/解析异常数量，位置、原因和影响按需展开；未扫描目录内的文件数未知。诊断最多展示前 100 项，汇总仍计入其余已记录问题；旧运行端没有明细时明确提示。路径为扫描根相对路径，多个用户根以序号区分，不返回内容、密钥或错误原文。失败可在弹窗内重试。
 
 存量 `RankFilter`、`RankModelCascadeSelect` 和 `KeyFilterSelect` 在当前两个 UI 根中未找到页面接入点。它们的菜单外壳也遵守公共约束，但不能作为已验收页面或优先复用的业务入口；接入时重新核对调用、键盘和视觉行为。Desktop 的 PlatformFilterSelect 当前也未找到使用点。
 

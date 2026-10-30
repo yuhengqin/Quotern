@@ -17,6 +17,7 @@ import { ProviderIcon } from './ProviderIcon';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { DetailDisclosure, DetailValue, SessionModelBreakdown, SessionPricingDetails, type DetailFormat } from './SessionUsageBreakdown';
 import { HelpPopover } from './HelpPopover';
+import { sessionDisplayIdentity } from '../lib/session-list-display';
 
 const groupLabels = { own: 'usage.detail.own', subagent: 'usage.insights.subagent', fork: 'usage.detail.forks', unknown: 'usage.detail.otherRelated' } as const;
 
@@ -75,7 +76,7 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
       return (await request<SessionActivitySnapshot>(sessionDetailQuery(source, period), { signal: signal() })).sessions;
     }
   }, [...sessions, row], 'session'));
-  const [frames, setFrames] = useState<DetailFrame[]>(() => [{ key: 0, source: row.source, sessionId: row.sessionId, title: row.sessionTitle ?? t('usage.insights.detailTitle'), row: cache.get(row) ?? null }]);
+  const [frames, setFrames] = useState<DetailFrame[]>(() => [{ key: 0, source: row.source, sessionId: row.sessionId, title: sessionDisplayIdentity(row, t('usage.activity.untitledSession')).name, row: cache.get(row) ?? null }]);
   const sequence = useRef(0);
   const dialog = useRef<HTMLDivElement>(null);
   const views = useRef(new Map<number, { top: number; trigger?: HTMLElement }>());
@@ -88,7 +89,7 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
   useEffect(() => {
     if (JSON.stringify(range) !== JSON.stringify(period)) return;
     cache.seed([...sessions, row]);
-    setFrames(previous => previous.map(frame => frame.key === 0 ? { ...frame, row: cache.get(row) ?? frame.row, title: row.sessionTitle ?? frame.title } : frame));
+    setFrames(previous => previous.map(frame => frame.key === 0 ? { ...frame, row: cache.get(row) ?? frame.row, title: sessionDisplayIdentity(row, frame.title).name } : frame));
   }, [cache, row, sessions, range, period]);
 
   useLayoutEffect(() => {
@@ -112,12 +113,12 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
     });
   };
   useEffect(() => {
-    if (!cache.get(row)) loadFrame({ key: 0, source: row.source, sessionId: row.sessionId, title: row.sessionTitle ?? '', row: null });
+    if (!cache.get(row)) loadFrame({ key: 0, source: row.source, sessionId: row.sessionId, title: sessionDisplayIdentity(row, t('usage.activity.untitledSession')).name, row: null });
   }, [cache]);
   const navigate = (member: DetailMember, trigger: HTMLElement) => {
     saveView(trigger);
     const cached = cache.get(member) ?? null;
-    const next: DetailFrame = { key: ++sequence.current, source: member.source, sessionId: member.sessionId, title: member.sessionTitle ?? member.agentNickname ?? member.sessionId, row: cached };
+    const next: DetailFrame = { key: ++sequence.current, source: member.source, sessionId: member.sessionId, title: sessionDisplayIdentity({ ...member, relation: member }, t('usage.activity.untitledSession')).name, row: cached };
     setFrames(previous => [...previous, next]);
     if (!cached) loadFrame(next);
   };
@@ -128,10 +129,10 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
   const prefetch = (member: DetailMember) => { void cache.load(member).catch(() => {}); };
 
   return <Modal isOpen onOpenChange={open => { if (!open) onClose(); }}>
-    <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog aria-label={active.title} className="max-w-5xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}><div ref={dialog} className="contents">
+    <Modal.Backdrop><Modal.Container scroll="inside" size="lg"><Modal.Dialog aria-label={active.row ? sessionDisplayIdentity(active.row, active.title).name : active.title} className="max-w-5xl text-foreground" style={{ fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif' }}><div ref={dialog} className="contents">
       <Modal.CloseTrigger aria-label={t('usage.detail.close')} />
       {frames.map((frame, index) => <div key={frame.key} data-session-frame hidden={frame.key !== active.key} inert={frame.key !== active.key} className={frame.key === active.key ? 'contents' : 'hidden'}>
-        {frame.row ? <SessionDetailContent row={frame.row} range={period} showTokenShare={index === 0 && showTokenShare} onNavigate={navigate} onPrefetch={prefetch} navigation={index > 0 && <Button size="sm" variant="tertiary" className="mb-2 max-w-full" onPress={back}><ArrowLeft className="size-3.5 shrink-0" aria-hidden />{t('usage.detail.backSession')}</Button>} /> : <>
+        {frame.row ? <SessionDetailContent row={frame.row} fallbackTitle={frame.title} range={period} showTokenShare={index === 0 && showTokenShare} onNavigate={navigate} onPrefetch={prefetch} navigation={index > 0 && <Button size="sm" variant="tertiary" className="mb-2 max-w-full" onPress={back}><ArrowLeft className="size-3.5 shrink-0" aria-hidden />{t('usage.detail.backSession')}</Button>} /> : <>
           <Modal.Header className="border-b border-separator pb-3 pr-9">{index > 0 && <Button size="sm" variant="tertiary" className="mb-2" onPress={back}><ArrowLeft className="size-3.5" aria-hidden />{t('usage.detail.backSession')}</Button>}<h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{frame.title}</h2></Modal.Header>
           <Modal.Body className="space-y-3 py-8 text-sm"><p role={frame.error ? 'status' : undefined}>{t(frame.error === 'failed' ? 'usage.detail.relatedError' : frame.error === 'missing' ? 'usage.detail.relatedMissing' : 'usage.activity.loading')}</p>{frame.error && <Button size="sm" variant="secondary" onPress={() => { setFrames(previous => previous.map(item => item.key === frame.key ? { ...item, error: undefined } : item)); loadFrame(frame, true); }}>{t('usage.detail.retry')}</Button>}</Modal.Body>
         </>}
@@ -140,7 +141,7 @@ function SessionDetailNavigator({ row, range, sessions = emptySessions, showToke
   </Modal>;
 }
 
-function SessionDetailContent({ row, range, showTokenShare, navigation, onNavigate, onPrefetch }: { row: SessionActivity; range?: DetailRange; showTokenShare: boolean; navigation: ReactNode; onNavigate(member: DetailMember, trigger: HTMLElement): void; onPrefetch(member: DetailMember): void }) {
+function SessionDetailContent({ row, fallbackTitle, range, showTokenShare, navigation, onNavigate, onPrefetch }: { row: SessionActivity; fallbackTitle: string; range?: DetailRange; showTokenShare: boolean; navigation: ReactNode; onNavigate(member: DetailMember, trigger: HTMLElement): void; onPrefetch(member: DetailMember): void }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const toastQueue = useAppToastQueue();
@@ -245,7 +246,7 @@ function SessionDetailContent({ row, range, showTokenShare, navigation, onNaviga
   const available = metrics.filter(metric => metric.value != null), missing = metrics.filter(metric => metric.value == null);
   const columnClass = 'grid grid-cols-[minmax(0,1fr)_minmax(4.5rem,auto)_minmax(5rem,auto)] items-baseline gap-x-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(5rem,0.55fr)_minmax(6rem,0.55fr)]';
   const renderRelatedMember = (member: DetailMember, relation?: keyof typeof groupLabels) => {
-    const name = member.sessionTitle ?? member.agentNickname ?? member.sessionId;
+    const name = sessionDisplayIdentity({ ...member, relation: member }, t('usage.activity.untitledSession')).name;
     return <li key={`${member.source}:${member.sessionId}`} className={`${columnClass} py-2 text-xs`}>
       <div className="min-w-0 sm:contents">
       <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 [overflow-wrap:anywhere]">
@@ -262,7 +263,7 @@ function SessionDetailContent({ row, range, showTokenShare, navigation, onNaviga
       <Modal.Header className="border-b border-separator pb-3">
         {navigation}
         <div className="flex min-w-0 items-start gap-3 pr-9"><span className="mt-1 shrink-0"><ProviderIcon provider={row.source} size={22} /></span><div className="min-w-0">
-          <h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{row.sessionTitle ?? t('usage.insights.detailTitle')}</h2>
+          <h2 data-session-heading tabIndex={-1} className="break-words text-lg leading-7 outline-none">{sessionDisplayIdentity(row, fallbackTitle).name}</h2>
           <p className="mt-1 break-words text-xs text-muted">{sourceLabel(row.source)} · {row.projectLabel}</p>
         </div></div>
         <div className="mt-3 flex flex-wrap items-center gap-2">

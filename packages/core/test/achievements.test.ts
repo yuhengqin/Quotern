@@ -8,6 +8,16 @@ const facts = (overrides: Partial<AchievementFacts> = {}): AchievementFacts => (
 const progress = (input: AchievementFacts, id: string) => evaluateAchievements(input).progress.find(p => p.id === id)!;
 const dates = (year: number, month: number, count: number) => Array.from({ length: count }, (_, i) => year + '-' + String(month).padStart(2, '0') + '-' + String(i + 1).padStart(2, '0'));
 
+test('monthly attainability allows an unfinished today but detects a missed past day even when today is active', () => {
+  const previousDays = dates(2026, 10, 28);
+  const current = facts({ today: '2026-10-29', days: previousDays.map(d => day(d)) });
+  assert.equal((progress(current, 'monthly-full-2026-10') as any).periodAttainable, true);
+  const missed = { ...current, days: [...previousDays.slice(1), '2026-10-29'].map(d => day(d)) };
+  assert.equal((progress(missed, 'monthly-full-2026-10') as any).periodAttainable, false);
+  assert.equal((progress({ ...current, days: [] }, 'monthly-active-2026-10') as any).periodAttainable, false);
+  assert.equal((progress({ ...current, days: dates(2026, 10, 31).map(d => day(d)), today: '2026-10-31' }, 'monthly-full-2026-10') as any).periodAttainable, true);
+});
+
 test('Token, cost and active-day awards unlock exactly at thresholds and keep earliest qualifying dates', () => {
   const input = facts({ days: [day('2026-10-01', 999999, 9.99), day('2026-10-02', 1, .01)] });
   assert.equal(progress(input, 'tokens-1000000').eligible, true);

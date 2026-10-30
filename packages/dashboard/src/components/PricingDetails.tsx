@@ -6,7 +6,7 @@ import { pricingRegionMessageKeys } from '../i18n/pricing-messages';
 import type { PricingCurrency } from '../lib/pricing-currency';
 import type { PricingModelGroup, PricingVariant } from '../lib/pricing-groups';
 import { formatPricingContext } from '../lib/pricing-groups';
-import { formatPricingDisplayRate, getPricingVariantAliases, splitPricingHighlight } from '../lib/pricing-display';
+import { formatPricingCost, formatPricingDisplayRate, getPricingVariantAliases, splitPricingHighlight } from '../lib/pricing-display';
 import { estimatePricingCost, PRICING_TOKEN_FIELDS, type PricingScenario } from '../lib/pricing-workbench';
 import type { PricingCatalogRow } from '../lib/pricing-data';
 
@@ -84,8 +84,8 @@ export function PricingEstimatedCost({ row, scenario, currency, exchangeRate }: 
   const { t, i18n } = useTranslation();
   const estimate = estimatePricingCost(row, scenario);
   if (estimate.status === 'ready') {
-    const price = formatPricingDisplayRate(estimate.totalUsd, currency, exchangeRate, i18n.language);
-    return <span className="whitespace-nowrap font-mono tabular-nums" title={price.exact === '—' ? t('pricing.exchange.unavailableValue') : t('pricing.details.referenceCost', { price: price.exact })}>{price.text}</span>;
+    const price = formatPricingCost(estimate.totalUsd, currency, exchangeRate, i18n.language);
+    return <span className="whitespace-nowrap font-mono tabular-nums" title={price === '—' ? t('pricing.exchange.unavailableValue') : t('pricing.details.referenceCost', { price })}>{price}</span>;
   }
   const fields = new Intl.ListFormat(i18n.language).format(estimate.missing.map(key => t(RATE_FIELD_KEYS[key])));
   const description = estimate.status === 'missing' ? t('pricing.details.missingRates', { fields })

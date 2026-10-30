@@ -14,6 +14,8 @@ export interface AchievementProgress {
   title: string; description: string; target: number; value: number; unit: string; tier: number;
   eligible: boolean; achievedOn: string | null; scope?: string; scopeLabel?: string; period?: string;
   privateScope?: boolean;
+  /** Whether remaining days can complete this period, based on currently collected activity. */
+  periodAttainable?: boolean;
 }
 export interface EarnedAchievement extends AchievementProgress {
   ruleVersion: 1; unlockedAt: string; seenAt: string | null; notifiedAt: string | null;

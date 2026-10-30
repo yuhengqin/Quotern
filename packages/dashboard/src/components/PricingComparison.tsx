@@ -8,7 +8,7 @@ import { PricingCalculator, PricingScenarioSummary } from './PricingTools';
 import { getPricingModelName, getPricingProvider } from '../lib/pricing-catalog';
 import { formatPricingContext, getPrimaryPricingVariant, type PricingModelGroup, type PricingVariant } from '../lib/pricing-groups';
 import { comparePricingCosts, estimatePricingCost, getCacheReadSavings, type PricingScenario } from '../lib/pricing-workbench';
-import { formatPricingDisplayRate, formatPricingReleaseDate, formatPricingTokens } from '../lib/pricing-display';
+import { formatPricingCost, formatPricingReleaseDate, formatPricingTokens } from '../lib/pricing-display';
 import { FilterSelectPopover } from './FilterMenu';
 
 export function PricingComparison({ groups, initialChannels, onClose, scenario, onScenarioChange, currency, exchangeRate, usageStatus }: {
@@ -54,7 +54,7 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
   ];
   return <Modal.Backdrop isOpen onOpenChange={open => { if (!open) onClose(); }}>
     <Modal.Container scroll="inside" placement="center" className="p-3 sm:p-6">
-      <Modal.Dialog className="w-full !max-w-[1160px] min-w-0 !max-h-[calc(100dvh-1.5rem)]">
+      <Modal.Dialog className="flex w-full !max-w-[1160px] min-w-0 flex-col overflow-hidden !max-h-[calc(100dvh-1.5rem)]">
         <Modal.CloseTrigger aria-label={t('pricing.compare.close')} />
         <Modal.Header className="gap-2 pr-12">
           <Modal.Heading>{t('pricing.compare.title')} <span className="text-sm font-normal text-muted">{groups.length} / 4</span></Modal.Heading>
@@ -64,9 +64,9 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
             <span className="text-[11px] text-muted"><PricingScenarioSummary scenario={scenario} /></span>
           </div>
         </Modal.Header>
-        <Modal.Body className="min-w-0">
+        <Modal.Body className="flex min-h-0 min-w-0 flex-col !overflow-hidden">
           <p className="mb-2 text-[11px] text-muted sm:hidden">{t('pricing.compare.scrollHint')}</p>
-          <div role="region" aria-label={t('pricing.compare.scrollRegion')} tabIndex={0} className="max-w-full overflow-auto overscroll-contain rounded-xl border border-border/70 outline-none focus-visible:outline-2 focus-visible:outline-accent">
+          <div role="region" aria-label={t('pricing.compare.scrollRegion')} tabIndex={0} className="min-h-0 max-w-full flex-1 overflow-auto overscroll-contain rounded-xl border border-border/70 outline-none focus-visible:outline-2 focus-visible:outline-accent">
             <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ minWidth: 112 + groups.length * 210 }}>
               <caption className="sr-only">{t('pricing.compare.caption')}</caption>
               <thead>
@@ -99,7 +99,7 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
                     return <td key={group.id} className={`border-t border-border/60 p-3 align-top ${lowest ? 'bg-accent-soft/60' : 'bg-surface'}`}>
                       <div className={`text-2xl font-semibold tracking-tight ${lowest ? 'text-accent-soft-foreground' : 'text-foreground'}`}><PricingEstimatedCost row={variant.row} scenario={scenario} currency={currency} exchangeRate={exchangeRate} /></div>
                       {lowest && <p className="mt-1.5 text-[11px] font-medium text-accent-soft-foreground">{sameCosts ? t('pricing.compare.sameCost') : comparisons.some(value => value === null) ? t('pricing.compare.knownLowest', { rank: t(lowestCount > 1 ? 'pricing.compare.tiedLowest' : 'pricing.compare.lowest') }) : t(lowestCount > 1 ? 'pricing.compare.tiedLowest' : 'pricing.compare.lowest')}</p>}
-                      {comparison && !comparison.isLowest && <p className="mt-1.5 text-[11px] leading-5 text-muted" title={formatPricingDisplayRate(comparison.differenceUsd, currency, exchangeRate, locale).exact}>{t('pricing.compare.higherCost', { difference: formatPricingDisplayRate(comparison.differenceUsd, currency, exchangeRate, locale).text })}{comparison.multiple !== null && comparison.multiple >= 1.01 && <> · {t('pricing.compare.multiple', { multiple: new Intl.NumberFormat(locale, { maximumSignificantDigits: 3 }).format(comparison.multiple) })}</>}</p>}
+                      {comparison && !comparison.isLowest && <p className="mt-1.5 text-[11px] leading-5 text-muted">{t('pricing.compare.higherCost', { difference: formatPricingCost(comparison.differenceUsd, currency, exchangeRate, locale) })}{comparison.multiple !== null && comparison.multiple >= 1.01 && <> · {t('pricing.compare.multiple', { multiple: new Intl.NumberFormat(locale, { maximumSignificantDigits: 3 }).format(comparison.multiple) })}</>}</p>}
                     </td>;
                   })}
                 </tr>

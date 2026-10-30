@@ -2,12 +2,26 @@ import { ACHIEVEMENT_FAMILIES } from 'quotern-core/achievements';
 import type { AchievementCategory, AchievementFamily, AchievementProgress, AchievementRecord, AchievementSnapshot, EarnedAchievement } from 'quotern-core/achievements';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { sourceLabel } from '../lib/tokens.ts';
+import { formatCompactTokenCount } from '../lib/utils.ts';
+import { formatUsd } from '../lib/format.ts';
 export interface AchievementRecordGroup { id: string; family: AchievementProgress['family']; items: AchievementProgress[]; featured: AchievementProgress; next: AchievementProgress | null; earnedCount: number }
 export interface AchievementGroup extends AchievementRecordGroup { records: AchievementRecordGroup[]; earnedObjectCount: number }
 
 const closestFirst = (a: AchievementProgress, b: AchievementProgress) => Math.min(1, b.value / b.target) - Math.min(1, a.value / a.target) || a.id.localeCompare(b.id);
 export function isCurrentAchievement(item: AchievementProgress, asOfDate: string): boolean {
   return !item.period || item.period >= asOfDate.slice(0, item.period.length);
+}
+export function achievementPeriodState(item: AchievementProgress, asOfDate: string): 'current' | 'expired' | 'unattainable' {
+  if (item.eligible) return 'current';
+  if (!isCurrentAchievement(item, asOfDate)) return 'expired';
+  if (item.period === asOfDate.slice(0, 7) && ['monthly-full', 'monthly-active'].includes(item.family)) {
+    if (item.periodAttainable === false) return 'unattainable';
+    // Older runtimes do not say whether today was active. Exclude only definitely impossible goals.
+    const [year, month, day] = asOfDate.split('-').map(Number);
+    const remaining = new Date(Date.UTC(year!, month!, 0)).getUTCDate() - day! + 1;
+    if (item.periodAttainable === undefined && item.value + remaining < item.target) return 'unattainable';
+  }
+  return 'current';
 }
 export function achievementMatchesStatus(item: AchievementProgress, status: string, asOfDate: string): boolean {
   if (status === 'earned') return item.eligible;
@@ -68,7 +82,7 @@ export function groupAchievements(snapshot: Pick<AchievementSnapshot, 'progress'
       (b.featured.period ?? '').localeCompare(a.featured.period ?? '') || Number(b.earnedCount > 0) - Number(a.earnedCount > 0) || b.featured.value - a.featured.value || a.id.localeCompare(b.id));
     if (!members.length) return [];
     const items = members.flatMap(record => record.items), owned = items.filter(item => item.eligible).sort((a, b) => b.tier - a.tier || b.value - a.value || (b.period ?? '').localeCompare(a.period ?? ''));
-    const candidates = members.map(record => record.next).filter((item): item is AchievementProgress => Boolean(item && isCurrentAchievement(item, snapshot.coverage?.asOfDate ?? '0000-00-00'))).sort(closestFirst);
+    const candidates = members.map(record => record.next).filter((item): item is AchievementProgress => Boolean(item && achievementPeriodState(item, snapshot.coverage?.asOfDate ?? '0000-00-00') === 'current')).sort(closestFirst);
     const featured = owned[0] ?? candidates[0] ?? members[0]!.featured;
     return [{ id: meta.id, family: meta.id, items, records: members, featured, next: candidates[0] ?? null, earnedCount: owned.length, earnedObjectCount: members.filter(record => record.earnedCount > 0).length }];
   });
@@ -76,7 +90,7 @@ export function groupAchievements(snapshot: Pick<AchievementSnapshot, 'progress'
 
 export function closestAchievements(snapshot: AchievementSnapshot): AchievementProgress[] {
   return groupAchievements(snapshot).map(group => group.next ?? (!group.featured.eligible ? group.featured : null))
-    .filter((item): item is AchievementProgress => Boolean(item && item.value > 0 && !['cost', 'duration', 'annual', 'records'].includes(item.family) && isCurrentAchievement(item, snapshot.coverage.asOfDate)))
+    .filter((item): item is AchievementProgress => Boolean(item && item.value > 0 && !['cost', 'duration', 'annual', 'records'].includes(item.family) && achievementPeriodState(item, snapshot.coverage.asOfDate) === 'current'))
     .sort(closestFirst).slice(0, 3);
 }
 export function distinctFamilyBadges(items: EarnedAchievement[], limit = 3): EarnedAchievement[] {
@@ -104,9 +118,9 @@ export function formatAchievementMonth(value: string, locale: SupportedLocale = 
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', timeZone: 'UTC' }).format(date);
 }
 export function formatAchievementAmount(value: number, family: AchievementFamily, locale: SupportedLocale = 'zh-CN'): string {
-  if (family === 'cost') return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }).format(value);
+  if (family === 'cost') return formatUsd(value, locale);
   if (family === 'duration') return (value / 3600).toLocaleString(locale, { maximumFractionDigits: 1 });
-  if (family === 'tokens') return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  if (family === 'tokens') return formatCompactTokenCount(value, undefined, locale);
   return value.toLocaleString(locale, { maximumFractionDigits: 0 });
 }
 export function achievementUnit(item: Pick<AchievementProgress, 'family' | 'unit'>, locale: SupportedLocale = 'zh-CN'): string {

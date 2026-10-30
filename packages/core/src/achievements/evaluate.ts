@@ -59,8 +59,9 @@ export function evaluateAchievements(facts: AchievementFacts): AchievementEvalua
   for (const period of [...new Set([...byMonth.keys(), facts.today.slice(0, 7)])].sort()) {
     const dates = byMonth.get(period) ?? [], length = monthLength(period), closed = period < facts.today.slice(0, 7);
     const full = closed && dates.length === length;
-    add({ id: 'monthly-full-' + period, family: 'monthly-full', groupId: 'monthly-full-' + period, title: period + ' 全勤章', description: '月度肝帝：自然月每一天都有有效用量，月末结束后结算；二月按实际天数计算。', target: length, value: dates.length, unit: '天', tier: 1, eligible: full, achievedOn: full ? period + '-' + length : null, period });
-    add({ id: 'monthly-active-' + period, family: 'monthly-active', groupId: 'monthly-active-' + period, title: period + ' 常有你', description: '一个自然月累计活跃 20 天，为自己的使用节奏留下纪念。', target: 20, value: dates.length, unit: '天', tier: 1, eligible: dates.length >= 20, achievedOn: dates[19] ?? null, period });
+    const possibleDays = dates.length + (closed ? 0 : length - Number(facts.today.slice(8)) + Number(!dates.includes(facts.today)));
+    add({ id: 'monthly-full-' + period, family: 'monthly-full', groupId: 'monthly-full-' + period, title: period + ' 全勤章', description: '月度肝帝：自然月每一天都有有效用量，月末结束后结算；二月按实际天数计算。', target: length, value: dates.length, unit: '天', tier: 1, eligible: full, achievedOn: full ? period + '-' + length : null, period, periodAttainable: possibleDays >= length });
+    add({ id: 'monthly-active-' + period, family: 'monthly-active', groupId: 'monthly-active-' + period, title: period + ' 常有你', description: '一个自然月累计活跃 20 天，为自己的使用节奏留下纪念。', target: 20, value: dates.length, unit: '天', tier: 1, eligible: dates.length >= 20, achievedOn: dates[19] ?? null, period, periodAttainable: possibleDays >= 20 });
   }
 
   const sourceEntries: Array<[string, string[]]> = bySource.size ? [...bySource].sort(([a], [b]) => a.localeCompare(b)) : [['pending', []]];

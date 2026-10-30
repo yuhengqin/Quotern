@@ -6,7 +6,7 @@ import { CalendarDate, parseDate } from '@internationalized/date';
 import { I18nProvider } from 'react-aria';
 import { useTranslation } from 'quotern-i18n/react';
 import type { PricingCurrency, PricingExchangeRate } from '../lib/pricing-currency';
-import { getRecentReleaseRange, type PricingFilters } from '../lib/pricing-filters';
+import { formatContextWindow, getRecentReleaseRange, type PricingFilters } from '../lib/pricing-filters';
 import { localDateNow } from '../lib/stats-timezone';
 import { formatPricingReleaseDate } from '../lib/pricing-display';
 import { formatPricingExchangeRate } from '../lib/pricing-currency';
@@ -111,8 +111,7 @@ export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, 
   const [showDateRange, setShowDateRange] = useState(false);
   const applyFilters = (next: PricingAdvancedFilters) => {
     onChange(next);
-    setOpen(false);
-    setShowDateRange(false);
+    if (showDateRange) returnToFilters();
   };
   const dateTrigger = useRef<HTMLButtonElement>(null);
   const returnToFilters = () => {
@@ -143,7 +142,7 @@ export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, 
             <Label className="text-xs">{t('pricing.filters.minContext')}</Label>
             <Select.Trigger className="!h-9 !min-h-9 !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4" /><Select.Indicator /></Select.Trigger>
             <FilterSelectPopover><ListBox aria-label={t('pricing.filters.minContextOptions')}>
-              {[[0, t('pricing.filters.unlimited')], [8000, '8K'], [128000, '128K'], [1000000, '1M']].map(([value, label]) => (
+              {[0, 8000, 128000, 1000000].map(value => [value, value ? formatContextWindow(value, i18n.language) : t('pricing.filters.unlimited')]).map(([value, label]) => (
                 <ListBox.Item id={String(value)} key={String(value)} textValue={String(label)}>{label}<ListBox.ItemIndicator /></ListBox.Item>
               ))}
             </ListBox></FilterSelectPopover>
@@ -174,6 +173,7 @@ export function PricingMoreFilters({ filters, onChange, currency, exchangeRate, 
               <Button className="!h-8 !min-h-8 shrink-0 !text-xs" size="sm" variant="secondary" isDisabled={!Number.isFinite(manualRate) || manualRate <= 0} onPress={() => onManualRate(manualRate)}>{t('pricing.exchange.apply')}</Button>
             </div>
           </div>}
+          <div className="flex justify-end"><Button slot={null} size="sm" variant="secondary" onPress={() => setOpen(false)}>{t('pricing.filters.done')}</Button></div>
           </>}
         </Popover.Dialog>
       </Popover.Content>

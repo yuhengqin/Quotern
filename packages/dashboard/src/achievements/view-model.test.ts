@@ -9,6 +9,18 @@ import { achievementRankMessages } from '../i18n/achievement-rank-messages.ts';
 
 registerMessages(achievementRankMessages);
 
+test('period status excludes missed current goals from recommendations but preserves historical records', () => {
+  const month = badge('monthly-full-2026-10', 31, 25, false, { family: 'monthly-full', period: '2026-10', groupId: 'monthly-full-2026-10' });
+  const state = snapshot([month]);
+  state.coverage.asOfDate = '2026-10-29';
+  assert.deepEqual(closestAchievements(state), []);
+  assert.equal((viewModel as any).achievementPeriodState(month, state.coverage.asOfDate), 'unattainable');
+  assert.equal((viewModel as any).achievementPeriodState({ ...month, period: '2026-09' }, state.coverage.asOfDate), 'expired');
+  assert.equal(groupAchievements(state)[0]!.items[0], month);
+  assert.equal((viewModel as any).achievementPeriodState({ ...month, value: 28 }, state.coverage.asOfDate), 'current');
+  assert.equal((viewModel as any).achievementPeriodState({ ...month, value: 28, periodAttainable: false }, state.coverage.asOfDate), 'unattainable');
+});
+
 const badge = (id: string, target: number, value: number, eligible = false, overrides: Partial<AchievementProgress> = {}): AchievementProgress => ({ id, family: 'tokens', category: 'milestones', groupId: 'tokens', title: id, description: 'rule', target, value, unit: 'Token', tier: target, eligible, achievedOn: eligible ? '2026-09-01' : null, ...overrides });
 const earned = (item: AchievementProgress): EarnedAchievement => ({ ...item, ruleVersion: 1, unlockedAt: '2026-09-01T00:00:00Z', seenAt: null, notifiedAt: null, historical: true, snapshot: { value: item.value, timeZone: 'Asia/Shanghai', coverageFromDate: '2026-01-01' } });
 const snapshot = (progress: AchievementProgress[]): AchievementSnapshot => ({

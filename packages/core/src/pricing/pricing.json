@@ -1,8 +1,8 @@
 {
   "_meta": {
     "units": "usd_per_million_tokens",
-    "generated_at": "2026-10-27T06:26:31.596Z",
-    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev. Incremental models.dev sync on 2026-10-17: kept=448 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-18: kept=448 (added=0, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-19: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-20: kept=450 (added=2, changed=34, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-21: kept=451 (added=1, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-22: kept=451 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-23: kept=451 (added=0, changed=14, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-24: kept=455 (added=4, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-27: kept=456 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped.",
+    "generated_at": "2026-10-30T07:18:30.042Z",
+    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev. Incremental models.dev sync on 2026-10-17: kept=448 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-18: kept=448 (added=0, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-19: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-20: kept=450 (added=2, changed=34, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-21: kept=451 (added=1, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-22: kept=451 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-23: kept=451 (added=0, changed=14, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-24: kept=455 (added=4, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-27: kept=456 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-30: kept=457 (added=1, changed=1, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped.",
     "source": "https://models.dev/catalog.json"
   },
   "exact": {
@@ -2184,9 +2184,9 @@
       "cache_write": 0.125
     },
     "mistral/mistral-large-4": {
-      "input": 1.36,
-      "output": 4.18,
-      "cache_read": 0.14
+      "input": 0.7,
+      "output": 2.1,
+      "cache_read": 0.07
     },
     "mistral/labs-leanstral-1-5-1": {
       "input": 0,
@@ -2252,6 +2252,11 @@
       "output": 5,
       "cache_read": 0.05,
       "cache_write": 1.25
+    },
+    "mistral/mistral-large-4-0-8": {
+      "input": 0.7,
+      "output": 2.1,
+      "cache_read": 0.07
     }
   },
   "alias": {
@@ -5592,11 +5597,19 @@
       "canonical_model_id": "moonshotai/kimi-k3.1-pro"
     },
     "openai/gpt-6.1-terra": {
-      "display_name": "GPT-6.1 Terra",
-      "canonical_model_id": "openai/gpt-6.1-terra",
       "release_date": "2026-10-26",
       "release_date_source": "models.dev",
       "context_window": 1050000,
+      "context_window_source": "models.dev",
+      "display_name": "GPT-6.1 Terra",
+      "canonical_model_id": "openai/gpt-6.1-terra"
+    },
+    "mistral/mistral-large-4-0-8": {
+      "display_name": "Mistral Large 4",
+      "canonical_model_id": "mistral/mistral-large-4",
+      "release_date": "2026-10-06",
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
       "context_window_source": "models.dev"
     }
   },

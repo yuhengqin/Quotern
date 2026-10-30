@@ -103,11 +103,25 @@ describe('pricing model groups', () => {
     assert.deepEqual(filtered[0]!.subscriptionVariants.map(variant => variant.row.contextWindow), [1_048_576]);
   });
 
-  it('labels binary context sizes as 256K and 1M while retaining decimal sizes', () => {
-    assert.equal(formatPricingContext(262_144), '256K');
-    assert.equal(formatPricingContext(1_048_576), '1M');
-    assert.equal(formatPricingContext(200_000), '200K');
-    assert.equal(formatPricingContext(undefined), '—');
+  it('uses the saved Token units for every context size, including multiples of 1024', () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    let mode = 'localized';
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => mode } });
+    try {
+      const values = [131_072, 262_144, 256_000, 500_000, 1_000_000, 1_048_576, 1_050_000];
+      assert.deepEqual(values.map(value => formatPricingContext(value, 'zh-CN')), [
+        '13.11万', '26.21万', '25.6万', '50万', '100万', '104.9万', '105万',
+      ]);
+      mode = 'international';
+      assert.deepEqual(values.map(value => formatPricingContext(value, 'zh-CN')), [
+        '131.1K', '262.1K', '256K', '500K', '1M', '1M', '1.1M',
+      ]);
+      assert.equal(formatPricingContext(undefined, 'zh-CN'), '—');
+      assert.equal(formatPricingContext(0, 'zh-CN'), '—');
+    } finally {
+      if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+      else Reflect.deleteProperty(globalThis, 'localStorage');
+    }
   });
 
   it('filters by recent matched group usage while retaining unused regional and subscription channels', () => {

@@ -35,10 +35,10 @@ it('uses inclusive local calendar days for recent-release shortcuts', () => {
 });
 
 it('formats context capacity while preserving unknown as a dash', () => {
-  assert.equal(formatContextWindow(1_050_000), '1.05M');
+  assert.equal(formatContextWindow(1_050_000), '1.1M');
   assert.equal(formatContextWindow(200_000), '200K');
-  assert.equal(formatContextWindow(8192), '8.19K');
+  assert.equal(formatContextWindow(8192), '8.2K');
   assert.equal(formatContextWindow(undefined), '—');
   assert.equal(formatContextWindow(0), '—');
-    assert.equal(formatContextWindow(1_050_000, 'de-DE'), '1,05M');
+  assert.equal(formatContextWindow(1_050_000, 'ja'), '105万');
 });

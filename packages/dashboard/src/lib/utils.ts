@@ -75,10 +75,11 @@ export function cn(...inputs: ClassValue[]) {
 export function formatCompactTokenCount(
   value: number,
   mode: TokenUnitMode = getTokenUnitMode(),
+  requestedLocale?: string,
 ): string {
   if (!Number.isFinite(value)) return '0';
 
-  const locale = displayLocale();
+  const locale = requestedLocale ? normalizeLocale(requestedLocale) : displayLocale();
   if (mode === 'localized' && locale !== 'en') return formatEastAsianTokenCount(value, locale);
 
   const absoluteValue = Math.abs(value);

@@ -87,9 +87,5 @@ export function getPrimaryPricingVariant(group: PricingModelGroup): PricingVaria
 }
 
 export function formatPricingContext(value?: number, locale = 'en-US'): string {
-  if (value != null && value > 0 && Number.isSafeInteger(value)) {
-    if (value >= 1_048_576 && value % 1_048_576 === 0) return `${new Intl.NumberFormat(locale).format(value / 1_048_576)}M`;
-    if (value >= 1_024 && value % 1_024 === 0) return `${new Intl.NumberFormat(locale).format(value / 1_024)}K`;
-  }
   return formatContextWindow(value, locale);
 }

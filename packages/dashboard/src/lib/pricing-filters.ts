@@ -2,6 +2,7 @@ import { isModelReleaseDate } from 'quotern-core/pricing-matcher';
 import type { PricingCatalogRow } from './pricing-data.ts';
 import { getPricingProvider } from './pricing-catalog.ts';
 import { dashboardNow } from './demo-runtime.ts';
+import { formatCompactTokenCount } from './utils.ts';
 
 export interface PricingFilters {
   providers?: readonly string[];
@@ -35,9 +36,7 @@ export function filterPricingCatalog(rows: PricingCatalogRow[], filters: Pricing
 
 export function formatContextWindow(value?: number, locale = 'en-US'): string {
   if (value == null || !Number.isSafeInteger(value) || value <= 0) return '—';
-  const divisor = value >= 1_000_000 ? 1_000_000 : value >= 1_000 ? 1_000 : 1;
-  const suffix = divisor === 1_000_000 ? 'M' : divisor === 1_000 ? 'K' : '';
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value / divisor)}${suffix}`;
+  return formatCompactTokenCount(value, undefined, locale);
 }
 
 export function getRecentReleaseRange(days: number, now = dashboardNow()): Pick<PricingFilters, 'releasedAfter' | 'releasedBefore'> {

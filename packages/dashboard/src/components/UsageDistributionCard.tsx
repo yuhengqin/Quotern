@@ -56,6 +56,7 @@ export function UsageDistributionCard({
     () => visibleRows.reduce((sum, row) => sum + row.value, 0),
     [visibleRows],
   );
+  const hasHiddenRows = chartRows.some(row => hiddenIds.has(row.id));
 
   const toggleRow = (id: string) => {
     setHiddenIds((prev) => {
@@ -98,9 +99,9 @@ export function UsageDistributionCard({
             <div className="relative mx-auto h-44 w-44 shrink-0 sm:mx-0">
               <div className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center text-center">
                 <span className="text-[11px] text-muted">
-                  {metric === 'tokens' ? 'Tokens' : t('usage.common.cost')}
+                  {hasHiddenRows ? t('usage.distribution.visibleTotal') : metric === 'tokens' ? 'Tokens' : t('usage.common.cost')}
                 </span>
-                <strong className="text-lg font-semibold tracking-tight tabular-nums">
+                <strong className="max-w-32 break-all text-base font-semibold tracking-tight tabular-nums">
                   {formatDashboardMetricCompact(metric, visibleTotal)}
                 </strong>
               </div>
@@ -165,6 +166,7 @@ export function UsageDistributionCard({
             </div>
 
             <div className="min-w-0 flex-1">
+              {hasHiddenRows && <Button size="sm" variant="ghost" className="mb-1 h-7 text-xs" onPress={() => setHiddenIds(new Set())}>{t('usage.distribution.restoreAll')}</Button>}
               <DistributionRowList
                 metric={metric}
                 rows={chartRows.slice(0, 5)}

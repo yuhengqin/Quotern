@@ -23,7 +23,7 @@ export function DashboardSessionCards({ metrics, loading = false, error = false 
   const estimatedSources = list(metrics?.estimatedTaskSources);
   const missingTaskSources = list(metrics?.missingTaskSources);
   return (
-    <section aria-label={t('usage.session.overview')} aria-busy={loading && !metrics} className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label={t('usage.session.overview')} aria-busy={loading && !metrics} className="mt-2.5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
       {cards.map((card) => {
         const label = t(card.labelKey);
         const value = sessionMetricValue(metrics, card.key);

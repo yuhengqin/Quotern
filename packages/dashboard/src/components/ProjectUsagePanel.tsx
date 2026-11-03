@@ -1,7 +1,7 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CircleQuestion, Folder } from '@gravity-ui/icons';
-import { Button, Card, Modal, Switch, Tooltip } from '@heroui/react';
+import { Folder } from '@gravity-ui/icons';
+import { Button, Card, Modal, Switch } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { CHART_TOOLTIP_SURFACE_CLASSNAME } from '@/components/ChartPrimitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
@@ -15,6 +15,8 @@ import {
 import { formatPct, formatTokens, formatUsd } from '@/lib/format';
 import { sourceLabel } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
+import { HelpPopover } from './HelpPopover';
+import { UsageRowDetails } from './UsageRowDetails';
 
 const PROJECT_ROW_HEIGHT = 56;
 const MAX_VISIBLE_PROJECT_ROWS = 5;
@@ -77,7 +79,7 @@ export function ProjectUsagePanel({
         <div className="min-w-0 flex-1">
           <Card.Title className="flex items-center gap-1.5" id={headingId}>
             <span>{t('usage.project.heading')}</span>
-            <ProjectHelpTooltip />
+            <HelpPopover title={t('usage.project.heading')}><p>{t('usage.project.help')}</p></HelpPopover>
           </Card.Title>
           <Card.Description className="mt-1">
             {t('usage.project.description')}
@@ -171,40 +173,18 @@ function ProjectStackedList({
   rows: ProjectModelStackedChartRow[];
   series: ProjectModelChartSeries[];
 }) {
-  return (
-    <div
-      aria-labelledby={headingId}
-      className="grid w-full min-w-0 grid-cols-[minmax(0,7rem)_minmax(0,1fr)_50px] gap-x-2 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_50px] sm:gap-x-3"
-      role="img"
-    >
-      <ProjectLabelColumn rows={rows} />
-      <ProjectStackedBars
-        chartMaximum={chartMaximum}
-        rows={rows}
-        series={series}
-      />
-      <ProjectValueColumn rows={rows} />
-    </div>
-  );
-}
-
-function ProjectHelpTooltip() {
   const { t } = useTranslation();
   return (
-    <Tooltip closeDelay={80} delay={100}>
-      <Button
-        aria-label={t('usage.project.helpAria')}
-        className="h-5 min-h-5 w-5 min-w-5 rounded-full p-0 text-muted"
-        isIconOnly
-        size="sm"
-        variant="ghost"
-      >
-        <CircleQuestion className="h-3.5 w-3.5" />
-      </Button>
-      <Tooltip.Content className="max-w-64 p-3" placement="top" showArrow>
-        <p className="text-xs leading-relaxed text-foreground">{t('usage.project.help')}</p>
-      </Tooltip.Content>
-    </Tooltip>
+    <div aria-labelledby={headingId} className="w-full min-w-0 space-y-1">
+      {rows.map(row => <UsageRowDetails key={row.project} title={isUnknownProject(row) ? t('usage.project.unknown') : row.label} tokens={row.tokens} costUsd={row.costUsd}
+        models={series.flatMap(item => { const segment = row.segments[item.key]; return segment ? [{ ...segment, label: segment.source ? `${sourceLabel(segment.source)} · ${segment.model}` : segment.model, color: item.color }] : []; })}>
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,7rem)_minmax(0,1fr)_60px] items-center gap-x-2 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_60px] sm:gap-x-3">
+          <ProjectLabelColumn rows={[row]} />
+          <ProjectStackedBars chartMaximum={chartMaximum} rows={[row]} series={series} />
+          <ProjectValueColumn rows={[row]} />
+        </div>
+      </UsageRowDetails>)}
+    </div>
   );
 }
 
@@ -229,21 +209,12 @@ function ProjectLabelColumn({
             <Folder className="size-3.5 sm:size-4" />
           </span>
           <span className="min-w-0">
-            <Tooltip closeDelay={80} delay={200}>
-              <button
-                aria-label={isUnknownProject(row) ? t('usage.project.unknown') : row.label}
-                className="block max-w-full truncate text-left text-xs font-normal text-foreground sm:text-sm"
-                type="button"
-              >
-                {isUnknownProject(row) ? t('usage.project.unknown') : row.label}
-              </button>
-              <Tooltip.Content className="max-w-72 p-2" placement="top" showArrow>
-                <p className="break-all text-xs text-foreground">{isUnknownProject(row) ? t('usage.project.unknown') : row.label}</p>
-              </Tooltip.Content>
-            </Tooltip>
+            <span className="block max-w-full truncate text-left text-xs font-normal text-foreground sm:text-sm">
+              {isUnknownProject(row) ? t('usage.project.unknown') : row.label}
+            </span>
             <span
               aria-hidden="true"
-              className="mt-0.5 block truncate text-[9px] text-muted tabular-nums sm:text-[11px]"
+              className="mt-0.5 block text-[11px] leading-tight text-muted tabular-nums"
             >
               {t('usage.common.modelCount', { count: row.modelCount })} · {formatUsd(row.costUsd)}
             </span>
@@ -273,6 +244,20 @@ function ProjectStackedBars({
 }) {
   const { t } = useTranslation();
   const [hovered, setHovered] = useState<HoveredSegment | null>(null);
+  const hasHovered = hovered !== null;
+  useEffect(() => {
+    if (!hasHovered) return;
+    const clear = () => setHovered(null);
+    const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') clear(); };
+    window.addEventListener('scroll', clear, true);
+    window.addEventListener('resize', clear);
+    window.addEventListener('keydown', keydown);
+    return () => {
+      window.removeEventListener('scroll', clear, true);
+      window.removeEventListener('resize', clear);
+      window.removeEventListener('keydown', keydown);
+    };
+  }, [hasHovered]);
 
   return (
     <div className="relative min-w-0">

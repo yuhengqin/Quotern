@@ -595,7 +595,7 @@ export function buildToolModelUsage(
     source,
     localMetrics: mergeCompleteLocalMetrics(tool.metricParts),
     tokens: tool.tokens,
-    costUsd: roundCurrency(tool.costUsd),
+    costUsd: tool.costUsd,
     pct: percentage(tool.tokens, toolTokenTotal),
     models: [...tool.models.entries()]
       .sort(([, a], [, b]) => b.tokens - a.tokens)
@@ -603,7 +603,7 @@ export function buildToolModelUsage(
         model,
         localMetrics: mergeCompleteLocalMetrics(values.metricParts),
         tokens: values.tokens,
-        costUsd: roundCurrency(values.costUsd),
+        costUsd: values.costUsd,
         pct: percentage(values.tokens, tool.tokens),
       })),
   }));
@@ -676,14 +676,14 @@ export function buildProjectModelUsage(
       project: row.project,
       label: row.project === 'unknown' ? '未知项目' : row.project,
       tokens: row.tokens,
-      costUsd: roundCurrency(row.costUsd),
+      costUsd: row.costUsd,
       pct: percentage(row.tokens, tokenTotal),
       models: [...row.models.values()]
         .map((model) => ({
           model: model.model,
           source: model.source,
           tokens: model.tokens,
-          costUsd: roundCurrency(model.costUsd),
+          costUsd: model.costUsd,
           pct: percentage(model.tokens, row.tokens),
         }))
         .sort((a, b) => b.tokens - a.tokens),
@@ -736,10 +736,7 @@ export function aggregateUsage(
     },
   );
 
-  return {
-    ...totals,
-    totalCostUsd: roundCurrency(totals.totalCostUsd),
-  };
+  return totals;
 }
 
 function aggregateDailyUsage(

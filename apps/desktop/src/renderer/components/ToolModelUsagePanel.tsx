@@ -1,4 +1,4 @@
-import { memo, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { createPortal } from 'react-dom';
 import { Card } from '@heroui/react';
@@ -15,6 +15,7 @@ import {
 import { formatPct, formatTokens, formatUsd } from '@/lib/format';
 import { sourceLabel } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
+import { UsageRowDetails } from '../../../../../packages/dashboard/src/components/UsageRowDetails';
 
 const TOOL_ROW_HEIGHT = 56;
 const MAX_VISIBLE_TOOL_ROWS = 7;
@@ -98,16 +99,16 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
                 >
                   <div
                     aria-labelledby={headingId}
-                    className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_50px] gap-x-2 sm:gap-x-3"
-                    role="img"
+                    className="w-full min-w-0 space-y-1"
                   >
-                    <ToolLabelColumn rows={chart.rows} />
-                    <ToolStackedBars
-                      chartMaximum={chartMaximum}
-                      rows={chart.rows}
-                      series={chart.series}
-                    />
-                    <ToolValueColumn rows={chart.rows} />
+                    {chart.rows.map(row => <UsageRowDetails key={row.source} title={sourceLabel(row.source)} tokens={row.tokens} costUsd={row.costUsd}
+                      models={chart.series.flatMap(item => { const segment = row.segments[item.key]; return segment ? [{ ...segment, label: segment.model, color: item.color }] : []; })}>
+                      <div className="grid w-full min-w-0 grid-cols-[minmax(0,7rem)_minmax(0,1fr)_60px] items-center gap-x-2 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_60px] sm:gap-x-3">
+                        <ToolLabelColumn rows={[row]} />
+                        <ToolStackedBars chartMaximum={chartMaximum} rows={[row]} series={chart.series} />
+                        <ToolValueColumn rows={[row]} />
+                      </div>
+                    </UsageRowDetails>)}
                   </div>
                 </div>
 
@@ -176,6 +177,20 @@ function ToolStackedBars({
 }) {
   const { t } = useTranslation();
   const [hovered, setHovered] = useState<HoveredSegment | null>(null);
+  const hasHovered = hovered !== null;
+  useEffect(() => {
+    if (!hasHovered) return;
+    const clear = () => setHovered(null);
+    const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') clear(); };
+    window.addEventListener('scroll', clear, true);
+    window.addEventListener('resize', clear);
+    window.addEventListener('keydown', keydown);
+    return () => {
+      window.removeEventListener('scroll', clear, true);
+      window.removeEventListener('resize', clear);
+      window.removeEventListener('keydown', keydown);
+    };
+  }, [hasHovered]);
 
   return (
     <div className="relative min-w-0">

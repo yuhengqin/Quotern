@@ -566,7 +566,7 @@ test('projectDashboardForDate fills hourly from ISO date rows', () => {
   assert.equal(dayView.todayHourlyUsage[9]?.totalTokens, 500);
 });
 
-test('buildToolModelUsage rounds the source total once, not per model then sum', () => {
+test('buildToolModelUsage retains source and model precision until display', () => {
   const rows = buildToolModelUsage(
     [
       {
@@ -582,13 +582,13 @@ test('buildToolModelUsage rounds the source total once, not per model then sum',
     2,
   );
 
-  assert.equal(rows[0]?.costUsd, 9.03);
+  assert.equal(rows[0]?.costUsd, 9.032);
   assert.notEqual(rows[0]?.costUsd, 9.04);
-  assert.equal(rows[0]?.models[0]?.costUsd, 4.52);
-  assert.equal(rows[0]?.models[1]?.costUsd, 4.52);
+  assert.equal(rows[0]?.models[0]?.costUsd, 4.516);
+  assert.equal(rows[0]?.models[1]?.costUsd, 4.516);
 });
 
-test('dashboard tool panel uses summed 8-decimal model costs then cents', () => {
+test('dashboard tool panel retains the sum of raw model costs', () => {
   const today = localDateNow();
   const dataset = datasetWithDays(
     [
@@ -621,7 +621,7 @@ test('dashboard tool panel uses summed 8-decimal model costs then cents', () => 
 
   const view = buildDashboardDataFromDataset(dataset, 30);
   assert.equal(view.toolModelUsage[0]?.source, 'cursor');
-  assert.equal(view.toolModelUsage[0]?.costUsd, 9.03);
+  assert.equal(view.toolModelUsage[0]?.costUsd, 9.032);
   assert.notEqual(view.toolModelUsage[0]?.costUsd, 9.04);
 });
 

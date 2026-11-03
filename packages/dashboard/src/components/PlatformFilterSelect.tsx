@@ -45,9 +45,9 @@ export function PlatformFilterSelect({
   return (
     <Popover>
       <Button
-        aria-label={t('usage.filter.agentsAria', { label })}
+        aria-label={`${t('usage.heatmap.filterScope')}：${label}`}
         className={cn(
-          'h-auto min-h-0 max-w-36 gap-1 rounded-none border-0 bg-transparent p-0',
+          'h-auto min-h-0 max-w-64 gap-1 rounded-none border-0 bg-transparent p-0',
           'text-xs font-medium text-muted shadow-none',
           'hover:bg-transparent hover:text-foreground',
           'data-[pressed=true]:bg-transparent data-[pressed=true]:text-foreground',
@@ -59,8 +59,8 @@ export function PlatformFilterSelect({
         {!allSelected && value.length === 1 && value[0] ? (
           <ProviderIcon provider={value[0]} size={12} />
         ) : null}
-        <span className="min-w-0 max-w-28 truncate whitespace-nowrap">
-          {label}
+        <span className="min-w-0 max-w-52 truncate whitespace-nowrap">
+          {t('usage.heatmap.filterScope')} · {label}
         </span>
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
@@ -70,7 +70,7 @@ export function PlatformFilterSelect({
         placement="bottom end"
         header={<div className="flex items-center justify-between gap-2 px-3 py-2">
             <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
-              {t('usage.filter.selectAgents')}
+              {t('usage.heatmap.filterScope')}
             </Popover.Heading>
             <div className="flex items-center gap-1">
               <button
@@ -85,10 +85,11 @@ export function PlatformFilterSelect({
                 type="button"
                 onClick={() => onChange([])}
               >
-                {t('usage.filter.clear')}
+                {t('usage.heatmap.deselectAll')}
               </button>
             </div>
           </div>}
+        footer={<p className="px-3 py-2 text-xs text-muted">{t('usage.heatmap.filterHint')}</p>}
       >
           <ul
             aria-multiselectable="true"

@@ -230,8 +230,8 @@ export function buildToolModelUsage(rows: DashboardToolUsageInput[], totalTokens
   }
   return [...tools.entries()].map(([source, tool]) => ({
     localMetrics: mergeCompleteLocalMetrics(tool.metricParts),
-    source, tokens: tool.tokens, costUsd: Math.round(tool.costUsd * 100) / 100, pct: totalTokens > 0 ? (tool.tokens / totalTokens) * 100 : 0,
-    models: [...tool.models.entries()].map(([model, usage]) => ({ model, localMetrics: mergeCompleteLocalMetrics(usage.metricParts), tokens: usage.tokens, costUsd: Math.round(usage.costUsd * 100) / 100, pct: tool.tokens > 0 ? (usage.tokens / tool.tokens) * 100 : 0 })),
+    source, tokens: tool.tokens, costUsd: tool.costUsd, pct: totalTokens > 0 ? (tool.tokens / totalTokens) * 100 : 0,
+    models: [...tool.models.entries()].map(([model, usage]) => ({ model, localMetrics: mergeCompleteLocalMetrics(usage.metricParts), tokens: usage.tokens, costUsd: usage.costUsd, pct: tool.tokens > 0 ? (usage.tokens / tool.tokens) * 100 : 0 })),
   })).sort((a, b) => b.tokens - a.tokens);
 }
 
@@ -302,14 +302,14 @@ export function buildProjectModelUsage(
       project: row.project,
       label: row.project === 'unknown' ? '未知项目' : row.project,
       tokens: row.tokens,
-      costUsd: Math.round(row.costUsd * 100) / 100,
+      costUsd: row.costUsd,
       pct: tokenTotal > 0 ? (row.tokens / tokenTotal) * 100 : 0,
       models: [...row.models.values()]
         .map((model) => ({
           model: model.model,
           source: model.source,
           tokens: model.tokens,
-          costUsd: Math.round(model.costUsd * 100) / 100,
+          costUsd: model.costUsd,
           pct: row.tokens > 0 ? (model.tokens / row.tokens) * 100 : 0,
         }))
         .sort((a, b) => b.tokens - a.tokens),

@@ -138,7 +138,6 @@ function AppSettingsPanel() {
             if (next !== 'localized' && next !== 'international') return;
             if (next === getTokenUnitMode()) return;
             setTokenUnitMode(next);
-            window.location.reload();
           }}
         >
           <Label>{t('settings.tokenUnit.label')}</Label>

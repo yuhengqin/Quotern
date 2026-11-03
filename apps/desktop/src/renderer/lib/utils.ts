@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { i18n, normalizeLocale, type SupportedLocale } from 'quotern-i18n';
+import { i18n, normalizeLocale, notifyDisplayPreferencesChanged, type SupportedLocale } from 'quotern-i18n';
 
 const TOKEN_COUNT_UNITS = [
   { value: 1_000_000_000_000, suffix: 'T' },
@@ -31,6 +31,12 @@ const TOKEN_UNIT_STORAGE_KEY = 'quotern-token-unit-mode';
 
 export type TokenUnitMode = 'localized' | 'international';
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === null || event.key === TOKEN_UNIT_STORAGE_KEY) notifyDisplayPreferencesChanged();
+  });
+}
+
 function displayLocale() {
   return normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
 }
@@ -56,6 +62,7 @@ export function setTokenUnitMode(mode: TokenUnitMode): void {
   } catch {
     // Private browsing can block storage; the display follows the current language.
   }
+  notifyDisplayPreferencesChanged();
 }
 
 /**

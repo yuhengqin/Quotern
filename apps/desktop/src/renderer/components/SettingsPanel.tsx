@@ -422,7 +422,6 @@ function AppSettingsPanel() {
               if (next !== 'localized' && next !== 'international') return;
               if (next === getTokenUnitMode()) return;
               setTokenUnitMode(next);
-              window.location.reload();
             }}
           >
             <div className="flex items-center gap-1">

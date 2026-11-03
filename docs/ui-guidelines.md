@@ -87,6 +87,7 @@
 | 应用 Toast 队列与展示 | [AppToastContext](../packages/dashboard/src/components/AppToastContext.tsx) 提供队列；[AppToastRegion](../packages/dashboard/src/components/AppToastRegion.tsx) 与 [app-toast.css](../packages/dashboard/src/components/app-toast.css) 统一 AppShell、分享卡片和设置中的右上角提示 | `useAppToastQueue` 必须位于 Context Provider 内；短提示按内容收缩，长提示最多 24rem 且不超过视口减去两侧各 1rem，完整换行。保留 HeroUI 图标、加载、操作、关闭、堆叠与自动消失；局部队列可保留，价格页比较数量提示仍使用顶部居中 240px 的专用布局 | 独立 Context；`AppToastProvider` re-export 共享展示。main.tsx 在 document root 发布共享标题栏高度，index.css 将所有共享 Toast 放在标题栏下方 1rem，涵盖 body portal 中的分享/设置提示；托盘浮窗不预留标题栏 |
 | 按需帮助 | [HelpPopover](../packages/dashboard/src/components/HelpPopover.tsx)，SessionDetailDialog、SessionUsageBreakdown、PricingPage 使用 | 标题旁独立图标，Tooltip 只提示入口名称，点击 Popover 阅读定义、依据或覆盖信息；共享壳负责视口边界、焦点和 Escape，不使用筛选菜单外壳。现有 SettingsHelpPopover 是 Desktop 设置专用，CostExplanationLabel 绑定费用业务，均不适合直接承载共享会话指标 | 直接引用 Dashboard 实现，并在 index.css 登记 `@source` |
 | 图表基础 | [ChartPrimitives](../packages/dashboard/src/components/ChartPrimitives.tsx)，TokenUsageTrendCard、UsageDistributionCard 等使用 | Recharts 容器、主题、Tooltip/Legend；数据转换与指标含义留在业务图表中 | 同名独立副本 |
+| 堆叠图模型明细 | [UsageRowDetails](../packages/dashboard/src/components/UsageRowDetails.tsx)，ToolModelUsagePanel、ProjectUsagePanel 使用 | 整行作为点击和键盘入口，Popover 显示完整名称、原始费用格式化结果及本行模型占比；图形保持真实比例，极小条段也可经整行查看。保留鼠标模型提示，Escape、滚动或缩放关闭悬停提示 | Desktop 两个独立面板直接引用共享明细组件，并登记 CSS `@source` |
 | Agent 来源图标 | [ProviderIcon](../packages/dashboard/src/components/ProviderIcon.tsx)，会话、项目和 Agent 选择器使用 | Agent/采集来源标识及 fallback | 同名文件，分别核对资源与平台能力 |
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
 | 订阅品牌图标 | [SubscriptionBrandIcon](../packages/dashboard/src/components/SubscriptionBrandIcon.tsx)，QuotaUsageCard 使用 | 订阅品牌（含 Gemini CLI）；与 Agent/模型厂商有不同语义与资源集合。品牌文字已在卡片中显示，图标使用空 alt / aria-hidden | 独立实现，Desktop 支持的品牌/资源更多；新增通道时同时登记两端品牌资源 |
@@ -129,6 +130,8 @@
 | 趋势浏览 | [UsageTrendExplorer](../packages/dashboard/src/components/UsageTrendExplorer.tsx)，DashboardPage 使用 | 用量时间轴、动态粒度和费用分组；本地模式的两张图共同占满总览一整行，宽屏各占半宽、窄屏纵向排列。每张图的展开按钮打开 HeroUI Modal，复用当前数据、指标与分组状态，保留控件、Tooltip、图例和计价说明；Desktop 直接 re-export，并在 `index.css` 登记共享组件的 `@source` |
 | 价格筛选与比较 | [PricingTools](../packages/dashboard/src/components/PricingTools.tsx)、[PricingMoreFilters](../packages/dashboard/src/components/PricingMoreFilters.tsx)、[PricingComparison](../packages/dashboard/src/components/PricingComparison.tsx) | 厂商、上下文、日期、汇率、渠道及估算场景属于价格业务；共享 PricingPage 的 loadCatalog 读取 runtime 生效表，Desktop 注入 IPC 价格与用量读取；runtime 不可用时回退内置目录；两端价格路由共用 parsePricingSearch，models 参数携带来源/模型集合，按保守身份解析筛选同一模型的渠道分组，保留清除入口及未匹配提示 |
 | 用量分享 | [ShareActivityModal](../packages/dashboard/src/components/ShareActivityModal.tsx)、[ShareBackgroundPicker](../packages/dashboard/src/components/ShareBackgroundPicker.tsx)、[ShareCardCarousel](../packages/dashboard/src/components/ShareCardCarousel.tsx)、[ShareCardActions](../packages/dashboard/src/components/ShareCardActions.tsx) | 绑定分享快照、背景库和海报导出；Desktop 分享弹窗 re-export Dashboard。组件不作为任意轮播或上传器 |
+
+热力图局部入口明确标注「热力图来源」，菜单解释仅影响本图；空选动作称为「取消全选」，保留已有无结果语义。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
 
 当前没有统一的全页面 EmptyState；无数据、无匹配结果、读取失败由对应业务表达。新增页面先复用合适的 HeroUI 原件或现有业务表达，确有重复契约时再抽取。
 
@@ -188,6 +191,8 @@ import { FilterSelectPopover } from './FilterMenu';
 日期编辑器、计算器、解释性 Popover、原生系统窗口有各自布局合同，不套用列表菜单的 320px 上限。安装方式菜单和模型 ID 复制列表属于动作入口，按各自语义维护。
 
 当前允许直接使用 HeroUI Select.Popover 的页面例外仅有 Desktop [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx) 的 macOS 托盘模式设置与 [QuotaSettings](../apps/desktop/src/renderer/components/QuotaSettings.tsx) 的配额预测模式设置：均为固定三项、异步持久化的设置控件，本次保留原行为。新增例外需要同时更新这里的理由和对应检查范围。
+
+总览专项验收：两端构建后运行 `corepack pnpm test:dashboard-ui [全新输出目录]`。它复用 Electron 界面测试驱动，以合成数据经真实 Core API / IPC 验证费用原始精度、单位切换不刷新、整行明细键盘与焦点、长列表浮层边界和滚动、完整项目名、分母说明、宽窄屏主指标；生成两端截图，仍需查看实际画面。
 
 ## 验收与持续约束
 

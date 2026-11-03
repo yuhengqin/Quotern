@@ -289,3 +289,4 @@
     top: calc(var(--desktop-titlebar-height, 0px) + 1rem);
   }
 }
+@source "../../../../packages/dashboard/src/components/UsageRowDetails.tsx";

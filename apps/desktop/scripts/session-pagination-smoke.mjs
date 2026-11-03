@@ -14,7 +14,8 @@ import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = path.resolve(desktop, '../..');
-const output = path.resolve(process.argv[2] ?? path.join(workspace, `.quotern-dev/session-pagination-ui-${Date.now()}-${process.pid}`));
+const output = path.resolve(process.argv.slice(2).find(arg => !arg.startsWith('--')) ?? path.join(workspace, `.quotern-dev/session-pagination-ui-${Date.now()}-${process.pid}`));
+const dashboardOnly = process.argv.includes('--dashboard-fixes-only');
 assert.ok(!existsSync(output), 'Use a fresh acceptance directory');
 await mkdir(path.join(output, 'profile'), { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
@@ -38,6 +39,20 @@ for (let index = 0; index < 84; index++) {
   if (index !== 73 && (index < 76 || index === 79)) titles.push([JSON.stringify(['claude', sessionId]), { title: displayTitles[index] ?? (child ? `Child ${index}` : `Fixture ${index}`), priority: 2 }]);
 }
 const bucketStore = new BucketStore();
+if (dashboardOnly) {
+  const bucket = (source, model, project, tokens, reportedCost) => ({
+    source, model, project, hour_start: '2026-10-25T03:00:00Z', input_tokens: tokens,
+    output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 0, total_tokens: tokens, conversation_count: 1,
+    ...(reportedCost == null ? {} : { reported_cost_usd: reportedCost }),
+  });
+  bucketStore.apply([
+    bucket('cursor', 'model-a', longProject, 1_000_000, 715.06),
+    bucket('cursor', 'tiny-reported-model', 'Tiny', 1_000, 0.004),
+    bucket('claude', 'gpt-4o-mini', 'Tiny', 10, null),
+    ...['Beta', 'Gamma', 'Delta', 'Epsilon', 'unknown'].map((project, i) => bucket('cursor', 'free-model-' + i, project, 500 + i, 0.001)),
+  ]);
+}
 const facts = buildAchievementFacts([], [], [], new Date(referenceTime));
 const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-10-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: {} }, overlay: null },
   history: { messages, observations, timingEvents: [], evidence, titles, codexParents: [], missingSources: [] },
@@ -349,6 +364,77 @@ async function exerciseCompactFilters(window, client, mode) {
   checks.push(mode + '-dashboard-navigation-without-platform-billing');
 }
 
+async function exerciseDashboardFixes(window, client, mode) {
+  const label = text => `document.querySelector('button[aria-label=' + ${JSON.stringify(JSON.stringify(text))} + ']')`;
+  const close = async () => { await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'close overlay'); };
+  const shot = async name => captureSettled(window, path.join(output, `${mode}-fix-${name}.png`));
+  await until(() => client.evaluate('Boolean(document.querySelector("button[aria-label=\\"查看 Cursor 模型明细\\"]"))'), mode + ' dashboard loaded');
+  await client.evaluate('window.__dashboardDocumentStart = performance.timeOrigin; window.dispatchEvent(new CustomEvent("tud:open-settings", {detail:{tab:"app"}})); true');
+  await until(() => client.evaluate('Boolean(document.querySelector("input[value=international]"))'), mode + ' token preferences');
+  if (mode === 'desktop') await until(() => client.evaluate('(()=>{const control=document.querySelector("#desktop-open-at-login");return Boolean(control)&&!control.matches(":disabled,[aria-disabled=true],[data-disabled]")&&!control.querySelector(":disabled")})()'), 'settled Desktop preferences');
+  await client.click('document.querySelector("input[value=international]").closest("label")');
+  await until(() => client.evaluate('document.querySelector("input[value=international]")?.checked && document.querySelector("main").innerText.includes("1M")'), mode + ' reactive number units');
+  assert.equal(await client.evaluate('performance.timeOrigin === window.__dashboardDocumentStart && Boolean(document.querySelector("[role=dialog]"))'), true, 'unit changes preserve the document and settings');
+  await shot('units-settings-retained');
+  await client.click('document.querySelector("input[value=localized]").closest("label")');
+  await close();
+  const cursor = label('查看 Cursor 模型明细');
+  await client.evaluate(`(${cursor}).focus(); true`);
+  await client.key('Enter');
+  await until(() => client.evaluate('document.querySelector("[role=dialog]")?.innerText.includes("tiny-reported-model")'), mode + ' keyboard model details');
+  assert.equal(await client.evaluate('document.querySelector("[role=dialog]").innerText.includes("<$0.01")'), true, 'subcent amounts survive the real Core to UI path');
+  assert.equal(await client.evaluate('document.querySelector("[role=dialog]").innerText.includes("$715.06")'), true);
+  await shot('models-subcent-keyboard');
+  const bounds = await client.evaluate('(()=>{const d=document.querySelector("[role=dialog]"),r=d.getBoundingClientRect(),p=d.parentElement.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,bottom:r.bottom,surfaceBottom:p.bottom,scrollable:d.scrollHeight>d.clientHeight}})()');
+  assert.ok(bounds.bottom <= bounds.surfaceBottom + 1, 'dialog content fits inside the visible surface');
+  assert.ok(bounds.scrollable, 'long model lists scroll inside the surface');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: bounds.x, y: bounds.y, deltaX: 0, deltaY: 1000 });
+  await until(() => client.evaluate('document.querySelector("[role=dialog]").scrollTop > 0'), mode + ' model list scroll');
+  await shot('models-scrolled');
+  await close();
+  await until(() => client.evaluate(`document.activeElement === (${cursor})`), mode + ' focus returns to the row');
+  await client.click(label('项目分布说明'));
+  await until(() => client.evaluate('document.querySelector("[role=dialog]")?.innerText.includes("按工作目录")'), mode + ' clickable project explanation');
+  await shot('project-help');
+  await close();
+  for (const title of ['Agent 分布指标', '模型分布指标']) {
+    await client.click(`[...document.querySelectorAll('[role=tablist][aria-label="${title}"] [role=tab]')].find(el=>el.textContent.trim()==='费用')`);
+  }
+  const agentCard = `(${label('隐藏 Cursor')}).closest('.card')`;
+  assert.equal(await client.evaluate(`(${agentCard}).querySelector('strong').textContent.startsWith('$715.')`), true, 'chart center retains cents');
+  await shot('currency');
+  await client.click(label('隐藏 Cursor'));
+  await until(() => client.evaluate('document.body.innerText.includes("显示项合计")'), mode + ' filtered denominator label');
+  await shot('visible-total');
+  await client.click('[...document.querySelectorAll("button")].find(el=>el.textContent.trim()==="恢复全部")');
+  assert.equal(await client.evaluate('document.body.innerText.includes("显示项合计")'), false);
+  if (mode === 'browser') {
+    await client.click(label('热力图来源：全部 Agent'));
+    await until(() => client.evaluate('document.querySelector("[role=dialog]")?.innerText.includes("仅影响热力图")'), 'heatmap scope');
+    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="取消全选")');
+    await shot('heatmap-none');
+    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="全部")');
+    await close();
+  }
+  for (const width of [1120, 375]) {
+    await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await client.evaluate('window.scrollTo(0,0); document.querySelector("[data-dashboard-scroll-container]")?.scrollTo(0,0); true');
+    await wait(200);
+    assert.equal(await client.evaluate('document.documentElement.scrollWidth<=innerWidth'), true, mode + ' no horizontal overflow');
+    const values = await client.evaluate('[...document.querySelectorAll("[aria-label^=\\"预估费用 $\\"], [aria-label^=\\"总 Token \\"], [aria-label^=\\"输入 Token \\"], [aria-label^=\\"输出 Token \\" ]")].filter(el=>el.getClientRects().length).map(el=>({text:el.textContent, fits:el.scrollWidth<=el.clientWidth+1}))');
+    assert.ok(values.length >= 4 && values.every(value => value.fits), mode + ' complete primary values: ' + JSON.stringify(values));
+    await shot('overview-' + width);
+    await client.click('document.querySelector("button[aria-label*=recognizable-ending]")');
+    await until(() => client.evaluate('document.querySelector("[role=dialog]")?.innerText.includes("recognizable-ending")'), mode + ' full long project');
+    assert.equal(await client.evaluate('(()=>{const heading=document.querySelector("[role=dialog] h2");return heading.scrollWidth<=heading.clientWidth+1})()'), true, 'full name wraps inside the panel');
+    await shot('project-details-' + width);
+    await close();
+  }
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
+  checks.push(mode + '-units-without-reload', mode + '-raw-subcent-and-chart-precision', mode + '-model-details-keyboard-focus', mode + '-project-help-and-long-name', mode + '-visible-denominator-restore', mode + '-complete-values-wide-narrow');
+}
+
 async function main() {
   await mkdir(output, { recursive: true });
   server = createServer(async (req, res) => {
@@ -361,14 +447,17 @@ async function main() {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } }); windows.push(browser);
-  await browser.loadURL(`http://127.0.0.1:${server.address().port}/sessions?page=4`);
+  await browser.loadURL(`http://127.0.0.1:${server.address().port}/${dashboardOnly ? 'dashboard' : 'sessions?page=4'}`);
   const browserClient = await connect(browser);
-  await exercise(browser, browserClient, 'browser');
-  await exerciseCompactFilters(browser, browserClient, 'browser'); browser.destroy();
+  if (dashboardOnly) await exerciseDashboardFixes(browser, browserClient, 'browser');
+  else { await exercise(browser, browserClient, 'browser'); await exerciseCompactFilters(browser, browserClient, 'browser'); }
+  browser.destroy();
   calls.length = 0;
   ipcMain.handle('locale:get', () => ({ preference: 'zh-CN', resolved: 'zh-CN', systemLocale: 'zh-CN' }));
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' }));
   ipcMain.handle('auto-update:get-state', () => ({ status: 'unsupported', currentVersion: 'fixture' }));
+  ipcMain.handle('autostart:get', () => false);
+  ipcMain.handle('autostart:get-hidden', () => false);
   ipcMain.handle('dashboard-range:get', () => 'last-7-days');
   ipcMain.handle('dashboard-range:set', (_event, value) => value);
   ipcMain.handle('dsh-pet:navigation-get', () => null);
@@ -377,10 +466,10 @@ async function main() {
   ipcMain.handle('quota:get', () => ({ providers: [], preferences: DEFAULT_QUOTA_PREFERENCES, notice: null }));
   ipcMain.handle('share-backgrounds:request', (_event, request) => { assert.deepEqual(request, { operation: 'legacy' }); return []; });
   const window = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
-  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/sessions?page=4' });
+  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: dashboardOnly ? '/dashboard' : '/sessions?page=4' });
   const desktopClient = await connect(window);
-  await exercise(window, desktopClient, 'desktop');
-  await exerciseCompactFilters(window, desktopClient, 'desktop');
+  if (dashboardOnly) await exerciseDashboardFixes(window, desktopClient, 'desktop');
+  else { await exercise(window, desktopClient, 'desktop'); await exerciseCompactFilters(window, desktopClient, 'desktop'); }
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2));
   console.log(JSON.stringify({ ok: true, checks, output }));
 }

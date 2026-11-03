@@ -1,5 +1,5 @@
 import type { DashboardChartMetric } from '@/lib/dashboard-mock-data';
-import { formatTokens, formatUsd } from '@/lib/format';
+import { formatTokens, formatUsd } from './format.ts';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 
 export function formatDashboardMetric(
@@ -17,9 +17,7 @@ export function formatDashboardMetricCompact(
   value: number,
 ) {
   if (metric === 'tokens') return formatTokens(value);
-  if (metric === 'cost') {
-    return value >= 10 ? `$${value.toFixed(0)}` : `$${value.toFixed(1)}`;
-  }
+  if (metric === 'cost') return formatUsd(value);
 
   const minutes = Math.round(value);
   if (minutes < 60) return `${minutes}m`;

@@ -48,6 +48,7 @@ void i18n.init({
   keySeparator: false,
   interpolation: { escapeValue: false },
   returnNull: false,
+  react: { bindI18n: 'languageChanged displayPreferencesChanged' },
 });
 
 export function registerMessages(messages: Record<SupportedLocale, Record<string, string>>): void {
@@ -62,4 +63,9 @@ export function translate(locale: SupportedLocale, key: string, options?: Record
 
 export async function setActiveLocale(locale: SupportedLocale): Promise<void> {
   if (i18n.language !== locale) await i18n.changeLanguage(locale);
+}
+
+/** Refresh localized presentation without remounting views or changing language. */
+export function notifyDisplayPreferencesChanged(): void {
+  i18n.emit('displayPreferencesChanged');
 }

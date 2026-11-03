@@ -145,19 +145,19 @@ export function DashboardOverviewCard({
 
   return (
     <section aria-label={t('usage.page.overview')} className="w-full">
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {metrics.map((metric) => (
           <Card
             className={cn(
               'min-w-0 overflow-hidden rounded-2xl p-3',
               reserveCaption
-                ? 'h-[6.25rem] min-h-[6.25rem]'
-                : 'h-[5.5rem] min-h-[5.5rem]',
+                ? 'min-h-40 sm:h-[6.25rem] sm:min-h-[6.25rem]'
+                : 'min-h-36 sm:h-[5.5rem] sm:min-h-[5.5rem]',
             )}
             key={metric.id}
           >
-            <Card.Content className="grid h-full grid-rows-[1.25rem_1fr] content-start gap-3 p-0">
-              <div className="flex h-5 min-w-0 items-center justify-between gap-2">
+            <Card.Content className="grid h-full grid-rows-[auto_1fr] content-start gap-2 p-0 sm:grid-rows-[1.25rem_1fr] sm:gap-3">
+              <div className="flex min-h-5 min-w-0 flex-wrap items-center justify-between gap-1 sm:h-5 sm:flex-nowrap sm:gap-2">
                 {metric.id === 'cost' && showLocalMetrics ? (
                   <CostExplanationLabel
                     report={costReport}
@@ -188,7 +188,7 @@ export function DashboardOverviewCard({
                   ) : null}
                 </div>
               </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_64px] items-end gap-2">
+              <div className="grid grid-cols-1 items-end gap-1 sm:grid-cols-[minmax(0,1fr)_64px] sm:gap-2">
                 <div className="min-w-0">
                   {metric.id === 'cost' && showLocalMetrics && !costReport ? (
                     <div aria-label={t(costExplanationLoading ? 'usage.overview.costLoading' : 'usage.overview.costUnavailable')} className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-muted">
@@ -486,7 +486,7 @@ function NestedAnimatedValue({
   return (
     <div
       aria-label={`${label} ${exactFormat(value)}`}
-      className="min-w-0 truncate text-lg font-semibold leading-7 tracking-tight text-foreground tabular-nums"
+      className="min-w-0 break-words text-base font-semibold leading-7 tracking-tight text-foreground tabular-nums sm:text-lg"
       title={exactFormat(value)}
     >
       {format(animatedValue)}

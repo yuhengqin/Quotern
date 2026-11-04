@@ -11,7 +11,7 @@
   },
   "main": "./out/main/bootstrap.js",
   "scripts": {
-    "dev": "node scripts/prepare-dsh-pet.mjs && node scripts/run-electron-vite.mjs dev",
+    "dev": "node scripts/run-electron-vite.mjs dev",
     "build": "node scripts/prepare-dsh-pet.mjs && electron-vite build && node scripts/prepare-native-runtime.cjs",
     "start": "node scripts/run-electron-vite.mjs preview",
     "build:mac": "corepack pnpm build && node ../../scripts/release-macos.mjs --mode adhoc",

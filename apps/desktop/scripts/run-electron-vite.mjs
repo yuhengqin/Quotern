@@ -28,6 +28,13 @@ export function runWithUtf8Output(command, args) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // The helper is generated separately from Vite's main/preload bundles. Always
+  // refresh it on both development and preview startup, even when out exists.
+  const mode = process.argv[2] ?? 'dev';
+  if (['dev', 'preview', 'build'].includes(mode)) {
+    const { prepareDshPet } = await import('./prepare-dsh-pet.mjs');
+    await prepareDshPet();
+  }
   const require = createRequire(import.meta.url);
   const cli = join(dirname(require.resolve('electron-vite/package.json')), 'bin/electron-vite.js');
   if (process.platform === 'win32') {

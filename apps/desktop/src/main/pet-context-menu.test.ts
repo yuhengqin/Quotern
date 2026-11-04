@@ -25,10 +25,10 @@ test('dsh extras retain playable leaves and translate fixed groups without chang
   assert.equal(actions.submenu?.[0]?.submenu?.[0]?.label, '悠闲哼歌');
   assert.deepEqual(actions.submenu?.[0]?.submenu?.[0]?.local, { anim: '悠闲哼歌' });
   assert.equal(findPetMenuItem(menu.items, 'balance')?.label, 'View quota and balance');
-  assert.deepEqual(findPetMenuItem(menu.items, 'home')?.local, { action: 'home' });
   for (const locale of ['zh-CN', 'en', 'ja', 'ko'] as const) {
     const translated = model('dsh', locale);
-    for (const id of ['open', 'sync', 'sizes', 'characters', 'balance', 'actions', 'more', 'settings', 'hide']) assert.ok(findPetMenuItem(translated.items, id)?.label);
+    for (const id of ['open', 'sync', 'sizes', 'characters', 'balance', 'actions', 'settings', 'hide']) assert.ok(findPetMenuItem(translated.items, id)?.label);
+    for (const id of ['home', 'reload', 'more']) assert.equal(findPetMenuItem(translated.items, id), undefined);
   }
 });
 

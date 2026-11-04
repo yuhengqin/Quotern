@@ -129,7 +129,7 @@ async function main() {
       assert.equal(await ev('window.__dshPetDebug.menuOpen'),false);
       const video=await ev(`document.querySelector('.pet-video.is-front')?.src??''`);assert.ok(decodeURIComponent(video).includes(name),`${name} was not played: ${video}`);
     });
-    await check('menu-has-no-retired-items',async()=>{await openMenu();assert.equal((await menuTree()).some((i:any)=>['对话','碎碎念','显示位置'].includes(i.label)),false);await clean();});
+    await check('menu-has-no-retired-items',async()=>{await openMenu();const items=await menuTree();assert.equal(items.some((i:any)=>['对话','碎碎念','显示位置'].includes(i.label)),false);for(const id of ['home','reload','more'])assert.equal(items.some((i:any)=>i.id===id),false);await clean();});
     await check('manual-quota-without-account-explains-unavailable',async()=>{await openMenu();await clickMenu('balance');await wait(500);assert.ok(await ev(`document.querySelector('.pet-bubble.is-on')?.textContent`));});
     await check('open-quotern-reaches-host',async()=>{await openMenu();const before=openedHost;await clickMenu('open');await wait(150);assert.equal(openedHost,before+1);});
     await check('sync-and-pet-settings-menu-reach-host',async()=>{const beforeSync=synced,beforeSettings=settingsOpened;await openMenu();await clickMenu('sync');await wait(250);assert.equal(synced,beforeSync+1);await openMenu();await clickMenu('settings');await wait(150);assert.equal(settingsOpened,beforeSettings+1);});
@@ -139,9 +139,9 @@ async function main() {
       for(let i=1;i<=4;i++){await page.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:start.x+12*i,y:start.y+8*i,buttons:1});await wait(80);}
       await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:start.x+48,y:start.y+32,button:'left',buttons:0,clickCount:1});await wait(180);
       assert.ok(await ev('window.__dshPetDebug.lastDragRelease || window.__dshPetDebug.lastDragRaw'));
-      await openMenu();await clickMenu('home');await wait(150);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);
+      await ev('sprites[0].goHome();true');await wait(150);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);
     });
-    await check('menu-reload-replaces-helper',async()=>{await openMenu();const previous=child?.pid;await clickMenu('reload');for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);await connect();assert.equal(controller.getState().status,'running');});
+    await check('controller-retry-replaces-helper',async()=>{const previous=child?.pid;await controller.dispatch({type:'retry'});assert.notEqual(child?.pid,previous);await connect();assert.equal(controller.getState().status,'running');});
     await check('dock-position-restores-on-helper-restart',restoreCheck);
     await check('hide-menu-stops-helper-and-resumes-same-pet',async()=>{await openMenu();const id=controller.config.petId();await clickMenu('hide');for(let i=0;i<100&&controller.isEnabled();i++)await wait(50);assert.equal(controller.isEnabled(),false);await controller.dispatch({type:'set-enabled',enabled:true});await connect();assert.equal(controller.config.petId(),id);});
     if(!controller.getState().enabled){await controller.dispatch({type:'set-enabled',enabled:true});await connect();}

@@ -37,10 +37,6 @@ export function buildPetContextMenu(state: MenuState): PetContextMenu {
       { id: 'separator-extra', type: 'separator' as const },
       { id: 'balance', label: t('native.pet.balance'), local: { action: 'show-balance' } },
       { id: 'actions', label: t('native.pet.actions'), enabled: false, submenu: [] },
-      { id: 'more', label: t('native.pet.more'), submenu: [
-        { id: 'home', label: t('native.pet.home'), local: { action: 'home' } },
-        { id: 'reload', label: t('native.pet.reload'), local: { action: 'reload' } },
-      ] },
     ] : []),
     { id: 'separator-end', type: 'separator' },
     { id: 'settings', label: t('native.pet.settings'), command: { action: 'settings', target } },

@@ -121,7 +121,7 @@ try {
     assert.equal(items.some(i => i.label === '显示位置'), false);
     assert.equal(items.find(i => i.id === 'balance').label, '查看额度与余额');
     assert.ok(items.find(i => i.id === 'actions').children.length);
-    assert.deepEqual(items.find(i => i.id === 'more').children.map(i => i.id), ['home', 'reload']);
+    for (const id of ['home', 'reload', 'more']) assert.equal(items.some(i => i.id === id), false);
     await writeFile(path.join(output, 'dsh-menu.json'), JSON.stringify(items, null, 2)); await close(fishInspector);
   });
   await check('dsh-settings-overrides-another-preview', async () => {
@@ -146,8 +146,8 @@ try {
     await fish.evaluate('window.dispatchEvent(new Event("mouseleave"));window.dispatchEvent(new Event("blur"));true');
     assert.equal(await fishInspector.evaluate('__menuAudit.open'), true);
     assert.equal(await fish.evaluate('window.__dshPetDebug.menuOpen && window.__dshPetDebug.inputBusy'), true);
-    await choose(fishInspector, 'home');
-    await until(() => fish.evaluate('!window.__dshPetDebug.inputBusy'), 'native home after renderer leave');
+    await close(fishInspector);
+    await until(() => fish.evaluate('!window.__dshPetDebug.inputBusy'), 'native menu cancellation after renderer leave');
   });
   for (const [size, width] of [['small', 160], ['medium', 204], ['large', 264]]) await check(`dsh-native-size:${size}`, async () => {
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")'); await choose(fishInspector, `size:${size}`);

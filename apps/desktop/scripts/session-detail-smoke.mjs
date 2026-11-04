@@ -14,6 +14,8 @@ const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workspace = path.resolve(desktop, '../..');
 const output = path.resolve(process.argv[2] ?? path.join(workspace, `.quotern-dev/session-detail-ui-${Date.now()}-${process.pid}`));
 assert.ok(!existsSync(output), 'Provide a fresh dedicated output directory');
+// Keep the host locale different from the initial Chinese fixture on every runner.
+app.commandLine.appendSwitch('lang', 'en-US');
 app.setPath('userData', path.join(output, 'profile'));
 app.on('window-all-closed', () => {});
 await mkdir(path.join(output, 'profile'), { recursive: true });
@@ -488,12 +490,16 @@ async function main() {
   assert.equal(await devPrice.evaluate('typeof window.tud.api.request'), 'function');
   assert.equal(devWindow.webContents.getURL(), devOriginalUrl);
   assert.equal(await devClient.evaluate(`Boolean(${dialog})`), true);
+  // The browser reads origin storage; Desktop's IPC locale does not initialize it.
+  await devClient.evaluate('localStorage.setItem("quotern.locale.preference", "zh-CN"); true');
   devReference.destroy(); devWindow.destroy();
   checks.push('desktop-http-renderer-reference-keeps-preload-and-original-detail');
   const browserWindow = new BrowserWindow({ width: 1080, height: 900, show: true, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } }); windows.push(browserWindow);
   await browserWindow.loadURL(`${origin}/sessions`);
   const selectedBrowser = await connect(browserWindow);
   await until(() => selectedBrowser.evaluate(`Boolean(document.querySelector('button[aria-haspopup="dialog"]'))`), 'regular session list');
+  assert.match(await selectedBrowser.evaluate('navigator.language'), /^en\b/i, 'browser fixture simulates the CI host language');
+  assert.equal(await selectedBrowser.evaluate('document.documentElement.lang'), 'zh-CN', 'browser fixture language is independent of the host language');
   await selectedBrowser.click(`[...document.querySelectorAll('[data-session-trigger]')].find(el=>el.textContent.includes(${JSON.stringify(title)}))`);
   await until(() => selectedBrowser.evaluate(`Boolean(${dialog})`), 'regular selected period detail');
   await selectedBrowser.click(help('所选期间用量说明'));

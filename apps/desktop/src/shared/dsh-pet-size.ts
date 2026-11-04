@@ -1,8 +1,8 @@
 import type { PetSize } from '../main/pet-core.js';
 
-// Match Clawd's painted height (84/108/140 * .84). The video character
-// occupies 285/640 of its canvas width; transparent video margins are excluded.
-export const DSH_PET_WIDTHS = { small: 160, medium: 204, large: 264 } as const;
+// Presets use the full video canvas width; the visible character's height
+// is approximately 285/640 of that width, excluding transparent margins.
+export const DSH_PET_WIDTHS = { small: 204, medium: 264, large: 364 } as const;
 
 export function dshPetSize(width: unknown): PetSize {
   if (typeof width !== 'number' || !Number.isFinite(width)) return 'medium';

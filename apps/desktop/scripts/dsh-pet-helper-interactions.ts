@@ -62,7 +62,7 @@ async function main() {
     if(process.env.QUOTERN_FISH_RESTORE_ONLY==='1'){await check('dock-position-restores-on-helper-restart',restoreCheck);if(results.some(r=>!r.ok))throw Error('restore acceptance failed');return;}
     await check('new-menu-actions-before-other-interactions',async()=>{await openMenu();await clickMenu('sync');await wait(300);assert.equal(synced,1);await openMenu();await clickMenu('settings');await wait(200);assert.equal(settingsOpened,1);});
     await check('single-real-helper-page',async()=>{assert.equal((await pages()).length,1);assert.equal(await ev('window.__dshPetDebug.spriteCount'),1);});
-    for (const width of [160,204,264]) await check(`rendered-size:${width}`,async()=>{
+    for (const width of [204,264,364]) await check(`rendered-size:${width}`,async()=>{
       await controller.dispatch({type:'patch-pet',petId:'main',patch:{size:width}});await connect();await wait(300);
       const rect=await ev(`(()=>{const r=document.querySelector('.pet-hit').getBoundingClientRect();return{width:r.width,height:r.height}})()`);
       assert.ok(Math.abs(rect.height-width*285/640)<2,JSON.stringify(rect));

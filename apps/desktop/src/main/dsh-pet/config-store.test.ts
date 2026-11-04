@@ -7,13 +7,13 @@ import { DshPetConfigStore } from './config-store.js';
 
 const runtime = path.resolve('out/dsh-pet');
 
-test('runtime sizes use three Clawd-scale presets without rewriting legacy files', async () => {
+test('runtime sizes use three presets without rewriting legacy files', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-size-'));
   try {
     const store = new DshPetConfigStore(root, runtime);
     const base = store.readAll().main!;
     const pet = (base.pets as object[])[0]!;
-    for (const [width, expected] of [[160, 160], [204, 204], [264, 264], [462, 264], [190, 204]]) {
+    for (const [width, expected] of [[160, 204], [204, 204], [264, 264], [364, 364], [462, 364], [190, 204]]) {
       const raw = JSON.stringify({ pets: [{ ...pet, size: width }] });
       await writeFile(store.paths.userFile, raw);
       assert.equal(store.vendor.flattenPetList(store.read())[0]!.size, expected);

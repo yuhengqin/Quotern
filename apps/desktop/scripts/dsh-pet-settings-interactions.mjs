@@ -91,7 +91,7 @@ try {
   await check('size-presets', async () => {
     const buttons = sizeButtons();
     assert.equal(await ev(`${buttons}.length`), 3, 'three size presets');
-    for (const [index, width] of [160,204,264].entries()) {
+    for (const [index, width] of [204,264,364].entries()) {
       const button = `(${buttons})[${index}]`;
       await click(button);
       assert.equal((await state()).config.main.pets[0].size, width);
@@ -176,10 +176,10 @@ try {
   const jsonc=`(${section}).querySelector('textarea[name="jsonc"]')`;
   await check('invalid-jsonc-preserves-draft-and-config', async () => { const before=JSON.stringify((await state()).config); await page.fill(jsonc,'{"pets":'); await click(button('saveConfig')); assert.ok(await ev(`!!(${section}).querySelector('[role="alert"]')`)); assert.equal(await ev(`(${jsonc}).value`),'{"pets":'); assert.equal(JSON.stringify((await state()).config),before); });
   await check('advanced-save-updates-edited-inputs', async () => {
-    const main=(await state()).config.main; main.pets[0].name='高级配置宠物'; main.pets[0].size=204; main.font.size=37;
+    const main=(await state()).config.main; main.pets[0].name='高级配置宠物'; main.pets[0].size=264; main.font.size=37;
     await page.fill(jsonc,'// UI acceptance\n'+JSON.stringify(main,null,2)); await click(button('saveConfig'));
     assert.equal((await state()).config.main.pets[0].name,'高级配置宠物');
-    assert.equal(await ev(`(${field('name')}).value`),'高级配置宠物'); assert.equal((await state()).config.main.pets[0].size,204); assert.equal(await ev(`(${sizeButtons()})[1].getAttribute('aria-pressed')`),'true'); assert.equal(await ev(`(${field('fontSize')}).value`),'37');
+    assert.equal(await ev(`(${field('name')}).value`),'高级配置宠物'); assert.equal((await state()).config.main.pets[0].size,264); assert.equal(await ev(`(${sizeButtons()})[1].getAttribute('aria-pressed')`),'true'); assert.equal(await ev(`(${field('fontSize')}).value`),'37');
   });
   await check('advanced-config-cannot-start-another-companion', async () => {
     const main=(await state()).config.main; main.pets.push({...main.pets[0],id:'legacy-extra'});

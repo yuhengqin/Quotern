@@ -39,7 +39,7 @@ try {
   const text = await ev(`(${section}).innerText`);
   assert.doesNotMatch(text, /初始角落|水平偏移|垂直偏移|仅运行一只桌宠|模型 API|自动碎碎念|清除聊天记忆/);
   checks.push('removed settings and model UI absent');
-  for (const [label, width] of [['小', 160], ['中', 204], ['大', 264]]) {
+  for (const [label, width] of [['小', 204], ['中', 264], ['大', 364]]) {
     const button = `[...(${section}).querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(label)})`;
     await page.click(button);
     await until(async () => { const [, pet] = await state(); return pet.config.main.pets[0].size === width && pet.status === 'running'; }, `size ${label}`);

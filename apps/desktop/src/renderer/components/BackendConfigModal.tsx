@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import type { PetSettingsRequest } from '../../shared/settings-navigation';
 import {
   getDefaultSettingsTab,
   OPEN_SETTINGS_EVENT,
@@ -43,6 +44,7 @@ export function BackendConfigModal({
   const { t } = useTranslation();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>(getDefaultSettingsTab);
+  const [petRequest, setPetRequest] = useState<PetSettingsRequest>();
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
   const activeTab = controlledTab ?? uncontrolledTab;
@@ -68,6 +70,7 @@ export function BackendConfigModal({
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<OpenSettingsDetail>).detail;
       if (detail?.tab) setTab(detail.tab);
+      setPetRequest(detail?.pet);
       setOpen(true);
     };
     window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
@@ -110,6 +113,7 @@ export function BackendConfigModal({
               <SettingsPanel
                 activeTab={activeTab}
                 onTabChange={setTab}
+                petRequest={petRequest}
               />
             </Modal.Body>
           </Modal.Dialog>

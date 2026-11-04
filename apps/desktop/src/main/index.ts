@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, ipcMain, nativeImage, nativeTheme, powerMonitor } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, nativeTheme, powerMonitor } from 'electron';
+import { randomUUID } from 'node:crypto';
 import {
   initAutostartOnLaunch,
   loadShowTrayUsage,
@@ -51,6 +52,7 @@ import { registerTraeSubscriptionIpc } from './trae-subscription-ipc';
 import { registerWorkBuddySubscriptionIpc } from './workbuddy-subscription-ipc';
 import {
   localApiRequest,
+  isLocalRuntimeSyncing,
   onLocalRuntimeSynced,
   pokeSyncOnForeground,
   resumeLocalRuntimeWatchdog,
@@ -82,7 +84,10 @@ import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
 import { isLocalePreference, registerMessages, resolveLocale } from 'quotern-i18n';
 import { LOCALE_CHANGED_CHANNEL, LOCALE_GET_CHANNEL, LOCALE_SET_CHANNEL } from '../shared/locale';
 import { createLocaleController } from './locale-controller';
-import { NATIVE_MESSAGES } from './native-messages';
+import { NATIVE_MESSAGES, nativeText } from './native-messages';
+import { buildPetContextMenu, runPetMenuCommand, type PetMenuPorts } from './pet-context-menu';
+import type { OpenSettingsDetail } from '../shared/settings-navigation';
+import { DSH_PET_WIDTHS, dshPetSize } from '../shared/dsh-pet-size';
 import {
   resolveDataDir,
   evictRuntimeKind,
@@ -413,7 +418,7 @@ function flushPendingConfigResetNotice(): void {
   sendToMainWindowWhenReady(main, () => broadcastConfigResetNotice());
 }
 
-async function openSettings(detail?: { tab?: 'sync' | 'pet' | 'app' }): Promise<void> {
+async function openSettings(detail?: OpenSettingsDetail): Promise<void> {
   await showMainWindowAsync();
   const w = getMainWindow();
   if (!w) return;
@@ -542,17 +547,50 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         onChanged: broadcastSelection,
       });
       await activation.initialize().catch(error => console.error('[tud-desktop] failed to load current pet:', error));
-      petController = new PetController({
-        toggleMainWindow: () => {
-          const window = getMainWindow();
-          if (window?.isVisible() && !window.isMinimized()) window.close();
-          else showMainWindow();
+      const menuPorts: PetMenuPorts = {
+        getMenu: kind => {
+          const state = petController?.getState();
+          const fish = dshPet?.controller;
+          const instance = fish?.config.vendor.flattenPetList(fish.config.read())[0];
+          return buildPetContextMenu({ kind, locale: getNativeLocale(), theme: currentTheme, catalog: state?.catalog ?? [], character: state?.settings.character ?? 'clawd',
+            size: kind === 'dsh' ? dshPetSize(instance?.size) : state?.settings.size ?? 'medium', dshAvailable: Boolean(fish), syncing: isLocalRuntimeSyncing() });
         },
+        open: showMainWindowAsync,
+        sync: async () => {
+          const result = await localApiRequest('/functions/tud-trigger-sync', { method: 'POST', body: '{}' });
+          if (result.status !== 200) throw new Error('Sync unavailable');
+        },
+        size: async (kind, size) => {
+          if (kind === 'builtin') {
+            if (!petController) throw new Error('Desktop pet unavailable');
+            await petController.setSize(size);
+          } else {
+            if (!dshPet) throw new Error('Desktop pet unavailable');
+            const petId = dshPet.controller.config.petId();
+            if (!petId) throw new Error('Desktop pet unavailable');
+            await dshPet.controller.dispatch({ type: 'patch-pet', petId, patch: { size: DSH_PET_WIDTHS[size] } });
+          }
+        },
+        select: target => activation.select(target),
+        settings: target => openSettings({ tab: 'pet', pet: { target, requestId: randomUUID() } }),
+        hide: () => activation.setEnabled(false),
+      };
+      // A size/selection/hide action may stop the helper that delivered it.
+      // Acknowledge its request and dismiss its native menu before changing lifecycle.
+      const menuCommand = (kind: 'builtin' | 'dsh', id: string) => {
+        setTimeout(() => { void runPetMenuCommand(id, kind, menuPorts).catch(error => {
+          console.error('[tud-desktop] pet menu action failed:', error);
+          dialog.showErrorBox(nativeText(getNativeLocale(), 'native.pet.title'), nativeText(getNativeLocale(), 'native.pet.operationFailed'));
+        }); }, 30);
+      };
+      petController = new PetController({
+        toggleMainWindow: showMainWindow,
         isMainWindowVisible: () => {
           const window = getMainWindow();
           return Boolean(window?.isVisible() && !window.isMinimized());
         },
-        openSettings: () => void openSettings({ tab: 'pet' }),
+        openSettings: () => void menuPorts.settings({ kind: 'builtin', character: petController?.getState().settings.character ?? 'clawd' }),
+        getContextMenu: () => menuPorts.getMenu('builtin'), onMenuCommand: id => menuCommand('builtin', id),
         getDark: () => currentTheme === 'dark',
         getLocale: getNativeLocale,
         getQuotaState: getQuotaRuntimeState,
@@ -573,7 +611,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow,
           getCompanion: () => buildDshPetCompanion(petController?.getState(), getQuotaRuntimeState()),
           sync: async () => { const result = await localApiRequest('/functions/tud-trigger-sync', { method: 'POST', body: '{}' }); if (result.status !== 200) throw new Error('Sync unavailable'); },
-          openSettings: () => void openSettings({ tab: 'pet' }),
+          openSettings: () => void menuPorts.settings({ kind: 'dsh' }),
+          getContextMenu: () => menuPorts.getMenu('dsh'), onMenuCommand: id => menuCommand('dsh', id),
           coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation), onStateChanged: broadcastSelection });
         await dshPet.controller.initialize();
       }

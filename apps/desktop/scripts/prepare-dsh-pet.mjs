@@ -6,6 +6,7 @@ import path from 'node:path';
 import { withoutPetChat } from './patch-dsh-pet-features.mjs';
 import { patchDshPetPointer } from './patch-dsh-pet-pointer.mjs';
 import { patchDshPetMotion } from './patch-dsh-pet-motion.mjs';
+import { patchDshPetMenu } from './patch-dsh-pet-menu.mjs';
 
 const desktopRoot = fileURLToPath(new URL('../', import.meta.url));
 const hostModules = ['config', 'state', 'work-status', 'notify-events', 'anim', 'broadcast'];
@@ -49,10 +50,12 @@ export async function prepareDshPet({ vendorRoot = path.join(desktopRoot, 'vendo
   const bridgeStart = helper.indexOf('let bridgeSeq = 0;'), bridgeEnd = helper.indexOf('app.whenReady().then(() => {', bridgeStart);
   if (bridgeStart < 0 || bridgeEnd < bridgeStart) throw new Error('unsupported upstream bridge');
   helper = helper.slice(0, bridgeStart) + `const { connectHost, fileResponse } = require('./quotern-adapter.cjs');
+const { installPetContextMenus } = require('./quotern-adapter.cjs');
 let hostBridge;
 async function startBridgeCallback() {
   hostBridge = connectHost(process.env.DSH_PET_PIPE, process.env.DSH_PET_TOKEN, exitForDeadHost);
   await hostBridge.ready;
+  installPetContextMenus(electronApi, windows, hostBridge);
   app.once('will-quit', () => hostBridge.close());
 }
 async function handleBridgeRequest(request) {
@@ -81,17 +84,17 @@ async function handleBridgeRequest(request) {
   helper = helper.slice(0, openStart) + "  ipcMain.on('pet:open-host', () => { void hostBridge.request('POST', '/dsh-pet-7340/open-host').catch(() => {}); });\n\n" + helper.slice(openEnd);
   const preloadFile = path.join(output, 'runtime/preload.js');
   let preload = await readFile(preloadFile, 'utf8');
+  preload = replaceRequired(preload, "contextBridge.exposeInMainWorld('petBridge', {", `contextBridge.exposeInMainWorld('petBridge', {
+  showContextMenu(tree) { return ipcRenderer.invoke('pet:context-menu', tree); },
+  closeContextMenu() { ipcRenderer.send('pet:context-menu-close'); },`);
   preload = replaceRequired(preload, 'openDshSite(url)', 'openHost()');
   preload = replaceRequired(preload, "ipcRenderer.send('pet:open-site', { url });", "ipcRenderer.send('pet:open-host');");
   const spriteFile = path.join(output, 'runtime/sprite.js');
   let sprite = await readFile(spriteFile, 'utf8');
-  sprite = replaceRequired(sprite, "OPEN_TARGET === 'desktop' ? '打开 DeepSeek Harness' : '打开网站'", "'打开 Quotern'");
   sprite = replaceRequired(sprite, 'window.petBridge.openDshSite(ORIGIN)', 'window.petBridge.openHost()');
   sprite = patchDshPetMotion(sprite);
   sprite = withoutPetChat(sprite);
-  sprite = replaceRequired(sprite, "    tools.push({ label: '查看余额', action: 'show-balance' });", `    tools.push({ label: this.companionData?.labels?.sync || '立即同步', action: 'quotern-sync' });
-    tools.push({ label: this.companionData?.labels?.settings || '宠物设置', action: 'quotern-settings' });
-    tools.push({ label: '查看余额', action: 'show-balance' });`);
+  sprite = patchDshPetMenu(sprite);
   ({ helper, preload, sprite } = patchDshPetPointer({ helper, preload, sprite }));
   helper = replaceRequired(helper, 'let hostBridge;', `let hostBridge;
 require('./position-store.cjs').installPositionStore({ app, ipcMain, getWindow: id => windows.get(id) });`);

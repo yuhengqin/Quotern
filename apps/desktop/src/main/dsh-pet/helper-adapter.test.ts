@@ -4,7 +4,24 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { DshPetRpcServer } from './rpc.js';
-import { connectHost, createPointerSampler, fileResponse } from './helper-adapter.js';
+import { connectHost, createPointerSampler, fileResponse, installPetContextMenus } from './helper-adapter.js';
+import { EventEmitter } from 'node:events';
+import { buildPetContextMenu } from '../pet-context-menu.js';
+
+test('cancelling an in-flight native menu request never opens a late popup', async () => {
+  const handlers = new Map<string, (...args: any[]) => any>(), listeners = new Map<string, (...args: any[]) => any>();
+  const frame = {}, sender = { mainFrame: frame }, event = { sender, senderFrame: frame };
+  const win = Object.assign(new EventEmitter(), { isDestroyed: () => false });
+  let finish!: (response: { status: number; body: string }) => void, popups = 0;
+  const electron = { ipcMain: { handle: (name: string, handler: (...args: any[]) => any) => handlers.set(name, handler), on: (name: string, handler: (...args: any[]) => any) => listeners.set(name, handler) },
+    BrowserWindow: { fromWebContents: () => win }, Menu: { buildFromTemplate: () => ({ popup: (options: { callback(): void }) => { popups++; options.callback(); }, closePopup() {} }) } };
+  installPetContextMenus(electron as never, new Map([['main', win]]) as never, { request: () => new Promise(resolve => { finish = resolve; }) });
+  const pending = handlers.get('pet:context-menu')!(event, []);
+  listeners.get('pet:context-menu-close')!(event);
+  finish({ status: 200, body: JSON.stringify(buildPetContextMenu({ kind: 'dsh', locale: 'en', character: 'clawd', catalog: [], size: 'medium', syncing: false, dshAvailable: true })) });
+  assert.equal(await pending, null);
+  assert.equal(popups, 0);
+});
 test('cursor sampling preserves hover and exit without forwarding desktop mouse traffic', () => {
   const sample = createPointerSampler(), bounds = { x: 100, y: 200 };
   assert.equal(sample(bounds, { x: 0, y: 0 }, false, false), null);

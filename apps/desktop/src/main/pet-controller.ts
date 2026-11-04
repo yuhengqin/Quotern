@@ -10,6 +10,7 @@ import { isLocalRuntimeSyncing, localApiRequest, onLocalRuntimeSyncActivity, onL
 import { PetCatalog } from './pet-catalog';
 import { petCatalogFailure, petCatalogMessageKey } from './pet-catalog-errors';
 import { createPetCursorSampler } from './pet-pointer';
+import { buildPetContextMenu, runPetMenuCommand, toNativePetMenuTemplate, type PetContextMenu } from './pet-context-menu';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
 import { NATIVE_MESSAGES, nativeText, type NativeMessageKey } from './native-messages';
@@ -102,6 +103,8 @@ export class PetController {
     getQuotaState?: () => QuotaState | null;
     coordinateVisibility?: <T>(visible: boolean, operation: () => Promise<T>) => Promise<T>;
     getCurrentKind?: () => PetState['currentKind'];
+    getContextMenu?: () => PetContextMenu;
+    onMenuCommand?: (id: string) => void;
   }) {}
 
   private t(key: NativeMessageKey): string {
@@ -385,23 +388,16 @@ export class PetController {
   private showContextMenu(): void {
     const w = this.window;
     if (!w || w.isDestroyed()) return;
-    const size = this.settings.size;
-    const menu = Menu.buildFromTemplate([
-      { label: this.t(this.options.isMainWindowVisible() ? 'native.pet.closeMain' : 'native.pet.openMain'), click: this.options.toggleMainWindow },
-      { label: this.t('native.tray.sync'), click: () => void this.triggerSync() },
-      { type: 'separator' },
-      { label: this.t('native.pet.size'), submenu: (['small', 'medium', 'large'] as const).map((value) => ({
-        label: this.t(`native.pet.${value}`), type: 'radio' as const, checked: size === value,
-        click: () => this.setSettingsFromMenu({ size: value }),
-      })) },
-      { label: this.t('native.pet.character'), submenu: this.state.catalog.map(pet => ({
-        label: pet.displayName, type: 'radio' as const, checked: this.settings.character === pet.id,
-        click: () => this.setSettingsFromMenu({ character: pet.id }),
-      })) },
-      { type: 'separator' },
-      { label: this.t('native.pet.settings'), click: this.options.openSettings },
-      { label: this.t('native.pet.hide'), click: () => this.setSettingsFromMenu({ visible: false }) },
-    ]);
+    const getMenu = () => this.options.getContextMenu?.() ?? buildPetContextMenu({ kind: 'builtin', locale: this.options.getLocale(), character: this.settings.character, size: this.settings.size, catalog: this.state.catalog, syncing: this.state.syncing, dshAvailable: false });
+    const menu = Menu.buildFromTemplate(toNativePetMenuTemplate(getMenu().items, item => {
+      if (this.options.onMenuCommand) { this.options.onMenuCommand(item.id); return; }
+      void runPetMenuCommand(item.id, 'builtin', {
+        getMenu, open: async () => this.options.toggleMainWindow(), sync: () => this.triggerSync(),
+        size: async (_kind, size) => { await this.setSettings({ size }); },
+        select: async target => { if (target.kind === 'builtin') await this.setSettings({ character: target.character }); },
+        settings: async () => this.options.openSettings(), hide: async () => { await this.setSettings({ visible: false }); },
+      }).catch(() => dialog.showErrorBox(this.t('native.pet.title'), this.t('native.pet.operationFailed')));
+    }));
     menu.popup({ window: w });
   }
 
@@ -667,6 +663,8 @@ export class PetController {
   activate(): Promise<PetState> { return this.applySettings({ visible: true }); }
 
   selectCharacter(character: string): Promise<PetState> { return this.applySettings({ character }); }
+
+  setSize(size: PetSettings['size']): Promise<PetState> { return this.setSettings({ size }); }
 
   async hide(): Promise<void> { if (this.settings.visible) await this.applySettings({ visible: false }); }
 

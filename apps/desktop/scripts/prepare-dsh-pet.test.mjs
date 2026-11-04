@@ -8,6 +8,29 @@ import vm from 'node:vm';
 
 const vendorRoot = new URL('../vendor/dsh-pet/', import.meta.url);
 
+test('generated blur and leave handlers preserve native menus and still release an ordinary drag', async () => {
+  const { prepareDshPet } = await import('./prepare-dsh-pet.mjs');
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-native-menu-events-'));
+  try {
+    await prepareDshPet({ outputRoot: root });
+    const sprite = await readFile(path.join(root, 'runtime/sprite.js'), 'utf8');
+    const handlers = new Map(); let closes = 0, releases = 0; const ignored = [];
+    const pet = { menuOpen: true, dragState: { active: false }, closeMenu() { closes++; }, onPointerUp() { releases++; this.dragState.active = false; }, inputBusy() { return this.menuOpen || this.dragState.active; }, setInteractive(value) { ignored.push(value); } };
+    for (const event of ['blur', 'mouseleave']) {
+      const start = sprite.indexOf(`window.addEventListener(\n      '${event}',`);
+      assert.ok(start >= 0);
+      const end = sprite.indexOf('\n    );', start) + '\n    );'.length;
+      new Function('window', 'ac', sprite.slice(start, end)).call(pet, { addEventListener: (name, handler) => handlers.set(name, handler) }, new AbortController());
+    }
+    handlers.get('blur')(); handlers.get('mouseleave')();
+    assert.equal(closes, 0, 'crossing from the renderer into a native submenu must not cancel it');
+    assert.deepEqual(ignored, [], 'the popup owns input while it is open');
+    pet.menuOpen = false; pet.dragState.active = true; handlers.get('blur')();
+    assert.equal(releases, 1, 'a lost mouse release still ends an ordinary drag');
+    assert.deepEqual(ignored, [false]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('generated desktop wandering respects the current screen and the facing after a turn', async () => {
   const { prepareDshPet } = await import('./prepare-dsh-pet.mjs');
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-wandering-'));

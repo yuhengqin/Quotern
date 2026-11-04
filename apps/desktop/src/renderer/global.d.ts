@@ -136,9 +136,7 @@ declare global {
       };
       onDataSynced: (callback: () => void) => () => void;
       onOpenSettings: (
-        callback: (detail?: {
-          tab?: 'sync' | 'pet' | 'app';
-        }) => void,
+        callback: (detail?: import('../shared/settings-navigation').OpenSettingsDetail) => void,
       ) => () => void;
       onRuntimeNotice: (
         callback: (detail: { kind: 'config-reset'; tokenSalvaged: boolean }) => void,

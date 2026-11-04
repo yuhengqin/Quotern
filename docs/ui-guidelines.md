@@ -99,7 +99,11 @@
 
 宠物角色列表固定先展示大肥鱼，再展示 Clawd、Bot、Doro、咕嘎、鸡哥ikun、罗小黑、Monthly salary cat（月薪猫）、小八和导入角色。六个图集角色随应用打包，无需导入或联网；已有相同 ID 的导入记录只显示对应内置选项，保留原有选择及本地文件。不再内置 Sprout、Byte、Ember，也不提供恢复这三项内置角色的按钮。导入角色仍可预览、应用和移除。底部「导入宠物」为两套宠物详情共用，均提供标准 ZIP、Codex 和链接导入，不因预览大肥鱼而隐藏；大肥鱼详情不再重复展示上游署名与许可提示，项目 README 保留相关引用。导入与移除反馈跟随触发操作：ZIP 及本地 Codex 读取反馈在对应按钮下方，链接导入反馈在输入框下方并通过 `aria-describedby` 关联，Codex 选中项导入失败保留选择并在确认按钮下方提示，移除反馈在角色列表下方。展示主进程按语言处理后的具体失败原因，IPC 等异常回退通用提示；重试、改用其他操作或编辑链接时清除对应旧反馈。
 
-大肥鱼独立 helper 的交互与数据入口为 `apps/desktop/scripts/dsh-pet-interactions-runtime.js` 和 `apps/desktop/src/main/dsh-pet/companion.ts`；保留原视频播放器、右键动作菜单、身体命中及鼠标穿透。该经典 DOM 页面没有 React Provider，提示气泡和菜单沿用 helper 实现，不使用 FilterMenu。交互边界：悬停显示今日用量、参考 USD 费用和额度窗口，点击轮换回应动作与本机统计短句，右侧屏幕边缘收起并在悬停后展开（多屏接缝不收边），全画面倾斜遵守 reduced-motion；不增加独立眼神交互，也不使用 mini 素材。
+大肥鱼独立 helper 的交互与数据入口为 `apps/desktop/scripts/dsh-pet-interactions-runtime.js` 和 `apps/desktop/src/main/dsh-pet/companion.ts`；保留原视频播放器、身体命中及鼠标穿透。该经典 DOM 页面没有 React Provider，提示气泡沿用 helper 实现，不使用 FilterMenu。交互边界：悬停显示今日用量、参考 USD 费用和额度窗口，点击轮换回应动作与本机统计短句，右侧屏幕边缘收起并在悬停后展开（多屏接缝不收边），全画面倾斜遵守 reduced-motion；不增加独立眼神交互，也不使用 mini 素材。
+
+两套桌宠右键共用 `apps/desktop/src/main/pet-context-menu.ts` 的菜单模型和原生 Electron Menu：依次为「打开 Quotern、同步数据、大小、角色、宠物设置、隐藏宠物」，按任务分组；打开动作始终显示主窗口，不切换成含义不清的「关闭 Quotern」。角色菜单包含大肥鱼、内置与导入角色，当前项和大小使用单选标记，大小修改右键所在宠物系统。隐藏保留当前宠物选择与独立尺寸，统一启用入口恢复它。大肥鱼额外保留「查看额度与余额」「动作」「更多操作」；后者容纳回到初始位置与重新加载配置。固定入口及动作分类跟随应用四语言，用户角色名和素材动作原名保持原文。当前集成不提供网页宠物，右键不显示「仅网页／两者／都不」选项，历史 display 配置仍保留兼容。
+
+大肥鱼原生菜单由 `dsh-pet/helper-adapter.ts` 在拥有宠物窗口的 helper 进程弹出，经认证 RPC 读取最新菜单模型；普通宠物由 PetController 弹出。选择、取消和失败均清除菜单输入占用，恢复身体命中与穿透，保留原手动动画与移动接管。设置入口通过 `shared/settings-navigation.ts` 携带具体宠物和独立请求标识，既定位「宠物」页签，也选择被右键的编辑对象；重复请求仍生效，普通打开设置不重置预览草稿。跨端共享不适用：此菜单只在 Windows Desktop 提供，Dashboard 不增加副本。
 
 ### 业务内复用入口
 

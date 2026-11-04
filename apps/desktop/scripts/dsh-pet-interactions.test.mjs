@@ -26,7 +26,7 @@ async function fixture(run) {
     const context = vm.createContext({ console: { log() {}, warn() {}, error() {} }, Event, AbortController, URLSearchParams, Date, performance,
       setTimeout: later, clearTimeout: cancel, requestAnimationFrame: fn => later(() => fn(performance.now() + 250), 16), cancelAnimationFrame: cancel,
       window: { __dshPetDebug: {}, setTimeout: later, clearTimeout: cancel, addEventListener() {}, matchMedia: () => ({ matches: false }), localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, val) => storage.set(key, val), removeItem: key => storage.delete(key) } },
-      document: { createElement: () => new Element(), querySelectorAll: () => [] }, Element,
+      document: { body: new Element(), addEventListener() {}, removeEventListener() {}, createElement: () => new Element(), querySelectorAll: () => [] }, Element,
       fetch: async (url, options) => { requests.push(String(url)); return { ok: true, json: async () => String(url).endsWith('/state') ? context.snapshot : { ok: true } }; },
       sprites: [], STATE_URL: '/state', BASE: '/pet', VIEW: { x: 0, y: 0, w: 1000, h: 800 }, WORK_AREAS: [{ x: 0, y: 0, width: 1000, height: 800 }], AREAS: [{ x: 0, y: 0, width: 1000, height: 800 }],
       CONFIG: { scale: 1, topInsetRatio: 0 }, toLocal: n => n, toScreen: n => n,
@@ -52,6 +52,33 @@ async function fixture(run) {
     evaluate('pet.disposeCompanion?.()');
   } finally { await rm(root, { recursive: true, force: true }); }
 }
+
+test('native menu sends only animation content, routes host commands and clears capture on cancel', async () => fixture(async ({ evaluate, context, requests }) => {
+  let finish, closes = 0;
+  context.window.petBridge = { setInteractive() {}, showContextMenu: tree => { assert.equal(tree[0].label, '动作'); return new Promise(resolve => { finish = resolve; }); }, closeContextMenu: () => { closes++; } };
+  const opened = evaluate('pet.onContextMenu({preventDefault(){},clientX:200,clientY:300})');
+  assert.equal(evaluate('pet.menuOpen'), true);
+  assert.equal(typeof finish, 'function', 'right click must invoke the native menu bridge');
+  finish({ command: 'settings' }); await opened;
+  assert.equal(evaluate('pet.menuOpen'), false);
+  assert.ok(requests.includes('/pet/context-menu-action'));
+  const cancelled = evaluate('pet.onContextMenu({preventDefault(){},clientX:200,clientY:300})');
+  evaluate('pet.menuClose()'); finish(null); await cancelled;
+  assert.equal(evaluate('pet.menuOpen'), false);
+  assert.equal(context.window.__dshPetDebug.menuOpen, false);
+  assert.equal(closes, 1);
+}));
+
+test('native menu failure is visible and a selected animation preserves manual takeover', async () => fixture(async ({ evaluate, context }) => {
+  context.window.petBridge = { setInteractive() {}, showContextMenu: async () => { throw Error('unavailable'); } };
+  await evaluate('pet.onContextMenu({preventDefault(){}})');
+  assert.equal(evaluate('pet.menuOpen'), false);
+  assert.match(evaluate('pet.bubble.textContent'), /操作失败/);
+  context.window.petBridge.showContextMenu = async () => ({ local: { anim: 'one' } });
+  await evaluate('pet.onContextMenu({preventDefault(){}})');
+  assert.equal(evaluate('pet.anim'), 'one');
+  assert.equal(evaluate('pet.companionManual'), true);
+}));
 
 test('click cycles every configured response, shows fresh statistics and preserves flight scoring', async () => fixture(({ evaluate }) => {
   evaluate(`pet.onCompanionSnapshot?.({connected:true,syncing:false,hoverText:'Today 42',quips:['Today 42','Seven days 100']}); pet.onClick(); pet.onClick(); pet.onClick(); pet.onClick();`);

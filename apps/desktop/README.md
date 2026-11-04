@@ -88,6 +88,12 @@ Windows 主托盘仅保留一个「独立桌宠」复选项，控制唯一桌宠
 
 `scripts/prepare-dsh-pet.test.mjs` 在生成后的精灵与共享几何上验证锁屏、跨屏、屏幕空洞和转向方向。`scripts/dsh-pet-tray-smoke.ts` 可打包为 Electron 入口，传入 runtime、全新输出目录和 Desktop 应用路径，验证真实原生菜单回调停止/恢复唯一 helper；不启动正常采集或读取正式配置。
 
+### 桌宠统一右键菜单验收
+
+两套桌宠通过 `src/main/pet-context-menu.ts` 共用原生菜单模型、业务动作与四语言文案。helper 的原生菜单在自己的 Electron 进程弹出，生成适配位于 `scripts/patch-dsh-pet-menu.mjs`；不修改有完整性校验的 vendor 源码。设置跳转还携带具体宠物，普通设置打开仍保留预览选择。
+
+构建本 worktree 后，在仓库根运行 `corepack pnpm --filter quotern-desktop exec node scripts/pet-context-menu-smoke.mjs [全新输出目录]`，以私有配置、数据与 Electron profile 启动真实 Desktop 和 helper，验证两套菜单、互斥切换、尺寸保存、隐藏恢复、重复设置定位、动作播放与语言更新。输出 `result.json`、菜单树和设置截图，退出时只清理本次创建的进程。此驱动使用真实 MenuItem 回调验证业务动作；不能据此单独声称操作系统方向键或原生菜单截图通过。设置 `QUOTERN_PET_MENU_VISUAL=1` 时分别停在两套真实 popup，结合 Windows 输入与窗口捕获验收键盘、取消、边缘和视觉后，在输出目录创建对应的 `continue-builtin` / `continue-dsh` 文件继续。
+
 ## 与 CLI 的关系
 
 | | CLI (`quotern start`) | Desktop |

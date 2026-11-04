@@ -7,6 +7,7 @@
  *  - tud.onDataSynced → Core poll / sync watcher refresh
  */
 import { contextBridge, ipcRenderer } from 'electron';
+import { parseOpenSettingsDetail, type OpenSettingsDetail } from '../shared/settings-navigation';
 import { DSH_PET_GET, DSH_PET_ACTION, DSH_PET_CHANGED, DSH_PET_NAVIGATION, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK, type DshPetAction, type DshPetState, type SessionNavigation } from '../shared/dsh-pet';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import {
@@ -105,8 +106,6 @@ const TRAE_GLOBAL_SUBSCRIPTION_GET_CHANNEL = 'trae-global-subscription:get';
 const TRAE_CN_SUBSCRIPTION_GET_CHANNEL = 'trae-cn-subscription:get';
 const WORKBUDDY_GLOBAL_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-global-subscription:get';
 const WORKBUDDY_MAINLAND_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-mainland-subscription:get';
-
-type SettingsTabId = 'sync' | 'pet' | 'app';
 
 async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise<SavedShareBackground[]> {
   try {
@@ -392,25 +391,10 @@ const tudApi = {
    * Optional `tab` selects the settings panel section.
    */
   onOpenSettings: (
-    callback: (detail?: {
-      tab?: SettingsTabId;
-    }) => void,
+    callback: (detail?: OpenSettingsDetail) => void,
   ) => {
     const listener = (_event: unknown, detail: unknown) => {
-      if (!detail || typeof detail !== 'object') {
-        callback();
-        return;
-      }
-      const raw = detail as {
-        tab?: unknown;
-      };
-      const next: {
-        tab?: SettingsTabId;
-            } = {};
-      if (raw.tab === 'sync' || raw.tab === 'pet' || raw.tab === 'app') {
-        next.tab = raw.tab;
-      }
-      callback(next);
+      callback(parseOpenSettingsDetail(detail));
     };
     ipcRenderer.on(OPEN_SETTINGS_CHANNEL, listener);
     return () => ipcRenderer.removeListener(OPEN_SETTINGS_CHANNEL, listener);

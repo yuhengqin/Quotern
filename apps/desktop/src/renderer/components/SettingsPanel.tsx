@@ -29,6 +29,7 @@ import { AboutContent } from '@/components/AboutContent';
 import { AppToastProvider } from './AppToastProvider';
 import { StatusBanner } from '@/components/StatusBanner';
 import { PetSettingsCard } from '@/components/PetSettingsCard';
+import type { PetSettingsRequest } from '../../shared/settings-navigation';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
 import { useTranslation } from 'quotern-i18n/react';
 import { LanguagePreferenceControl } from '../../../../../packages/dashboard/src/components/LanguagePreferenceControl';
@@ -63,9 +64,11 @@ const SETTINGS_SCROLL_PANEL =
 export function SettingsPanel({
   activeTab,
   onTabChange,
+  petRequest,
 }: {
   activeTab?: DesktopSettingsTabId;
   onTabChange?: (tab: DesktopSettingsTabId) => void;
+  petRequest?: PetSettingsRequest;
 } = {}) {
   const [toastQueue] = useState(
     () => new ToastQueue({ maxVisibleToasts: 1 }),
@@ -102,7 +105,7 @@ export function SettingsPanel({
 
         {isWindows && (
           <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">
-            {tab === 'pet' && <PetSettingsCard />}
+            {tab === 'pet' && <PetSettingsCard request={petRequest} />}
           </Tabs.Panel>
         )}
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="subscription">

@@ -7,6 +7,7 @@ import { SettingsHelpPopover } from './SettingsHelpPopover';
 import type { PetCatalogEntry } from '../../main/pet-core';
 import type { PetActivationState, PetCatalogRequest, PetSelection, PetSettingPatch, PetState } from '../../shared/pet';
 import type { DshPetState } from '../../shared/dsh-pet';
+import type { PetSettingsRequest } from '../../shared/settings-navigation';
 import { DSH_PET_WIDTHS, dshPetSize } from '../../shared/dsh-pet-size';
 // These two renderers are shared with the standalone pet page copied from TokenTracker.
 // @ts-expect-error The upstream JSX module has no TypeScript declarations.
@@ -94,7 +95,7 @@ function PetCardSprite({ pet, color }: { pet: PetCatalogEntry; color: string }) 
   return <PetAtlasAnimated character={pet.id} pet={pet} state="idle-living" size={44} />;
 }
 
-export function PetSettingsCard() {
+export function PetSettingsCard({ request }: { request?: PetSettingsRequest } = {}) {
   const { t } = useTranslation();
   const [state, setState] = useState<PetState | null>(null);
   const [activation, setActivation] = useState<PetActivationState | null>(null);
@@ -110,6 +111,9 @@ export function PetSettingsCard() {
   const [previewTarget, setPreviewTarget] = useState<PetSelection | null>(null);
   const [dshState, setDshState] = useState<DshPetState | null>(null);
   const showDshSettings = previewTarget?.kind === 'dsh';
+  useEffect(() => {
+    if (request) setPreviewTarget(request.target);
+  }, [request]);
 
   useEffect(() => {
     let live = true;

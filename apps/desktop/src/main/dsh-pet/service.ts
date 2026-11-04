@@ -6,6 +6,7 @@ import type { MemeEntry, PetInstance } from './vendor.js';
 import { toDshPetBalance } from './balance.js';
 import { DshPetControls, motionCue, type PlaybackStatus } from './controls.js';
 import type { DshPetCompanion } from './companion.js';
+import { findPetMenuItem, type PetContextMenu } from '../pet-context-menu.js';
 
 interface Options {
   config: DshPetConfigStore; assets: DshPetAssetStore;
@@ -13,6 +14,7 @@ interface Options {
   reload(): Promise<void>; showMainWindow(): void; now?(): number; onChanged?(): void;
   notify?(title: string, body: string, target?: SessionNavigationTarget): void; isMainWindowVisible?(): boolean;
   getCompanion?(): DshPetCompanion; sync?(): Promise<void>; openSettings?(): void;
+  getContextMenu?(): PetContextMenu; onMenuCommand?(id: string): void;
 }
 const json = (body: unknown, status = 200): RpcResponse => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const failure = (reason: string, message?: string) => ({ ok: false, reason, ...(message ? { message } : {}) });
@@ -50,6 +52,14 @@ export class DshPetService {
     const method = request.method, route = rawRoute.split('?')[0]!;
     const cfg = this.options.config.read(), vendor = this.options.config.vendor;
     if (method === 'GET' && route === '/config') return json(cfg);
+    if (method === 'GET' && route === '/context-menu') return this.options.getContextMenu ? json(this.options.getContextMenu()) : json(failure('unavailable'), 503);
+    if (method === 'POST' && route === '/context-menu-action') {
+      const menu = this.options.getContextMenu?.();
+      const item = typeof body.id === 'string' && menu ? findPetMenuItem(menu.items, body.id) : undefined;
+      if (!item?.command || item.enabled === false || !this.options.onMenuCommand) return json(failure('bad-request'), 400);
+      this.options.onMenuCommand(item.id);
+      return json({ ok: true });
+    }
     if (method === 'GET' && route === '/state') { this.controls.sweep(); return json({ ...this.poll.read(), configVersion: this.options.config.version() }); }
     const playback = /^\/playback\/([a-zA-Z0-9-]+)(\/report)?$/.exec(route);
     if (playback) {

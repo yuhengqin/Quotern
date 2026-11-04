@@ -6,6 +6,25 @@ import path from 'node:path';
 import { DshPetService } from './service.js';
 import { DshPetConfigStore } from './config-store.js';
 import { DshPetAssetStore } from './asset-store.js';
+import { buildPetContextMenu } from '../pet-context-menu.js';
+
+test('native menu routes expose fresh host state and accept only enabled host commands', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-menu-service-'));
+  const config = new DshPetConfigStore(root, path.resolve('out/dsh-pet'));
+  const selected: string[] = [];
+  let syncing = false;
+  const service = new DshPetService({ config, assets: new DshPetAssetStore(root, path.resolve('out/dsh-pet')), getQuota: () => null, quotaSource: () => null, reload: async () => {}, showMainWindow() {},
+    getContextMenu: () => buildPetContextMenu({ kind: 'dsh', locale: 'en', catalog: [], character: 'clawd', size: 'small', syncing, dshAvailable: true }), onMenuCommand: id => { selected.push(id); },
+  });
+  const call = (method: string, route: string, body?: unknown) => service.handle({ id: 1, method, url: `/dsh-pet-7340/${route}`, body: body === undefined ? undefined : JSON.stringify(body) });
+  try {
+    assert.equal((await call('GET', 'context-menu')).status, 200);
+    assert.equal((await call('POST', 'context-menu-action', { id: 'settings' })).status, 200);
+    syncing = true;
+    for (const id of ['sync', 'home', 'set-display', 'character:builtin:removed']) assert.equal((await call('POST', 'context-menu-action', { id })).status, 400);
+    assert.deepEqual(selected, ['settings']);
+  } finally { service.dispose(); await rm(root, { recursive: true, force: true }); }
+});
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-service-'));

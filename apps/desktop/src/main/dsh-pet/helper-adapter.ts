@@ -3,6 +3,53 @@ import { open } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import type { RpcResponse } from '../../shared/dsh-pet.js';
+import { toNativePetMenuTemplate, withDshActions, type PetContextMenu } from '../pet-context-menu.js';
+
+/** Popups belong to the helper's Electron process, not to the host's windows. */
+export function installPetContextMenus(
+  electron: Pick<typeof import('electron'), 'ipcMain' | 'BrowserWindow' | 'Menu' | 'nativeTheme'>,
+  windows: Map<unknown, import('electron').BrowserWindow>,
+  host: { request(method: string, url: string, body?: string): Promise<RpcResponse> },
+): void {
+  const active = new Map<import('electron').BrowserWindow, import('electron').Menu>();
+  const requests = new WeakMap<import('electron').BrowserWindow, object>();
+  const owner = (event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) => {
+    const win = electron.BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || event.senderFrame !== event.sender.mainFrame || ![...windows.values()].includes(win)) throw new Error('Pet menu sender rejected');
+    return win;
+  };
+  electron.ipcMain.handle('pet:context-menu', async (event, tree: unknown) => {
+    const win = owner(event);
+    const generation = {};
+    requests.set(win, generation);
+    const response = await host.request('GET', '/dsh-pet-7340/context-menu');
+    if (win.isDestroyed() || requests.get(win) !== generation) return null;
+    if (response.status !== 200) throw new Error('Pet menu unavailable');
+    const model = withDshActions(JSON.parse(response.body ?? '{}') as PetContextMenu, tree);
+    electron.nativeTheme.themeSource = model.theme;
+    active.get(win)?.closePopup(win);
+    return new Promise(resolve => {
+      let selected: { command?: string; local?: { action?: string; anim?: string } } | null = null, finished = false;
+      const menu = electron.Menu.buildFromTemplate(toNativePetMenuTemplate(model.items, item => {
+        selected = item.local ? { local: item.local } : item.command ? { command: item.id } : null;
+      }));
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (active.get(win) === menu) active.delete(win);
+        win.removeListener('closed', finish);
+        resolve(selected);
+      };
+      active.set(win, menu);
+      win.once('closed', finish);
+      // Electron dispatches the chosen item and close event separately.
+      menu.popup({ window: win, callback: () => { setImmediate(finish); } });
+    });
+  });
+  electron.ipcMain.on('pet:context-menu-close', event => {
+    try { const win = owner(event); requests.delete(win); active.get(win)?.closePopup(win); } catch { /* Ignore stale frames after helper shutdown. */ }
+  });
+}
 
 /** Sample local hover coordinates without a Windows low-level mouse hook. */
 export function createPointerSampler() {

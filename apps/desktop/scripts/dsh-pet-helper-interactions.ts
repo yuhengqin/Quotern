@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DshPetController } from '../src/main/dsh-pet/controller';
+import { buildPetContextMenu } from '../src/main/pet-context-menu';
 // @ts-ignore manual acceptance driver, not part of the runtime bundle
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
@@ -20,6 +21,8 @@ async function main() {
     getQuota:()=>null,showMainWindow:()=>{openedHost++;},openDirectory:async()=>{},roots:[],
     getCompanion:()=>({connected:true,syncing:false,hoverText:'今日 12.3K tokens\n参考费用 USD $0.42\nCodex · 5h 已用 32%',quips:['今日 12.3K tokens','近 7 天 100K tokens','你好呀，大肥鱼！'],labels:{sync:'立即同步',settings:'宠物设置',failed:'操作失败'}}),
     sync:async()=>{synced++;},openSettings:()=>{settingsOpened++;},
+    getContextMenu:()=>buildPetContextMenu({kind:'dsh',locale:'zh-CN',catalog:[],character:'clawd',size:'medium',dshAvailable:true,syncing:false}),
+    onMenuCommand:id=>{if(id==='open')openedHost++;else if(id==='sync')synced++;else if(id==='settings')settingsOpened++;else if(id==='hide')setTimeout(()=>void controller.dispatch({type:'set-enabled',enabled:false}),30);},
     spawn:(exe,args,options)=>{const launched=spawn(exe,[...args,`--remote-debugging-port=${port}`,`--inspect=127.0.0.1:${inspectorPort}`],options);child=launched;launched.once('exit',()=>{if(child===launched)child=null;});launched.stdout?.on('data',c=>{stdout+=String(c);});launched.stderr?.on('data',c=>{stderr+=String(c);});return launched;},
   });
   let page: any, second: any, native: any;
@@ -36,15 +39,14 @@ async function main() {
     assert.ok(ready,'helper did not load configuration');
     await page.evaluate('for (const v of [sprites[0].videoA,sprites[0].videoB]) { v.defaultPlaybackRate=16;v.playbackRate=16; } true');
     native=await connectPage((await(await fetch(`http://127.0.0.1:${inspectorPort}/json/list`)).json())[0]);clients.push(native);
+    await native.evaluate(`(()=>{const e=process.getBuiltinModule('module').createRequire(process.execPath)('electron');if(!globalThis.__menuAudit){globalThis.__menuAudit={menu:null,open:false};const original=e.Menu.prototype.popup;e.Menu.prototype.popup=function(options){__menuAudit.menu=this;__menuAudit.open=true;return original.call(this,{...options,callback:()=>{__menuAudit.open=false;options?.callback?.();}});};}return true;})()`);
   };
   const check=async(name:string,fn:()=>Promise<void>)=>{try{await fn();results.push({name,ok:true});}catch(error){results.push({name,ok:false,error:String((error as Error).stack??error)});await writeFile(path.join(directory,'stderr-live.log'),stderr);await writeFile(path.join(directory,'stdout-live.log'),stdout);if(String(error).includes('CDP timeout'))throw error;await page?.screenshot(path.join(directory,`failure-${results.length}.png`)).catch(()=>{});}console.log(JSON.stringify(results.at(-1)));};
   const ev=(code:string)=>page.evaluate(code);
-  const menu='.dsh-pet-menu';
-  const visibleColumns=`[...document.querySelectorAll('.dsh-pet-menu-column')].filter(el=>el.offsetWidth&&el.offsetHeight&&getComputedStyle(el).display!=='none')`;
-  const menuItem=(label:string)=>`[...document.querySelectorAll('.dsh-pet-menu-item')].find(el=>el.querySelector('span')?.textContent===${JSON.stringify(label)})`;
-  const clean=async()=>{await page.key('Escape');await wait(160);};
-  const openMenu=async()=>{await clean();await page.click('document.querySelector(".pet-hit")','right');for(let i=0;i<30;i++){if(await ev(`!!document.querySelector('${menu}')`))return;await wait(50);}throw Error('context menu did not open');};
-  const hover=async(expression:string)=>{const point=await ev(`(()=>{const e=(${expression});if(!e)throw Error('missing menu branch');const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await page.call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});await wait(80);};
+  const clean=async()=>{await native.evaluate('globalThis.__menuAudit?.menu?.closePopup();true');await wait(160);};
+  const openMenu=async()=>{await clean();await page.click('document.querySelector(".pet-hit")','right');for(let i=0;i<30;i++){if(await native.evaluate('Boolean(__menuAudit.open)'))return;await wait(50);}throw Error('context menu did not open');};
+  const clickMenu=async(id:string)=>{await native.evaluate(`(()=>{const m=__menuAudit.menu,i=m.getMenuItemById(${JSON.stringify(id)});if(!i||!i.enabled)throw Error('missing menu item');i.click(i,null,{});m.closePopup();return true;})()`);await wait(100);};
+  const menuTree=()=>native.evaluate(`(()=>{const walk=m=>m.items.map(i=>({id:i.id,label:i.label,children:i.submenu?walk(i.submenu):undefined}));return walk(__menuAudit.menu);})()`);
   try{
     const original=controller.getState().config.main!;
     await controller.dispatch({type:'patch-config',patch:{notificationsEnabled:false,workStatusTexts:[['思考'],['工作'],['结果'],['等待'],['本轮工作完成占位'],['发生错误占位']],pets:[
@@ -58,7 +60,7 @@ async function main() {
       assert.equal(restored.docked,true,JSON.stringify(restored));await ev('sprites[0].goHome();true');
     };
     if(process.env.QUOTERN_FISH_RESTORE_ONLY==='1'){await check('dock-position-restores-on-helper-restart',restoreCheck);if(results.some(r=>!r.ok))throw Error('restore acceptance failed');return;}
-    await check('new-menu-actions-before-other-interactions',async()=>{await openMenu();await page.click(menuItem('立即同步'));await wait(300);assert.equal(synced,1);await openMenu();await page.click(menuItem('宠物设置'));await wait(200);assert.equal(settingsOpened,1);});
+    await check('new-menu-actions-before-other-interactions',async()=>{await openMenu();await clickMenu('sync');await wait(300);assert.equal(synced,1);await openMenu();await clickMenu('settings');await wait(200);assert.equal(settingsOpened,1);});
     await check('single-real-helper-page',async()=>{assert.equal((await pages()).length,1);assert.equal(await ev('window.__dshPetDebug.spriteCount'),1);});
     for (const width of [160,204,264]) await check(`rendered-size:${width}`,async()=>{
       await controller.dispatch({type:'patch-pet',petId:'main',patch:{size:width}});await connect();await wait(300);
@@ -88,7 +90,7 @@ async function main() {
       await check('native-poll-restores-hover-without-forwarded-mousemove',async()=>{await outside();await nativePoint('document.querySelector(".pet-hit")');assert.equal(await ev('sprites[0].companionHover'),true);assert.match(await ev('document.querySelector(".pet-bubble").textContent'),/12.3K/);const calls=await native.evaluate('__pointerAudit.calls');assert.equal(calls.at(-1).ignore,false);assert.ok(calls.every((call:any)=>call.forward===false),'no Windows native call may enable the global mouse hook');await page.screenshot(path.join(directory,'hover-usage.png'));});
       await check('native-poll-clears-hover-and-restores-passthrough',async()=>{await outside();assert.equal(await ev('sprites[0].companionHover'),false);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);});
       await check('native-poll-does-not-stream-far-away-desktop-movement',async()=>{await native.evaluate('__pointerAudit.samples=0;__pointerAudit.calls=[];true;');await native.evaluate('new Promise(resolve=>{let n=0;const timer=setInterval(()=>{__pointerAudit.point={x:-10000+n++,y:-10000};if(n>=100){clearInterval(timer);resolve(true);}},1);})');await wait(80);assert.equal(await native.evaluate('__pointerAudit.samples'),0);assert.equal((await native.evaluate('__pointerAudit.calls')).length,0);});
-      await check('native-poll-preserves-menu-input-regions',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openMenu();await nativePoint(menuItem('动作'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await outside();assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,true);await nativePoint(menuItem('动作'));assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await clean();});
+      await check('native-menu-keeps-input-busy-until-dismissed',async()=>{await nativePoint('document.querySelector(".pet-hit")');await openMenu();await outside();assert.equal(await ev('window.__dshPetDebug.inputBusy'),true);assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await clean();assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);});
       await check('native-poll-preserves-drag-capture-outside-window',async()=>{await nativePoint('document.querySelector(".pet-hit")');const point=await ev(`(()=>{const r=document.querySelector('.pet-hit').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1});await wait(100);await outside();assert.equal(await ev('window.__dshPetDebug.inputBusy'),true);assert.equal((await native.evaluate('__pointerAudit.calls')).at(-1).ignore,false);await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});await wait(100);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);assert.equal(await ev('window.__dshPetDebug.tooltipOn'),false);});
       await check('click-cycles-real-videos-and-statistics',async()=>{
         await clean();await outside();await ev('sprites[0].companionClickIndex=0;sprites[0].companionQuipIndex=0;true');
@@ -120,39 +122,28 @@ async function main() {
       });
     }finally{await native.evaluate('globalThis.__restorePointerAudit?.();true;');await clean();}
     await check('ordinary-left-click-animates',async()=>{await page.click('document.querySelector(".pet-hit")');await wait(180);assert.ok(await ev(`document.querySelector('.pet-video.is-front')?.src`));assert.equal(await ev('window.__dshPetDebug.errors.length'),0);});
-    await check('context-menu-escape',async()=>{await openMenu();assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await page.key('Escape');assert.equal(await ev(`!!document.querySelector('${menu}')`),false);});
+    await check('context-menu-dismissal-clears-capture',async()=>{await openMenu();assert.equal(await ev('window.__dshPetDebug.menuOpen'),true);await clean();assert.equal(await ev('window.__dshPetDebug.menuOpen'),false);});
     await check('three-level-animation-menu',async()=>{
-      await openMenu();await hover(menuItem('动作'));
-      assert.equal(await ev(`(${visibleColumns}).length`),2);
-      const branch=`(${visibleColumns})[1].querySelector('.dsh-pet-menu-branch')`;
-      await hover(branch);assert.equal(await ev(`(${visibleColumns}).length`),3);
-      const leaf=`(${visibleColumns})[2].querySelector('.dsh-pet-menu-item')`;
-      const name=await ev(`(${leaf}).querySelector('span').textContent`);await page.click(leaf);await wait(150);
-      assert.equal(await ev(`!!document.querySelector('${menu}')`),false);
+      await openMenu();const leaf=(await menuTree()).find((i:any)=>i.id==='actions').children[0].children[0];
+      const name=leaf.label;await clickMenu(leaf.id);await wait(150);
+      assert.equal(await ev('window.__dshPetDebug.menuOpen'),false);
       const video=await ev(`document.querySelector('.pet-video.is-front')?.src??''`);assert.ok(decodeURIComponent(video).includes(name),`${name} was not played: ${video}`);
     });
-    await check('menu-has-no-retired-items',async()=>{await openMenu();assert.equal(await ev(`[...document.querySelector('.dsh-pet-menu-column').querySelectorAll('.dsh-pet-menu-item span')].some(el=>['对话','碎碎念'].includes(el.textContent))`),false);await clean();});
-    await check('manual-quota-without-account-explains-unavailable',async()=>{await openMenu();await page.click(menuItem('查看余额'));await wait(500);assert.ok(await ev(`document.querySelector('.pet-bubble.is-on')?.textContent`));});
-    await check('open-quotern-reaches-host',async()=>{await openMenu();const before=openedHost;await page.click(menuItem('打开 Quotern'));await wait(150);assert.equal(openedHost,before+1);});
-    await check('sync-and-pet-settings-menu-reach-host',async()=>{const beforeSync=synced,beforeSettings=settingsOpened;await openMenu();await page.click(menuItem('立即同步'));await wait(250);assert.equal(synced,beforeSync+1);await openMenu();await page.click(menuItem('宠物设置'));await wait(150);assert.equal(settingsOpened,beforeSettings+1);});
+    await check('menu-has-no-retired-items',async()=>{await openMenu();assert.equal((await menuTree()).some((i:any)=>['对话','碎碎念','显示位置'].includes(i.label)),false);await clean();});
+    await check('manual-quota-without-account-explains-unavailable',async()=>{await openMenu();await clickMenu('balance');await wait(500);assert.ok(await ev(`document.querySelector('.pet-bubble.is-on')?.textContent`));});
+    await check('open-quotern-reaches-host',async()=>{await openMenu();const before=openedHost;await clickMenu('open');await wait(150);assert.equal(openedHost,before+1);});
+    await check('sync-and-pet-settings-menu-reach-host',async()=>{const beforeSync=synced,beforeSettings=settingsOpened;await openMenu();await clickMenu('sync');await wait(250);assert.equal(synced,beforeSync+1);await openMenu();await clickMenu('settings');await wait(150);assert.equal(settingsOpened,beforeSettings+1);});
     await check('drag-and-go-home',async()=>{
       await clean();const start=await ev(`(()=>{const r=document.querySelector('.pet-hit').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
       await page.call('Input.dispatchMouseEvent',{type:'mousePressed',...start,button:'left',buttons:1,clickCount:1});
       for(let i=1;i<=4;i++){await page.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:start.x+12*i,y:start.y+8*i,buttons:1});await wait(80);}
       await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:start.x+48,y:start.y+32,button:'left',buttons:0,clickCount:1});await wait(180);
       assert.ok(await ev('window.__dshPetDebug.lastDragRelease || window.__dshPetDebug.lastDragRaw'));
-      await openMenu();await page.click(menuItem('回到初始位置'));await wait(150);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);
+      await openMenu();await clickMenu('home');await wait(150);assert.equal(await ev('window.__dshPetDebug.inputBusy'),false);
     });
-    await check('menu-reload-replaces-helper',async()=>{await openMenu();const previous=child?.pid;await page.click(menuItem('重载配置'));for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);await connect();assert.equal(controller.getState().status,'running');});
+    await check('menu-reload-replaces-helper',async()=>{await openMenu();const previous=child?.pid;await clickMenu('reload');for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);await connect();assert.equal(controller.getState().status,'running');});
     await check('dock-position-restores-on-helper-restart',restoreCheck);
-    await check('menu-click-outside-closes',async()=>{await openMenu();await page.call('Input.dispatchMouseEvent',{type:'mousePressed',x:2,y:2,button:'left',clickCount:1});await page.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:2,y:2,button:'left',clickCount:1});assert.equal(await ev(`!!document.querySelector('${menu}')`),false);});
-    for(const [label,value,count] of [['两者','both',1],['仅桌面','desktop',1],['仅网页','web',0],['都不','none',0]] as const){
-      // Restore the fixture before testing another choice that hides its own window.
-      if(!controller.getState().enabled){
-        await controller.dispatch({type:'set-enabled',enabled:true});await connect();
-      }
-      await check(`display-menu:${value}`,async()=>{await openMenu();await hover(menuItem('显示位置'));const previous=child?.pid;await page.click(menuItem(label));for(let i=0;i<100&&child?.pid===previous;i++)await wait(100);assert.notEqual(child?.pid,previous);if(count)await connect();assert.equal((controller.getState().config.main!.pets as any[])[0].display,value);assert.equal((await pages()).length,count);if(!count)assert.equal(controller.getState().enabled,false);});
-    }
+    await check('hide-menu-stops-helper-and-resumes-same-pet',async()=>{await openMenu();const id=controller.config.petId();await clickMenu('hide');for(let i=0;i<100&&controller.isEnabled();i++)await wait(50);assert.equal(controller.isEnabled(),false);await controller.dispatch({type:'set-enabled',enabled:true});await connect();assert.equal(controller.config.petId(),id);});
     if(!controller.getState().enabled){await controller.dispatch({type:'set-enabled',enabled:true});await connect();}
     await page.screenshot(path.join(directory,'helper-final.png'));
   }catch(error){results.push({name:'runner',ok:false,error:String((error as Error).stack??error)});throw error;}

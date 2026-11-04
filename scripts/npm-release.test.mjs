@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,8 +49,11 @@ test('stable releases promote existing versions while refusing to roll latest ba
 });
 
 test('Release preflight runs without installed dependencies and binds its output to the real Git tag', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-npm-source-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), 'quotern-npm-source-')));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const root = join(temporary, 'source'), alias = join(temporary, 'alias');
+  await mkdir(root);
+  await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
   const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
   for (const [directory, manifest] of [
     ['apps/desktop', { version: '0.3.0' }],
@@ -68,11 +71,17 @@ test('Release preflight runs without installed dependencies and binds its output
   git(['-c', 'user.name=Release test', '-c', 'user.email=release-test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'fixture']);
   git(['tag', 'v0.3.0']);
   const event = join(root, 'event.json');
-  const output = join(root, 'output.txt');
   await writeFile(event, JSON.stringify({ action: 'published', release: request().release }));
-  const env = { ...process.env, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output, GITHUB_EVENT_NAME: 'release', GITHUB_REF: 'refs/tags/v0.3.0', GITHUB_SHA: git(['rev-parse', 'HEAD']) };
-  execFileSync(process.execPath, [join(root, 'scripts/npm-release.mjs'), '--preflight'], { cwd: root, env });
-  assert.equal(await readFile(output, 'utf8'), 'npm-tag=latest\n');
+  const env = { ...process.env, GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: 'release', GITHUB_REF: 'refs/tags/v0.3.0', GITHUB_SHA: git(['rev-parse', 'HEAD']) };
+  for (const [name, directory, flags] of [
+    ['direct', root, []],
+    ['alias', alias, []],
+    ['preserved-alias', alias, ['--preserve-symlinks-main']],
+  ]) {
+    const output = join(temporary, `output-${name}.txt`);
+    execFileSync(process.execPath, [...flags, join(directory, 'scripts/npm-release.mjs'), '--preflight'], { cwd: root, env: { ...env, GITHUB_OUTPUT: output } });
+    assert.equal(await readFile(output, 'utf8'), 'npm-tag=latest\n', name);
+  }
 });
 
 async function tarball(t, { manifest, files, contents = {} }) {

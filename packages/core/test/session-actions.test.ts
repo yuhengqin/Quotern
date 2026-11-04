@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join, win32 } from 'node:path';
 import { existingSessionDirectory, findSessionExecutable, nativeSessionActions, sessionTerminalLaunch, windowsResumeScript } from '../src/session-actions.js';
@@ -30,7 +30,7 @@ test('POSIX copied commands quote literal backslashes in session paths', () => {
 });
 
 test('executable discovery skips project-local and relative PATH entries', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-cli-discovery-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-cli-discovery-')));
   try {
     const project = join(root, 'project'), installed = join(root, 'installed'), projectBin = join(project, 'node_modules', '.bin');
     await mkdir(projectBin, { recursive: true }); await mkdir(installed);
@@ -47,8 +47,28 @@ test('executable discovery skips project-local and relative PATH entries', async
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('executable discovery excludes project paths across directory aliases', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-cli-alias-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const project = join(root, 'project'), alias = join(root, 'alias'), installed = join(root, 'installed');
+  const projectBin = join(project, 'node_modules', '.bin');
+  await mkdir(projectBin, { recursive: true }); await mkdir(installed);
+  const suffix = process.platform === 'win32' ? '.cmd' : '';
+  for (const directory of [project, projectBin, installed]) {
+    await writeFile(join(directory, 'codex' + suffix), 'fixture', { mode: 0o755 });
+  }
+  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+  await symlink(project, alias, linkType);
+  for (const directory of [project, alias]) {
+    const localPaths = [project, alias, projectBin, join(alias, 'node_modules', '.bin')];
+    assert.equal(await findSessionExecutable('codex', directory, { PATH: localPaths.join(delimiter) }), null);
+    assert.equal(await findSessionExecutable('codex', directory, { PATH: [...localPaths, installed].join(delimiter) }), join(installed, 'codex' + suffix));
+  }
+  assert.equal(await findSessionExecutable('codex', join(root, 'missing'), { PATH: installed }), null);
+});
+
 test('a PATH executable symlink into the project is not trusted', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-cli-symlink-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-cli-symlink-')));
   try {
     const project = join(root, 'project'), installed = join(root, 'installed');
     await mkdir(project); await mkdir(installed);
@@ -87,7 +107,7 @@ test('interactive terminals do not inherit the service no-color, CI and dumb-ter
 });
 
 test('Windows executes a fixed CLI shim with literal directory and installation paths', { skip: process.platform !== 'win32' }, async () => {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-windows-resume-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-windows-resume-')));
   try {
     const project = join(root, "项目 ' & $(echo wrong) %QUOTERN_UNSET_TEST%"), installed = join(root, "bin ' & %QUOTERN_UNSET_TEST%");
     await mkdir(project); await mkdir(installed);
@@ -107,7 +127,7 @@ test('Windows executes a fixed CLI shim with literal directory and installation 
 });
 
 test('copied PI commands preserve a session path with PowerShell metacharacters', { skip: process.platform !== 'win32' }, async () => {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-copy-resume-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-copy-resume-')));
   try {
     const output = join(root, 'result.json');
     const path = "C:/sessions/项目 ' & $env:PATH `echo/selected.jsonl";

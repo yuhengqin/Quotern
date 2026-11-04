@@ -4,12 +4,14 @@ import test from 'node:test';
 import yaml from 'js-yaml';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-test('release verification installs fresh dependencies instead of restoring a global virtual store', async () => {
-  const workflow = yaml.load(await read('.github/workflows/release-desktop.yml'));
-  for (const [name, job] of Object.entries(workflow.jobs)) {
-    for (const step of job.steps) {
-      if (step.uses?.startsWith('actions/setup-node@')) assert.equal(step.with?.cache, undefined, `${name} must not restore cached dependency graphs`);
-      assert(!step.uses?.startsWith('actions/cache@'), `${name} must install platform dependencies from a fresh store`);
+test('CI and release verification install fresh dependencies instead of restoring a global virtual store', async () => {
+  for (const file of ['.github/workflows/ci.yml', '.github/workflows/release-desktop.yml']) {
+    const workflow = yaml.load(await read(file));
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      for (const step of job.steps) {
+        if (step.uses?.startsWith('actions/setup-node@')) assert.equal(step.with?.cache, undefined, `${file}: ${name} must not restore cached dependency graphs`);
+        assert(!step.uses?.startsWith('actions/cache@'), `${file}: ${name} must install platform dependencies from a fresh store`);
+      }
     }
   }
 });

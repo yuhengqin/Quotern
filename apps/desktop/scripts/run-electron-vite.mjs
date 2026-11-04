@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { constants } from 'node:os';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export function runWithUtf8Output(command, args) {
@@ -27,7 +28,15 @@ export function runWithUtf8Output(command, args) {
   });
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function isMain() {
+  if (!process.argv[1]) return false;
+  try {
+    // The invoked path and module path may retain different directory aliases.
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+}
+
+if (isMain()) {
   // The helper is generated separately from Vite's main/preload bundles. Always
   // refresh it on both development and preview startup, even when out exists.
   const mode = process.argv[2] ?? 'dev';

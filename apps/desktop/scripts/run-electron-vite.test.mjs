@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { cp, mkdir, mkdtemp, rm, writeFile, readFile, access } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile, readFile, access, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const launcher = new URL('./run-electron-vite.mjs', import.meta.url).href;
 
-async function startupFixture(t, fail = false) {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-helper-launch-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+async function startupFixture(t, { fail = false, alias = false } = {}) {
+  const temporary = await mkdtemp(join(tmpdir(), 'quotern-helper-launch-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const root = join(temporary, 'source');
+  await mkdir(root);
   await cp(new URL('./run-electron-vite.mjs', import.meta.url), join(root, 'run-electron-vite.mjs'));
   await mkdir(join(root, 'node_modules/electron-vite/bin'), { recursive: true });
   await writeFile(join(root, 'node_modules/electron-vite/package.json'), '{"name":"electron-vite","version":"5.0.0"}');
@@ -20,20 +22,42 @@ async function startupFixture(t, fail = false) {
     fs.writeFileSync('electron-started.txt',process.argv[2]);
     if(fs.readFileSync('runtime.txt','utf8')!=='current-helper')process.exit(23);
     console.log('fresh-helper-before-electron');`);
-  return root;
+  const entryRoot = alias ? join(temporary, 'alias') : root;
+  if (alias) await symlink(root, entryRoot, process.platform === 'win32' ? 'junction' : 'dir');
+  return { root, entry: join(entryRoot, 'run-electron-vite.mjs') };
 }
 
 for (const mode of ['dev', 'preview']) test(`${mode} refreshes an existing stale helper before starting Electron`, async t => {
-  const root = await startupFixture(t);
-  const result = spawnSync(process.execPath, [join(root, 'run-electron-vite.mjs'), mode], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  const { root, entry } = await startupFixture(t);
+  const result = spawnSync(process.execPath, [entry, mode], { cwd: root, encoding: 'utf8', timeout: 10000 });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(await readFile(join(root, 'runtime.txt'), 'utf8'), 'current-helper');
   assert.equal(result.stdout.trim(), 'fresh-helper-before-electron');
 });
 
 test('helper generation failure prevents Electron from starting', async t => {
-  const root = await startupFixture(t, true);
-  const result = spawnSync(process.execPath, [join(root, 'run-electron-vite.mjs'), 'dev'], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  const { root, entry } = await startupFixture(t, { fail: true });
+  const result = spawnSync(process.execPath, [entry, 'dev'], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  assert.notEqual(result.status, 0);
+  await assert.rejects(access(join(root, 'electron-started.txt')), { code: 'ENOENT' });
+  assert.match(result.stderr, /fixture generation failed/);
+});
+
+for (const mode of ['dev', 'preview', 'build']) for (const preserve of [false, true]) {
+  test(`${mode} refreshes the helper through a directory alias${preserve ? ' with preserved entry-point symlinks' : ''}`, async t => {
+    const { root, entry } = await startupFixture(t, { alias: true });
+    const args = [...(preserve ? ['--preserve-symlinks-main'] : []), entry, mode];
+    const result = spawnSync(process.execPath, args, { cwd: root, encoding: 'utf8', timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readFile(join(root, 'runtime.txt'), 'utf8'), 'current-helper');
+    assert.equal(await readFile(join(root, 'electron-started.txt'), 'utf8'), mode);
+    assert.equal(result.stdout.trim(), 'fresh-helper-before-electron');
+  });
+}
+
+test('generation failure through a directory alias prevents Electron from starting', async t => {
+  const { root, entry } = await startupFixture(t, { fail: true, alias: true });
+  const result = spawnSync(process.execPath, [entry, 'dev'], { cwd: root, encoding: 'utf8', timeout: 10000 });
   assert.notEqual(result.status, 0);
   await assert.rejects(access(join(root, 'electron-started.txt')), { code: 'ENOENT' });
   assert.match(result.stderr, /fixture generation failed/);

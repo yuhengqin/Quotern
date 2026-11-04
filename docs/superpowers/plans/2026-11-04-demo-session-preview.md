@@ -24,5 +24,5 @@
 - [x] Add demo-only pagination feedback and copy, update the existing UI/runtime documentation and changeset.
 - [x] Run Dashboard tests, localization checks, Desktop typecheck and the CLI build; perform focused independent review.
 - [x] Verify the built demo with the exported local snapshot: first-page URL, Next mouse/keyboard feedback, filters and normal-mode pagination.
-- [ ] Upload a versioned code artifact and snapshot; validate candidate service before switching; back up unit, snapshot and NGINX configuration.
-- [ ] Switch the service/cache version, verify public page/API/cache behavior, capture the result and record rollback paths.
+- [x] Upload a versioned code artifact and snapshot; validate candidate service before switching; back up unit, snapshot and NGINX configuration.
+- [x] Switch the service/cache version, verify public page/API/cache behavior, capture the result and record rollback paths.

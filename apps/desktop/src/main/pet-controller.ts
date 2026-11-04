@@ -45,6 +45,7 @@ const CURSOR_POLL_MS = process.platform === 'win32' ? 16 : 50;
 const IDLE_SLEEP_MS = 60_000;
 const EDGE_ANIMATION_MS = 200;
 const DATA_REFRESH_MS = 60_000;
+const TOPMOST_REASSERT_MS = 5_000;
 
 function dataFromResponse(value: { status: number; body: unknown }): Record<string, unknown> {
   const body = value.body && typeof value.body === 'object' ? value.body as Record<string, unknown> : {};
@@ -82,6 +83,7 @@ export class PetController {
   private cursorTimer: ReturnType<typeof setInterval> | null = null;
   private edgeTimer: ReturnType<typeof setInterval> | null = null;
   private dataTimer: ReturnType<typeof setInterval> | null = null;
+  private topmostTimer: ReturnType<typeof setInterval> | null = null;
   private lastCursor: Point | null = null;
   private lastCursorMoveAt = Date.now();
   private sleeping = false;
@@ -263,6 +265,7 @@ export class PetController {
         this.sampleCursor = createPetCursorSampler();
       }
       this.stopCursorTimer();
+      this.stopTopmostTimer();
     });
     void this.loadRenderer(w).catch(error => console.error('[tud-desktop] pet renderer failed:', error));
     return w;
@@ -271,6 +274,7 @@ export class PetController {
   private setVisible(visible: boolean): void {
     if (!visible) {
       this.stopCursorTimer();
+      this.stopTopmostTimer();
       this.stopEdgeAnimation();
       this.pointerPressed = false;
       this.sampleCursor = createPetCursorSampler();
@@ -292,6 +296,7 @@ export class PetController {
     this.applyBounds();
     if (original.x !== clamped.x || original.y !== clamped.y) void this.savePosition();
     w.showInactive();
+    this.startTopmostTimer();
     this.lastCursorMoveAt = Date.now();
     this.sleeping = false;
     this.emitPetEvent('pet:wake');
@@ -309,6 +314,27 @@ export class PetController {
   private stopCursorTimer(): void {
     if (this.cursorTimer) clearInterval(this.cursorTimer);
     this.cursorTimer = null;
+  }
+
+  private reassertTopmost(): void {
+    const w = this.window;
+    if (!w || w.isDestroyed() || !w.isVisible()) return;
+    // Windows can retain WS_EX_TOPMOST while native z-order has drifted below
+    // ordinary windows. Reapply HWND_TOPMOST even if isAlwaysOnTop() says true;
+    // Electron uses SWP_NOACTIVATE, preserving the user's input focus.
+    w.setAlwaysOnTop(true, 'screen-saver');
+  }
+
+  private startTopmostTimer(): void {
+    if (process.platform !== 'win32') return;
+    this.reassertTopmost();
+    if (this.topmostTimer) return;
+    this.topmostTimer = setInterval(() => this.reassertTopmost(), TOPMOST_REASSERT_MS);
+  }
+
+  private stopTopmostTimer(): void {
+    if (this.topmostTimer) clearInterval(this.topmostTimer);
+    this.topmostTimer = null;
   }
 
   private pollCursor(): void {
@@ -674,6 +700,7 @@ export class PetController {
 
   dispose(): void {
     this.stopCursorTimer();
+    this.stopTopmostTimer();
     this.stopEdgeAnimation();
     if (this.dataTimer) clearInterval(this.dataTimer);
     this.dataTimer = null;

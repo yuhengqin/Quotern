@@ -119,7 +119,7 @@ let server;
 async function connect(window) {
   let target;
   await until(async () => { try { target = (await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json()).find(page => page.type === 'page' && page.url === window.webContents.getURL()); return Boolean(target); } catch { return false; } }, 'renderer debugger');
-  const client = await connectPage(target); clients.push(client); return client;
+  const client = await connectPage(target, { waitForActionability: true }); clients.push(client); return client;
 }
 async function noOverflow(client, label) {
   const layout = await client.evaluate(`(() => {
@@ -229,7 +229,7 @@ async function main() {
   await until(() => client.evaluate(`!(${button('继续会话')}).disabled`), 'native actions ready');
   await client.click(button('继续会话'));
   assert.equal(await client.evaluate(`(${button('正在打开…')}).disabled && (${button('打开文件夹')}).disabled`), true);
-  await client.click(button('正在打开…'));
+  await client.click(button('正在打开…'), 'left', { force: true });
   await until(async () => (await text(client)).includes('已打开终端'), 'resume feedback');
   assert.deepEqual(actionCalls, [{ source: 'codex', sessionId: 'fixture-root', action: 'resume' }]);
   await client.click(button('打开文件夹'));
@@ -369,7 +369,8 @@ async function main() {
   await until(async () => reference.isMinimized(), 'reference window minimizes itself');
   assert.equal(window.isMinimized(), false);
   reference.restore();
-  await referenceClient.evaluate('window.tud.close(); true');
+  const referenceClosed = new Promise(resolve => reference.once('closed', resolve));
+  await Promise.race([referenceClient.evaluate('window.tud.close(); true'), referenceClosed]);
   await until(async () => reference.isDestroyed(), 'reference window closes itself');
   assert.equal(window.isDestroyed(), false);
   assert.equal(await client.evaluate(`Boolean(${dialog})`), true);
@@ -548,12 +549,24 @@ async function main() {
     fixtureDirectory = directory;
     await browserWindow.loadURL(`${origin}/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=copy-${index}`);
     await until(() => browser.evaluate(`Boolean(${button('复制项目路径')}) && !(${button('复制项目路径')}).disabled`), 'copy path ready');
+    if (index === 0) {
+      // Exercise the same hit-test blocking used by Toast view transitions.
+      assert.equal(await browser.evaluate(`(() => {
+        const style=document.createElement('style');
+        style.textContent='::view-transition-group(smoke-input),::view-transition-old(smoke-input),::view-transition-new(smoke-input){animation-duration:400ms}';
+        document.head.append(style);
+        document.documentElement.style.viewTransitionName='smoke-input';
+        const transition=document.startViewTransition(()=>{document.documentElement.dataset.smokeTransition='copy';});
+        return transition.ready.then(()=>{const el=(${button('复制项目路径')}),r=el.getBoundingClientRect();return !el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));});
+      })()`), true, 'the regression fixture must block pointer input during its transition');
+    }
     clipboard.clear();
     await browser.click(button('复制项目路径'));
     await until(() => clipboard.readText().length > 0, 'browser directory clipboard');
     assert.equal(clipboard.readText(), expected, 'copy path from ' + directory);
   }
   fixtureDirectory = copyPaths[0][0];
+  checks.push('browser-copy-waits-for-view-transition-input-target');
   checks.push('browser-copy-normalizes-drive-and-unc-paths-and-preserves-other-paths');
   await browser.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
   await noOverflow(browser, '320px browser overflow');

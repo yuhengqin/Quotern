@@ -42,7 +42,7 @@ Files: `packages/core/src/session-actions.ts`, `packages/core/test/session-actio
 - [x] Run the repository build and complete root test command with Node 22; record any unrelated failures by name.
 - [x] Review the diff independently for path containment and standalone-script regressions.
 - [x] Commit the reviewed fix and run the existing three-OS CI workflow on a branch containing only this fix.
-- [ ] Require real macOS and Windows CI success before reporting both platforms verified.
+- [x] Require real macOS and Windows CI success before reporting both platforms verified (CI #19).
 
 ## CI follow-up: deterministic browser smoke locale
 
@@ -51,4 +51,15 @@ The first real run passed on macOS and Ubuntu. Windows passed the original path 
 - [x] Force an English host locale and reproduce the missing browser fixture preference as an explicit locale assertion failure.
 - [x] Initialize the browser's origin storage to Chinese before loading it; retain the later English scenarios and all existing assertions.
 - [x] Build the isolated CI checkout and pass all 34 UI smoke groups with the English host locale.
-- [ ] Run the complete three-OS workflow on the final commit.
+- [x] Run the complete three-OS workflow on the final commit (CI #19, commit `81074b93`).
+
+## Main push follow-up: UI input timing
+
+[CI #19](https://github.com/yuhengqin/Quotern/actions/runs/41770467663) passed on all three systems. The same commit's [main push CI #20](https://github.com/yuhengqin/Quotern/actions/runs/41771705815) passed the original path checks but timed out copying the legacy directory in the Windows UI smoke test. A local baseline run also intermittently failed to close the selected-period help overlay.
+
+- [x] Add a controlled native view-transition snapshot; verify it blocks pointer hit testing and the old driver then fails the clipboard assertion.
+- [x] Opt this smoke test into bounded input readiness: stable geometry, enabled controls, hit testing, active view transitions and keyboard animation settling. Preserve the other driver's consumers' defaults and the intentional disabled-control input test.
+- [x] Accept the actual reference-window close event when destroying the page races its CDP evaluation reply.
+- [x] Pass all 35 UI smoke groups locally, keeping the existing native input, clipboard, keyboard and product assertions.
+- [x] Repeat the final UI smoke three times and independently review the change: three additional 35-group passes, no review findings.
+- [ ] Verify the final main push workflow and merge the remote history into local main without rewriting or publishing the four unrelated commits.

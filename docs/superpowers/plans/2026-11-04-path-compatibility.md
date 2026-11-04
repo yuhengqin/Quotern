@@ -41,5 +41,21 @@ Files: `packages/core/src/session-actions.ts`, `packages/core/test/session-actio
 
 - [x] Run the repository build and complete root test command with Node 22; record any unrelated failures by name.
 - [x] Review the diff independently for path containment and standalone-script regressions.
-- [ ] Commit the reviewed fix and run the existing three-OS CI workflow on a branch containing only this fix.
-- [ ] Require real macOS and Windows CI success before reporting both platforms verified.
+- [x] Commit the reviewed fix and run the existing three-OS CI workflow on a branch containing only this fix.
+- [x] Require real macOS and Windows CI success before reporting both platforms verified.
+
+## CI follow-up: deterministic browser smoke locale
+
+The first real run passed on macOS and Ubuntu. Windows passed the original path checks, then exposed an unrelated quota snapshot timing failure; that test passed on retry. The retry reached the browser smoke test and failed because the fresh browser inherited English from the runner while its selectors expected Chinese.
+
+- [x] Force an English host locale and reproduce the missing browser fixture preference as an explicit locale assertion failure.
+- [x] Initialize the browser's origin storage to Chinese before loading it; retain the later English scenarios and all existing assertions.
+- [x] Build the isolated CI checkout and pass all 34 UI smoke groups with the English host locale.
+- [x] Run the complete three-OS workflow on the final commit.
+
+## Verified results
+
+- Windows with Node.js 22.23.4: `corepack pnpm test` and Desktop type checking passed, retaining the existing platform/permission skips.
+- `corepack pnpm test:session-detail-ui` passed all 34 groups on both the isolated verification checkout and local main, with the host locale forced to English.
+- [CI #19](https://github.com/yuhengqin/Quotern/actions/runs/41770467663), code commit `81074b931b028fb25872e87f77c9bdef20378a85`: macOS passed in 3m 28s, Windows passed in 5m 46s, Ubuntu passed in 1m 59s. The complete run succeeded without a retry.
+- Only the task's changes were pushed to `codex/path-compatibility-ci`; `origin/main` and the pre-existing unpushed local commits were preserved.

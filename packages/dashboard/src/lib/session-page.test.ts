@@ -90,6 +90,18 @@ test('page capacity restores from the URL and changing it resets the page while 
   assert.equal(parseSessionPageSearch({ pageSize: 999 }).pageSize, 12);
 });
 
+test('demo session links stay on the first default-sized page without losing filters or exact targets', () => {
+  const raw = { page: 8, pageSize: 48, days: 30, q: 'needle', sources: ['codex'], scopeSources: ['codex', 'claude'], project: 'Project 1', model: 'gpt-5', sort: 'tokens', sessionSource: 'codex', sessionId: 'demo-session' };
+  const normal = parseSessionPageSearch(raw);
+  const preview = parseSessionPageSearch(raw, { firstPageOnly: true });
+  assert.equal(preview.page, 1);
+  assert.equal(preview.pageSize, 12);
+  assert.deepEqual(preview, { ...normal, page: 1, pageSize: 12 });
+  assert.equal(parseSessionPageSearch(JSON.parse(JSON.stringify(preview)), { firstPageOnly: true }).page, 1);
+  assert.equal(normal.page, 8);
+  assert.equal(normal.pageSize, 48);
+});
+
 test('clearing list filters resets the page but retains the overview and attribution scope', () => {
   const search = parseSessionPageSearch({ days: 30, scopeSources: ['pi', 'omp'], group: '["openai","api",null]', q: 'model', sources: ['pi'], project: 'app', sort: 'cost', page: 8 });
   const cleared = updateSessionPageSearch(search, { q: '', sources: [], project: '' });

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, realpathSync } from 'node:fs';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -169,4 +169,12 @@ async function main() {
   }
   await checkSourceArchive({ mode: values['working-tree'] ? 'working-tree' : 'ref', ref: values.ref, output: values.output, isolatedStore: values['isolated-store'] });
 }
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+function isMain() {
+  if (!process.argv[1]) return false;
+  try {
+    // Resolve both sides: the entry or module path can retain a directory alias.
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+}
+
+if (isMain()) main().catch(error => { console.error(error.stack); process.exitCode = 1; });

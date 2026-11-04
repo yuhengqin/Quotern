@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { appendFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { sourceBuildEnvironment } from './check-source-archive.mjs';
 
@@ -154,4 +155,12 @@ async function main() {
   console.log(`npm packages verified without publishing: ${output}`);
 }
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+function isMain() {
+  if (!process.argv[1]) return false;
+  try {
+    // Keep this script standalone, including when invoked through a directory alias.
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+}
+
+if (isMain()) main().catch(error => { console.error(error.stack); process.exitCode = 1; });

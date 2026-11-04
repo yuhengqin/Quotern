@@ -20,10 +20,12 @@ export async function existingSessionDirectory(directory: string | null): Promis
 
 /** Deliberately omit implicit cwd lookup, relative PATH entries and project-local shims. */
 export async function findSessionExecutable(name: string, directory: string, env = process.env): Promise<string | null> {
-  const insideProject = (path: string) => {
-    const child = relative(directory, path);
+  const resolvedDirectory = await existingSessionDirectory(directory);
+  if (!resolvedDirectory) return null;
+  const insideProject = (path: string) => [directory, resolvedDirectory].some(root => {
+    const child = relative(root, path);
     return child === '' || child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child);
-  };
+  });
   const entries = (env.PATH ?? env.Path ?? '').split(delimiter);
   for (const entry of entries) {
     const path = entry.replace(/^"(.*)"$/, '$1');

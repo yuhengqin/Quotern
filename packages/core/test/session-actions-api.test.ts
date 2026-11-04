@@ -14,7 +14,7 @@ const route = '/functions/tud-session-actions';
 const target = { source: 'codex', sessionId: 'session-123' };
 
 async function fixture(run: (app: ReturnType<typeof createLocalApiApp>, directory: string, launches: unknown[]) => Promise<void>, availability?: 'available' | 'SESSION_CLI_UNAVAILABLE' | 'SESSION_ACTION_UNSUPPORTED') {
-  const root = await mkdtemp(join(tmpdir(), 'quotern-session-actions-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-session-actions-')));
   const directory = join(root, "项目 ' & workspace");
   const launches: unknown[] = [];
   try {

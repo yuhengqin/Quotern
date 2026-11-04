@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { access, copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -104,4 +104,17 @@ test('the archive checker can start before installing checkout dependencies', as
   await copyFile(fileURLToPath(new URL('./check-source-archive.mjs', import.meta.url)), script);
   const result = execFileSync(process.execPath, [script, '--help'], { encoding: 'utf8' });
   assert.match(result, /working-tree|archive/i);
+});
+
+test('the standalone archive checker starts through a directory alias', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern archive alias ')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const source = join(root, 'source'), alias = join(root, 'alias');
+  await mkdir(source);
+  await copyFile(new URL('./check-source-archive.mjs', import.meta.url), join(source, 'check-source-archive.mjs'));
+  await symlink(source, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  for (const flags of [[], ['--preserve-symlinks-main']]) {
+    const result = execFileSync(process.execPath, [...flags, join(alias, 'check-source-archive.mjs'), '--help'], { encoding: 'utf8' });
+    assert.match(result, /working-tree|archive/i, JSON.stringify(flags));
+  }
 });

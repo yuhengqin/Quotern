@@ -53,7 +53,7 @@ export async function launchProbe(executable, output, { args = [], env: extraEnv
     },
   };
 }
-export async function connectPage(target) {
+export async function connectPage(target, { waitForActionability = false } = {}) {
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
   let sequence = 0;
@@ -74,17 +74,61 @@ export async function connectPage(target) {
     if (result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
     return result.result.value;
   };
+  const ready = async (check, label) => {
+    const deadline = Date.now() + 5000;
+    do {
+      const result = await check();
+      if (result) return result;
+      await wait(25);
+    } while (Date.now() < deadline);
+    throw Error(`Timed out waiting for ${label}`);
+  };
+  const actionablePoint = expression => {
+    let previous = null;
+    return ready(async () => {
+      const current = await evaluate(`(() => {
+    const el = (${expression});
+    if (!el || el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true') return null;
+    el.scrollIntoView({block:'center',inline:'nearest'});
+    if (!el.isConnected || document.documentElement.matches(':active-view-transition') || el.closest('[data-entering="true"],[data-exiting="true"]')) return null;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    const x = r.x+r.width/2, y = r.y+r.height/2;
+    const hit = document.elementFromPoint(x,y);
+    return x >= 0 && y >= 0 && (hit === el || el.contains(hit)) ? {x,y,width:r.width,height:r.height} : null;
+  })()`);
+      const stable = current && previous && ['x','y','width','height'].every(key => Math.abs(current[key]-previous[key]) <= 0.5);
+      previous = current;
+      return stable ? {x:current.x,y:current.y} : null;
+    }, 'an actionable pointer target');
+  };
+  const settled = () => {
+    let previous = false;
+    return ready(async () => {
+      const current = await evaluate(`(() => {
+    return !document.documentElement.matches(':active-view-transition') && !document.querySelector('[data-entering="true"],[data-exiting="true"]') &&
+      !document.getAnimations().some(animation => animation.playState === 'running' && Number.isFinite(animation.effect?.getComputedTiming().endTime));
+  })()`);
+      const stable = previous && current;
+      previous = current;
+      return stable;
+    }, 'UI animations before keyboard input');
+  };
   await call('Runtime.enable');
   return {
     call, evaluate, errors, target,
-    async click(expression, button = 'left') {
-      const point = await evaluate(`(() => { const el = (${expression}); if (!el) throw Error('Missing target'); el.scrollIntoView({block:'center',inline:'nearest'}); const r=el.getBoundingClientRect(); if(!r.width||!r.height) throw Error('Target is hidden'); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+    async click(expression, button = 'left', { force = false } = {}) {
+      const shouldWait = waitForActionability && !force;
+      let point = shouldWait ? await actionablePoint(expression) : await evaluate(`(() => { const el = (${expression}); if (!el) throw Error('Missing target'); el.scrollIntoView({block:'center',inline:'nearest'}); const r=el.getBoundingClientRect(); if(!r.width||!r.height) throw Error('Target is hidden'); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
       assert.ok(point.x >= 0 && point.y >= 0, 'Target must be in the viewport');
       await call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+      // Hover, layout animation and view-transition snapshots can change the hit target.
+      if (shouldWait) point = await actionablePoint(expression);
       await call('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button, clickCount: 1 });
       await call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button, clickCount: 1 });
     },
     async key(key, code = key === ' ' ? 'Space' : key, modifiers = 0) {
+      if (waitForActionability) await settled();
       const windowsVirtualKeyCode = { ' ': 32, Enter: 13, Tab: 9, Escape: 27, ArrowDown: 40, ArrowUp: 38, Home: 36, End: 35, a: 65 }[key];
       const text = !modifiers && (key === 'Enter' || key === ' ') ? { text: key === 'Enter' ? '\r' : ' ', unmodifiedText: key === 'Enter' ? '\r' : ' ' } : {};
       await call('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers, ...text, ...(windowsVirtualKeyCode ? { windowsVirtualKeyCode } : {}) });

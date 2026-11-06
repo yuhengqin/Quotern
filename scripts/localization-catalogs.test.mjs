@@ -11,6 +11,7 @@ import { desktopShellMessages } from '../apps/desktop/src/renderer/i18n/desktop-
 import { desktopSubscriptionMessages } from '../apps/desktop/src/renderer/i18n/desktop-subscription-messages.ts';
 import { NATIVE_MESSAGES } from '../apps/desktop/src/main/native-messages.ts';
 import { cliMessages } from '../packages/cli/src/i18n/messages.ts';
+import { accountBillingMessages } from '../packages/dashboard/src/i18n/account-billing-messages.ts';
 
 const locales = ['zh-CN', 'en', 'ja', 'ko'];
 const catalogs = {
@@ -25,6 +26,7 @@ const catalogs = {
   desktopSubscriptions: desktopSubscriptionMessages,
   native: NATIVE_MESSAGES,
   cli: cliMessages,
+  accountBilling: accountBillingMessages,
 };
 
 function placeholders(message) {

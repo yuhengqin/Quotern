@@ -108,6 +108,8 @@ node scripts/migrate-state.mjs --from "/原状态目录" --to "/Quotern状态目
 
 ## 订阅读数的环境与账号
 
+按账号启动、Quotern 默认账号与自动 Claude 换号，以及独立的实际消费连接见 [账号启动与费用](account-launch-billing.md)。默认选择保存在 `account-launch/preferences.json`，运行端注册监控目录来源到同目录的 `sources.json`；账单私有凭据与缓存保存在 `billing-private/`，不参与普通数据备份。新本地动作接口为 `/functions/tud-account-launch` 与 `/functions/tud-claude-billing`，要求真实 loopback Host/来源和运行实例操作 token。
+
 GUI 启动环境的 PATH 可能缺少 Node 或 Agent CLI。Claude reader 使用 [cli-runtime.ts](../apps/desktop/src/main/cli-runtime.ts) 补齐运行环境，在临时目录以受限参数执行 `/usage`；Codex reader 直接读取本机登录状态并请求额度，不以 Codex CLI 是否存在作为前提。
 
 CLI 的 Node 额度及服务状态请求通过 `quotaNodeFetch` 显式使用 `HTTP_PROXY` / `HTTPS_PROXY`（也支持小写形式），遵守 `NO_PROXY`，无需设置 `NODE_USE_ENV_PROXY`；localhost 和回环 IP 始终直连，避免将本机 language server 请求交给代理。仅配置系统代理而没有环境代理变量时，Node 请求仍按原行为直连。Desktop 为 Codex 额度及服务状态注入独立 Electron session 网络，继续沿用系统代理及已有网络恢复流程。

@@ -26,6 +26,8 @@ import { createQuotaSnapshotPublisher } from './snapshot.js';
 import { createWindowStarter } from '../agent/window-start.js';
 import { projectQuotaReport, type QuotaRuntimeSource } from './report.js';
 import { QUOTA_PROVIDER_DESCRIPTORS, getQuotaProviderDescriptor, type QuotaProviderId } from './shared/provider-descriptors.js';
+import { registerLaunchSource } from './account-launch.js';
+import { createAccountAutoSwitcher } from './account-auto-switch.js';
 
 export { QuotaManager } from './readers/quota-manager.js';
 const STATUS_URLS: Record<string, string> = Object.fromEntries(QUOTA_PROVIDER_DESCRIPTORS.filter(p => p.statusPage).map(p => [p.id, p.statusPage!.url]));
@@ -40,6 +42,11 @@ export async function createQuotaRuntime(options: {
 }) {
   const publisher = options.snapshot && createQuotaSnapshotPublisher(options.snapshot.directory, options.snapshot.runtime);
   const windowStarter = options.snapshot && createWindowStarter(options.snapshot.directory, options.snapshot.runtime);
+  if (options.snapshot) {
+    try { await registerLaunchSource(options.snapshot.directory, options.snapshot.runtime, options.directory); }
+    catch { console.warn('[quotern] account launch source unavailable'); }
+  }
+  let autoSwitch: (() => Promise<void>) | undefined;
   const force = { forceRefresh: true };
   const codex = createDefaultCodexSubscriptionReader(options.fetch);
   const claude = createDefaultClaudeSubscriptionReader();
@@ -99,10 +106,11 @@ export async function createQuotaRuntime(options: {
     for (const key of observers.keys()) if (!observedKeys.has(key)) observers.delete(key);
     return output;
   };
-  return new QuotaManager({ readers, store: await openQuotaStore(options.directory),
+  const manager = new QuotaManager({ readers, store: await openQuotaStore(options.directory),
     profileReaders,
     notify: options.notify ?? (() => {}), notifyService: options.notifyService, onChanged: state => {
       options.onChanged?.(state);
+      if (autoSwitch) void autoSwitch().catch(() => { console.warn('[quotern] optional account rotation unavailable'); });
       if (windowStarter) void windowStarter(state).catch(() => { console.warn('[quotern] optional window startup unavailable'); });
       // Construction and the first in-flight emission must not erase the previous run's snapshot.
       if (publisher && options.snapshot && (state.providers.length === 0 || state.providers.some(p => p.queriedAt !== null))) {
@@ -120,4 +128,8 @@ export async function createQuotaRuntime(options: {
       return parseQuotaServiceSummary(JSON.parse(body), url, Date.now() / 1000);
     },
   });
+  if (options.snapshot) autoSwitch = createAccountAutoSwitcher(options.snapshot.directory, options.directory, options.snapshot.runtime, {
+    getState: () => manager.getState(), isActive: () => manager.canRunAutomation(),
+  });
+  return manager;
 }

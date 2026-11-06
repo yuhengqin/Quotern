@@ -7,6 +7,9 @@ import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
 import { registerSessionActionsApi } from './session-actions-api.js';
 import { registerAgentApi } from './agent-api.js';
 import { registerLocalAdminApi } from './local-admin-api.js';
+import { registerAccountLaunchApi } from './account-launch-api.js';
+import { registerBillingApi } from './billing-api.js';
+import { join } from 'node:path';
 import { SessionQueryService, type SessionRangeQuery } from '../session-query.js';
 import type { SessionListQuery } from '../session-list.js';
 import { sessionsToCsv } from '../session-csv.js';
@@ -111,6 +114,9 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
     registerAgentApi(app, deps.dataDir, deps.sessionActionsIpc);
     registerLocalAdminApi(app, deps);
+    registerAccountLaunchApi(app, { dataDir: deps.dataDir, quotaDirectory: deps.desktopQuotaDirectory ?? join(deps.dataDir, 'quota'),
+      getState: () => deps.getQuotaState?.() ?? deps.quota?.getState() ?? null, ipc: deps.sessionActionsIpc });
+    registerBillingApi(app, { dataDir: deps.dataDir, ipc: deps.sessionActionsIpc });
   }
 
   app.get('/health', (c) => {

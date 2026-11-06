@@ -68,6 +68,7 @@ quotern start
 | `quotern doctor` | 检查运行环境、本地数据源及服务状态 |
 | `quotern usage [period]` | 只读查询已采集用量，支持文本、JSON、CSV |
 | `quotern statusline` | 从 Claude stdin 显示会话费用、今日估价、上下文和会话平均费用速率 |
+| `quotern launch claude\|codex` | 使用默认或 `--profile ID` 的配置，在当前目录打开新终端；[账号启动与自动换号](docs/account-launch-billing.md) |
 | `quotern demo export --out <文件>` | 将已采集数据匿名化导出为独立演示快照 |
 | `quotern demo start --file <文件>` | 只读运行演示快照，默认端口 8253 |
 | `quotern backup create\|verify\|restore` | 创建、校验本地数据备份，或恢复到新目录 |

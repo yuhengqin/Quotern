@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Input, Label, Modal, TextField } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { QuotaPreferencePatch, QuotaPreferences, QuotaProfile, QuotaProviderState } from 'quotern-core/quota/shared/quota';
+import { AccountLaunchControls, AccountLaunchSettings, useAccountLaunch } from './AccountLaunchControls';
 
 export function QuotaProfilesManager({ preferences, providers, onSave }: { preferences: QuotaPreferences; providers: QuotaProviderState[]; onSave(patch: QuotaPreferencePatch): Promise<unknown> }) {
   const { t } = useTranslation();
@@ -9,6 +10,7 @@ export function QuotaProfilesManager({ preferences, providers, onSave }: { prefe
   const [editing, setEditing] = useState<string | null>(null);
   const [provider, setProvider] = useState<QuotaProfile['provider']>('codex'), [label, setLabel] = useState(''), [directory, setDirectory] = useState('');
   const profiles = preferences.profiles ?? [];
+  const launch = useAccountLaunch(open, profiles);
   const clear = () => { setEditing(null); setLabel(''); setDirectory(''); };
   const save = async (next: QuotaProfile[]) => {
     setBusy(true); setError(null);
@@ -31,14 +33,14 @@ export function QuotaProfilesManager({ preferences, providers, onSave }: { prefe
     <Modal.Backdrop isOpen={open} onOpenChange={setOpen}><Modal.Container placement="center" scroll="inside"><Modal.Dialog aria-label={t('usage.profiles.title')} className="w-full max-w-lg">
       <Modal.CloseTrigger aria-label={t('usage.quota.closeDetails')} /><Modal.Header><Modal.Heading>{t('usage.profiles.title')}</Modal.Heading></Modal.Header>
       <Modal.Body className="flex flex-col gap-5">
-        <p className="text-xs text-muted">{t('usage.profiles.defaultHint')}</p>
-        <p className="text-xs text-muted">{t('usage.profiles.duplicateHint')}</p>
+        <AccountLaunchSettings controller={launch} />
         <div className="flex flex-col gap-3">
           {profiles.map(profile => <div key={profile.id} className="rounded-xl bg-surface-secondary p-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{profile.provider === 'codex' ? 'Codex' : 'Claude'} · {profile.label}</p><div className="flex gap-1"><Button size="sm" variant="ghost" className="h-7 text-xs" isDisabled={busy} onPress={() => { setEditing(profile.id); setProvider(profile.provider); setLabel(profile.label); setDirectory(profile.directory); setError(null); }}>{t('usage.profiles.edit')}<span className="sr-only"> {profile.label}</span></Button><Button size="sm" variant="ghost" className="h-7 text-xs" isDisabled={busy} onPress={() => void save(profiles.filter(item => item.id !== profile.id)).then(ok => { if (ok && editing === profile.id) clear(); })}>{t('usage.profiles.remove')}<span className="sr-only"> {profile.label}</span></Button></div></div>
             <p className="mt-1 break-all text-[11px] text-muted">{profile.directory}</p>
             <ProfileIdentity profile={profile} providers={providers} />
             <div className="mt-2 flex gap-5 text-xs"><label className="flex items-center gap-2"><input type="checkbox" className="accent-accent" checked={profile.enabled} disabled={busy} onChange={event => void save(profiles.map(item => item.id === profile.id ? { ...item, enabled: event.target.checked } : item))} />{t('usage.profiles.monitor')}<span className="sr-only"> {profile.label}</span></label><label className="flex items-center gap-2"><input type="checkbox" className="accent-accent" checked={profile.alerts !== false} disabled={busy} onChange={event => void save(profiles.map(item => item.id === profile.id ? { ...item, alerts: event.target.checked } : item))} />{t('usage.profiles.alerts')}<span className="sr-only"> {profile.label}</span></label></div>
+            <AccountLaunchControls profile={profile} controller={launch} disabled={busy} />
           </div>)}
           {!profiles.length && <p className="text-xs text-muted">{t('usage.profiles.empty')}</p>}
         </div>

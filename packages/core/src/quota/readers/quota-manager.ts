@@ -124,6 +124,7 @@ export class QuotaManager {
   }
   private emit(): void { if (!this.disposed) this.deps.onChanged?.(this.getState()); }
   reportNotice(message: string): void { this.notice = message; this.emit(); }
+  canRunAutomation(): boolean { return !this.disposed && !this.paused && !this.locked && this.timer !== null; }
   setSignals(locked: boolean, constrained: boolean): void { this.locked = locked; this.constrained = constrained; }
   start(): void {
     if (this.disposed) return;

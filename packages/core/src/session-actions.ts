@@ -49,20 +49,32 @@ export async function findSessionExecutable(name: string, directory: string, env
 const psLiteral = (value: string) => `'${value.replace(/'/g, "''")}'`;
 const psEncoded = (script: string) => Buffer.from(script, 'utf16le').toString('base64');
 
-export function windowsResumeScript(directory: string, executable: string, args: readonly string[]): string {
-  const setup = `$ErrorActionPreference = 'Stop'; Set-Location -LiteralPath ${psLiteral(directory)}; `;
-  if (!/\.(cmd|bat)$/i.test(executable)) return setup + `& ${[executable, ...args].map(psLiteral).join(' ')}`;
+export type TerminalBindings = Record<string, string | null>;
+function checkedBindings(bindings: TerminalBindings): [string, string | null][] {
+  const entries = Object.entries(bindings);
+  if (entries.some(([key, value]) => !/^[A-Z_][A-Z0-9_]*$/.test(key) || value !== null && (typeof value !== 'string' || /[\u0000\r\n]/.test(value)))) throw new Error('SESSION_ACTION_LAUNCH_FAILED');
+  return entries;
+}
+export function windowsResumeScript(directory: string, executable: string, args: readonly string[], bindings: TerminalBindings = {}): string {
+  const environment = checkedBindings(bindings).map(([key, value]) => `$env:${key} = ${value === null ? '$null' : psLiteral(value)}; `).join('');
+  const setup = `$ErrorActionPreference = 'Stop'; Set-Location -LiteralPath ${psLiteral(directory)}; ${environment}`;
   const values = [executable, ...args];
-  // cmd expands %NAME% even inside PowerShell's literal arguments. Substitute
-  // our own environment slots once so percent characters in the values are not
-  // expanded recursively. Quote every slot and turn delayed expansion off.
-  if (values.some(value => /["\u0000\r\n]/.test(value))) throw new Error('SESSION_ACTION_LAUNCH_FAILED');
-  const slots = values.map((_, index) => `QUOTERN_SESSION_LAUNCH_${index}`);
-  const assignments = slots.map((slot, index) => `$env:${slot} = ${psLiteral(values[index]!.replace(/(\\+)$/, '$1$1'))}`).join('; ');
-  const command = '"' + slots.map((slot, index) => values[index] === '' ? '""' : `"%${slot}%"`).join(' ') + '"';
+  if (values.some(value => /[\u0000\r\n]/.test(value))) throw new Error('SESSION_ACTION_LAUNCH_FAILED');
+  // Build the exact native command line; Windows PowerShell's legacy argument
+  // binder otherwise drops empty arguments and embedded double quotes.
+  const nativeArgument = (value: string) => '"' + value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1') + '"';
+  const processScript = (file: string, argumentLine: string) => `$launchInfo = [System.Diagnostics.ProcessStartInfo]::new(); $launchInfo.FileName = ${psLiteral(file)}; $launchInfo.Arguments = ${psLiteral(argumentLine)}; $launchInfo.UseShellExecute = $false; $launchInfo.WorkingDirectory = ${psLiteral(directory)}; $launchProcess = [System.Diagnostics.Process]::Start($launchInfo); $launchProcess.WaitForExit(); $global:LASTEXITCODE = $launchProcess.ExitCode; $launchProcess.Dispose()`;
+  if (!/\.(cmd|bat)$/i.test(executable)) return setup + processScript(executable, args.map(nativeArgument).join(' '));
+  // A shim's %* is parsed by cmd a second time. Protect metacharacters for both
+  // passes, and substitute slots once to keep literal %NAME% from expanding.
+  const meta = /([()\][%!^"`<>&|;, *?])/g;
+  const encoded = [executable, ...args.map(value => nativeArgument(value).replace(meta, '^$1').replace(meta, '^$1'))];
+  const slots = encoded.map((_, index) => `QUOTERN_SESSION_LAUNCH_${index}`);
+  const assignments = slots.map((slot, index) => `$env:${slot} = ${psLiteral(encoded[index]!)}`).join('; ');
+  const command = `""%${slots[0]}%" ${slots.slice(1).map(slot => `%${slot}%`).join(' ')}"`;
   const cmd = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe');
   const cleanup = slots.map(slot => `$env:${slot} = $null`).join('; ');
-  return setup + `${assignments}; try { & ${psLiteral(cmd)} /d /v:off /s /c ${psLiteral(command)} } finally { ${cleanup} }`;
+  return setup + `${assignments}; try { ${processScript(cmd, '/d /v:off /s /c ' + command)} } finally { ${cleanup} }`;
 }
 
 interface Launch {
@@ -95,17 +107,22 @@ const terminalScript = `on run argv
   end tell
 end run`;
 
-export function sessionTerminalLaunch(directory: string, executable: string, args: readonly string[], platform = process.platform, env = process.env): Launch {
+export function sessionTerminalLaunch(directory: string, executable: string, args: readonly string[], platform = process.platform, env = process.env, bindings: TerminalBindings = {}): Launch {
   const interactiveEnv = terminalEnvironment(env);
+  const entries = checkedBindings(bindings);
+  for (const [key, value] of entries) { if (value === null) delete interactiveEnv[key]; else interactiveEnv[key] = value; }
   if (platform === 'win32') {
     const powershell = win32.join(env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
     // Start-Process gives the visible terminal fresh console handles; inheriting the
     // daemon's ignored stdio would leave an apparently empty, noninteractive window.
-    const script = `$ErrorActionPreference = 'Stop'; Start-Process -FilePath ${psLiteral(powershell)} -ArgumentList '-NoLogo','-NoExit','-EncodedCommand',${psLiteral(psEncoded(windowsResumeScript(directory, executable, args)))} -WorkingDirectory ${psLiteral(directory)} -WindowStyle Normal`;
+    const script = `$ErrorActionPreference = 'Stop'; Start-Process -FilePath ${psLiteral(powershell)} -ArgumentList '-NoLogo','-NoExit','-EncodedCommand',${psLiteral(psEncoded(windowsResumeScript(directory, executable, args, bindings)))} -WorkingDirectory ${psLiteral(directory)} -WindowStyle Normal`;
     return { executable: powershell, args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', psEncoded(script)], waitForExit: true, env: interactiveEnv };
   }
-  if (platform === 'darwin') return { executable: '/usr/bin/osascript', args: ['-e', terminalScript, '--', directory, executable, ...args], waitForExit: true, env: interactiveEnv };
-  if (platform === 'linux') return { executable: 'x-terminal-emulator', args: ['-e', '/bin/sh', '-c', 'cd -- "$1" || exit; shift; "$@"; exec "${SHELL:-/bin/sh}"', 'quotern-session', directory, executable, ...args], env: interactiveEnv };
+  // Terminal.app runs a login shell, whose startup files may override the spawn
+  // environment. Bind the selected account immediately before the CLI itself.
+  const invocation = entries.length ? ['/usr/bin/env', ...entries.filter(([, value]) => value === null).flatMap(([key]) => ['-u', key]), ...entries.filter(([, value]) => value !== null).map(([key, value]) => `${key}=${value}`), executable, ...args] : [executable, ...args];
+  if (platform === 'darwin') return { executable: '/usr/bin/osascript', args: ['-e', terminalScript, '--', directory, ...invocation], waitForExit: true, env: interactiveEnv };
+  if (platform === 'linux') return { executable: 'x-terminal-emulator', args: ['-e', '/bin/sh', '-c', 'cd -- "$1" || exit; shift; "$@"; exec "${SHELL:-/bin/sh}"', 'quotern-session', directory, ...invocation], env: interactiveEnv };
   throw new Error('SESSION_ACTION_UNSUPPORTED');
 }
 
@@ -124,6 +141,17 @@ async function launch(command: Launch, directory: string): Promise<void> {
     });
     else child.once('spawn', () => { child.unref(); resolve(); });
   });
+}
+
+/** The executable has already been resolved outside the untrusted project. */
+export async function launchResolvedTerminal(directory: string, executable: string, args: readonly string[], env: NodeJS.ProcessEnv, bindings: TerminalBindings = {}): Promise<void> {
+  const terminal = sessionTerminalLaunch(directory, executable, args, process.platform, env, bindings);
+  if (process.platform === 'linux') {
+    const installed = await findSessionExecutable(terminal.executable, directory, env);
+    if (!installed) throw new Error('SESSION_ACTION_UNSUPPORTED');
+    terminal.executable = installed;
+  }
+  await launch(terminal, directory);
 }
 
 export const nativeSessionActions: SessionActionRuntime = {

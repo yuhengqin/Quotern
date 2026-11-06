@@ -214,6 +214,7 @@ Commands:
                         查询已落盘的本地用量数据（只读，不触发同步）
   sessions              查询已采集会话；支持模型／项目筛选及 JSON／CSV 导出
   statusline            从 stdin 读取 Claude 状态并显示会话费用、今日估价与上下文
+  launch claude|codex    使用默认或指定账号打开新终端（详见 launch --help）
   quota [status|forecast|diagnostics|recommend|providers] 只读额度快照（详见 quota --help）
   mcp                   只读额度 MCP 服务（stdio；详见 mcp --help）
   prompt                通用终端额度摘要（只读缓存；详见 prompt --help）
@@ -262,6 +263,7 @@ Commands:
                         Query persisted local usage (read only; does not sync)
   sessions              Query collected sessions with model/project filters and JSON/CSV export
   statusline            Show Claude session cost, local daily estimate and context from stdin
+  launch claude|codex    Open a terminal with the default or selected account (see launch --help)
   quota [status|forecast|diagnostics|recommend|providers] Read quota snapshots (see quota --help)
   mcp                   Read-only quota MCP server (stdio; see mcp --help)
   prompt                Terminal quota summary (cached; see prompt --help)
@@ -310,6 +312,7 @@ Examples:
                         保存済みの使用量を参照（読取専用。同期は行いません）
   sessions              保存済みセッションを絞り込み、JSON/CSV で出力
   statusline            stdin の Claude 状態から費用とコンテキストを表示
+  launch claude|codex    既定または選択したアカウントで起動（launch --help を参照）
   quota [status|forecast|diagnostics|recommend|providers] クォータ参照（quota --help を参照）
   mcp                   読取専用クォータ MCP（stdio; mcp --help を参照）
   prompt                キャッシュから端末クォータ摘要（prompt --help を参照）
@@ -358,6 +361,7 @@ Examples:
                         저장된 로컬 사용량 조회 (읽기 전용, 동기화하지 않음)
   sessions              수집된 세션 필터링 및 JSON/CSV 내보내기
   statusline            stdin의 Claude 상태로 비용 및 컨텍스트 표시
+  launch claude|codex    기본 또는 선택한 계정으로 새 터미널 열기 (launch --help 참조)
   quota [status|forecast|diagnostics|recommend|providers] 할당량 조회 (quota --help 참조)
   mcp                   읽기 전용 할당량 MCP (stdio; mcp --help 참조)
   prompt                캐시된 터미널 할당량 요약 (prompt --help 참조)

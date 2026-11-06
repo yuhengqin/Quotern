@@ -112,7 +112,7 @@ test('Windows executes a fixed CLI shim with literal directory and installation 
     const project = join(root, "项目 ' & $(echo wrong) %QUOTERN_UNSET_TEST%"), installed = join(root, "bin ' & %QUOTERN_UNSET_TEST%");
     await mkdir(project); await mkdir(installed);
     const output = join(root, 'result.json'), recorder = join(root, 'record.cjs'), executable = join(installed, 'codex.cmd');
-    await writeFile(recorder, `require('node:fs').writeFileSync(${JSON.stringify(output)}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }));`);
+    await writeFile(recorder, `require('node:fs').writeFileSync(${JSON.stringify(output)}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), ...(process.env.QUOTERN_TEST_BINDINGS ? { profile: process.env.CLAUDE_CONFIG_DIR, override: process.env.ANTHROPIC_API_KEY ?? null } : {}) }));`);
     await writeFile(executable, `@echo off\r\n"${process.execPath}" "${recorder}" %*\r\n`);
     const script = windowsResumeScript(project, executable, ['resume', 'safe-id']);
     const powershell = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
@@ -123,6 +123,18 @@ test('Windows executes a fixed CLI shim with literal directory and installation 
     const piScript = windowsResumeScript(project, executable, pathArgs);
     await promisify(execFile)(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(piScript, 'utf16le').toString('base64')], { windowsHide: true, timeout: 10_000, env: { ...process.env, QUOTERN_SESSION_ARG_TEST: 'must-not-expand' } });
     assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), { cwd: project, args: pathArgs });
+    const profileScript = windowsResumeScript(project, executable, ['--resume', 'safe-id'], { QUOTERN_TEST_BINDINGS: '1', CLAUDE_CONFIG_DIR: sessionFile, ANTHROPIC_API_KEY: null });
+    await promisify(execFile)(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(profileScript, 'utf16le').toString('base64')], { windowsHide: true, timeout: 10_000, env: { ...process.env, ANTHROPIC_API_KEY: 'synthetic-must-be-cleared' } });
+    assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), { cwd: project, args: ['--resume', 'safe-id'], profile: sessionFile, override: null });
+    const marker = join(root, 'must-not-execute.txt');
+    const arbitraryArgs = ['Explain "hello"', '', '{"key":"q & echo wrong"}', '%PATH% !literal!^', 'D:\\', 'x\\"q', `" & echo wrong > "${marker}" & "`];
+    const forwardedScript = windowsResumeScript(project, executable, arbitraryArgs);
+    await promisify(execFile)(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(forwardedScript, 'utf16le').toString('base64')], { windowsHide: true, timeout: 10_000 });
+    assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), { cwd: project, args: arbitraryArgs });
+    await assert.rejects(readFile(marker), { code: 'ENOENT' });
+    const nativeScript = windowsResumeScript(project, process.execPath, [recorder, ...arbitraryArgs]);
+    await promisify(execFile)(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(nativeScript, 'utf16le').toString('base64')], { windowsHide: true, timeout: 10_000 });
+    assert.deepEqual(JSON.parse(await readFile(output, 'utf8')), { cwd: project, args: arbitraryArgs });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

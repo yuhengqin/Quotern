@@ -520,6 +520,12 @@ async function main(): Promise<void> {
   try {
     // Query before the runtime argument path: no startup, ownership or sync.
     const commandLine = extractCliLanguage(process.argv.slice(2));
+    if (commandLine.args[0] === 'launch') {
+      quotaQueryMode = true;
+      try { await (await import('./launch-command.js')).runLaunchCommand(commandLine.args.slice(1)); }
+      catch (error) { throw new CliUserError(error instanceof Error ? error.message : 'LAUNCH_REQUEST_FAILED'); }
+      return;
+    }
     if (commandLine.args[0] === 'agent') {
       await (await import('./agent-command.js')).runAgentCommand(commandLine.args.slice(1));
       return;

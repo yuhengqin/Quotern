@@ -113,6 +113,13 @@ export function quotaPaceLabel(analysis: QuotaAnalysis): string | null {
   return pace === null ? null : pace === 0 ? '节奏正常' : pace > 0 ? '使用较慢' : '使用偏快';
 }
 
+/** The bar shows remaining, whereas paceDifference is expected-used minus actual-used. */
+export function quotaPaceMarker(window: QuotaWindow, analysis: QuotaAnalysis | undefined, stale: boolean, now: number): number | null {
+  if (stale || window.analysisEligible === false || window.timeKind === 'expiry' || !window.resetsAt || window.resetsAt <= now
+    || analysis?.paceDifference == null || !Number.isFinite(analysis.paceDifference) || !Number.isFinite(window.usedPercent)) return null;
+  return Math.max(0, Math.min(100, 100 - window.usedPercent - analysis.paceDifference));
+}
+
 export function quotaPaceDescription(window: QuotaWindow, analysis: QuotaAnalysis): string | null {
   if (analysis.paceDifference === null) return null;
   const basis = analysis.paceBasis === 'workdays' ? '工作日安排' : analysis.paceBasis === 'automatic' ? '历史使用习惯' : '当前周期进度';

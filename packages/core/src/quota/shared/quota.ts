@@ -63,7 +63,11 @@ export interface QuotaServiceStatus {
   checkedAt: number | null;
   stale: boolean;
   url: string;
+  components?: { id: string; name: string; level: QuotaServiceStatus['level'] }[];
+  incidents?: { id: string; name: string; phase: string; level: QuotaServiceStatus['level']; componentIds: string[]; body: string; updatedAt: number | null; url: string }[];
+  selectionEmpty?: boolean;
 }
+export interface QuotaServiceNotification { provider: string; label: string; level: QuotaServiceStatus['level']; url: string }
 export interface QuotaProviderState {
   id: string;
   providerId?: string;
@@ -93,9 +97,15 @@ export interface QuotaPreferences {
   showSparkline: boolean;
   paceModel: QuotaPaceModel;
   channels: Partial<Record<SubscriptionChannelId, boolean>>;
+  serviceAlerts?: boolean;
+  /** Missing means all services, [] explicitly selects none. */
+  serviceComponents?: Partial<Record<SubscriptionChannelId, string[]>>;
+  resetTimeMode?: 'countdown' | 'date';
+  quotaShortcut?: boolean;
 }
 export const DEFAULT_QUOTA_PREFERENCES: QuotaPreferences = {
   thresholdAlerts: true, resetAlerts: true, showSparkline: true, paceModel: 'uniform', channels: {},
+  serviceAlerts: false, serviceComponents: {}, resetTimeMode: 'countdown', quotaShortcut: false,
 };
 export interface QuotaState {
   providers: QuotaProviderState[];

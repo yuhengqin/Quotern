@@ -38,6 +38,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
+import { FilterSelectPopover } from './FilterMenu';
 
 import {
   getDefaultSettingsTab,
@@ -391,7 +392,7 @@ function AppSettingsPanel() {
                       <Select.Value>{({ selectedText }) => selectedText}</Select.Value>
                       <Select.Indicator />
                     </Select.Trigger>
-                    <Select.Popover>
+                    <FilterSelectPopover>
                       <ListBox aria-label={t('settings.tray.modeListAria')}>
                         <ListBox.Item id="both" textValue={t('settings.tray.both')}>
                           {t('settings.tray.both')}
@@ -405,8 +406,11 @@ function AppSettingsPanel() {
                           {t('settings.tray.cost')}
                           <ListBox.ItemIndicator />
                         </ListBox.Item>
+                        <ListBox.Item id="quota" textValue={t('desktop.quota.menuBar')}>
+                          {t('desktop.quota.menuBar')}<ListBox.ItemIndicator />
+                        </ListBox.Item>
                       </ListBox>
-                    </Select.Popover>
+                    </FilterSelectPopover>
                   </Select>
                 </div>
               )}

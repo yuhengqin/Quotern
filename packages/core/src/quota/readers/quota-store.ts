@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { DEFAULT_QUOTA_PREFERENCES, type QuotaPreferences, type QuotaProfile, type QuotaSample } from '../shared/quota.js';
-import { isSubscriptionChannelVisibility } from '../shared/subscription-channels.js';
+import { isSubscriptionChannelVisibility, SUBSCRIPTION_CHANNELS } from '../shared/subscription-channels.js';
 
 export type QuotaHistory = Record<string, QuotaSample[]>;
 export function pruneQuotaHistory(history: QuotaHistory, now: number): boolean {
@@ -40,7 +40,10 @@ export function validQuotaProfiles(value: unknown): value is QuotaProfile[] {
 export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
-  return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline'].includes(key) ? typeof value === 'boolean'
+  return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline', 'serviceAlerts', 'quotaShortcut'].includes(key) ? typeof value === 'boolean'
+    : key === 'resetTimeMode' ? value === 'countdown' || value === 'date'
+    : key === 'serviceComponents' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([id, ids]) =>
+      SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && Array.isArray(ids) && ids.length <= 200 && new Set(ids).size === ids.length && ids.every(item => typeof item === 'string' && /^[a-zA-Z0-9_-]{1,300}$/.test(item))))
     : key === 'paceModel' ? ['uniform', 'workdays', 'automatic'].includes(value as string)
     : key === 'channels' ? isSubscriptionChannelVisibility(value)
       : key === 'profiles' ? validQuotaProfiles(value) : false);
@@ -75,7 +78,7 @@ export async function openQuotaStore(directory: string): Promise<QuotaStore> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       preferencesReadable = false;
-      preferences.thresholdAlerts = false; preferences.resetAlerts = false;
+      preferences.thresholdAlerts = false; preferences.resetAlerts = false; preferences.serviceAlerts = false;
       notice = '无法读取额度设置，已暂停提醒。请检查额度设置文件及访问权限。';
     }
   }

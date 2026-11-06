@@ -3,6 +3,12 @@ import type { SupportedLocale } from 'quotern-i18n';
 /** Native-only copy. Registered with the shared translator during app startup. */
 export const NATIVE_MESSAGES = {
   'zh-CN': {
+    'native.tray.quotaTitle': '{{provider}} 余{{percent}}%',
+    'native.quota.serviceIssue': '{{provider}} 服务异常',
+    'native.quota.serviceRestored': '{{provider}} 服务已恢复',
+    'native.quota.serviceBody': '所关注服务的状态发生变化。点击查看额度面板中的服务详情。',
+    'native.quota.testTitle': 'Quotern 测试通知',
+    'native.quota.testBody': '额度提醒使用此通知通道。点击打开额度面板。',
     'native.tray.showMain': '显示主窗口',
     'native.tray.sync': '同步数据',
     'native.tray.togglePet': '显示/隐藏桌面宠物',
@@ -73,6 +79,12 @@ export const NATIVE_MESSAGES = {
     'native.update.restartTimedOut': '自动重启未完成，请点击“更新并重启”再次尝试。',
   },
   en: {
+    'native.tray.quotaTitle': '{{provider}} {{percent}}% left',
+    'native.quota.serviceIssue': '{{provider}} service disruption',
+    'native.quota.serviceRestored': '{{provider}} service restored',
+    'native.quota.serviceBody': 'A service you follow changed status. Click to view service details in the quota panel.',
+    'native.quota.testTitle': 'Quotern test notification',
+    'native.quota.testBody': 'Quota alerts use this notification channel. Click to open the quota panel.',
     'native.tray.showMain': 'Show main window',
     'native.tray.sync': 'Sync data',
     'native.tray.togglePet': 'Show/hide desktop pet',
@@ -143,6 +155,12 @@ export const NATIVE_MESSAGES = {
     'native.update.restartTimedOut': 'Automatic restart did not finish. Select “Update and restart” to try again.',
   },
   ja: {
+    'native.tray.quotaTitle': '{{provider}} 残り{{percent}}%',
+    'native.quota.serviceIssue': '{{provider}} のサービス障害',
+    'native.quota.serviceRestored': '{{provider}} のサービスが復旧',
+    'native.quota.serviceBody': '確認中のサービスの状態が変わりました。クリックして利用枠パネルで詳細を確認できます。',
+    'native.quota.testTitle': 'Quotern テスト通知',
+    'native.quota.testBody': '利用枠の通知はこの経路を使用します。クリックして利用枠パネルを開きます。',
     'native.tray.showMain': 'メインウィンドウを表示',
     'native.tray.sync': 'データを同期',
     'native.tray.togglePet': 'デスクトップペットの表示切替',
@@ -213,6 +231,12 @@ export const NATIVE_MESSAGES = {
     'native.update.restartTimedOut': '自動再起動が完了しませんでした。「更新して再起動」を選んで再試行してください。',
   },
   ko: {
+    'native.tray.quotaTitle': '{{provider}} {{percent}}% 남음',
+    'native.quota.serviceIssue': '{{provider}} 서비스 장애',
+    'native.quota.serviceRestored': '{{provider}} 서비스 복구됨',
+    'native.quota.serviceBody': '확인 중인 서비스의 상태가 변경되었습니다. 클릭하여 한도 패널에서 상세 내용을 확인하세요.',
+    'native.quota.testTitle': 'Quotern 테스트 알림',
+    'native.quota.testBody': '한도 알림은 이 알림 채널을 사용합니다. 클릭하여 한도 패널을 여세요.',
     'native.tray.showMain': '기본 창 표시',
     'native.tray.sync': '데이터 동기화',
     'native.tray.togglePet': '데스크톱 펫 표시/숨기기',

@@ -43,6 +43,7 @@ test('formats each tray display mode', () => {
   assert.equal(isTrayUsageMode('both'), true);
   assert.equal(isTrayUsageMode('tokens'), true);
   assert.equal(isTrayUsageMode('cost'), true);
+  assert.equal(isTrayUsageMode('quota'), true);
   assert.equal(isTrayUsageMode('other'), false);
   assert.equal(isTrayUsageMode(null), false);
 });

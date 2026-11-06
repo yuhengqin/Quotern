@@ -1,5 +1,7 @@
 import { SUBSCRIPTION_CHANNELS } from './shared/subscription-channels.js';
-import type { QuotaServiceStatus } from './shared/quota.js';
+import type { QuotaServiceNotification } from './shared/quota.js';
+import { parseQuotaServiceSummary } from './shared/quota-service.js';
+export { parseQuotaServiceStatus } from './shared/quota-service.js';
 import { QuotaManager, type QuotaReader, type QuotaNotification } from './readers/quota-manager.js';
 import type { QuotaState, QuotaProfile } from './shared/quota.js';
 import { openQuotaStore } from './readers/quota-store.js';
@@ -26,17 +28,11 @@ import { QUOTA_PROVIDER_DESCRIPTORS, getQuotaProviderDescriptor, type QuotaProvi
 export { QuotaManager } from './readers/quota-manager.js';
 const STATUS_URLS: Record<string, string> = Object.fromEntries(QUOTA_PROVIDER_DESCRIPTORS.filter(p => p.statusPage).map(p => [p.id, p.statusPage!.url]));
 
-export function parseQuotaServiceStatus(value: unknown): QuotaServiceStatus['level'] {
-  const indicator = (value as { status?: { indicator?: unknown } } | null)?.status?.indicator;
-  const levels: Record<string, QuotaServiceStatus['level']> = { none: 'operational', minor: 'minor', major: 'major', critical: 'critical', maintenance: 'maintenance' };
-  if (typeof indicator !== 'string' || !Object.hasOwn(levels, indicator)) throw new Error('未知服务状态');
-  return levels[indicator];
-}
-
 export async function createQuotaRuntime(options: {
   directory: string;
   onChanged?(state: QuotaState): void;
   notify?(notification: QuotaNotification): void;
+  notifyService?(notification: QuotaServiceNotification): void;
   fetch?: (url: string, init: RequestInit) => Promise<Response>;
   snapshot?: { directory: string; runtime: QuotaRuntimeSource };
 }) {
@@ -100,7 +96,7 @@ export async function createQuotaRuntime(options: {
   };
   return new QuotaManager({ readers, store: await openQuotaStore(options.directory),
     profileReaders,
-    notify: options.notify ?? (() => {}), onChanged: state => {
+    notify: options.notify ?? (() => {}), notifyService: options.notifyService, onChanged: state => {
       options.onChanged?.(state);
       // Construction and the first in-flight emission must not erase the previous run's snapshot.
       if (publisher && options.snapshot && (state.providers.length === 0 || state.providers.some(p => p.queriedAt !== null))) {
@@ -111,11 +107,11 @@ export async function createQuotaRuntime(options: {
     },
     fetchStatus: async url => {
       if (!Object.values(STATUS_URLS).includes(url)) throw new Error('unsupported status source');
-      const response = await (options.fetch ?? quotaNodeFetch)(new URL('api/v2/status.json', url).toString(), { signal: AbortSignal.timeout(15000), credentials: 'omit', redirect: 'error', cache: 'no-store' });
+      const response = await (options.fetch ?? quotaNodeFetch)(new URL('api/v2/summary.json', url).toString(), { signal: AbortSignal.timeout(15000), credentials: 'omit', redirect: 'error', cache: 'no-store' });
       if (!response.ok) throw new Error('status unavailable');
       const body = await response.text();
       if (body.length > 256 * 1024) throw new Error('status response too large');
-      return parseQuotaServiceStatus(JSON.parse(body));
+      return parseQuotaServiceSummary(JSON.parse(body), url, Date.now() / 1000);
     },
   });
 }

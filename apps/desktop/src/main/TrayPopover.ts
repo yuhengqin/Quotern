@@ -247,6 +247,15 @@ function togglePopover(): void {
   w.focus();
 }
 
+/** Reuse the tray panel for the global shortcut and quota notifications. */
+export function showQuotaPopover(): void {
+  if (!tray || (!isMac && process.platform !== 'win32')) { currentOptions?.showMainWindow(); return; }
+  currentOptions?.onOpen?.();
+  const w = ensurePopover();
+  positionPopoverNearTray(tray, popoverHeight);
+  w.show(); w.focus();
+}
+
 /** Hide the macOS tray popover if visible (e.g. before focusing the main window). */
 export function hideTrayPopover(): void {
   if (!popover || popover.isDestroyed() || !popover.isVisible()) return;

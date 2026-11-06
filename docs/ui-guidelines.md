@@ -91,6 +91,7 @@
 | Agent 来源图标 | [ProviderIcon](../packages/dashboard/src/components/ProviderIcon.tsx)，会话、项目和 Agent 选择器使用 | Agent/采集来源标识及 fallback | 同名文件，分别核对资源与平台能力 |
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
 | 订阅品牌图标 | [SubscriptionBrandIcon](../packages/dashboard/src/components/SubscriptionBrandIcon.tsx)，QuotaUsageCard 使用 | 订阅品牌（含 Gemini CLI）；与 Agent/模型厂商有不同语义与资源集合。品牌文字已在卡片中显示，图标使用空 alt / aria-hidden | 独立实现，Desktop 支持的品牌/资源更多；新增通道时同时登记两端品牌资源 |
+| 订阅额度与服务详情 | [QuotaUsageCard](../packages/dashboard/src/components/QuotaUsageCard.tsx) 与 [QuotaServiceDetails](../packages/dashboard/src/components/QuotaServiceDetails.tsx)，SubscriptionUsageGrid 使用 | 主卡保留额度窗口、异常和紧凑状态；详情承载全部窗口、趋势、来源、服务组件与事件。重置时间默认倒计时，详情可切换日期，经过截止时刻仅提示等待读数更新。节奏刻度按“剩余”方向换算，过期读数、已到期窗口和非额度余额不显示刻度。服务筛选复用 FilterSelectPopover：未配置表示全部，空数组表示尚未选择，未知与过期不得显示正常。保存失败保留原值并在详情反馈；Claude 金额和赠送权益提供官方用量页入口，未接入自动读数 | Desktop 的 QuotaUsageCard 适配 IPC 保存与原生外链，复用 Dashboard 实现；index.css 登记共享组件 `@source`。两端保存 resetTimeMode 与 serviceComponents，服务筛选按厂商共用 |
 | 外观偏好 | [ThemePreferenceControl](../packages/dashboard/src/components/ThemePreferenceControl.tsx)，SettingsPanel 的「应用」中紧随语言设置 | 明确选择跟随系统、浅色、深色，立即应用并保存；位于运行配置之前，不依赖配置读取成功。FilterChromeActions 不再提供主题按钮，所有浏览器面板均保留设置入口；存量 ThemeToggle 仅供旧页面使用 | Desktop SettingsPanel 直接引用同一控件，由各端独立主题 hook 提供状态与保存，Desktop 保留主进程系统外观广播 |
 | 关于与仓库链接 | [AboutContent](../packages/dashboard/src/components/AboutContent.tsx)，设置「关于」与 AboutModal 使用 | GitHub 仓库链接位于版本信息下方，保留反馈和支持的 Agent 信息；仪表盘操作区不再单独展示仓库按钮 | 同名独立副本；仓库链接经原生 openExternal 打开 |
 | 应用更新 | 浏览器端不提供桌面更新操作 | Desktop 构建策略决定自动或手动更新，不由运行时环境变量控制 | [AutoUpdateAction](../apps/desktop/src/renderer/components/AutoUpdateAction.tsx) 与 [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx) 复用 shared/auto-update 的操作语义；macOS ad-hoc 显示「手动更新」/「前往下载页」及说明，不声称已发现新版本，不显示检查/下载/安装进度；signed 和 Windows 安装版保留自动更新，Windows portable 保留新版本提示与下载页入口 |
@@ -194,7 +195,9 @@ import { FilterSelectPopover } from './FilterMenu';
 
 日期编辑器、计算器、解释性 Popover、原生系统窗口有各自布局合同，不套用列表菜单的 320px 上限。安装方式菜单和模型 ID 复制列表属于动作入口，按各自语义维护。
 
-当前允许直接使用 HeroUI Select.Popover 的页面例外仅有 Desktop [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx) 的 macOS 托盘模式设置与 [QuotaSettings](../apps/desktop/src/renderer/components/QuotaSettings.tsx) 的配额预测模式设置：均为固定三项、异步持久化的设置控件，本次保留原行为。新增例外需要同时更新这里的理由和对应检查范围。
+当前允许直接使用 HeroUI Select.Popover 的页面例外仅有 Desktop [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx) 的 macOS 托盘模式设置（Token、费用、两者、订阅剩余额度，共四项）与 [QuotaSettings](../apps/desktop/src/renderer/components/QuotaSettings.tsx) 的配额预测模式设置（三项）：均为固定少量、异步持久化的设置控件，保留原有设置行为。菜单栏额度模式的归一化与摘要有单元测试，macOS 原生菜单栏显示仍需在对应系统验收。新增例外需要同时更新这里的理由和对应检查范围。
+
+Desktop「订阅」设置提供默认关闭的服务故障/恢复提醒和额度面板快捷键（Windows/Linux 为 Ctrl+Shift+U，macOS 为 ⌘⇧U）。快捷键注册冲突不写入开启设置，启动时无法恢复注册会就地提示；关闭与退出只释放本功能持有的快捷键。测试通知分别显示系统已接收、已请求但未确认显示、发送失败，不能把请求成功写成用户已看到。通知点击复用额度浮窗，未提供浮窗的平台进入主窗口。首次服务观察、筛选变化、过期和未知状态不触发故障/恢复提醒；多账号按厂商合并查询与通知。
 
 总览专项验收：两端构建后运行 `corepack pnpm test:dashboard-ui [全新输出目录]`。它复用 Electron 界面测试驱动，以合成数据经真实 Core API / IPC 验证费用原始精度、单位切换不刷新、整行明细键盘与焦点、长列表浮层边界和滚动、完整项目名、分母说明、宽窄屏主指标；生成两端截图，仍需查看实际画面。
 

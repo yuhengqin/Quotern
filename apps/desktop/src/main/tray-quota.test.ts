@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { quotaTraySummary, quotaPopoverBounds } from './tray-quota';
+import { quotaTraySummary, quotaPopoverBounds, quotaTrayTitle } from './tray-quota';
 import { normalizeQuotaSnapshot } from '../shared/quota-analysis';
 import { mapAntigravityModels } from '../shared/antigravity-subscription';
 import { mapOpenCodeUsage } from '../shared/opencode-subscription';
@@ -9,6 +9,12 @@ test('tray risk ignores stale and monetary balances and names the limiting quota
   const a = normalizeQuotaSnapshot('codex', 'Codex', { status: 'ready', fiveHour: { usedPercent: 95 } });
   const b = normalizeQuotaSnapshot('claude', 'Claude', { status: 'ready', stale: true, fiveHour: { usedPercent: 100 } });
   assert.deepEqual(quotaTraySummary([a, b]), { level: 2, text: 'Codex 5 小时限额 剩余 5%' });
+});
+test('menu bar quota title uses the limiting fresh quota and leaves unknown readings unknown', () => {
+  const a = normalizeQuotaSnapshot('codex', 'Codex', { status: 'ready', fiveHour: { usedPercent: 95 } });
+  const b = normalizeQuotaSnapshot('claude', 'Claude', { status: 'ready', stale: true, fiveHour: { usedPercent: 100 } });
+  assert.equal(quotaTrayTitle([a, b], 'en'), 'Codex 5% left');
+  assert.equal(quotaTrayTitle([b], 'en'), '—');
 });
 test('tray tooltip summary follows the selected native language', () => {
   const provider = normalizeQuotaSnapshot('codex', 'Codex', { status: 'ready', fiveHour: { usedPercent: 95 } });

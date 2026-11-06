@@ -33,8 +33,10 @@ import {
   setTrayUsageTitle,
   setTrayQuotaState,
   refreshTrayLocale,
+  showQuotaPopover,
 } from './TrayPopover';
 import { formatTrayUsage } from '../shared/tray-usage';
+import { quotaTrayTitle } from './tray-quota';
 import { registerLocalApiIpc } from './local-api-ipc';
 import { registerCodexSubscriptionIpc } from './codex-subscription-ipc';
 import { registerClaudeSubscriptionIpc } from './claude-subscription-ipc';
@@ -286,6 +288,7 @@ function registerLocaleIpc(): void {
   });
 }
 
+let trayQuotaTitleEnabled = false;
 async function refreshTrayUsage(): Promise<void> {
   if (process.platform !== 'darwin') return;
   const generation = ++trayUsageRefreshGeneration;
@@ -295,8 +298,13 @@ async function refreshTrayUsage(): Promise<void> {
       loadTrayUsageMode(),
     ]);
     if (generation !== trayUsageRefreshGeneration) return;
+    trayQuotaTitleEnabled = enabled && mode === 'quota';
     if (!enabled) {
       setTrayUsageTitle('');
+      return;
+    }
+    if (mode === 'quota') {
+      setTrayUsageTitle(quotaTrayTitle(getQuotaRuntimeState()?.providers ?? [], getNativeLocale()));
       return;
     }
     const res = await localApiRequest('/functions/tud-usage-summary');
@@ -523,8 +531,9 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeOpenCodeSubscriptionIpc = registerOpenCodeSubscriptionIpc();
     disposeTraeSubscriptionIpc = registerTraeSubscriptionIpc();
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
-    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, getLocale: getNativeLocale, onChanged: state => {
+    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, showQuota: showQuotaPopover, getLocale: getNativeLocale, onChanged: state => {
       setTrayQuotaState(state);
+      if (trayQuotaTitleEnabled) setTrayUsageTitle(quotaTrayTitle(state.providers, getNativeLocale()));
       petController?.updateQuotaState(state);
     } });
     if (process.platform === 'win32') {

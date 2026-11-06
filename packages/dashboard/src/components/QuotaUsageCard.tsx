@@ -5,10 +5,12 @@ import { translate, type SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaDetail, localizeQuotaPaceDescription, localizeQuotaPaceLabel, localizeQuotaValueText, localizeQuotaWindowLabel } from 'quotern-i18n/quota';
 import { useTranslation } from 'quotern-i18n/react';
 import { RefreshCw } from 'lucide-react';
-import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from 'quotern-core/quota/shared/quota';
+import type { QuotaAnalysis, QuotaPreferences, QuotaPreferencePatch, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from 'quotern-core/quota/shared/quota';
+import type { SubscriptionChannelId } from 'quotern-core/quota/shared/subscription-channels';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
-import { formatSubscriptionResetTime } from '../lib/subscription-time';
-import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows } from '../lib/quota-presentation';
+import { formatSubscriptionResetTime, formatSubscriptionCountdown } from '../lib/subscription-time';
+import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows, quotaPaceMarker } from '../lib/quota-presentation';
+import { QuotaServiceDetails } from './QuotaServiceDetails';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string }> = {
   operational: { dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
@@ -55,16 +57,31 @@ export interface QuotaUsageCardProps {
   statusRow?: boolean;
   onRefresh: (id: string) => Promise<unknown>;
   onOpenExternal?: (url: string) => unknown;
+  onSave?: (patch: QuotaPreferencePatch) => Promise<unknown>;
 }
 
 function openExternal(url: string) { window.open(url, '_blank', 'noopener,noreferrer'); }
 
-export function QuotaUsageCard({ provider, preferences, statusRow = false, onRefresh, onOpenExternal = openExternal }: QuotaUsageCardProps) {
+export function QuotaUsageCard({ provider, preferences, statusRow = false, onRefresh, onSave, onOpenExternal = openExternal }: QuotaUsageCardProps) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const providerType = provider.providerId ?? provider.id;
   const proof = provider.provenance;
-  const [error, setError] = useState<'refreshFailed' | null>(null);
+  const [error, setError] = useState<'refreshFailed' | 'saveFailed' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = () => { if (!document.hidden) setNow(new Date()); };
+    const timer = window.setInterval(tick, 30000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
+  }, []);
+  const dateMode = preferences.resetTimeMode === 'date';
+  const apply = async (patch: QuotaPreferencePatch) => {
+    if (!onSave) return;
+    setSaving(true); setError(null);
+    try { await onSave(patch); } catch { setError('saveFailed'); } finally { setSaving(false); }
+  };
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
@@ -111,7 +128,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   }, [hintVisible, detailsOpen, hintSource]);
   const status = provider.service;
   const serviceLevel = status?.stale ? 'unknown' : status?.level;
-  const service = serviceLevel ? { ...SERVICE_STATUS[serviceLevel], label: t(`usage.quota.service.${serviceLevel}`) } : null;
+  const service = serviceLevel ? { ...SERVICE_STATUS[serviceLevel], label: status?.selectionEmpty ? t('usage.quota.noServices') : t(`usage.quota.service.${serviceLevel}`) } : null;
   const serviceWarning = status && !status.stale && !['operational', 'unknown'].includes(status.level) ? service : null;
   const severeServiceWarning = serviceWarning && (status?.level === 'major' || status?.level === 'critical') ? serviceWarning : null;
   const hasReading = provider.windows.length > 0 || provider.details.length > 0;
@@ -130,7 +147,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
       : provider.stale ? t('usage.quota.stale')
         : provider.message ? locale === 'zh-CN' ? provider.message : t('usage.quota.noReading')
           : compact ? t('usage.quota.noReading') : null;
-  const errorMessage = error ? t('usage.quota.refreshFailed') : null;
+  const errorMessage = error ? t(`usage.quota.${error}`) : null;
   const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
   const busy = provider.refreshing || refreshing;
   const lastQuery = provider.queriedAt ?? provider.fetchedAt;
@@ -183,12 +200,12 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
           </div>
           {planSummary && <Chip size="sm" variant="soft" className="min-w-0 max-w-full bg-foreground/8 text-foreground" title={planSummary}><Chip.Label className="truncate">{planSummary}</Chip.Label></Chip>}
         </div>
-        {status && headerService && <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpenExternal={onOpenExternal} iconOnly />}
+        {status && headerService && <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpen={openDetails} iconOnly />}
       </div>
       {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">{t('usage.quota.ompRecord', { date: provider.provenance.observedAt ? queryDate(provider.provenance.observedAt, locale) : t('usage.quota.timeUnknown') })}{provider.provenance.identityVerified ? '' : ` · ${t('usage.quota.identityUnverified')}`}</p>}
-      {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
+      {commonReset !== null && <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} />}
       {hasReading && <div className="flex flex-col gap-3">
-        {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} stale={provider.stale} hideReset={commonReset !== null} />)}
+        {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} now={now} dateMode={dateMode} />)}
         {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
       </div>}
       {summary && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={t('usage.quota.summaryTitle', { window: summary.label, description: summary.description ?? summary.text })}>
@@ -197,7 +214,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
       </div>}
       {(message || error) && <div className={`flex items-center justify-between gap-2 ${grouped ? 'min-w-0 flex-1' : compact ? 'min-h-8' : ''}`}>
         <p role="status" className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? errorMessage ?? message ?? undefined : undefined}>{errorMessage ?? message}</p>
-        {(retryable || error) && <Button data-quota-action data-quota-retry aria-label={t('usage.quota.retryAria', { provider: provider.label })} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? t('usage.quota.retrying') : t('usage.quota.retry')}</Button>}
+        {(retryable || error === 'refreshFailed') && <Button data-quota-action data-quota-retry aria-label={t('usage.quota.retryAria', { provider: provider.label })} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? t('usage.quota.retrying') : t('usage.quota.retry')}</Button>}
       </div>}
       {severeServiceWarning && <p role="status" className={`flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 ${grouped ? 'w-full' : ''}`}>
         {t('usage.quota.officialService', { status: severeServiceWarning.label })}
@@ -213,17 +230,19 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
                 <Modal.Header>
                   <Modal.Heading>{t('usage.quota.details', { provider: provider.label })}</Modal.Heading>
                 </Modal.Header>
-                <Modal.Body className="flex flex-col gap-5">
+                <Modal.Body className="flex flex-col gap-5 [&>*]:shrink-0">
                   {(provider.planLabel || provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ')}</p>}
-                  {commonReset !== null && <QuotaCommonResetTime at={commonReset} />}
-                  {status && service && <QuotaServiceStatusLink label={provider.label} status={status} service={service} onOpenExternal={onOpenExternal} />}
+                  {onSave && windows.some(window => window.resetsAt !== null) && <Button size="sm" variant="tertiary" className="w-fit" isDisabled={saving} onPress={() => void apply({ resetTimeMode: dateMode ? 'countdown' : 'date' })}>{t(dateMode ? 'usage.quota.showCountdown' : 'usage.quota.showDate')}</Button>}
+                  {commonReset !== null && <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} />}
                   <div className="flex flex-col gap-5">
-                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale} hideReset={commonReset !== null} detailed />)}
+                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} now={now} dateMode={dateMode} detailed />)}
                     {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
                   </div>
                   {(message || error) && <p role="status" className="text-sm text-muted">{errorMessage ?? message}</p>}
                   {compact && provider.status === 'expired' && <p className="text-xs text-muted">{t('usage.quota.signIn', { provider: provider.label })}</p>}
                   {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">{t('usage.quota.customModelNote')}</p>}
+                  {providerType === 'claude' && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal('https://claude.ai/settings/usage')}>{t('usage.quota.claudeUsage')} ↗</Button>}
+                  {status && <QuotaServiceDetails status={status} selected={preferences.serviceComponents?.[providerType as SubscriptionChannelId]} saving={saving} onSelect={onSave ? ids => void apply({ serviceComponents: { [providerType]: ids } }) : undefined} onOpenExternal={onOpenExternal} />}
                   <dl className="flex flex-col gap-2 border-t border-separator pt-4 text-xs text-muted">
                     <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.source')}</dt><dd>{proof?.source === 'native' ? `${provider.label} · ${t('usage.quota.localReading')}` : proof?.observer ?? t('usage.quota.localReading')}</dd></div>
                     <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.observedAt')}</dt><dd>{(proof?.observedAt ?? provider.fetchedAt) !== null ? queryDate((proof?.observedAt ?? provider.fetchedAt)!, locale) : t('usage.quota.noRecord')}</dd></div>
@@ -242,7 +261,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   </>;
 }
 
-function QuotaServiceStatusLink({ label, status, service, onOpenExternal, iconOnly = false }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']] & { label: string }; onOpenExternal: (url: string) => unknown; iconOnly?: boolean }) {
+function QuotaServiceStatusLink({ label, status, service, onOpen, iconOnly = false }: { label: string; status: QuotaServiceStatus; service: typeof SERVICE_STATUS[QuotaServiceStatus['level']] & { label: string }; onOpen: () => void; iconOnly?: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [open, setOpen] = useState(false);
@@ -253,7 +272,7 @@ function QuotaServiceStatusLink({ label, status, service, onOpenExternal, iconOn
       aria-label={t('usage.quota.statusAria', { provider: label, status: service.label })}
       onHoverStart={() => setOpen(true)} onHoverEnd={() => setOpen(false)}
       onFocus={event => { if (event.target.matches(':focus-visible')) setOpen(true); }} onBlur={() => setOpen(false)}
-      onPress={() => { setOpen(false); void onOpenExternal(status.url); }}>
+      onPress={() => { setOpen(false); onOpen(); }}>
       <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${service.dotClassName}`} />
       {!iconOnly && <><span>{service.label}</span><span aria-hidden="true">↗</span></>}
     </Button>
@@ -268,32 +287,37 @@ function QuotaServiceStatusLink({ label, status, service, onOpenExternal, iconOn
   </Tooltip>;
 }
 
-function QuotaCommonResetTime({ at }: { at: number }) {
+function QuotaCommonResetTime({ at, now, dateMode }: { at: number; now: Date; dateMode: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  return <p data-quota-common-reset className="text-xs tabular-nums text-muted" title={formatSubscriptionResetTime(at, new Date(), true, locale) ?? undefined}>{t('usage.quota.commonReset', { time: formatSubscriptionResetTime(at, new Date(), false, locale) })}</p>;
+  const time = dateMode ? formatSubscriptionResetTime(at, now, false, locale) : formatSubscriptionCountdown(at, now, locale);
+  return <p data-quota-common-reset className="text-xs tabular-nums text-muted" title={formatSubscriptionResetTime(at, now, true, locale) ?? undefined}>{!dateMode && at <= now.getTime() / 1000 ? time : t(dateMode ? 'usage.quota.commonReset' : 'usage.quota.resetsIn', { time })}</p>;
 }
 
-function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, hideReset = false }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; hideReset?: boolean }) {
+function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, hideReset = false, now, dateMode }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; hideReset?: boolean; now: Date; dateMode: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const label = localizeQuotaWindowLabel(locale, providerId, window);
-  const reset = hideReset ? null : formatSubscriptionResetTime(window.resetsAt, new Date(), false, locale);
+  const reset = hideReset ? null : dateMode ? formatSubscriptionResetTime(window.resetsAt, now, false, locale) : formatSubscriptionCountdown(window.resetsAt, now, locale);
+  const marker = quotaPaceMarker(window, analysis, stale, now.getTime() / 1000);
+  const markerId = useId();
+  const markerText = marker === null ? undefined : t('usage.quota.paceMarker', { percent: Math.round(marker) });
   const paceText = analysis ? localizeQuotaPaceLabel(locale, analysis) : null;
   const valueText = window.valueText ? localizeQuotaValueText(locale, window.valueText) : null;
   const color = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
   return <div className="flex min-w-0 flex-col gap-1">
-    <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
       <span className="min-w-0 truncate text-muted" title={label}>{label}</span>
-      {reset && <span className="shrink-0 text-[10px] tabular-nums text-muted" title={formatSubscriptionResetTime(window.resetsAt, new Date(), true, locale) ?? undefined}>{reset} {window.timeKind === 'expiry' ? t('usage.quota.expiry') : t('usage.quota.reset')}</span>}
+      {reset && <span className="text-xs tabular-nums text-muted" title={formatSubscriptionResetTime(window.resetsAt, now, true, locale) ?? undefined}>{!dateMode && window.resetsAt! <= now.getTime() / 1000 ? window.timeKind === 'expiry' ? t('usage.quota.expiredAt') : reset : dateMode ? `${reset} ${t(window.timeKind === 'expiry' ? 'usage.quota.expiry' : 'usage.quota.reset')}` : t(window.timeKind === 'expiry' ? 'usage.quota.expiresIn' : 'usage.quota.resetsIn', { time: reset })}</span>}
     </div>
     <div className="flex min-w-0 items-center gap-3">
-      <ProgressBar aria-label={`${label}: ${valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}`} className="min-w-0 flex-1" value={100 - window.usedPercent} size="sm"
+      <ProgressBar aria-label={`${label}: ${valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}`} aria-describedby={markerText ? markerId : undefined} className="min-w-0 flex-1" value={100 - window.usedPercent} size="sm"
         style={{ gap: 0, gridTemplateAreas: '"track"', gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto' }}>
-        <ProgressBar.Track className="h-1.5 rounded-full bg-surface-secondary"><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} /></ProgressBar.Track>
+        <ProgressBar.Track className="relative h-1.5 overflow-visible rounded-full bg-surface-secondary" title={markerText}><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} />{marker !== null && <span data-quota-pace-marker aria-hidden="true" className="absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded bg-foreground ring-1 ring-background" style={{ left: `${marker}%` }} />}</ProgressBar.Track>
       </ProgressBar>
       <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground" aria-label={valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}>{valueText ?? `${Math.round(100 - window.usedPercent)}%`}</span>
     </div>
+    {markerText && <span id={markerId} className="sr-only">{markerText}</span>}
     {detailed && window.used !== undefined && window.limit !== undefined && <p className="text-[10px] text-muted">{window.used.toLocaleString(locale)} / {window.limit.toLocaleString(locale)} {window.unit === 'requests' ? t('usage.quota.requestUnit') : window.unit === 'credits' ? t('usage.quota.creditUnit') : 'Token'}</p>}
     {detailed && !stale && paceText && <p className="text-[11px] text-muted" title={localizeQuotaPaceDescription(locale, window, analysis!) ?? undefined}>{paceText}</p>}
     {detailed && !stale && etaAt && <p data-quota-forecast className="text-xs text-amber-700 dark:text-amber-400">{t('usage.quota.forecast', { duration: duration(etaAt, locale) })}</p>}

@@ -12,12 +12,7 @@ declare global {
       dshPet: import('../preload/index').TudApi['dshPet'];
       version: () => string;
       platform: NodeJS.Platform;
-      quota: {
-        getState: () => Promise<import('../shared/quota').QuotaState>;
-        refresh: (provider?: string) => Promise<import('../shared/quota').QuotaState>;
-        setPreferences: (patch: import('../shared/quota').QuotaPreferencePatch) => Promise<import('../shared/quota').QuotaState>;
-        onChanged: (callback: (state: import('../shared/quota').QuotaState) => void) => () => void;
-      };
+      quota: import('../preload/index').TudApi['quota'];
       minimize: () => void;
       toggleMaximize: () => void;
       close: () => void;

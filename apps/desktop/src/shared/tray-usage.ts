@@ -6,11 +6,11 @@ export const TRAY_USAGE_MODE_SET_CHANNEL = 'tray-usage-mode:set';
 export const TRAY_USAGE_MODE_CHANGED_CHANNEL = 'tray-usage-mode:changed';
 
 /** macOS 菜单栏今日用量的展示内容。 */
-export type TrayUsageMode = 'both' | 'tokens' | 'cost';
-export const DEFAULT_TRAY_USAGE_MODE: TrayUsageMode = 'both';
+export type TrayUsageMode = 'both' | 'tokens' | 'cost' | 'quota';
+export const DEFAULT_TRAY_USAGE_MODE = 'both' satisfies TrayUsageMode;
 
 export function isTrayUsageMode(value: unknown): value is TrayUsageMode {
-  return value === 'both' || value === 'tokens' || value === 'cost';
+  return value === 'both' || value === 'tokens' || value === 'cost' || value === 'quota';
 }
 
 export function formatCompactTokens(tokens: number): string {
@@ -33,7 +33,7 @@ export function formatCompactTokens(tokens: number): string {
 export function formatTrayUsage(summary: {
   todayCostUsd?: number | null;
   todayTokens?: number | null;
-}, mode: TrayUsageMode = DEFAULT_TRAY_USAGE_MODE): string {
+}, mode: Exclude<TrayUsageMode, 'quota'> = DEFAULT_TRAY_USAGE_MODE): string {
   const cost = Number(summary.todayCostUsd);
   const tokens = Number(summary.todayTokens);
   // 菜单栏同时展示今日 Token 和费用，零费用模型也保留金额信息。

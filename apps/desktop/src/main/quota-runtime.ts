@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, Notification, powerMonitor } from 'electron';
 import path from 'node:path';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import { SUBSCRIPTION_CHANNELS } from '../shared/subscription-channels';
@@ -8,15 +8,36 @@ import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtim
 import { resolveDataDir } from 'quotern-core';
 import { quotaFetch, recoverQuotaNetwork } from './quota-fetch';
 import { nativeText } from './native-messages';
+import { createQuotaShortcut } from './quota-shortcut';
+import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET } from '../shared/quota-desktop';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
 
-export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; getLocale(): SupportedLocale }) {
+export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; showQuota(): void; getLocale(): SupportedLocale }) {
   const notifications = new Set<Notification>();
+  const shortcut = createQuotaShortcut({ register: (key, action) => globalShortcut.register(key, action), unregister: key => globalShortcut.unregister(key), open: options.showQuota });
+  const sendNotification = (title: string, body: string) => new Promise<'shown' | 'requested'>((resolve, reject) => {
+    if (!Notification.isSupported()) { reject(new Error('notifications unavailable')); return; }
+    const notification = new Notification({ title, body, silent: true });
+    notifications.add(notification);
+    const timeout = setTimeout(() => resolve('requested'), 5000);
+    timeout.unref?.();
+    notification.once('show', () => { clearTimeout(timeout); resolve('shown'); });
+    notification.once('click', options.showQuota);
+    notification.once('close', () => { clearTimeout(timeout); notifications.delete(notification); resolve('requested'); });
+    notification.once('failed', () => {
+      clearTimeout(timeout); notifications.delete(notification);
+      manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed'));
+      reject(new Error('notification failed'));
+    });
+    if (notifications.size > 64) { const oldest = notifications.values().next().value!; oldest.close(); notifications.delete(oldest); }
+    notification.show();
+  });
   const manager = await createQuotaRuntime({ directory: path.join(app.getPath('userData'), 'quota'), fetch: quotaFetch,
     snapshot: { directory: resolveDataDir(), runtime: 'desktop' },
     onChanged: state => {
+      shortcut.setEnabled(state.preferences.quotaShortcut === true);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(QUOTA_CHANGED, state);
       options.onChanged(state);
     },
@@ -31,23 +52,35 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
       const title = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetTitle' : 'native.quota.thresholdTitle', vars);
       const body = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetBody' : 'native.quota.thresholdBody', vars)
         + (reset ? nativeText(locale, 'native.quota.resetsAt', { time: reset }) : '');
-      const notification = new Notification({ title, body, silent: true });
-      notifications.add(notification);
-      notification.once('click', options.showMainWindow);
-      notification.once('close', () => notifications.delete(notification));
-      notification.once('failed', () => { notifications.delete(notification); manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')); });
-      if (notifications.size > 64) { const oldest = notifications.values().next().value as Notification; oldest.close(); notifications.delete(oldest); }
-      notification.show();
+      void sendNotification(title, body).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));
+    },
+    notifyService: value => {
+      const locale = options.getLocale(), recovered = value.level === 'operational';
+      void sendNotification(nativeText(locale, recovered ? 'native.quota.serviceRestored' : 'native.quota.serviceIssue', { provider: value.label }),
+        nativeText(locale, 'native.quota.serviceBody')).catch(() => manager.reportNotice(nativeText(locale, 'native.quota.deliveryFailed')));
     },
   });
   activeManager = manager;
-  for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET]) ipcMain.removeHandler(channel);
+  shortcut.setEnabled(manager.getState().preferences.quotaShortcut === true);
+  for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET]) ipcMain.removeHandler(channel);
   ipcMain.handle(QUOTA_GET, () => { const state = manager.getState(); void manager.refresh('interaction'); return state; });
   ipcMain.handle(QUOTA_REFRESH, (_event, id: unknown) => {
     if (id !== undefined && !SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && !manager.getState().providers.some(provider => provider.id === id)) throw new Error(nativeText(options.getLocale(), 'native.quota.unknownProvider'));
     return manager.refresh('manual', id as string | undefined);
   });
-  ipcMain.handle(QUOTA_SET, (_event, patch: QuotaPreferencePatch) => manager.setPreferences(patch));
+  let settingsQueue = Promise.resolve();
+  ipcMain.handle(QUOTA_SET, (_event, patch: QuotaPreferencePatch) => {
+    const pending = settingsQueue.then(async () => {
+      const wasEnabled = manager.getState().preferences.quotaShortcut === true;
+      if (patch?.quotaShortcut === true && !shortcut.setEnabled(true)) throw new Error('QUOTA_SHORTCUT_UNAVAILABLE');
+      try { return await manager.setPreferences(patch); }
+      catch (error) { shortcut.setEnabled(wasEnabled); throw error; }
+    });
+    settingsQueue = pending.then(() => {}, () => {});
+    return pending;
+  });
+  ipcMain.handle(QUOTA_SHORTCUT_GET, () => shortcut.isRegistered());
+  ipcMain.handle(QUOTA_TEST_NOTIFICATION, () => sendNotification(nativeText(options.getLocale(), 'native.quota.testTitle'), nativeText(options.getLocale(), 'native.quota.testBody')));
   let locked = powerMonitor.getSystemIdleState(60) === 'locked';
   let constrained = powerMonitor.isOnBatteryPower();
   const signals = () => manager.setSignals(locked, constrained);
@@ -72,9 +105,10 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
     pause: () => manager.pause(),
     dispose: () => {
       disposed = true;
+      shortcut.dispose();
       manager.dispose(); if (activeManager === manager) activeManager = null;
       for (const [event, listener] of listeners) (powerMonitor as NodeJS.EventEmitter).removeListener(event, listener);
-      for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET]) ipcMain.removeHandler(channel);
+      for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET]) ipcMain.removeHandler(channel);
       for (const notification of notifications) notification.close(); notifications.clear();
     },
   };

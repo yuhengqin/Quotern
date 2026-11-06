@@ -10,6 +10,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { parseOpenSettingsDetail, type OpenSettingsDetail } from '../shared/settings-navigation';
 import { DSH_PET_GET, DSH_PET_ACTION, DSH_PET_CHANGED, DSH_PET_NAVIGATION, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK, type DshPetAction, type DshPetState, type SessionNavigation } from '../shared/dsh-pet';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
+import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET } from '../shared/quota-desktop';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
@@ -128,6 +129,8 @@ const tudApi = {
   version: () => '0.1.0',
   platform: process.platform,
   quota: {
+    testNotification: (): Promise<'shown' | 'requested'> => ipcRenderer.invoke(QUOTA_TEST_NOTIFICATION),
+    isShortcutRegistered: (): Promise<boolean> => ipcRenderer.invoke(QUOTA_SHORTCUT_GET),
     getState: (): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_GET),
     refresh: (provider?: string): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_REFRESH, provider),
     setPreferences: (patch: QuotaPreferencePatch): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_SET, patch),

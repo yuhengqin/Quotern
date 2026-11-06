@@ -4,6 +4,15 @@ import { dshPetRows } from './dsh-pet-messages.ts';
 // Keep all four offline translations together. The renderer entry registers this catalog.
 const rows: Record<string, readonly [string, string, string, string]> = {
   ...dshPetRows,
+  'desktop.quota.serviceAlerts': ['所关注服务故障或恢复时提醒', 'Alert when followed services fail or recover', '確認中のサービスの障害・復旧を通知', '확인 중인 서비스 장애 또는 복구 시 알림'],
+  'desktop.quota.testNotification': ['发送测试通知', 'Send test notification', 'テスト通知を送信', '테스트 알림 보내기'],
+  'desktop.quota.testing': ['正在发送…', 'Sending…', '送信中…', '보내는 중…'],
+  'desktop.quota.test.shown': ['系统已接收测试通知，请检查通知中心。', 'The system accepted the test notification. Check the notification center.', 'システムがテスト通知を受け付けました。通知センターをご確認ください。', '시스템이 테스트 알림을 수락했습니다. 알림 센터를 확인하세요.'],
+  'desktop.quota.test.requested': ['已请求发送；系统未确认显示，请检查通知权限或勿扰模式。', 'Send requested; display was not confirmed. Check notification permissions or Do Not Disturb.', '送信を要求しましたが表示を確認できません。通知権限や集中モードをご確認ください。', '전송을 요청했지만 표시를 확인하지 못했습니다. 알림 권한이나 방해 금지 모드를 확인하세요.'],
+  'desktop.quota.test.failed': ['通知发送失败，请检查系统通知设置后重试。', 'Notification failed. Check system notification settings and try again.', '通知に失敗しました。システムの通知設定を確認して再試行してください。', '알림 전송에 실패했습니다. 시스템 알림 설정을 확인한 후 다시 시도하세요.'],
+  'desktop.quota.shortcut': ['用 {{keys}} 打开额度面板', 'Open quota panel with {{keys}}', '{{keys}} で利用枠パネルを開く', '{{keys}}로 한도 패널 열기'],
+  'desktop.quota.shortcutUnavailable': ['快捷键已被占用或当前系统不支持。关闭后重新开启可重试，仍可点击托盘查看额度。', 'The shortcut is in use or unsupported. Turn it off and on to retry, or use the tray.', 'ショートカットは使用中、または未対応です。オフにして再度オンにするか、トレイから確認してください。', '단축키가 사용 중이거나 지원되지 않습니다. 껐다 켜서 다시 시도하거나 트레이를 이용하세요.'],
+  'desktop.quota.menuBar': ['订阅剩余额度', 'Subscription quota remaining', 'サブスクリプションの残り利用枠', '구독 잔여 한도'],
   'desktop.settings.help': ['查看「{{label}}」说明', 'About {{label}}', '「{{label}}」の説明を表示', '{{label}} 도움말 보기'],
   'desktop.pet.preview.calm': ['平静', 'Calm', '落ち着き', '차분함'],
   'desktop.pet.preview.thinking': ['思考', 'Thinking', '思考中', '생각 중'],

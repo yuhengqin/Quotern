@@ -6,6 +6,8 @@ import { quotaIdentity, quotaEvidence } from './quota-identity.js';
 import { captureQuotaRead, quotaReadAttempts, quotaReadRetryAfter } from './quota-fetch-state.js';
 import type { QuotaDiagnosticCode } from '../shared/quota-diagnostic.js';
 import { validQuotaPatch, pruneQuotaHistory, assertQuotaProfileDirectories, type QuotaStore } from './quota-store.js';
+import { selectQuotaServiceStatus } from '../shared/quota-service.js';
+import type { QuotaServiceNotification } from '../shared/quota.js';
 
 export interface QuotaReader {
   id: SubscriptionChannelId; label: string; interval: number; read(): Promise<unknown>; statusUrl?: string;
@@ -48,11 +50,13 @@ export class QuotaManager {
   private settingsQueue = Promise.resolve();
   private lastMaintenance: number | null = null;
   private readonly sentAlerts = new Set<string>();
+  private readonly serviceBaselines = new Map<string, QuotaServiceStatus['level']>();
   constructor(private readonly deps: {
     readers: QuotaReader[]; store: QuotaStore; now?: () => number; monotonic?: () => number; timeZone?: string;
     profileReaders?(profiles: readonly QuotaProfile[]): QuotaReader[];
     notify(value: QuotaNotification): void; onChanged?(state: QuotaState): void;
-    fetchStatus?(url: string): Promise<QuotaServiceStatus['level']>;
+    fetchStatus?(url: string): Promise<QuotaServiceStatus | QuotaServiceStatus['level']>;
+    notifyService?(value: QuotaServiceNotification): void;
   }) {
     this.now = deps.now ?? (() => Date.now() / 1000); this.mono = deps.monotonic ?? (() => performance.now());
     this.preferences = structuredClone(deps.store.preferences); this.notice = deps.store.notice;
@@ -92,6 +96,10 @@ export class QuotaManager {
     const now = this.now();
     return { preferences: structuredClone(this.preferences), notice: this.notice, providers: this.slots.filter(slot => this.enabled(slot)).map(slot => {
       const state = structuredClone(slot.state);
+      if (state.service) {
+        state.service = selectQuotaServiceStatus(state.service, this.preferences.serviceComponents?.[slot.reader.id]);
+        state.service.stale ||= state.service.checkedAt !== null && state.service.checkedAt < now - 1800;
+      }
       state.stale ||= state.fetchedAt !== null && state.fetchedAt < now - Math.max(1800, this.interval(slot) * 2);
       state.nextRefreshAt = slot.attempted === null ? null : now + Math.max(0, Math.max(slot.blockedUntil, slot.attempted + this.interval(slot) * 1000) - this.mono()) / 1000;
       if (!slot.reader.observationOnly && !state.stale && state.status === 'ready') for (const window of state.windows) {
@@ -137,6 +145,7 @@ export class QuotaManager {
       }
     }
     this.emit();
+    if (reason === 'manual') await this.refreshStatus(true);
     return this.getState();
   }
   private refreshSlot(slot: Slot, reason: string): Promise<void> {
@@ -245,12 +254,21 @@ export class QuotaManager {
     if (!validQuotaPatch(patch)) return Promise.reject(new Error('无效的额度设置'));
     const pending = this.settingsQueue.then(async () => {
       if (this.disposed) throw new Error('额度服务已退出');
-      const next = { ...this.preferences, ...patch, channels: { ...this.preferences.channels, ...patch.channels } };
+      const next = { ...this.preferences, ...patch, channels: { ...this.preferences.channels, ...patch.channels }, serviceComponents: { ...this.preferences.serviceComponents, ...patch.serviceComponents } };
       if (patch.profiles) assertQuotaProfileDirectories(patch.profiles, this.preferences.profiles ?? []);
       try { await this.deps.store.savePreferences(next); }
       catch { this.notice = '额度设置保存失败，已保留原设置。'; this.emit(); throw new Error(this.notice); }
       const changedAlerts = next.thresholdAlerts !== this.preferences.thresholdAlerts || next.resetAlerts !== this.preferences.resetAlerts;
       const previous = this.preferences; this.preferences = next;
+      if (next.serviceAlerts !== previous.serviceAlerts) this.serviceBaselines.clear();
+      else for (const id of this.serviceBaselines.keys()) {
+        const provider = id as SubscriptionChannelId;
+        const selection = (prefs: QuotaPreferences) => {
+          const ids = prefs.serviceComponents?.[provider];
+          return ids === undefined ? null : JSON.stringify([...ids].sort());
+        };
+        if (selection(previous) !== selection(next) || (previous.channels[provider] !== false) !== (next.channels[provider] !== false)) this.serviceBaselines.delete(id);
+      }
       this.syncReaders();
       for (const slot of this.slots) {
         if (changedAlerts) slot.observations.clear();
@@ -265,18 +283,39 @@ export class QuotaManager {
     this.settingsQueue = pending.catch(() => {});
     return pending.then(() => this.getState());
   }
-  async refreshStatus(): Promise<void> {
+  async refreshStatus(manual = false): Promise<void> {
     if (!this.deps.fetchStatus || this.disposed || this.paused) return;
     if (this.statusPending) return this.statusPending;
-    if (this.statusAt !== null && this.mono() - this.statusAt < 900000) return;
+    if (this.statusAt !== null && this.mono() - this.statusAt < (manual ? 10000 : 900000)) return;
     this.statusAt = this.mono();
     const generation = this.generation;
-    const pending = Promise.all(this.slots.filter(slot => this.enabled(slot) && slot.reader.statusUrl).map(async slot => {
-      const slotGeneration = slot.generation;
+    const groups = new Map<string, { slot: Slot; generation: number }[]>();
+    for (const slot of this.slots) if (this.enabled(slot) && slot.reader.statusUrl) {
+      const group = groups.get(slot.reader.statusUrl) ?? [];
+      group.push({ slot, generation: slot.generation }); groups.set(slot.reader.statusUrl, group);
+    }
+    const pending = Promise.all([...groups].map(async ([url, group]) => {
       let status: QuotaServiceStatus;
-      try { status = { level: await this.deps.fetchStatus!(slot.reader.statusUrl!), checkedAt: this.now(), stale: false, url: slot.reader.statusUrl! }; }
-      catch { status = slot.state.service ? { ...slot.state.service, stale: true } : { level: 'unknown', checkedAt: null, stale: true, url: slot.reader.statusUrl! }; }
-      if (!this.disposed && generation === this.generation && slotGeneration === slot.generation && this.enabled(slot)) slot.state.service = status;
+      try {
+        const result = await this.deps.fetchStatus!(url);
+        status = typeof result === 'string' ? { level: result, checkedAt: this.now(), stale: false, url } : result;
+      } catch { const previous = group[0].slot.state.service; status = previous ? { ...previous, stale: true } : { level: 'unknown', checkedAt: null, stale: true, url }; }
+      if (this.disposed || generation !== this.generation) return;
+      const active = group.filter(({ slot, generation }) => slot.generation === generation && this.enabled(slot));
+      for (const { slot } of active) slot.state.service = status;
+      const notified = new Set<string>();
+      for (const { slot } of active) {
+        const id = slot.reader.id;
+        if (notified.has(id)) continue; notified.add(id);
+        const selected = selectQuotaServiceStatus(status, this.preferences.serviceComponents?.[id]);
+        if (selected.stale || selected.level === 'unknown') continue;
+        const prior = this.serviceBaselines.get(id);
+        this.serviceBaselines.set(id, selected.level);
+        if (this.preferences.serviceAlerts && prior !== undefined && prior !== selected.level) {
+          try { this.deps.notifyService?.({ provider: id, label: slot.reader.label, level: selected.level, url }); }
+          catch { this.notice = '系统通知暂不可用，额度卡片仍会继续更新。'; }
+        }
+      }
     })).then(() => { if (!this.disposed && generation === this.generation) this.emit(); }).finally(() => { this.statusPending = null; });
     this.statusPending = pending; return pending;
   }

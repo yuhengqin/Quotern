@@ -119,6 +119,8 @@ CLI / Desktop 启动先加载内置表和有效磁盘覆盖缓存，再从 `http
 
 维护底表使用 `pnpm sync:pricing`，请求自动读取 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（也支持小写形式），不需要额外设置 `NODE_USE_ENV_PROXY`。`_meta.generated_at` 记录本次生成的实际 UTC 时间，页面按本地时区显示；它不是供应商调价时间，也不再固定为当天 UTC 零点。
 
+价格页的「用户价格」单独保存在 `pricing-manual.json`。输入、输出、缓存读写均为 USD / 1M Token，留空继承参考表，0 是明确零价。只按输入的明确 ID、精确匹配或明确别名应用，不把手动条目用于模糊匹配；删除后恢复当时的远端/内置价格。上下文、档位和 TTL 规则仍在基础单价之后应用，来源报告金额保持优先。远端转换读取不含手动层的参考表，避免删除后残留旧价。保存后重建聚合估算；封存与会话缓存包含有效价格版本，其他本机进程观察手动文件变化后刷新。
+
 同步从 models.dev 的 `catalog.json` 同时读取 provider 调用 ID 和标准模型元数据。`model_metadata` 保存 `display_name` / `canonical_model_id`，价格页按调用 ID、展示名与标准模型 ID 搜索，保留不同渠道及 highspeed 等调用变体。经明确名单核实的厂商 Coding / Token / Step Plan 保存在独立的 `subscription_models` 目录，缺少 cost 仍可收录；上游的零值或非零占位费率均不进入 `exact`，不影响按 Token 的费用估算。名单不能仅凭 provider 名称包含 plan 或 cost 为零来扩大。两条历史人工补充的 `moonshotai/kimi-for-coding*` 费率仍供原有费用估算使用，公开目录由当前 Kimi Code 订阅渠道取代。
 
 Dashboard 与 Desktop 共享价格页及目录转换，订阅行显示“订阅制 / 按套餐额度使用”，不显示为免费 API，也不参与 API 单价排序。官方套餐由销售平台归类，套餐内的第三方模型不因此成为模型原厂 API；标准名关联只用于目录展示和搜索，不作为费用匹配 alias。
@@ -150,6 +152,12 @@ Dashboard 与 Desktop 共享价格页及目录转换，订阅行显示“订阅�
 `GET /functions/tud-usage-trend` 支持 `granularity=hourly|daily|weekly|monthly`、`days` 或成对 `fromDate/toDate`，以及 `sources/model/project`。沿用报告的参数、采集下限和时区，图表范围最多 367 个自然日；小时 key 包含日期，今天补零截止当前小时。每个时间点直接按桶计算模型费用，不按 Token 占比分摊；周一开周，首末周/月只含选定日期。`costUsd=null` 保留未知价格，图表显示 `knownCostUsd` 并提示部分未计价。粒度仅影响图表，不修改日期、来源、概览或分享筛选。
 
 Dashboard 与 Desktop 主页面的两张趋势图共用日期标签、粒度和一次趋势请求。自动粒度为单日按小时、2–90 日按日、更长范围按周；小时选项限 7 日以内，周/月选项要求范围超过 7 日且跨越至少两个对应日历桶。切换范围后，失效的手动粒度恢复为自动。单日标签只显示一次日期，今天附“今天”；单日小时轴省略重复日期。显示粒度规则见 [usage-trend-controls.ts](../packages/dashboard/src/lib/usage-trend-controls.ts)。
+
+## 性能样本与额度周期
+
+独立性能页复用 [performance-analysis.ts](../packages/core/src/performance-analysis.ts)，首字时间分位数直接来自有效原始样本，不从会话均值推导。输出速度沿用至少 200 输出 Token、1 秒至 1 小时的有效采样范围，以总输出除以总采样耗时加权；两种指标分别计数，不强行配对，也不推导完整请求成功率。已确认的 fork 祖系重复证据只计一次，父记录缺失时也保留此去重边界。
+
+[额度历史](../packages/core/src/quota/quota-history.ts) 按实际重置时间及连续观察分组；没有可信时长的旧点不倒推周期起点，缺重置、百分比回拨和账号证据变化保留不连续/未知状态。用量仅按同服务、订阅方式和公开账号引用匹配，使用首末观察之间的真实事件时间 `[firstObservedAt,lastObservedAt)`。当前只在 Codex 账号级窗口且消耗增量有效时显示本机 Token / 百分点；它受漏采和其他设备消耗影响，不代表固定兑换率。功能池不按账号总用量计算效率，缺匹配事件显示无法归属而非零。
 
 ## 日历、封存与配置写入
 

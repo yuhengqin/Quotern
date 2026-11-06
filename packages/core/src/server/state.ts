@@ -100,6 +100,9 @@ export interface LocalApiDeps {
   quota?: LocalQuotaRuntime;
   /** Electron exposes quota through IPC while sharing account labels locally. */
   getQuotaState?(): QuotaState | null;
+  getQuotaHistory?(providerId: string): import('../quota/quota-history.js').QuotaHistorySource | null;
+  /** Desktop keeps quota separately from the CLI data directory. */
+  desktopQuotaDirectory?: string;
   dataDir: string;
   getConfig: () => TudConfig;
   bucketStore: BucketStore;
@@ -115,6 +118,7 @@ export interface LocalApiDeps {
   ) => Promise<SyncResult[]>;
   onSync?: (source?: string) => Promise<void>;
   onConfigChange?: (config: TudConfig) => void;
+  onPricingChange?: () => void;
   /**
    * Fired right after cursors.json was cleared for a backfill. Processes that
    * cache cursors elsewhere (Desktop sync worker) must drop their copy here,

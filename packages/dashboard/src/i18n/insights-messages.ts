@@ -1,0 +1,57 @@
+import { registerMessages, type SupportedLocale } from 'quotern-i18n';
+
+const entries = {
+  'insights.performance': ['性能分析', 'Performance', 'パフォーマンス分析'],
+  'insights.period': ['时间范围', 'Period', '期間'],
+  'insights.days': ['近 {{count}} 天', 'Last {{count}} days', '過去 {{count}} 日'],
+  'insights.agent': ['Agent', 'Agent', 'Agent'],
+  'insights.model': ['模型', 'Model', 'モデル'],
+  'insights.project': ['项目', 'Project', 'プロジェクト'],
+  'insights.all': ['全部', 'All', 'すべて'],
+  'insights.unknown': ['未识别', 'Unknown', '不明'],
+  'insights.group': ['比较维度', 'Compare by', '比較対象'],
+  'insights.ttft50': ['首字时间 P50', 'Time to first token · P50', '最初のトークンまで · P50'],
+  'insights.ttft95': ['首字时间 P95', 'Time to first token · P95', '最初のトークンまで · P95'],
+  'insights.speed': ['估算输出速度', 'Estimated output speed', '推定出力速度'],
+  'insights.seconds': ['{{value}} 秒', '{{value}} s', '{{value}} 秒'],
+  'insights.tps': ['{{value}} tok/s', '{{value}} tok/s', '{{value}} tok/s'],
+  'insights.samples': ['{{count}} 个样本', '{{count}} samples', '{{count}} サンプル'],
+  'insights.sessions': ['有样本的会话', 'Sessions with samples', 'サンプルのあるセッション'],
+  'insights.basis': ['样本与统计口径', 'Samples and methodology', 'サンプルと集計方法'],
+  'insights.performanceHelp': ['来自本机已采集日志。首字时间按原始有效值计算最近秩分位数；Codex 的值来自回合完成记录。速度按有效样本的输出 Token 总数除以采样总耗时估算，仅纳入输出不少于 200 Token、耗时 1 秒至 1 小时的记录。两组样本独立，不代表逐 Token 解码速度或完整请求成功率。', 'Uses collected local logs. TTFT percentiles use the nearest-rank method on raw valid values; Codex reports this at turn completion. Speed divides total sampled output tokens by total sampled duration, using records with at least 200 output tokens and durations from 1 second to 1 hour. These are separate sample sets, not per-token decoding speed or a complete request success rate.', '収集済みのローカルログを使用します。TTFT は有効な生データから最近順位法で計算し、Codex ではターン完了記録の値を使います。速度は出力 200 Token 以上、所要時間 1 秒〜1 時間のサンプルの合計出力数を合計時間で割った推定値です。両者は別の標本であり、トークン単位のデコード速度や全リクエストの成功率ではありません。'],
+  'insights.latencyTrend': ['每日首字时间', 'Daily time to first token', '日別 TTFT'],
+  'insights.speedTrend': ['每日输出速度', 'Daily output speed', '日別出力速度'],
+  'insights.compare': ['样本比较', 'Sample comparison', 'サンプル比較'],
+  'insights.latest': ['最近响应样本', 'Recent response samples', '最近の応答サンプル'],
+  'insights.latestHelp': ['最多展示最近 100 条；上方汇总和趋势统计全部匹配样本。点击会话回看详情。', 'Shows the latest 100 samples. Summaries and trends include all matching samples. Open a session to investigate.', '最新 100 件を表示します。集計と推移には一致する全サンプルを含みます。セッションを開くと詳細を確認できます。'],
+  'insights.time': ['时间', 'Time', '時刻'],
+  'insights.session': ['会话', 'Session', 'セッション'],
+  'insights.ttft': ['首字时间', 'Time to first token', 'TTFT'],
+  'insights.loading': ['正在读取…', 'Loading…', '読み込み中…'],
+  'insights.error': ['读取失败，请重试。旧版运行端可能尚不支持此功能。', 'Could not load data. Retry; older runtimes may not support this feature.', '読み込めませんでした。再試行してください。旧バージョンでは未対応の場合があります。'],
+  'insights.retry': ['重试', 'Retry', '再試行'],
+  'insights.emptyPerformance': ['所选范围没有有效响应样本', 'No valid response samples in this range', 'この期間に有効な応答サンプルがありません'],
+  'insights.emptyPerformanceHint': ['可扩大时间范围或清除筛选。只有日志提供足够计时证据时才会产生样本。', 'Try a wider period or clear filters. Samples require sufficient timing evidence in local logs.', '期間を広げるか絞り込みを解除してください。ログに十分な時間情報がある場合にのみサンプルが作成されます。'],
+  'insights.clear': ['清除筛选', 'Clear filters', '絞り込みを解除'],
+  'insights.noMetric': ['暂无有效样本', 'No valid samples', '有効なサンプルなし'],
+} satisfies Record<string, readonly [string, string, string]>;
+
+const korean: Record<keyof typeof entries, string> = {
+  'insights.performance': '성능 분석', 'insights.period': '기간', 'insights.days': '최근 {{count}}일',
+  'insights.agent': 'Agent', 'insights.model': '모델', 'insights.project': '프로젝트', 'insights.all': '전체',
+  'insights.unknown': '알 수 없음', 'insights.group': '비교 기준', 'insights.ttft50': '첫 토큰 시간 P50', 'insights.ttft95': '첫 토큰 시간 P95',
+  'insights.speed': '추정 출력 속도', 'insights.seconds': '{{value}}초', 'insights.tps': '{{value}} tok/s', 'insights.samples': '샘플 {{count}}개',
+  'insights.sessions': '샘플이 있는 세션', 'insights.basis': '샘플 및 집계 기준',
+  'insights.performanceHelp': '수집된 로컬 로그를 사용합니다. 첫 토큰 시간은 유효한 원본 값의 최근접 순위 백분위수이며, Codex는 턴 완료 기록의 값을 사용합니다. 속도는 출력 200 Token 이상, 소요 시간 1초~1시간인 샘플의 총 출력 수를 총 시간으로 나눈 추정값입니다. 두 샘플 집합은 서로 다르며, 토큰별 디코딩 속도나 전체 요청 성공률을 나타내지 않습니다.',
+  'insights.latencyTrend': '일별 첫 토큰 시간', 'insights.speedTrend': '일별 출력 속도', 'insights.compare': '샘플 비교',
+  'insights.latest': '최근 응답 샘플', 'insights.latestHelp': '최근 100개까지 표시합니다. 요약과 추세에는 일치하는 모든 샘플이 포함됩니다. 세션을 열어 자세히 확인하세요.',
+  'insights.time': '시간', 'insights.session': '세션', 'insights.ttft': '첫 토큰 시간', 'insights.loading': '불러오는 중…',
+  'insights.error': '데이터를 불러오지 못했습니다. 다시 시도하세요. 이전 실행 버전에서는 지원하지 않을 수 있습니다.',
+  'insights.retry': '다시 시도', 'insights.emptyPerformance': '선택한 기간에 유효한 응답 샘플이 없습니다',
+  'insights.emptyPerformanceHint': '기간을 넓히거나 필터를 해제하세요. 로그에 충분한 시간 정보가 있어야 샘플이 생성됩니다.',
+  'insights.clear': '필터 해제', 'insights.noMetric': '유효한 샘플 없음',
+};
+export const insightsMessages: Record<SupportedLocale, Record<string, string>> = Object.fromEntries(
+  (['zh-CN', 'en', 'ja', 'ko'] as const).map(locale => [locale, Object.fromEntries(Object.entries(entries).map(([key, values]) => [key, locale === 'ko' ? korean[key as keyof typeof korean] : values[locale === 'zh-CN' ? 0 : locale === 'en' ? 1 : 2]]))]),
+) as Record<SupportedLocale, Record<string, string>>;
+registerMessages(insightsMessages);

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { lock } from 'proper-lockfile';
+import { withDataTransaction } from '../data-transaction.js';
 import { evaluateAchievements } from './evaluate.js';
 import { ACHIEVEMENT_FAMILIES } from './catalog.js';
 import { resolveAchievementProjects, type AchievementProjectResolution } from './projects.js';
@@ -28,6 +29,16 @@ const validEarned = (item: EarnedAchievement) => item && validId(item.id) && fam
 const validRecord = (item: AchievementRecord) => item && ['longest-streak', 'most-active-month'].includes(item.id) && text(item.title) && number(item.value) && (item.achievedOn === null || date(item.achievedOn));
 const validAnnual = (item: AnnualFootprint) => item && Number.isInteger(item.year) && item.year >= 1 && item.year <= 9999 && number(item.activeDays) && item.activeDays <= 366 && number(item.activeMonths) && item.activeMonths <= 12 && number(item.tokens) && number(item.costUsd) && typeof item.complete === 'boolean' && (item.topSource === null || text(item.topSource)) && (item.fromDate === null || date(item.fromDate)) && (item.toDate === null || date(item.toDate));
 
+export function validateStoredAchievements(value: unknown): asserts value is StoredAchievements {
+  const state = value as StoredAchievements;
+  if (state?.version !== 1 || (state.initializedAt !== null && !timestamp(state.initializedAt)) || !Array.isArray(state.earned) || !state.earned.every(validEarned) || new Set(state.earned.map(item => item.id)).size !== state.earned.length
+    || !state.preferences || typeof state.preferences.celebrationsEnabled !== 'boolean' || !Array.isArray(state.preferences.showcaseIds) || state.preferences.showcaseIds.length > 3 || !state.preferences.showcaseIds.every(id => validId(id) && state.earned.some(item => item.id === id))
+    || !Array.isArray(state.records) || !state.records.every(validRecord) || !Array.isArray(state.annual) || !state.annual.every(validAnnual)) throw new Error('invalid');
+  if (state.projectSettings !== undefined && (!Array.isArray(state.projectSettings) || state.projectSettings.length > 4096 || !state.projectSettings.every(validProjectSetting))) throw new Error('invalid projects');
+  if (state.projectAliases !== undefined && (!state.projectAliases || typeof state.projectAliases !== 'object' || Array.isArray(state.projectAliases) || Object.entries(state.projectAliases).some(([id, target]) => !projectId(id) || !projectId(target)))) throw new Error('invalid aliases');
+  if (state.projectCatalog !== undefined && (!Array.isArray(state.projectCatalog) || state.projectCatalog.some(item => !item || !projectId(item.id) || !text(item.label) || !['repository', 'manifest', 'unconfirmed'].includes(item.kind ?? 'unconfirmed')))) throw new Error('invalid project catalog');
+}
+
 export class AchievementError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }
@@ -48,19 +59,14 @@ export function validateAchievementOperation(value: unknown): asserts value is A
 export class AchievementStore {
   private readonly directory: string;
   private readonly path: string;
-  constructor(dataDir: string, private readonly loadFacts: () => Promise<AchievementFacts>) {
+  constructor(private readonly dataDir: string, private readonly loadFacts: () => Promise<AchievementFacts>) {
     this.directory = join(dataDir, 'achievements'); this.path = join(this.directory, 'state.json');
   }
   private async readStored(): Promise<StoredAchievements> {
     try {
       if ((await stat(this.path)).size > 8 * 1024 * 1024) throw new Error('oversized');
       const state: StoredAchievements = JSON.parse(await readFile(this.path, 'utf8'));
-      if (state?.version !== 1 || (state.initializedAt !== null && !timestamp(state.initializedAt)) || !Array.isArray(state.earned) || !state.earned.every(validEarned) || new Set(state.earned.map(item => item.id)).size !== state.earned.length
-        || !state.preferences || typeof state.preferences.celebrationsEnabled !== 'boolean' || !Array.isArray(state.preferences.showcaseIds) || state.preferences.showcaseIds.length > 3 || !state.preferences.showcaseIds.every(id => validId(id) && state.earned.some(item => item.id === id))
-        || !Array.isArray(state.records) || !state.records.every(validRecord) || !Array.isArray(state.annual) || !state.annual.every(validAnnual)) throw new Error('invalid');
-      if (state.projectSettings !== undefined && (!Array.isArray(state.projectSettings) || state.projectSettings.length > 4096 || !state.projectSettings.every(validProjectSetting))) throw new Error('invalid projects');
-      if (state.projectAliases !== undefined && (!state.projectAliases || typeof state.projectAliases !== 'object' || Array.isArray(state.projectAliases) || Object.entries(state.projectAliases).some(([id, target]) => !projectId(id) || !projectId(target)))) throw new Error('invalid aliases');
-      if (state.projectCatalog !== undefined && (!Array.isArray(state.projectCatalog) || state.projectCatalog.some(item => !projectId(item.id) || !text(item.label) || !['repository', 'manifest', 'unconfirmed'].includes(item.kind ?? 'unconfirmed')))) throw new Error('invalid project catalog');
+      validateStoredAchievements(state);
       return state;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return initial();
@@ -134,6 +140,9 @@ export class AchievementStore {
     };
   }
   private async transaction(operation?: AchievementOperation): Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }> {
+    return withDataTransaction(this.dataDir, () => this.transactionUnlocked(operation));
+  }
+  private async transactionUnlocked(operation?: AchievementOperation): Promise<{ snapshot: AchievementSnapshot; notice?: AchievementNotice }> {
     await mkdir(this.directory, { recursive: true });
     const release = await lock(this.path, { realpath: false, stale: 60000, update: 10000, retries: { retries: 100, factor: 1.2, minTimeout: 10, maxTimeout: 200 } });
     try {

@@ -17,7 +17,7 @@ import {
 import { sealedDailyCachePath } from './paths.js';
 import type { UsageBounds } from './usage-window.js';
 import { normalizeProjectName } from './project-label.js';
-import { roundCostUsd } from './pricing/index.js';
+import { roundCostUsd, getPricingFingerprint } from './pricing/index.js';
 import {
   DEFAULT_STATS_TIMEZONE,
   localDateAndHour,
@@ -69,6 +69,7 @@ export interface SealedDayEntry {
 }
 
 interface SealedCacheFile {
+  pricingFingerprint?: string;
   version: number;
   timeZone: string;
   /** Local date when sealed days were last written (`YYYY-MM-DD`). */
@@ -266,6 +267,7 @@ export class AggregateCache {
   private days = new Map<string, SealedDayEntry>();
   private sealedAsOf: string | null = null;
   private loaded = false;
+  private pricingFingerprint = getPricingFingerprint();
   private dirty = false;
   private readonly timeZone: string;
 
@@ -277,13 +279,15 @@ export class AggregateCache {
   }
 
   async ensureLoaded(): Promise<void> {
+    const pricing = getPricingFingerprint();
+    if (this.pricingFingerprint !== pricing) { this.pricingFingerprint = pricing; this.days.clear(); this.sealedAsOf = null; this.loaded = false; }
     if (this.loaded) return;
     this.loaded = true;
     const path = sealedDailyCachePath(this.dataDir);
     if (!existsSync(path)) return;
     try {
       const raw = JSON.parse(await readFile(path, 'utf8')) as SealedCacheFile;
-      if (raw.version !== CACHE_VERSION || raw.timeZone !== this.timeZone) return;
+      if (raw.version !== CACHE_VERSION || raw.timeZone !== this.timeZone || raw.pricingFingerprint !== this.pricingFingerprint) return;
       this.sealedAsOf = raw.sealedAsOf ?? null;
       this.days = new Map(Object.entries(raw.days ?? {}));
     } catch {
@@ -297,6 +301,7 @@ export class AggregateCache {
     const path = sealedDailyCachePath(this.dataDir);
     await mkdir(dirname(path), { recursive: true });
     const payload: SealedCacheFile = {
+      pricingFingerprint: this.pricingFingerprint,
       version: CACHE_VERSION,
       timeZone: this.timeZone,
       sealedAsOf: this.sealedAsOf ?? localDateNow(this.timeZone),

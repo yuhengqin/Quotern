@@ -17,6 +17,7 @@ import { AppToastRegion } from './AppToastRegion';
 import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
 import { ThemePreferenceControl } from '@/components/ThemePreferenceControl';
 import { AgentIntegrationSettings } from './AgentIntegrationSettings';
+import { LocalBackupPanel } from './LocalBackupPanel';
 import { StatusBanner } from '@/components/StatusBanner';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
@@ -163,6 +164,7 @@ function AppSettingsPanel() {
       </Surface>
       {loading ? <p className="text-muted">{t('settings.loadingConfig')}</p> : null}
       <AgentIntegrationSettings />
+      <LocalBackupPanel />
       {error ? <StatusBanner tone="error" title={t(error)} /> : null}
       {!loading && !error && !config ? (
         <p className="text-sm text-muted">

@@ -524,6 +524,11 @@ async function main(): Promise<void> {
       await (await import('./agent-command.js')).runAgentCommand(commandLine.args.slice(1));
       return;
     }
+    if (commandLine.args[0] === 'backup') {
+      try { await (await import('./backup.js')).runBackupCommand(commandLine.args.slice(1)); }
+      catch (error) { throw new CliUserError(error instanceof Error ? error.message : 'Backup failed'); }
+      return;
+    }
     if (commandLine.args[0] === 'demo') {
       try {
         const { runDemoCommand } = await import('./demo.js');

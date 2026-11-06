@@ -11,6 +11,7 @@ import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime, formatSubscriptionCountdown } from '../lib/subscription-time';
 import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows, quotaPaceMarker } from '../lib/quota-presentation';
 import { QuotaServiceDetails } from './QuotaServiceDetails';
+import { QuotaHistoryButton } from './QuotaHistoryPanel';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string }> = {
   operational: { dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
@@ -251,6 +252,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
                   </dl>
                 </Modal.Body>
                 <Modal.Footer>
+                  <QuotaHistoryButton providerId={provider.id} identity={proof?.accountRef} />
                   <Button aria-label={t('usage.quota.refreshAria', { provider: provider.label })} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
                     <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? t('usage.quota.refreshing') : t('usage.quota.refresh')}
                   </Button>

@@ -46,6 +46,7 @@ import { parseWarpIncremental } from '../parsers/warp.js';
 import { parseQwenworkIncremental } from '../parsers/qwenwork.js';
 import { parseMiniMaxCodeIncremental } from '../parsers/minimax-code.js';
 import { parseWpsComateIncremental } from '../parsers/wps-comate.js';
+import { withDataTransaction } from '../data-transaction.js';
 import {
   appendBuckets,
   loadBucketsForRange,
@@ -1039,6 +1040,9 @@ export async function syncAll(
   config: TudConfig,
   source?: string,
 ): Promise<SyncResult[]> {
+  return withDataTransaction(dataDir, () => syncAllUnlocked(dataDir, config, source));
+}
+async function syncAllUnlocked(dataDir: string, config: TudConfig, source?: string): Promise<SyncResult[]> {
   // CLI / local API validate and normalize before calling in; treat `all`
   // as a full sweep here too so no direct caller can hit the
   // unknown-source branch with it.
@@ -1093,6 +1097,9 @@ export async function syncAllStaggered(
   config: TudConfig,
   options: SyncStaggeredOptions = {},
 ): Promise<SyncResult[]> {
+  return withDataTransaction(dataDir, () => syncAllStaggeredUnlocked(dataDir, config, options));
+}
+async function syncAllStaggeredUnlocked(dataDir: string, config: TudConfig, options: SyncStaggeredOptions): Promise<SyncResult[]> {
   const gapMs = options.gapMs ?? SYNC_SOURCE_GAP_MS;
   const results: SyncResult[] = [];
   const logPath = syncLogPath(dataDir);

@@ -6,9 +6,11 @@ import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
 import { registerSessionActionsApi } from './session-actions-api.js';
 import { registerAgentApi } from './agent-api.js';
+import { registerLocalAdminApi } from './local-admin-api.js';
 import { SessionQueryService, type SessionRangeQuery } from '../session-query.js';
 import type { SessionListQuery } from '../session-list.js';
 import { sessionsToCsv } from '../session-csv.js';
+import { buildQuotaHistoryReport } from '../quota/quota-history.js';
 
 import type { LocalApiDeps } from './state.js';
 import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
@@ -108,6 +110,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     registerQuotaApi(app, deps.quota, deps.dataDir);
     registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
     registerAgentApi(app, deps.dataDir, deps.sessionActionsIpc);
+    registerLocalAdminApi(app, deps);
   }
 
   app.get('/health', (c) => {
@@ -137,6 +140,21 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const { hasOverlay, updatedAt, refreshing } = getPricingStatus();
     // Custom source URLs can embed credentials; the panel needs only table state.
     return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt: deps.demo?.exportedAt ?? updatedAt, refreshing: deps.demo ? false : refreshing } }));
+  });
+
+  app.get('/functions/tud-quota-history', async c => {
+    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'QUOTA_FORBIDDEN_ORIGIN', data: null }, 403);
+    c.header('Cache-Control', 'no-store');
+    if (deps.demo) return c.json({ success: false, message: 'DEMO_QUOTA_UNAVAILABLE', data: null }, 503);
+    const params = new URL(c.req.url).searchParams, id = params.get('provider');
+    if (!id || id.length > 100 || [...params.keys()].some(key => key !== 'provider' || params.getAll(key).length !== 1)) return c.json({ success: false, message: 'INVALID_QUOTA_QUERY', data: null }, 400);
+    const read = () => deps.getQuotaHistory?.(id) ?? deps.quota?.getHistory?.(id) ?? null;
+    const snapshot = read();
+    if (!snapshot) return c.json(ok({ providerId: id, label: '', windows: [], observedAt: Date.now() / 1000 }));
+    const history = await readHistory(deps.dataDir, []);
+    const current = read();
+    if (!current || current.revision !== snapshot.revision) return c.json({ success: false, message: 'QUOTA_ACCOUNT_CHANGED', data: null }, 409);
+    return c.json(ok(buildQuotaHistoryReport(snapshot, history.observations)));
   });
 
   app.get('/functions/tud-usage-report', (c) => {
@@ -226,6 +244,17 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     return { page, pageSize, sort: sort as SessionListQuery['sort'], direction: direction as SessionListQuery['direction'], filterSources: filterSources as string[] | undefined,
       q: c.req.query('q'), project: c.req.query('project'), model: c.req.query('model'), group: c.req.query('group') };
   };
+
+  app.get('/functions/tud-performance', async c => {
+    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'PERFORMANCE_FORBIDDEN_ORIGIN', data: null }, 403);
+    const range = sessionRange(c), groupBy = c.req.query('groupBy') ?? 'model';
+    const params = new URL(c.req.url).searchParams;
+    const allowed = new Set(['days', 'fromDate', 'toDate', 'fromTime', 'toTime', 'sources', 'model', 'project', 'groupBy']);
+    if (!range || !['source', 'model', 'project'].includes(groupBy) || [...params.keys()].some(key => !allowed.has(key) || params.getAll(key).length !== 1)
+      || ['model', 'project'].some(key => (params.get(key)?.length ?? 0) > 1024)) return c.json({ success: false, message: 'INVALID_PERFORMANCE_QUERY', data: null }, 400);
+    c.header('Cache-Control', 'no-store');
+    return c.json(ok(await sessionQueries.performance(range, { groupBy: groupBy as 'source' | 'model' | 'project', model: c.req.query('model'), project: c.req.query('project') })));
+  });
 
   app.get('/functions/tud-session-list', async c => {
     if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'SESSION_FORBIDDEN_ORIGIN', data: null }, 403);

@@ -13,6 +13,8 @@ import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET, QUOTA_SHORTCUT_ACCELERATOR
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
+export function getQuotaRuntimeHistory(providerId: string) { return activeManager?.getHistory(providerId) ?? null; }
+export function getQuotaBackupDirectory() { return path.join(app.getPath('userData'), 'quota'); }
 
 export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; showQuota(): void; getLocale(): SupportedLocale }) {
   const notifications = new Set<Notification>();

@@ -52,7 +52,13 @@ export function quotaWindowPeriodSeconds(window: QuotaWindow): number | null {
   const numericSuffix = /^(?:account|feature:.+):(\d+)$/.exec(window.id);
   return numericSuffix ? Number(numericSuffix[1]) || null : null;
 }
-export interface QuotaSample { at: number; usedPercent: number; resetsAt: number | null }
+export interface QuotaSample {
+  at: number; usedPercent: number; resetsAt: number | null;
+  /** Only upstream duration evidence, never the UI's estimated period. */
+  durationSeconds?: number;
+  /** Non-reversible account join proof, available only for verified identities. */
+  accountRef?: string; service?: string;
+}
 export interface QuotaAnalysis {
   paceDifference: number | null;
   paceBasis: QuotaPaceModel;

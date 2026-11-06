@@ -1,6 +1,6 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
+import { Activity, CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
 import { Button, Tooltip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { createSessionPageSearch, type SessionScope } from '../lib/session-page';
 import { isDemoMode } from '../lib/demo-runtime';
+import '../i18n/insights-messages';
 
 /**
  * Page actions and an always-available settings entry for browser preferences.
@@ -61,6 +62,10 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
 
   return (
     <div className="flex items-center gap-1">
+      {cliBackend && <Tooltip closeDelay={80} delay={100}>
+        <Tooltip.Trigger aria-label={t('insights.performance')} className={CHROME_ICON_BUTTON_CLASS_NAME} render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/performance" search={{ days: 7, source: '', model: '', project: '', groupBy: 'model' }} />}><Activity className="size-4" aria-hidden /></Tooltip.Trigger>
+        <Tooltip.Content placement="bottom"><p>{t('insights.performance')}</p></Tooltip.Content>
+      </Tooltip>}
       {cliBackend && sessionScope && <Tooltip closeDelay={80} delay={100}>
         <Tooltip.Trigger aria-label={t('usage.activity.pageTitle')} className={CHROME_ICON_BUTTON_CLASS_NAME} render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/sessions" search={createSessionPageSearch(sessionScope)} />}>
           <RotateCcwClock className="size-4" aria-hidden />

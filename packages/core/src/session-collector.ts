@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { lock } from 'proper-lockfile';
+import { withDataTransaction } from './data-transaction.js';
 import { createJsonlLineReader } from './parsers/jsonl-tail.js';
 import {
   discoverSessionInputs, extractSessionMessage, extractSessionTimingEvents, mergeSessionTimingEvent, readSessionSnapshot,
@@ -145,6 +146,9 @@ export async function syncSessionSource(
   source: string,
   discovered?: { inputs: SessionInput[]; complete: boolean },
 ): Promise<boolean> {
+  return withDataTransaction(dataDir, () => syncSessionSourceUnlocked(dataDir, source, discovered));
+}
+async function syncSessionSourceUnlocked(dataDir: string, source: string, discovered?: { inputs: SessionInput[]; complete: boolean }): Promise<boolean> {
   if (!validSource(source)) throw new Error('invalid_session_source');
   clearProjectResolutionCache();
   const discovery = discovered ?? await discoverSessionInputs(source);

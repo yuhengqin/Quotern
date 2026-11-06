@@ -62,6 +62,17 @@ async function fixture(t: TestContext) {
         if (/^(?:https?_proxy|all_proxy|no_proxy|node_use_env_proxy|node_options)$/i.test(key)) delete env[key];
       }
       const { stdout } = await run(process.execPath, ['--input-type=module', '-e', `
+        import dns from 'node:dns';
+        const lookup = dns.lookup;
+        // Resolve the synthetic remote host inside this child only. NO_PROXY
+        // must reach our origin directly, without relying on public DNS timing.
+        dns.lookup = (hostname, options, callback) => {
+          if (hostname !== 'quota.invalid') return lookup(hostname, options, callback);
+          if (typeof options === 'function') { callback = options; options = {}; }
+          queueMicrotask(() => options?.all
+            ? callback(null, [{ address: '127.0.0.1', family: 4 }])
+            : callback(null, '127.0.0.1', 4));
+        };
         import { quotaNodeFetch, captureQuotaRead, quotaReadRetryAfter } from ${JSON.stringify(moduleUrl)};
         try {
           const snapshot = await captureQuotaRead(async () => {
@@ -111,9 +122,9 @@ test('quota fetch keeps local credentials direct when global Node environment pr
 test('quota fetch respects NO_PROXY for remote hosts', async t => {
   const current = await fixture(t);
   const result = await current.read(`${current.remote}/usage`, { HTTP_PROXY: current.proxy, NO_PROXY: 'quota.invalid' });
-  assert.equal(result.error, 'TypeError');
+  assert.deepEqual(result, { status: 429, body: { ok: true }, retryAfter: 90 });
   assert.deepEqual(current.tunnels, []);
-  assert.deepEqual(current.requests, []);
+  assert.deepEqual(current.requests, [{ path: '/usage', authorization: 'Bearer fixture-token' }]);
 });
 
 test('quota fetch works without proxy configuration', async t => {

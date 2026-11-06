@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
-import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, appendFile, readFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DEFAULT_AGENT_PREFERENCES, patchAgentPreferences, readAgentPreferences } from '../src/agent/preferences.js';
 import { evaluateAgentHook, agentHookScript } from '../src/agent/hook.js';
 import { setIntegrationInstalled, transformIntegrationHooks, integrationHandler } from '../src/agent/install.js';
-import { handoffExcerpts } from '../src/agent/handoff.js';
+import { handoffExcerpts, prepareHandoff } from '../src/agent/handoff.js';
 import { claudePluginModule, prepareClaudePlugin } from '../src/agent/plugin.js';
 import { Hono } from 'hono';
 import { registerAgentApi } from '../src/server/agent-api.js';
@@ -95,6 +95,37 @@ test('handoff extracts selected-session text and outstanding plan without tool r
     { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'TodoWrite', input: { todos: [{ status: 'completed', content: 'Done' }, { status: 'pending', content: 'Review layout' }] } }] } },
   ];
   assert.deepEqual(handoffExcerpts('claude', 'selected', rows.map(row => JSON.stringify(row))), { requests: ['Continue UI work'], pending: ['Review layout'] });
+});
+test('handoff preview accepts a collected session index larger than the Agent config limit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quotern-handoff-large-index-'));
+  try {
+    await mkdir(join(root, 'sessions'));
+    const path = join(root, 'session.jsonl');
+    await writeFile(path, [
+      { type: 'session_meta', payload: { id: 'handoff-large-index', cwd: root } },
+      { type: 'event_msg', payload: { type: 'user_message', message: 'Continue the selected project' } },
+    ].map(row => JSON.stringify(row)).join('\n'));
+    const index = join(root, 'sessions', 'codex.json');
+    // JSON whitespace represents unrelated collected history without a huge fixture string.
+    await writeFile(index, Buffer.alloc(128 * 1024 * 1024, 32));
+    await appendFile(index, JSON.stringify({ files: { [path]: { context: { sessionId: 'handoff-large-index' } } } }));
+    const preview = await prepareHandoff(root, 'codex', 'handoff-large-index');
+    assert.match(preview.text, /Continue the selected project/);
+    assert.equal(preview.canSave, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+test('handoff reads current Codex user records once and respects session boundaries', () => {
+  const rows = [
+    { type: 'session_meta', payload: { id: 'selected' } },
+    { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Fix the preview' }] } },
+    { type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text: 'Fix the preview' }] } } },
+    { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Private response' }] } },
+    { type: 'event_msg', payload: { type: 'item_completed', item: { type: 'UserMessage', content: [{ type: 'text', text: 'Keep the draft editable' }] } } },
+    { type: 'response_item', payload: { type: 'function_call', name: 'functions.update_plan', arguments: JSON.stringify({ plan: [{ step: 'Check preview', status: 'in_progress' }] }) } },
+    { type: 'session_meta', payload: { id: 'other' } },
+    { type: 'event_msg', payload: { type: 'user_message', message: 'Wrong session' } },
+  ];
+  assert.deepEqual(handoffExcerpts('codex', 'selected', rows.map(row => JSON.stringify(row))), { requests: ['Fix the preview', 'Keep the draft editable'], pending: ['Check preview'] });
 });
 test('generated Claude plugin is valid JavaScript and learning remains explicitly gated', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quotern-plugin-'));

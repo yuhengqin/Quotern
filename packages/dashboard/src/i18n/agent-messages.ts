@@ -32,6 +32,13 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'agent.preview': ['生成交接预览', 'Preview handoff', '引き継ぎをプレビュー', '인수인계 미리보기'],
   'agent.handoffHelp': ['按需读取最近请求、最后记录的未完成计划和当前 Git 状态。内容可能包含敏感信息，请编辑后再复制或保存；保存后同项目的新会话可通过已启用的 Hook 读取，30 天后失效。', 'Reads recent requests, last observed unfinished plans and current Git status on demand. Review and edit potentially sensitive content before copying or saving. Enabled hooks can load saved notes in new sessions for the same project for 30 days.', '必要時に最近の依頼、未完了計画、Git 状態を読み取ります。機密情報を確認・編集してからコピーまたは保存してください。有効な Hook が同じプロジェクトで30日間読み取れます。', '최근 요청, 마지막 미완료 계획 및 Git 상태를 필요할 때 읽습니다. 민감한 내용을 검토하고 편집한 뒤 복사하거나 저장하세요. 활성 Hook은 동일 프로젝트의 새 세션에서 30일간 사용할 수 있습니다.'],
   'agent.clear': ['清除已保存交接', 'Clear saved handoff', '保存済みの引き継ぎを消去', '저장한 인수인계 지우기'],
+  'agent.handoffDirectoryUnavailable': ['无法从已采集记录定位项目目录，请同步数据后重试。', 'The collected records do not identify a project directory. Sync data and retry.', '収集済みの記録からプロジェクトの場所を特定できません。同期して再試行してください。', '수집한 기록에서 프로젝트 폴더를 찾을 수 없습니다. 동기화 후 다시 시도하세요.'],
+  'agent.handoffTranscriptUnavailable': ['无法读取会话日志，文件可能已移动或无法访问。请同步数据后重试。', 'The session log could not be read. It may have moved or be inaccessible. Sync data and retry.', 'セッションログを読み取れません。移動されたかアクセスできない可能性があります。同期して再試行してください。', '세션 로그를 읽을 수 없습니다. 이동되었거나 접근할 수 없을 수 있습니다. 동기화 후 다시 시도하세요.'],
+  'agent.handoffConfigInvalid': ['无法读取 Agent 集成配置，请检查设置中的 Agent 集成状态。', 'Agent integration settings could not be read. Check Agent integrations in Settings.', 'Agent 連携の設定を読み取れません。設定画面の Agent 連携を確認してください。', 'Agent 연동 설정을 읽을 수 없습니다. 설정에서 Agent 연동 상태를 확인하세요.'],
+  'agent.handoffLocalOnly': ['交接内容只能在运行 Quotern 的本机生成和保存。', 'Handoffs can only be prepared and saved on the computer running Quotern.', '引き継ぎは Quotern を実行している端末でのみ作成・保存できます。', '인수인계는 Quotern을 실행 중인 컴퓨터에서만 생성하고 저장할 수 있습니다.'],
+  'agent.handoffExpired': ['本地服务已更新，请重新点击操作。已编辑内容仍保留。', 'The local service changed. Try the action again; your edits are preserved.', 'ローカルサービスが更新されました。もう一度操作してください。編集内容は保持されています。', '로컬 서비스가 변경되었습니다. 다시 시도하세요. 편집 내용은 유지됩니다.'],
+  'agent.handoffTooLong': ['交接内容最多 8,000 字符，请缩短后重试。', 'Handoffs are limited to 8,000 characters. Shorten the text and retry.', '引き継ぎは8,000文字以内にしてください。', '인수인계는 최대 8,000자입니다. 내용을 줄이고 다시 시도하세요.'],
+  'agent.handoffCopyFailed': ['无法写入剪贴板，请选择文本后手动复制。', 'The clipboard is unavailable. Select the text and copy it manually.', 'クリップボードに書き込めません。テキストを選択して手動でコピーしてください。', '클립보드에 복사할 수 없습니다. 텍스트를 선택하여 직접 복사하세요.'],
 };
 const at = (index: number) => Object.fromEntries(Object.entries(rows).map(([key, values]) => [key, values[index]!]));
 export const agentMessages = { 'zh-CN': at(0), en: at(1), ja: at(2), ko: at(3) };

@@ -68,14 +68,20 @@ const directoryValue = (value: unknown): string | null => typeof value === 'stri
 const sqlText = (value: string) => `'${value.replace(/'/g, "''")}'`;
 const query = (path: string, sql: string) => queryDbJson(path, sql, { readOnly: true, timeout: 1500, maxBuffer: 32 * 1024 });
 
-function codexDirectory(path: string, sessionId: string): string | null {
+function codexTarget(path: string, sessionId: string): { directory: string | null; transcriptFile: string | null } | null {
   for (const ledger of newestCodexLedgerPaths(codexLedgerDbPaths())) {
-    const child = relative(dirname(ledger), path);
-    if (isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`)) continue;
+    const isLocal = (candidate: string) => {
+      const child = relative(dirname(ledger), candidate);
+      return isAbsolute(candidate) && !isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`);
+    };
+    if (!isLocal(path)) continue;
     try {
-      const cwd = query(ledger, `SELECT cwd FROM threads WHERE id = ${sqlText(sessionId)} LIMIT 1`)[0]?.cwd;
-      const directory = directoryValue(cwd);
-      if (directory) return directory;
+      let thread: Record<string, unknown> | undefined;
+      try { thread = query(ledger, `SELECT cwd, rollout_path FROM threads WHERE id = ${sqlText(sessionId)} LIMIT 1`)[0]; }
+      catch { thread = query(ledger, `SELECT cwd FROM threads WHERE id = ${sqlText(sessionId)} LIMIT 1`)[0]; }
+      const directory = directoryValue(thread?.cwd), transcript = directoryValue(thread?.rollout_path);
+      const transcriptFile = transcript && isLocal(transcript) && /\.jsonl(?:\.zstd?)?$/.test(transcript) ? transcript : null;
+      if (directory || transcriptFile) return { directory, transcriptFile };
     } catch { /* Older schemas or a locked ledger can fall back to log metadata. */ }
   }
   return null;
@@ -142,7 +148,7 @@ function metadataDirectory(bytes: Buffer, source: string, sessionId: string, ini
   return { directory, identified, currentIdentity };
 }
 
-export interface LocalSessionTarget { directory: string | null; sessionFile: string | null; antigravityCli?: boolean }
+export interface LocalSessionTarget { directory: string | null; sessionFile: string | null; antigravityCli?: boolean; transcriptFiles?: string[] }
 
 async function antigravityCliTarget(path: string, sessionId: string): Promise<LocalSessionTarget | null> {
   if (!/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(sessionId)) return null;
@@ -165,14 +171,16 @@ async function antigravityCliTarget(path: string, sessionId: string): Promise<Lo
 }
 
 /** Local detail lookup only. Never persist cwd or attach it to bulk session exports. */
-export async function readSessionTarget(dataDir: string, source: string, sessionId: string): Promise<LocalSessionTarget> {
+export async function readSessionTarget(dataDir: string, source: string, sessionId: string, options: { includeTranscriptFiles?: boolean } = {}): Promise<LocalSessionTarget> {
   const empty = { directory: null, sessionFile: null };
   if (!['codex', 'claude', 'dsh', 'pi', 'zcode', 'antigravity'].includes(source)) return empty;
   let snapshot: { files?: Record<string, { context?: { sessionId?: string }; messages?: Record<string, { sessionId: string }> }> };
   try { snapshot = JSON.parse(await readFile(join(dataDir, 'sessions', `${source}.json`), 'utf8')); } catch { return empty; }
-  for (const [path, file] of Object.entries(snapshot.files ?? {})) {
-    if (file.context?.sessionId !== sessionId && !Object.values(file.messages ?? {}).some(m => m.sessionId === sessionId)) continue;
-    if (!isAbsolute(path)) continue;
+  const files = Object.entries(snapshot.files ?? {});
+  const matchesSession = ([path, file]: (typeof files)[number]) => isAbsolute(path)
+    && (file.context?.sessionId === sessionId || Object.values(file.messages ?? {}).some(m => m.sessionId === sessionId));
+  for (const [path, file] of files) {
+    if (!matchesSession([path, file])) continue;
     if (source === 'antigravity') {
       const target = await antigravityCliTarget(path, sessionId);
       if (target) return target;
@@ -180,7 +188,9 @@ export async function readSessionTarget(dataDir: string, source: string, session
     }
     if (source === 'zcode' && /\.(db|sqlite)$/.test(path)) return { directory: zcodeDirectory(path, sessionId), sessionFile: null };
     if (!/\.jsonl(?:\.zstd?)?$/.test(path)) continue;
-    const prefix = await sourcePrefix(path);
+    const codex = source === 'codex' ? codexTarget(path, sessionId) : null;
+    // Archiving moves the log before Quotern necessarily refreshes its collected index.
+    const prefix = await sourcePrefix(path) ?? (codex?.transcriptFile ? await sourcePrefix(codex.transcriptFile) : null);
     if (!prefix) continue;
     const metadata = metadataDirectory(prefix.bytes, source, sessionId);
     if (!metadata.identified) continue;
@@ -191,8 +201,10 @@ export async function readSessionTarget(dataDir: string, source: string, session
       latest = tail ? metadataDirectory(tail, source, sessionId, metadata.currentIdentity && file.context?.sessionId === sessionId).directory : null;
     }
     // The thread ledger owns Codex's current worktree, even when log metadata lags a handoff.
-    directory = source === 'codex' ? codexDirectory(prefix.path, sessionId) ?? latest ?? directory : latest ?? directory;
-    return { directory, sessionFile: source === 'pi' && !prefix.compressed ? prefix.path : null };
+    directory = codex?.directory ?? latest ?? directory;
+    return { directory, sessionFile: source === 'pi' && !prefix.compressed ? prefix.path : null,
+      // Reuse this collected lookup for handoff; the usage index is not an Agent config file.
+      ...(options.includeTranscriptFiles ? { transcriptFiles: [...new Set(files.filter(matchesSession).map(([filePath]) => filePath === path ? prefix.path : filePath).filter(filePath => filePath.endsWith('.jsonl')))] } : {}) };
   }
   return empty;
 }

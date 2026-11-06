@@ -1,15 +1,23 @@
 import { open } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { join, resolve, isAbsolute } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readSessionTarget } from '../session-directory.js';
-import { agentDirectory, readAgentJson, writeAgentJson } from './preferences.js';
+import { agentDirectory, writeAgentJson } from './preferences.js';
 
 const clean = (value: unknown, limit = 1600) => typeof value === 'string' ? value.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, limit) : '';
 const textContent = (value: unknown): string => typeof value === 'string' ? value : Array.isArray(value) ? value.filter(part => part?.type === 'text' || part?.type === 'input_text').map(part => part.text ?? '').join('\n') : '';
 /** Explicit preview only; excerpts are never written to the normal collection cache. */
 export function handoffExcerpts(source: string, sessionId: string, lines: string[]) {
   const requests: string[] = []; let pending: string[] = [];
+  let currentSession = true, previousRequest: { text: string; format: string } | null = null;
+  const addRequest = (value: unknown, format: string) => {
+    const text = clean(value);
+    if (!text) return;
+    // Codex writes one request in both response_item and event_msg projections.
+    if (previousRequest?.text !== text || previousRequest.format === format) requests.push(text);
+    previousRequest = { text, format };
+  };
   for (const line of lines) {
     try {
       const row = JSON.parse(line);
@@ -22,7 +30,11 @@ export function handoffExcerpts(source: string, sessionId: string, lines: string
           pending = part.input.todos.filter((todo: { status?: string }) => todo.status !== 'completed').map((todo: { content?: string }) => clean(todo.content, 300)).filter(Boolean).slice(0, 12);
         }
       } else if (source === 'codex') {
-        if (row.type === 'event_msg' && row.payload?.type === 'user_message') { const text = clean(row.payload.message); if (text) requests.push(text); }
+        if (row.type === 'session_meta') { currentSession = row.payload?.id === sessionId; previousRequest = null; }
+        if (!currentSession) continue;
+        if (row.type === 'response_item' && row.payload?.type === 'message' && row.payload.role === 'user') addRequest(textContent(row.payload.content), 'response');
+        if (row.type === 'event_msg' && row.payload?.type === 'user_message') addRequest(row.payload.message, 'event');
+        if (row.type === 'event_msg' && row.payload?.type === 'item_completed' && row.payload.item?.type === 'UserMessage') addRequest(textContent(row.payload.item.content), 'event');
         if (row.type === 'response_item' && row.payload?.type === 'function_call' && /(?:^|\.)update_plan$/.test(row.payload.name ?? '')) {
           const args = JSON.parse(row.payload.arguments); if (Array.isArray(args.plan)) pending = args.plan.filter((step: { status?: string }) => step.status !== 'completed').map((step: { step?: string }) => clean(step.step, 300)).filter(Boolean).slice(0, 12);
         }
@@ -37,13 +49,11 @@ export function handoffKey(directory: string): string {
 }
 export async function prepareHandoff(dataDir: string, source: string, sessionId: string) {
   if (!['claude', 'codex'].includes(source)) throw new Error('AGENT_HANDOFF_UNSUPPORTED');
-  const target = await readSessionTarget(dataDir, source, sessionId);
+  const target = await readSessionTarget(dataDir, source, sessionId, { includeTranscriptFiles: true });
   if (!target.directory) throw new Error('SESSION_DIRECTORY_UNAVAILABLE');
-  const snapshot = await readAgentJson<{ files?: Record<string, { context?: { sessionId?: string }; messages?: Record<string, { sessionId?: string }> }> }>(join(dataDir, 'sessions', `${source}.json`), {}, 128 * 1024 * 1024);
-  const candidates = Object.entries(snapshot.files ?? {}).filter(([path, row]) => isAbsolute(path) && path.endsWith('.jsonl') && (row.context?.sessionId === sessionId || Object.values(row.messages ?? {}).some(message => message.sessionId === sessionId)));
   const lines: string[] = []; let truncated = false;
-  for (const [file] of candidates.slice(0, 4)) {
-    const handle = await open(file, 'r');
+  for (const file of (target.transcriptFiles ?? []).slice(0, 4)) {
+    const handle = await open(file, 'r').catch(() => { throw new Error('AGENT_TRANSCRIPT_UNAVAILABLE'); });
     try {
       const info = await handle.stat(), start = Math.max(0, info.size - 1024 * 1024);
       const bytes = Buffer.alloc(Math.min(info.size, 1024 * 1024)); const read = await handle.read(bytes, 0, bytes.length, start);

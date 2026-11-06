@@ -94,6 +94,37 @@ test('Codex uses its collected thread ledger cwd after a worktree handoff', asyn
   });
 });
 
+test('Codex resolves an archived transcript through its thread ledger when the collected path is stale', async () => {
+  await fixture('codex', async (root) => {
+    const previous = process.env.CODEX_HOME;
+    const outside = root + '.outside.jsonl';
+    process.env.CODEX_HOME = root;
+    try {
+      const archived = join(root, 'archived_sessions', 'session.jsonl');
+      await mkdir(join(root, 'archived_sessions'));
+      await writeFile(archived, JSON.stringify({ type: 'session_meta', payload: { id: 's', cwd: root } }) + '\n');
+      const db = new DatabaseSync(join(root, 'state_5.sqlite'));
+      try {
+        db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT, cwd TEXT)');
+        db.prepare('INSERT INTO threads VALUES (?, ?, ?)').run('s', archived, root);
+      } finally { db.close(); }
+      const target = await readSessionTarget(root, 'codex', 's', { includeTranscriptFiles: true });
+      assert.equal(target.directory, root);
+      assert.deepEqual(target.transcriptFiles, [archived]);
+      assert.equal(await readSessionDirectory(root, 'codex', 'not-collected'), null);
+      await writeFile(archived, JSON.stringify({ type: 'session_meta', payload: { id: 'another-session', cwd: root } }) + '\n');
+      assert.equal(await readSessionDirectory(root, 'codex', 's'), null);
+      await writeFile(outside, JSON.stringify({ type: 'session_meta', payload: { id: 's', cwd: root } }) + '\n');
+      const update = new DatabaseSync(join(root, 'state_5.sqlite'));
+      try { update.prepare('UPDATE threads SET rollout_path = ? WHERE id = ?').run(outside, 's'); } finally { update.close(); }
+      assert.equal(await readSessionDirectory(root, 'codex', 's'), null);
+    } finally {
+      await rm(outside, { force: true });
+      if (previous === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previous;
+    }
+  });
+});
+
 test('bounded tail lookup finds the latest directory and excludes another session', async () => {
   for (const source of ['codex', 'claude']) await fixture(source, async (root, path) => {
     const first = source === 'codex' ? { type: 'session_meta', payload: { id: 's', cwd: 'C:/original' } } : { sessionId: 's', cwd: 'C:/original' };

@@ -53,6 +53,8 @@
 
 本轮新增入口：共享 `AgentIntegrationSettings` 用于两端应用设置，默认关闭的功能与 Hook 安装状态分别呈现；`SessionHandoff` 在会话详情按需展开，先生成可编辑预览再复制/保存。共享 `PaletteControl` 承接配色选择，`PaletteRuntime` 在两端 ThemeProvider 中应用并监听跨窗口偏好；系统/浅色/深色规则保持。共享 `QuotaLayoutControl` 复用 FilterMenuPopover，提供键盘可操作的优先/上移/下移和紧凑开关。Desktop 直接引用这些组件并登记 CSS `@source`。
 
+交接预览的目录、日志、集成配置和本机访问失败在操作附近说明原因及下一步；重试和保存失败保留草稿，复制失败提供手动复制提示。两端使用同一 `SessionHandoff`。预览复用已采集会话的文件定位，不把用量索引按小型 Agent 配置的大小上限处理；只在显式预览时读取有限日志尾部。
+
 `UsageInsightsPanel` 从当前报表读取最多三项结论，并带范围进入会话页；`SessionDiagnosticsSection` 在会话详情区分工具记录、粗略输出体积和推断关联，具体证据按需展开。固定额度面板复用 Desktop `TrayPopoverView`，`TrayPanelControl` 位于托盘标题和订阅设置；拖动区域只在标题，交互控件不属于拖动区。紧凑模式只调整间距，原额度信息和详情入口仍可访问。
 
 1. **先确定用户要判断或执行什么。** 正文优先展示结果和动作，不按 DTO 字段顺序铺开页面。新增一行文字、标签或说明时，确认它是否改变用户当前判断；默认界面没有这种价值的内容进入按需入口。

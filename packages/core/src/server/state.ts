@@ -181,6 +181,7 @@ export function buildSyncStatus(
         countTraeRows(rows),
       ),
       gemini: poll('gemini', 'Gemini CLI 读取 ~/.gemini/tmp 会话，定时轮询同步', countGeminiRows(rows)),
+      muse: poll('muse', 'Muse Code 读取本地 session.jsonl，定时轮询同步', rows.filter(row => row.source === 'muse').length),
       opencode: poll(
         'opencode',
         'OpenCode 读取 opencode.db 的 session_message / message，或 storage/message，定时轮询同步',

@@ -8,12 +8,13 @@ import gemini from '@lobehub/icons-static-svg/icons/gemini-color.svg';
 import grok from '@lobehub/icons-static-svg/icons/grok.svg';
 import kimi from '@lobehub/icons-static-svg/icons/kimi.svg';
 import minimax from '@lobehub/icons-static-svg/icons/minimax-color.svg';
+import muse from '@/assets/brand-logos/muse.svg';
 import opencode from '@lobehub/icons-static-svg/icons/opencode.svg';
 import qoder from '@lobehub/icons-static-svg/icons/qoder-color.svg';
 import zcode from '@lobehub/icons-static-svg/icons/zai.svg';
 
-const icons: Record<string, string> = { antigravity, claude, codex, copilot, cursor, deepseek, gemini, grok, kimi, minimax, opencode, qoder, zcode };
-const monochrome = new Set(['copilot', 'cursor', 'grok', 'kimi', 'opencode', 'zcode']);
+const icons: Record<string, string> = { antigravity, claude, codex, copilot, cursor, deepseek, gemini, grok, kimi, minimax, muse, opencode, qoder, zcode };
+const monochrome = new Set(['copilot', 'cursor', 'grok', 'kimi', 'muse', 'opencode', 'zcode']);
 export function SubscriptionBrandIcon({ brand }: { brand: string }) {
   const src = icons[brand];
   if (!src) return null;

@@ -7,6 +7,7 @@ import { captureQuotaRead, quotaNodeFetch } from './readers/quota-fetch-state.js
 import { createDefaultCodexSubscriptionReader } from './readers/codex-subscription.js';
 import { createDefaultClaudeSubscriptionReader } from './readers/claude-subscription.js';
 import { createDefaultGeminiSubscriptionReader } from './readers/gemini-subscription.js';
+import { createDefaultMuseSubscriptionReader } from './readers/muse-subscription.js';
 import { readCursorSubscription } from './readers/cursor-subscription.js';
 import { readCopilotSubscription } from './readers/copilot-subscription.js';
 import { readGrokSubscription } from './readers/grok-subscription.js';
@@ -20,6 +21,7 @@ import { readOpenCodeSubscription } from './readers/opencode-subscription.js';
 import { selectKimiSubscription } from './shared/kimi-selection.js';
 import { createOMPQuotaObservationReader, selectQuotaObservation, type OMPQuotaObservation } from './readers/quota-observations.js';
 import { createQuotaSnapshotPublisher } from './snapshot.js';
+import { createWindowStarter } from '../agent/window-start.js';
 import { projectQuotaReport, type QuotaRuntimeSource } from './report.js';
 import { QUOTA_PROVIDER_DESCRIPTORS, getQuotaProviderDescriptor, type QuotaProviderId } from './shared/provider-descriptors.js';
 
@@ -41,10 +43,12 @@ export async function createQuotaRuntime(options: {
   snapshot?: { directory: string; runtime: QuotaRuntimeSource };
 }) {
   const publisher = options.snapshot && createQuotaSnapshotPublisher(options.snapshot.directory, options.snapshot.runtime);
+  const windowStarter = options.snapshot && createWindowStarter(options.snapshot.directory, options.snapshot.runtime);
   const force = { forceRefresh: true };
   const codex = createDefaultCodexSubscriptionReader(options.fetch);
   const claude = createDefaultClaudeSubscriptionReader();
   const gemini = createDefaultGeminiSubscriptionReader(options.fetch);
+  const muse = createDefaultMuseSubscriptionReader();
   const readObservations = createOMPQuotaObservationReader();
   let observations: OMPQuotaObservation[] = [];
   const withObservations = (provider: string, read: () => Promise<unknown>) => async () => {
@@ -54,6 +58,7 @@ export async function createQuotaRuntime(options: {
   };
   const reads = {
     codex: () => codex(force), claude: () => claude(force), gemini: () => gemini(force),
+    muse: () => muse(),
     cursor: () => readCursorSubscription(force), copilot: () => readCopilotSubscription(force),
     grok: () => readGrokSubscription(force), zcode: () => readZcodeSubscription(force),
     kimi: async () => selectKimiSubscription(await readKimiSubscriptions(force)),
@@ -102,6 +107,7 @@ export async function createQuotaRuntime(options: {
     profileReaders,
     notify: options.notify ?? (() => {}), onChanged: state => {
       options.onChanged?.(state);
+      if (windowStarter) void windowStarter(state).catch(() => { console.warn('[quotern] optional window startup unavailable'); });
       // Construction and the first in-flight emission must not erase the previous run's snapshot.
       if (publisher && options.snapshot && (state.providers.length === 0 || state.providers.some(p => p.queriedAt !== null))) {
         void publisher.publish(projectQuotaReport(state, options.snapshot.runtime)).catch(() => {

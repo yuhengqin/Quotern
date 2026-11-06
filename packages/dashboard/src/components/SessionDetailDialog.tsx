@@ -17,6 +17,7 @@ import { ProviderIcon } from './ProviderIcon';
 import { useAppToastQueue } from '@/components/AppToastContext';
 import { DetailDisclosure, DetailValue, SessionModelBreakdown, SessionPricingDetails, type DetailFormat } from './SessionUsageBreakdown';
 import { HelpPopover } from './HelpPopover';
+import { SessionDiagnosticsSection } from './SessionDiagnosticsSection';
 import { sessionDisplayIdentity } from '../lib/session-list-display';
 
 const groupLabels = { own: 'usage.detail.own', subagent: 'usage.insights.subagent', fork: 'usage.detail.forks', unknown: 'usage.detail.otherRelated' } as const;
@@ -339,6 +340,8 @@ function SessionDetailContent({ row, fallbackTitle, range, showTokenShare, navig
             {!insight && <p className="text-muted">{t('usage.detail.noActivity')}</p>}
           </section>
         </section>
+          <SessionDiagnosticsSection row={row} range={range} format={format} />
+          <SessionHandoff source={row.source} sessionId={row.sessionId} />
           <section aria-label={t('usage.detail.sessionInfo')} className="space-y-3 border-t border-separator pt-4">
             <h3 className="font-semibold">{t('usage.detail.sessionInfo')}</h3>
             <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
@@ -358,3 +361,4 @@ function SessionDetailContent({ row, fallbackTitle, range, showTokenShare, navig
       </Modal.Body>
   </>;
 }
+import { SessionHandoff } from './SessionHandoff';

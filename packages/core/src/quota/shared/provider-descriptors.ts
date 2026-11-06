@@ -24,6 +24,7 @@ export const QUOTA_PROVIDER_DESCRIPTORS = [
   provider('codex', 'Codex', ['oauth-cache'], http, 180, 'https://status.openai.com/', ['percentage'], true, true),
   provider('claude', 'Claude', ['official-cli'], [{ kind: 'official-cli', platforms: PLATFORMS }], 300, 'https://status.claude.com/', ['percentage'], true, true),
   provider('gemini', 'Gemini CLI', ['oauth-cache'], [{ kind: 'credentials-http', platforms: PLATFORMS, limitation: 'valid-token-only' }], 300, null, ['percentage'], false, true),
+  provider('muse', 'Muse Code', ['official-cli'], [{ kind: 'official-cli', platforms: PLATFORMS }], 300),
   provider('cursor', 'Cursor', ['local-session'], http, 300, 'https://status.cursor.com/'),
   provider('copilot', 'Copilot', ['oauth-cache', 'api-key'], http, 900, 'https://www.githubstatus.com/', ['percentage', 'unlimited', 'exhausted']),
   provider('grok', 'Grok', ['oauth-cache'], http),

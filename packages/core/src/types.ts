@@ -135,6 +135,7 @@ export interface CodexSessionIndexEntry {
 }
 
 export interface CursorsFile {
+  muse?: import('./parsers/muse.js').MuseCursorState;
   minimaxCode?: {
     databases: Record<string, number>;
     files: Record<string, { offset: number; inode?: number }>;

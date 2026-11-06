@@ -59,6 +59,7 @@ export const SUPPORTED_TOOLS: readonly SupportedToolLine[] = [
   { name: 'Command Code', source: 'command-code' },
   { name: 'MiniMax Code', source: 'minimax-code' },
   { name: 'WPS Comate', source: 'wps-comate' },
+  { name: 'Muse Code', source: 'muse' },
 ] as const;
 
 export function formatSupportedTool(line: SupportedToolLine): string {

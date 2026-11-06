@@ -11,6 +11,8 @@ import {
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import sharp from 'sharp';
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { normalizeTrayPanel, TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, type TrayPanelState } from '../shared/tray-panel';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
 import { quotaPopoverBounds, quotaTraySummary } from './tray-quota';
@@ -75,6 +77,23 @@ let iconGeneration = 0;
 let quotaLevel = -1;
 /** Latest content height reported by the renderer, used when re-anchoring. */
 let popoverHeight = POPOVER_INITIAL_HEIGHT;
+let panelState: TrayPanelState = { pinned: false };
+let positioningPanel = false;
+function savePanel() {
+  const file = path.join(app.getPath('userData'), 'tray-panel.json');
+  const temporary = file + '.tmp';
+  writeFileSync(temporary, JSON.stringify(panelState)); renameSync(temporary, file);
+}
+function setPanelPinned(pinned: boolean): TrayPanelState {
+  const previous = panelState; panelState = { ...panelState, pinned };
+  try { savePanel(); } catch (error) { panelState = previous; throw error; }
+  const window = ensurePopover(); window.setMovable(pinned);
+  if (tray) positionPopoverNearTray(tray, popoverHeight);
+  if (pinned) { window.show(); window.focus(); }
+  else if (!window.isFocused()) { window.hide(); }
+  for (const item of BrowserWindow.getAllWindows()) item.webContents.send(TRAY_PANEL_CHANGED, panelState);
+  return panelState;
+}
 
 function resolveTrayIconPath(): string {
   const file = isMac ? 'quoternTemplate.png' : 'icon.png';
@@ -147,7 +166,7 @@ function ensurePopover(): BrowserWindow {
     // Transparent windows must not be user-resizable. Programmatic setBounds
     // still works; positionPopoverNearTray unlocks the min/max bounds first.
     resizable: false,
-    movable: false,
+    movable: panelState.pinned,
     minimizable: false,
     maximizable: false,
     skipTaskbar: true,
@@ -162,7 +181,13 @@ function ensurePopover(): BrowserWindow {
   });
 
   popover.webContents.on('context-menu', (e) => e.preventDefault());
-  popover.on('blur', () => { lastHiddenAt = Date.now(); popover?.hide(); });
+  popover.on('blur', () => { if (!panelState.pinned) { lastHiddenAt = Date.now(); popover?.hide(); } });
+  popover.on('moved', () => {
+    if (!panelState.pinned || positioningPanel || !popover) return;
+    const [x, y] = popover.getPosition(); panelState = { ...panelState, x, y };
+    try { savePanel(); } catch { console.warn('[quotern] panel position could not be saved'); }
+  });
+  popover.once('ready-to-show', () => { if (panelState.pinned && popover && tray) { positionPopoverNearTray(tray, popoverHeight); popover.showInactive(); } });
   popover.webContents.on('before-input-event', (_event, input) => { if (input.key === 'Escape') { lastHiddenAt = Date.now(); popover?.hide(); } });
   popover.on('close', (e) => {
     // Hide instead of destroy on user close to allow re-toggling.
@@ -207,11 +232,21 @@ function positionPopoverNearTray(t: Tray, height: number): void {
   } : screen.getCursorScreenPoint());
   const work = display.workArea;
   const target = quotaPopoverBounds(bounds, work, POPOVER_WIDTH, height);
+  if (panelState.pinned) {
+    const current = popover.getBounds();
+    const x = panelState.x ?? (popover.isVisible() ? current.x : target.x), y = panelState.y ?? (popover.isVisible() ? current.y : target.y);
+    const area = screen.getDisplayNearestPoint({ x, y }).workArea;
+    target.height = Math.min(height, area.height);
+    target.x = Math.max(area.x, Math.min(x, area.x + area.width - target.width));
+    target.y = Math.max(area.y, Math.min(y, area.y + area.height - target.height));
+  }
+  positioningPanel = true;
   popover.setMinimumSize(target.width, Math.min(POPOVER_MIN_HEIGHT, target.height));
   popover.setMaximumSize(target.width, POPOVER_MAX_HEIGHT);
   popover.setBounds(target);
   popover.setMinimumSize(target.width, target.height);
   popover.setMaximumSize(target.width, target.height);
+  positioningPanel = false;
 }
 
 function handlePopoverResize(
@@ -238,6 +273,7 @@ function togglePopover(): void {
   if (Date.now() - lastHiddenAt < 200) return;
   const w = ensurePopover();
   if (w.isVisible()) {
+    if (panelState.pinned) { w.focus(); return; }
     w.hide();
     return;
   }
@@ -249,6 +285,7 @@ function togglePopover(): void {
 
 /** Hide the macOS tray popover if visible (e.g. before focusing the main window). */
 export function hideTrayPopover(): void {
+  if (panelState.pinned) return;
   if (!popover || popover.isDestroyed() || !popover.isVisible()) return;
   popover.hide();
 }
@@ -285,6 +322,13 @@ export function setTrayQuotaState(state: QuotaState): void {
 export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
   currentOptions = options;
+  try { panelState = normalizeTrayPanel(JSON.parse(readFileSync(path.join(app.getPath('userData'), 'tray-panel.json'), 'utf8'))); } catch { panelState = { pinned: false }; }
+  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET]) ipcMain.removeHandler(channel);
+  ipcMain.handle(TRAY_PANEL_GET, () => panelState);
+  ipcMain.handle(TRAY_PANEL_SET, (event, pinned: unknown) => {
+    if (typeof pinned !== 'boolean' || !BrowserWindow.fromWebContents(event.sender)) throw new Error('INVALID_TRAY_PANEL');
+    return setPanelPinned(pinned);
+  });
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
   trayMenu = buildTrayMenu(options);
@@ -302,6 +346,7 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
     tray.on('click', () => options.showMainWindow());
   }
   if (lastQuotaState) setTrayQuotaState(lastQuotaState);
+  if (panelState.pinned && (isMac || process.platform === 'win32')) ensurePopover();
 }
 
 /** Rebuild native menu and tooltip when the Desktop language changes. */
@@ -316,6 +361,7 @@ export function disposeTrayPopover(): void {
   iconGeneration++; quotaLevel = -1;
   markTrayPopoverQuitting();
   ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
+  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET]) ipcMain.removeHandler(channel);
   if (popover && !popover.isDestroyed()) {
     popover.removeAllListeners('blur');
     popover.removeAllListeners('close');

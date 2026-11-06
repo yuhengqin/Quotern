@@ -1,8 +1,10 @@
 import type { SupportedLocale } from 'quotern-i18n';
+import { improvementMessages } from './improvement-messages.ts';
 
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
 const rows: Record<string, readonly [string, string, string, string]> = {
+  ...improvementMessages,
   'usage.detail.backSession': ['返回上一会话', 'Back to previous session', '前のセッションに戻る', '이전 세션으로 돌아가기'],
   'usage.detail.openSeparate': ['独立打开 {{name}}', 'Open {{name}} separately', '{{name}} を別ウィンドウで開く', '{{name}} 별도로 열기'],
   'usage.detail.relatedMissing': ['当前期间未找到该会话', 'This session was not found in this period', 'この期間にセッションが見つかりません', '이 기간에 세션을 찾을 수 없습니다'],

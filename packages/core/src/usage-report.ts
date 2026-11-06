@@ -12,6 +12,7 @@ import {
   loadCachedPricingOverlay, roundCostUsd, type RowCostExplanation,
 } from './pricing/index.js';
 import { addLocalDays, DEFAULT_STATS_TIMEZONE, localDateAndHour, localDateDaysAgo, localDateNow } from './timezone.js';
+import { explainUsage, type UsageInsights } from './usage-insights.js';
 
 export const USAGE_REPORT_PERIODS = ['summary', 'overview', 'daily', 'weekly', 'monthly', 'models', 'projects'] as const;
 export type UsageReportPeriod = typeof USAGE_REPORT_PERIODS[number];
@@ -66,6 +67,7 @@ export interface UsageReportBreakdowns {
   projects: UsageReportRow[];
 }
 export interface UsageReport {
+  insights?: UsageInsights;
   schemaVersion: 1;
   period: UsageReportPeriod;
   timeZone: string;
@@ -164,7 +166,7 @@ function validBucket(row: QueueBucket): boolean {
 }
 
 /** Pure query over the same local buckets as the UI. Does not widen collection or read raw conversations. */
-export function buildUsageReport(rows: readonly QueueBucket[], query: UsageReportQuery, context: UsageReportContext): UsageReport {
+function buildReport(rows: readonly QueueBucket[], query: UsageReportQuery, context: UsageReportContext, includeInsights: boolean): UsageReport {
   const now = context.now ?? new Date();
   const period = query.period ?? 'summary';
   if (!(USAGE_REPORT_PERIODS as readonly string[]).includes(period)) throw new Error('无效的报表类型');
@@ -233,7 +235,7 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
   const reportRows = period === 'overview' ? [{ key: 'summary', label: '合计', ...summary }] : groupRows(period);
   const breakdowns = period === 'overview'
     ? { daily: groupRows('daily'), models: groupRows('models'), projects: groupRows('projects') } : undefined;
-  return {
+  const report: UsageReport = {
     schemaVersion: 1, period, timeZone: DEFAULT_STATS_TIMEZONE, fromDate, toDate,
     ...(timeRange ? { fromTime: query.fromTime, toTime: query.toTime } : {}),
     filters: { sources: selectedSources, model, project },
@@ -243,6 +245,20 @@ export function buildUsageReport(rows: readonly QueueBucket[], query: UsageRepor
       snapshot: context.snapshot ?? 'runtime', lastSyncAt: context.lastSyncAt ?? null, readAt: now.toISOString(), invalidRows,
     }, summary, rows: reportRows, ...(breakdowns ? { breakdowns } : {}),
   };
+  if (includeInsights && period === 'overview') {
+    const start = Date.parse(query.fromTime ?? `${fromDate}T00:00:00+08:00`);
+    const end = Math.min(now.getTime(), Date.parse(query.toTime ?? `${addLocalDays(toDate, 1)}T00:00:00+08:00`));
+    const previousStart = start - (end - start);
+    const comparable = end > start && previousStart >= Date.parse(context.collectSince) && !report.coverage.limited && !invalidRows;
+    const previous = comparable ? buildReport(rows, { period: 'overview', fromTime: new Date(previousStart).toISOString(), toTime: new Date(start).toISOString(),
+      sources: selectedSources, ...(model ? { model } : {}), ...(project ? { project } : {}) }, context, false) : null;
+    report.insights = explainUsage(report, previous);
+  }
+  return report;
+}
+
+export function buildUsageReport(rows: readonly QueueBucket[], query: UsageReportQuery, context: UsageReportContext): UsageReport {
+  return buildReport(rows, query, context, true);
 }
 
 /** Read only persisted metadata and queue snapshots. No config repair, locks, runtime ownership or network. */

@@ -30,6 +30,29 @@ test('statusline keeps local priced subtotal and unpriced coverage distinct', ()
   assert.match(value, /local/i);
 });
 
+test('statusline reports host cache observations and near-full context without inventing causes', () => {
+  const value = line({ context_window: { used_percentage: 91 }, prompt_cache: { hit_ratio: 0.73, warm: false, caching_observed: true, last_miss_at: Date.now() / 1000, last_miss_cause: { causes: ['tools_changed'] } } });
+  assert.match(value, /cache 73%/i);
+  assert.match(value, /cold/i);
+  assert.match(value, /compact/i);
+  assert.match(value, /possible.*tools changed/i);
+  assert.doesNotMatch(line({ prompt_cache: { hit_ratio: null, last_miss_cause: null } }), /cache 0%|possible/i);
+  assert.match(line({ prompt_cache: { hit_ratio: 0 } }), /cache 0%/i);
+  assert.doesNotMatch(line({ prompt_cache: { hit_ratio: 7, last_miss_cause: { causes: ['secret\nvalue'] } } }), /cache 700%|secret/);
+});
+
+test('statusline context growth compares only recent samples from the same session and ignores compaction', () => {
+  const now = 1793940000000;
+  assert.equal(typeof api.contextSample, 'function');
+  const payload = { session_id: 'session-a', context_window: { used_percentage: 68 } };
+  const previous = { sessionId: 'session-a', percent: 48, at: now - 60000 };
+  assert.match(api.formatStatusline(payload, null, 'en', previous, now), /growing quickly/i);
+  assert.doesNotMatch(api.formatStatusline(payload, null, 'en', { ...previous, sessionId: 'session-b' }, now), /growing quickly/i);
+  assert.doesNotMatch(api.formatStatusline(payload, null, 'en', { ...previous, at: now - 3600000 }, now), /growing quickly/i);
+  assert.doesNotMatch(api.formatStatusline(payload, null, 'en', { ...previous, percent: 80 }, now), /growing quickly/i);
+  assert.equal(api.contextSample({ session_id: 'a', context_window: { used_percentage: null } }, now), null);
+});
+
 test('piped statusline tolerates malformed stdin without creating runtime state', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'quotern-statusline-'));
   try {

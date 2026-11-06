@@ -9,6 +9,7 @@ import { toUtcHalfHourStart } from './queue/keys.js';
 import { inTimeBounds } from './usage-window.js';
 import { extractAdditionalObservations } from './session-extra-observation.js';
 import type { SessionInsights } from './session-insights.js';
+import { decodeMuseUsage } from './parsers/muse.js';
 
 export interface SessionBilling {
   service: string;
@@ -73,6 +74,15 @@ export interface ObservationContext {
 }
 type Obj = Record<string, unknown>;
 export function extractSessionObservations(source: string, record: Obj, context: ObservationContext): SessionObservation[] {
+  if (source === 'muse') {
+    const event = decodeMuseUsage(record);
+    if (!event) return [];
+    const { total_tokens: tokens, conversation_count: _requests, ...tokenParts } = event.tokens;
+    const costUsd = isModelPriced(event.model, source) ? computeRowCost({ ...event.tokens, hour_start: event.timestamp, source, model: event.model, project: context.projectLabel ?? '' }) : null;
+    return [{ id: event.id, source, sessionId: context.sessionId, timestamp: event.timestamp, model: event.model, tokens,
+      usageKnown: true, tokenParts, requestKnown: true, costBasis: 'request-facts', costUsd, costKind: costUsd === null ? 'unknown' : 'estimated',
+      billing: { service: 'unknown', mode: 'unknown', accountRef: null, evidence: 'unknown' }, ...(context.projectLabel ? { projectLabel: context.projectLabel } : {}) }];
+  }
   const extra = extractAdditionalObservations(source, record, context);
   if (['grok','zcode','droid','copilot','dsh'].includes(source)) return extra;
   const event = extractSessionObservation(source, record, context);

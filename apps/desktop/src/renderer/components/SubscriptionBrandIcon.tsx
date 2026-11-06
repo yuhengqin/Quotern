@@ -13,11 +13,12 @@ import OpenCode from '@lobehub/icons/es/OpenCode';
 import Qoder from '@lobehub/icons/es/Qoder';
 import Trae from '@lobehub/icons/es/Trae';
 import ZAI from '@lobehub/icons/es/ZAI';
+import museIcon from '@/assets/brand-logos/muse.svg';
 import workBuddyIcon from '@/assets/brand-logos/workbuddy.svg';
 
 export type SubscriptionBrand =
   | 'antigravity' | 'claude' | 'codebuddy' | 'codex' | 'copilot' | 'cursor' | 'deepseek'
-  | 'gemini' | 'grok' | 'kimi' | 'minimax' | 'opencode' | 'qoder' | 'trae' | 'workbuddy' | 'zcode';
+  | 'gemini' | 'grok' | 'kimi' | 'minimax' | 'muse' | 'opencode' | 'qoder' | 'trae' | 'workbuddy' | 'zcode';
 
 const iconClassName = 'size-6 shrink-0';
 const monoIconClassName = `${iconClassName} text-foreground`;
@@ -36,6 +37,17 @@ export function SubscriptionBrandIcon({ brand }: { brand: SubscriptionBrand }) {
     case 'grok': return <Grok aria-hidden className={monoIconClassName} size={24} />;
     case 'kimi': return <Kimi aria-hidden className={monoIconClassName} size={24} />;
     case 'minimax': return <Minimax.Color aria-hidden className={iconClassName} size={24} />;
+    case 'muse':
+      return (
+        <img
+          alt=""
+          aria-hidden
+          className={`${iconClassName} object-contain dark:invert`}
+          height={24}
+          src={museIcon}
+          width={24}
+        />
+      );
     case 'opencode': return <OpenCode aria-hidden className={monoIconClassName} size={24} />;
     case 'qoder': return <Qoder.Color aria-hidden className={iconClassName} size={24} />;
     case 'trae': return <Trae.Color aria-hidden className={iconClassName} size={24} />;

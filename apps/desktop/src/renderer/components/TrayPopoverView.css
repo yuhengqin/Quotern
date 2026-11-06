@@ -53,6 +53,7 @@ body:has(.tray-popover),
   grid-area: header;
   min-height: 0;
 }
+.tray-panel-drag { -webkit-app-region: drag; app-region: drag; }
 
 .tray-popover__body {
   grid-area: body;

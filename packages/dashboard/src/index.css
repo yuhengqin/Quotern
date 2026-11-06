@@ -4,6 +4,7 @@
 @import "./components/app-toast.css";
 
 :root {
+  --source-muse: #7570bd;
   --font-dashboard-sans: "JetBrains Mono Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", system-ui, sans-serif;
   --font-dashboard-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --chart-1: #0485f7;

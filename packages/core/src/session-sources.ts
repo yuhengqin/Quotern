@@ -9,6 +9,7 @@ import { listDroidSettingsFiles } from './parsers/droid.js';
 import { extractSessionEvidence, type SessionEvidence } from './session-insights.js';
 import { extractSessionObservations } from './session-observation.js';
 import { findCopilotEventFiles } from './parsers/copilot.js';
+import { findMuseSessionFiles, museProject } from './parsers/muse.js';
 import { findGeminiSessionFiles } from './parsers/gemini.js';
 import { findPiSessionFiles } from './parsers/pi.js';
 import { findOmpSessionFiles, ompAgentDirCollidesWithPi } from './parsers/omp.js';
@@ -28,6 +29,7 @@ const string = (value: unknown): string => typeof value === 'string' ? value : '
 const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value) ?? '').digest('hex');
 
 export interface SessionFileContext extends ObservationContext {
+  museWorkspaceKnown?: boolean;
   sessionId: string;
   parentId?: string;
   recordIndex?: number;
@@ -57,7 +59,7 @@ export interface SessionInput {
   kind: 'jsonl' | 'json' | 'zstd' | 'sqlite';
 }
 
-export const SESSION_SOURCES = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'pi', 'omp', 'dsh', 'antigravity', 'zcode', 'kimi', 'grok', 'droid']);
+export const SESSION_SOURCES = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'muse', 'pi', 'omp', 'dsh', 'antigravity', 'zcode', 'kimi', 'grok', 'droid']);
 
 export function sessionTimestamp(value: unknown, milliseconds = false): string | null {
   if (value === null || value === undefined || value === '') return null;
@@ -77,6 +79,15 @@ function humanContent(content: unknown): boolean {
 /** Extract messages before any usage/token filtering. Event mirrors are excluded. */
 export function extractSessionMessage(source: string, record: ObjectValue, context: SessionFileContext): CollectedSessionMessage | null {
   context.recordIndex = (context.recordIndex ?? 0) + 1;
+  if (source === 'muse') {
+    const location = museProject(record);
+    if (location && (location.primary || !context.museWorkspaceKnown)) {
+      const project = resolveSessionProject(location.path);
+      if (project) Object.assign(context, project);
+      if (location.primary) context.museWorkspaceKnown = true;
+    }
+    return null; // Completion usage is not evidence of a user or assistant message.
+  }
   const payload = object(record.payload);
   if (source === 'claude' || source === 'codex') {
     const raw = source === 'claude' ? string(record.cwd) : ['session_meta', 'turn_context'].includes(string(record.type)) ? string(payload.cwd) : '';
@@ -276,6 +287,7 @@ export async function discoverSessionInputs(source: string): Promise<{ inputs: S
   else if (source === 'omp') paths = ompAgentDirCollidesWithPi() ? [] : findOmpSessionFiles();
   else if (source === 'dsh') paths = listDshSessionFiles();
   else if (source === 'copilot') return { inputs: findCopilotEventFiles().map((f) => ({ path: f.filePath, sessionId: f.sessionId, kind: 'jsonl' })), complete };
+  else if (source === 'muse') return { inputs: findMuseSessionFiles().map(f => ({ path: f.filePath, sessionId: f.sessionId, kind: 'jsonl' })), complete };
   else if (source === 'kimi') {
     paths = [...resolveKimiCodeWireFiles(), ...resolveKimiCodeWireFiles(kimiDesktopCodeHome()), ...resolveKimiLegacyWireFiles()];
   }

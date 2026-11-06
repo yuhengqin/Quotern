@@ -41,6 +41,7 @@ import {
 import { Check } from '@gravity-ui/icons';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
+import { TrayPanelControl } from './TrayPanelControl';
 import { DEFAULT_DASHBOARD_RANGE } from '../../shared/dashboard-range';
 import {
   TRAY_PANEL_WIDTH,
@@ -395,7 +396,8 @@ export function TrayPopoverView() {
         className="tray-popover__header flex flex-col gap-2 px-4 py-2"
       >
         <div className="flex items-center justify-between">
-          <h1 className="text-sm font-semibold text-foreground">{t('desktop.tray.overview')}</h1>
+          <h1 className="tray-panel-drag min-w-0 flex-1 py-1 text-sm font-semibold text-foreground">{t('desktop.tray.overview')}</h1>
+          <TrayPanelControl />
           <ThemeToggle />
         </div>
         <div className="flex min-w-0 items-center gap-2">

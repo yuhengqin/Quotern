@@ -30,6 +30,7 @@ import { zedDbPath } from '../parsers/zed.js';
 import { warpDbPaths } from '../parsers/warp.js';
 import { miniMaxCodeDataPaths } from '../parsers/minimax-code.js';
 import { wpsComateSessionsDir } from '../parsers/wps-comate.js';
+import { museSessionsDir } from '../parsers/muse.js';
 import {
   codexHomeCandidates,
   commandCodeProjectsDirs,
@@ -111,6 +112,8 @@ export function isSyncSourcePresent(source: string): boolean {
       return anyExists([opencodeDbPath(), opencodeMessagesDir()]);
     case 'copilot':
       return anyExists([copilotSessionStateDir()]);
+    case 'muse':
+      return anyExists([museSessionsDir()]);
     case 'antigravity':
       return anyExists(resolveAntigravityBrainDirs());
     case 'openclaw':

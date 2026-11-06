@@ -72,6 +72,7 @@ test('session ledger persists final call snapshots, retries safely and serves fi
   const wrongSource = await (await app.request('/functions/tud-session-activity?sessionSource=codex&sessionId=fixture-session')).json();
   assert.equal(wrongSource.data.sessions.length, 0, 'the same id in another source must not match');
   assert.equal((await app.request('/functions/tud-session-activity?sessionSource=claude')).status, 400);
+  for (const source of ['antigravity', 'muse']) assert.equal((await app.request(`/functions/tud-session-activity?sessionSource=${source}&sessionId=fixture-session`)).status, 200);
   assert.equal((await app.request('/functions/tud-session-activity?sources=unknown')).status, 400);
   assert.equal((await app.request('/functions/tud-session-activity?fromDate=broken&toDate=2026-10-16')).status, 400);
   assert.equal((await app.request('/functions/tud-session-activity', { headers: { Origin: 'https://evil.example' } })).status, 403);

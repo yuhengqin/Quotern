@@ -17,6 +17,11 @@ test('notification session targets retain an exact source/id pair across URL res
   assert.equal(search.sessionId, 'session.一 & 2');
   assert.equal(parseSessionPageSearch({ sessionSource: 'codex' }).sessionId, undefined);
   assert.equal(parseSessionPageSearch({ sessionSource: 'arbitrary', sessionId: 'id' }).sessionId, undefined);
+  for (const source of ['antigravity', 'muse']) {
+    const target = createSessionDetailSearch({ source, sessionId: 'linked-session' });
+    assert.equal(target.sessionSource, source);
+    assert.equal(target.sessionId, 'linked-session');
+  }
 });
 
 test('independent detail links preserve the exact parent period without inheriting list filters', () => {

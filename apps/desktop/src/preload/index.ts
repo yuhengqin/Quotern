@@ -262,6 +262,13 @@ const tudApi = {
    */
   resizeTrayPopover: (height: number) =>
     ipcRenderer.send(TRAY_POPOVER_RESIZE_CHANNEL, height),
+  getTrayPanel: (): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_GET),
+  setTrayPanelPinned: (pinned: boolean): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_SET, pinned),
+  onTrayPanelChanged: (callback: (state: TrayPanelState) => void) => {
+    const listener = (_event: unknown, state: TrayPanelState) => callback(state);
+    ipcRenderer.on(TRAY_PANEL_CHANGED, listener);
+    return () => ipcRenderer.removeListener(TRAY_PANEL_CHANGED, listener);
+  },
 
   getDashboardRange: (): Promise<DashboardRange> =>
     ipcRenderer.invoke(DASHBOARD_RANGE_GET_CHANNEL),
@@ -420,3 +427,4 @@ const tudApi = {
 contextBridge.exposeInMainWorld('tud', tudApi);
 
 export type TudApi = typeof tudApi;
+import { TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, type TrayPanelState } from '../shared/tray-panel';

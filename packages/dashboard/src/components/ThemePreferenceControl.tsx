@@ -1,6 +1,7 @@
 import { Label, Radio, RadioGroup } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { isThemeMode, type ThemeMode } from '../lib/theme';
+import { PaletteControl } from './PaletteControl';
 
 const OPTIONS: readonly ThemeMode[] = ['system', 'light', 'dark'];
 
@@ -15,7 +16,7 @@ export function ThemePreferenceControl({
   const { t } = useTranslation();
 
   return (
-    <RadioGroup
+    <div className="space-y-4"><RadioGroup
       name="theme-preference"
       value={value}
       variant="secondary"
@@ -32,6 +33,6 @@ export function ThemePreferenceControl({
           </Radio.Content>
         </Radio>
       ))}
-    </RadioGroup>
+    </RadioGroup><PaletteControl /></div>
   );
 }

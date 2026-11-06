@@ -21,6 +21,7 @@ import kimiIcon from '@lobehub/icons-static-svg/icons/kimi.svg';
 import minimaxIcon from '@lobehub/icons-static-svg/icons/minimax-color.svg';
 import kilocodeIcon from '@lobehub/icons-static-svg/icons/kilocode.svg';
 import kiroIcon from '@lobehub/icons-static-svg/icons/kiro-color.svg';
+import museIcon from '@/assets/brand-logos/muse.svg';
 import openClawIcon from '@lobehub/icons-static-svg/icons/openclaw-color.svg';
 import openCodeIcon from '@lobehub/icons-static-svg/icons/opencode.svg';
 import piIcon from '@lobehub/icons-static-svg/icons/pi.svg';
@@ -64,6 +65,7 @@ const PROVIDER_ICON_MAP: Record<string, ProviderIconAsset> = {
   'kilo-cli': { monochrome: true, src: kilocodeIcon },
   kilocode: { monochrome: true, src: kilocodeIcon },
   kiro: { src: kiroIcon },
+  muse: { monochrome: true, src: museIcon },
   mimo: { monochrome: true, src: xiaomiMimoIcon },
   openclaw: { src: openClawIcon },
   opencode: { monochrome: true, src: openCodeIcon },

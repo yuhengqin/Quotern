@@ -48,7 +48,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
   const calendar = !preset && date(raw.start) && date(raw.end) && raw.start <= raw.end;
   const instants = calendar && typeof raw.fromTime === 'string' && typeof raw.toTime === 'string'
     && Number.isFinite(Date.parse(raw.fromTime)) && Number.isFinite(Date.parse(raw.toTime)) && Date.parse(raw.fromTime) < Date.parse(raw.toTime);
-  const target = ['codex', 'claude', 'dsh'].includes(String(raw.sessionSource)) && typeof raw.sessionId === 'string' && raw.sessionId.length > 0 && raw.sessionId.length <= 512 && !/[\u0000-\u001f]/.test(raw.sessionId);
+  const target = ['codex', 'claude', 'dsh', 'antigravity', 'muse'].includes(String(raw.sessionSource)) && typeof raw.sessionId === 'string' && raw.sessionId.length > 0 && raw.sessionId.length <= 512 && !/[\u0000-\u001f]/.test(raw.sessionId);
   return {
     days: preset ? DASHBOARD_RANGE_DAYS[preset] : Number.isInteger(days) && days >= 1 && days <= 365 ? days : 7,
     ...(preset ? { range: preset } : raw.range === 'custom' && calendar ? { range: 'custom' as const } : {}),

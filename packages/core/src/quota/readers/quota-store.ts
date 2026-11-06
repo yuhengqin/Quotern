@@ -40,7 +40,8 @@ export function validQuotaProfiles(value: unknown): value is QuotaProfile[] {
 export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
-  return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline'].includes(key) ? typeof value === 'boolean'
+  return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline', 'compact'].includes(key) ? typeof value === 'boolean'
+    : key === 'providerOrder' ? Array.isArray(value) && value.length <= 100 && new Set(value).size === value.length && value.every(id => typeof id === 'string' && /^[a-z0-9][a-zA-Z0-9@_-]{0,100}$/.test(id))
     : key === 'paceModel' ? ['uniform', 'workdays', 'automatic'].includes(value as string)
     : key === 'channels' ? isSubscriptionChannelVisibility(value)
       : key === 'profiles' ? validQuotaProfiles(value) : false);

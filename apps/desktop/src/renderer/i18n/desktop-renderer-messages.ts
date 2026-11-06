@@ -12,7 +12,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'desktop.quota.test.failed': ['通知发送失败，请检查系统通知设置后重试。', 'Notification failed. Check system notification settings and try again.', '通知に失敗しました。システムの通知設定を確認して再試行してください。', '알림 전송에 실패했습니다. 시스템 알림 설정을 확인한 후 다시 시도하세요.'],
   'desktop.quota.shortcut': ['打开额度面板', 'Open quota panel', '利用枠パネルを開く', '한도 패널 열기'],
   'desktop.quota.shortcutKeys': ['快捷键', 'Keyboard shortcut', 'キーボードショートカット', '키보드 단축키'],
-  'desktop.quota.shortcutHint': ['输入组合键名称，如 {{keys}}；保存时检测冲突。', 'Type a key combination, such as {{keys}}. Conflicts are checked on save.', '{{keys}} などのキー名を入力。保存時に競合を確認します。', '{{keys}}와 같은 키 조합 이름을 입력하세요. 저장할 때 충돌을 확인합니다.'],
+  'desktop.quota.shortcutHint': ['按下或输入组合键，如 {{keys}}。保存时检测冲突。', 'Press or type a shortcut like {{keys}}. Conflicts are checked on save.', 'キーの組み合わせを押すか、{{keys}} のように入力します。保存時に競合を確認します。', '키 조합을 누르거나 {{keys}}처럼 입력하세요. 저장할 때 충돌을 확인합니다.'],
   'desktop.quota.shortcutSave': ['保存快捷键', 'Save shortcut', 'ショートカットを保存', '단축키 저장'],
   'desktop.quota.shortcutSaving': ['正在保存…', 'Saving…', '保存中…', '저장 중…'],
   'desktop.quota.shortcutSaved': ['快捷键已保存', 'Shortcut saved', 'ショートカットを保存しました', '단축키가 저장되었습니다'],

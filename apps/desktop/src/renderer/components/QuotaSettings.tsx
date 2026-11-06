@@ -4,6 +4,7 @@ import { useTranslation } from 'quotern-i18n/react';
 import { SUBSCRIPTION_CHANNELS } from '../../shared/subscription-channels';
 import type { QuotaPaceModel, QuotaPreferencePatch } from '../../shared/quota';
 import { useQuotaState } from '../hooks/useQuotaState';
+import { quotaShortcutFromKey } from '../lib/quota-shortcut-input';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
 import { QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut, resolveQuotaShortcut } from '../../shared/quota-desktop';
 
@@ -33,6 +34,11 @@ export function QuotaSettings() {
   }, [state?.preferences.quotaShortcut, savedAccelerator]);
   const paceLabelId = useId();
   const paceTriggerId = `${paceLabelId}-trigger`;
+  const editShortcut = (value: string) => {
+    setShortcutDraft(value);
+    setShortcutError(null);
+    setShortcutSaved(false);
+  };
   const apply = async (patch: QuotaPreferencePatch) => {
     setSaving(true); setSaveErrorSource('other');
     try { await save(patch); }
@@ -91,11 +97,17 @@ export function QuotaSettings() {
       </Checkbox>
       <div className="flex w-full max-w-md flex-wrap items-start gap-2">
         <TextField className="min-w-0 flex-1 basis-48" value={shortcutDraft} isDisabled={saving} isInvalid={shortcutError !== null} validationBehavior="aria"
-          onChange={value => { setShortcutDraft(value); setShortcutError(null); setShortcutSaved(false); }}>
+          onChange={editShortcut}>
           <Label>{t('desktop.quota.shortcutKeys')}</Label>
           <Input autoComplete="off" spellCheck={false} maxLength={120} onKeyDown={event => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
-              event.preventDefault(); void saveShortcut();
+            if (event.defaultPrevented || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+            const accelerator = quotaShortcutFromKey(event.nativeEvent, window.tud.platform);
+            if (accelerator) {
+              event.preventDefault();
+              if (!event.repeat) editShortcut(displayShortcut(accelerator));
+            } else if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+              event.preventDefault();
+              if (!event.repeat) void saveShortcut();
             }
           }} />
           <Description>{t('desktop.quota.shortcutHint', { keys: displayShortcut(QUOTA_SHORTCUT_ACCELERATOR) })}</Description>

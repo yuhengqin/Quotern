@@ -59,14 +59,25 @@ function currentModelMatch(model: string, source?: string | null): ReturnType<ty
   const key = JSON.stringify([source ?? null, model]);
   let result = modelMatchCache.get(key);
   if (!result) {
-    result = lookupPricingStacked(model, remoteOverlay, builtinPricing, source ?? null);
-    const explicitMatch = result.source === 'exact' || result.source === 'alias' || result.source.startsWith('sourceAlias:');
-    const manual = Object.hasOwn(matchedManual.models, model) ? matchedManual.models[model] : explicitMatch && result.matchedModel && Object.hasOwn(matchedManual.models, result.matchedModel) ? matchedManual.models[result.matchedModel] : undefined;
-    if (manual) result = { ...result, hit: true, value: { ...result.value, ...manual }, matchedModel: result.matchedModel ?? model, source: 'manual' };
+    result = matchWithManual(model, matchedManual, source);
     modelMatchCache.set(key, result);
     while (modelMatchCache.size > 1024) modelMatchCache.delete(modelMatchCache.keys().next().value!);
   }
   return result;
+}
+
+function matchWithManual(model: string, document: ManualPricingDocument, source?: string | null): ReturnType<typeof lookupPricingStacked> {
+  const result = lookupPricingStacked(model, remoteOverlay, builtinPricing, source ?? null);
+  const explicitMatch = result.source === 'exact' || result.source === 'alias' || result.source.startsWith('sourceAlias:');
+  const manual = Object.hasOwn(document.models, model) ? document.models[model] : explicitMatch && result.matchedModel && Object.hasOwn(document.models, result.matchedModel) ? document.models[result.matchedModel] : undefined;
+  return manual ? { ...result, hit: true, value: { ...result.value, ...manual }, matchedModel: result.matchedModel ?? model, source: 'manual' } : result;
+}
+
+/** Base rates only. Removing an exact override may reveal an override on its resolved alias target. */
+export function getPricingEditPreview(model: string, document = getManualPricing()) {
+  const models = { ...document.models }; delete models[model];
+  return { reference: lookupPricingStacked(model, remoteOverlay, builtinPricing, null).value,
+    effective: matchWithManual(model, document).value, restored: matchWithManual(model, { version: 1, models }).value };
 }
 
 export interface PricingSnapshot { builtin: PricingData; overlay: PricingData | null; manual?: ManualPricingDocument }

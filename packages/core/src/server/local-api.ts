@@ -249,11 +249,19 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'PERFORMANCE_FORBIDDEN_ORIGIN', data: null }, 403);
     const range = sessionRange(c), groupBy = c.req.query('groupBy') ?? 'model';
     const params = new URL(c.req.url).searchParams;
-    const allowed = new Set(['days', 'fromDate', 'toDate', 'fromTime', 'toTime', 'sources', 'model', 'project', 'groupBy']);
+    const allowed = new Set(['days', 'fromDate', 'toDate', 'fromTime', 'toTime', 'sources', 'model', 'project', 'groupBy', 'compareModels']);
+    let compareModels: string[] | undefined;
+    try {
+      if (params.has('compareModels')) {
+        const value: unknown = JSON.parse(params.get('compareModels')!);
+        if (!Array.isArray(value) || value.length > 4 || value.some(model => typeof model !== 'string' || !model || model.length > 1024)) throw new Error('Invalid models');
+        compareModels = [...new Set(value as string[])];
+      }
+    } catch { return c.json({ success: false, message: 'INVALID_PERFORMANCE_QUERY', data: null }, 400); }
     if (!range || !['source', 'model', 'project'].includes(groupBy) || [...params.keys()].some(key => !allowed.has(key) || params.getAll(key).length !== 1)
       || ['model', 'project'].some(key => (params.get(key)?.length ?? 0) > 1024)) return c.json({ success: false, message: 'INVALID_PERFORMANCE_QUERY', data: null }, 400);
     c.header('Cache-Control', 'no-store');
-    return c.json(ok(await sessionQueries.performance(range, { groupBy: groupBy as 'source' | 'model' | 'project', model: c.req.query('model'), project: c.req.query('project') })));
+    return c.json(ok(await sessionQueries.performance(range, { groupBy: groupBy as 'source' | 'model' | 'project', model: c.req.query('model'), project: c.req.query('project'), compareModels })));
   });
 
   app.get('/functions/tud-session-list', async c => {

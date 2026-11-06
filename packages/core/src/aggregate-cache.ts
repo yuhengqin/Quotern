@@ -403,7 +403,7 @@ export class AggregateCache {
     statsSince: string,
     bounds?: UsageBounds,
   ): DailyUsageResponse {
-    if (bounds?.fromTime) return aggregateDaily(rows, days, statsSince, this.timeZone, bounds);
+    if (bounds?.fromTime || !this.days.size || this.pricingFingerprint !== getPricingFingerprint()) return aggregateDaily(rows, days, statsSince, this.timeZone, bounds);
     const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
@@ -440,7 +440,7 @@ export class AggregateCache {
     statsSince: string,
     bounds?: UsageBounds,
   ): HourlyUsageResponse {
-    if (bounds?.fromTime) return aggregateHourly(rows, days, statsSince, this.timeZone, bounds);
+    if (bounds?.fromTime || !this.days.size || this.pricingFingerprint !== getPricingFingerprint()) return aggregateHourly(rows, days, statsSince, this.timeZone, bounds);
     const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
@@ -480,7 +480,7 @@ export class AggregateCache {
     statsSince: string,
     bounds?: UsageBounds,
   ): ModelBreakdownResponse {
-    if (bounds?.fromTime) return aggregateModelBreakdown(rows, days, statsSince, this.timeZone, bounds);
+    if (bounds?.fromTime || !this.days.size || this.pricingFingerprint !== getPricingFingerprint()) return aggregateModelBreakdown(rows, days, statsSince, this.timeZone, bounds);
     const { fromDate, toDate } = resolveAggregateWindow(days, statsSince, this.timeZone, bounds);
     const today = localDateNow(this.timeZone);
     const statsDate =
@@ -550,7 +550,7 @@ export class AggregateCache {
         : localDateAndHour(statsSince, this.timeZone).date;
 
     // If cache is empty, fall back to full scan (cold start before rebuild).
-    if (this.days.size === 0) {
+    if (this.days.size === 0 || this.pricingFingerprint !== getPricingFingerprint()) {
       return aggregateUsageSummary(rows, statsSince, this.timeZone);
     }
 

@@ -118,10 +118,10 @@
 
 | 能力 | 入口与使用点 | 适用边界及共享方式 |
 | --- | --- | --- |
-| 性能分析 | [PerformancePage](../packages/dashboard/src/pages/PerformancePage.tsx)，两端 `/performance` 与顶栏入口 | 原始样本的首字时间 P50/P95、估算速度、样本数、每日趋势；筛选和比较维度写入 URL，最近样本跳转到既有会话详情。未知指标保持 `—`，没有完整分母时不展示成功率 |
+| 性能分析 | [PerformancePage](../packages/dashboard/src/pages/PerformancePage.tsx) 与 [PerformanceTrend](../packages/dashboard/src/components/PerformanceTrend.tsx)，两端 `/performance` 与顶栏入口 | 原始样本的首字时间 P50/P95、估算速度、样本数、每日趋势；图例使用业务名称，图面标单位，提示显示对应当天样本数。比较表可排序，未知值始终排末尾；最多四个模型用完整样本同图比较。筛选、比较模型、维度与排序写入 URL；名称筛选对应样本，样本会话有“返回性能分析”并恢复筛选及滚动。未知指标保持 `—`，没有完整分母时不展示成功率 |
 | 诊断单选 | [InsightSelect](../packages/dashboard/src/components/InsightSelect.tsx)，性能页与额度历史使用 | HeroUI Select + FilterSelectPopover 的有标签单选组合；空值由调用者解释，继承公共键盘、焦点、尺寸和滚动约束 |
-| 额度历史 | [QuotaHistoryPanel](../packages/dashboard/src/components/QuotaHistoryPanel.tsx)，QuotaUsageCard 详情入口 | 按需读取当前账号窗口和周期，分开显示真实周期与实际观察区间；来源、覆盖和效率限制从相邻 HelpPopover 查看，无可归属记录保持空态 |
-| 用户价格 | [ManualPricingEditor](../packages/dashboard/src/components/ManualPricingEditor.tsx)，PricingPage 使用 | USD / 1M 的四项基础单价，留空继承、0 为零价，支持恢复参考价；保存反馈和冲突保留在弹窗，完成后焦点回到保存按钮以继续键盘关闭；演示隐藏 |
+| 额度历史 | [QuotaHistoryPanel](../packages/dashboard/src/components/QuotaHistoryPanel.tsx)，QuotaUsageCard 详情的“当前额度 / 额度历史”页签 | 同一 Modal 内手动激活页签，历史按需读取；关闭后重开默认当前额度。周期选项包含真实起止及当前/已结束/未知状态；首次观测不代替未知开始；同一周期的较早回拨段单独标识。窗口名称复用额度本地化，来源、覆盖和效率限制从相邻 HelpPopover 查看；账号 key 与 AbortSignal 防止旧返回覆盖当前账号 |
+| 用户价格 | [ManualPricingEditor](../packages/dashboard/src/components/ManualPricingEditor.tsx)，PricingPage 工具栏及 API 模型行使用 | 行入口预填精确 ID；ComboBox 支持名称/ID 搜索与自定义 ID，复用 FilterComboBoxPopover。USD / 1M 四项输入，留空继承、0 为零价；参考价、当前和修改后基础单价复用 PricingRate，预览遵守价格页 USD/CNY 设置。字段错误关联对应输入；冲突重新读取保留草稿。保存与历史更新分开报告，后台任务失败可单独重试，不重复保存价格；显示有数据的历史日期范围。旧 runtime 保留同步保存契约，失败不伪装成后台任务。完成后焦点回到保存按钮，关闭恢复入口；演示隐藏 |
 | 本地备份 | [LocalBackupPanel](../packages/dashboard/src/components/LocalBackupPanel.tsx)，两端设置「应用」使用 | 创建/下载、文件校验和恢复到新目录；错误与完成结果靠近操作，恢复不切换当前实例，不覆盖现有目录；大文件受明确上限限制；演示隐藏 |
 
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动打开详情弹窗；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史及服务端实际范围；缺记录时保留目标等待常规同步。关闭详情后焦点回到会话行，常规数据刷新不重新打开已关闭的弹窗。Dashboard 与 Desktop 使用同一页面和详情组件，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与关联展开行为保留。

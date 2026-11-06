@@ -7,6 +7,16 @@ import { withDataTransaction } from '../data-transaction.js';
 
 export interface ManualPricingDocument { version: 1; models: Record<string, ModelPricingRates> }
 export interface ManualPricingState { document: ManualPricingDocument; revision: string }
+export interface PricingImpactScope { days: number; fromDate: string | null; toDate: string | null }
+export interface PricingRecalculationJob {
+  id: string; revision: string; status: 'running' | 'succeeded' | 'failed';
+  scope: PricingImpactScope; startedAt: string; completedAt?: string; error?: string;
+}
+export interface ManualPricingAdminState extends ManualPricingState {
+  token: string; recalculated?: boolean; capabilities?: { backgroundRecalculation: boolean };
+  scope?: PricingImpactScope; job?: PricingRecalculationJob | null;
+  reference?: ModelPricingRates | null; effective?: ModelPricingRates | null; restored?: ModelPricingRates | null;
+}
 const fields = new Set(['input', 'output', 'cache_read', 'cache_write']);
 const record = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === 'object' && !Array.isArray(v));
 const validId = (id: string) => id.length > 0 && id.length <= 200 && id === id.trim() && !/[\u0000-\u001f\u007f]/.test(id) && !['__proto__', 'constructor', 'prototype'].includes(id);

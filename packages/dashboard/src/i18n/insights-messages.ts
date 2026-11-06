@@ -1,6 +1,19 @@
 import { registerMessages, type SupportedLocale } from 'quotern-i18n';
 
 const entries = {
+  'insights.unitSeconds': ['秒', 'Seconds', '秒'],
+  'insights.unitSpeed': ['tok/s', 'tok/s', 'tok/s'],
+  'insights.compareLatency': ['模型首字时间 P50', 'Model TTFT · P50', 'モデル TTFT · P50'],
+  'insights.compareSpeed': ['模型输出速度', 'Model output speed', 'モデル出力速度'],
+  'insights.compareHint': ['勾选最多 4 个模型同图比较；点击名称查看对应样本。', 'Plot up to 4 models. Select a name to inspect its samples.', '最大 4 モデルを比較できます。名前を選ぶとサンプルを表示します。'],
+  'insights.selectedModels': ['已选 {{count}} 个模型', '{{count}} models selected', '{{count}} モデルを選択中'],
+  'insights.clearComparison': ['清除比较', 'Clear comparison', '比較を解除'],
+  'insights.comparisonUnavailable': ['当前运行端尚不支持模型趋势比较。', 'This runtime does not support model trend comparisons.', 'この実行バージョンはモデル推移の比較に未対応です。'],
+  'insights.plot': ['同图比较', 'Plot', '比較'],
+  'insights.plotModel': ['比较 {{model}}', 'Compare {{model}}', '{{model}} を比較'],
+  'insights.viewSamples': ['查看 {{name}} 的样本', 'View samples for {{name}}', '{{name}} のサンプルを表示'],
+  'insights.backToPerformance': ['返回性能分析', 'Back to performance', 'パフォーマンスに戻る'],
+  'insights.performanceTarget': ['性能样本关联会话', 'Session linked to a performance sample', 'パフォーマンスサンプルの関連セッション'],
   'insights.performance': ['性能分析', 'Performance', 'パフォーマンス分析'],
   'insights.period': ['时间范围', 'Period', '期間'],
   'insights.days': ['近 {{count}} 天', 'Last {{count}} days', '過去 {{count}} 日'],
@@ -37,6 +50,10 @@ const entries = {
 } satisfies Record<string, readonly [string, string, string]>;
 
 const korean: Record<keyof typeof entries, string> = {
+  'insights.unitSeconds': '초', 'insights.unitSpeed': 'tok/s', 'insights.compareLatency': '모델 첫 토큰 시간 P50', 'insights.compareSpeed': '모델 출력 속도',
+  'insights.compareHint': '최대 4개 모델을 비교합니다. 이름을 선택하면 해당 샘플을 볼 수 있습니다.', 'insights.selectedModels': '모델 {{count}}개 선택됨',
+  'insights.clearComparison': '비교 해제', 'insights.comparisonUnavailable': '이 실행 버전은 모델 추세 비교를 지원하지 않습니다.', 'insights.plot': '비교',
+  'insights.plotModel': '{{model}} 비교', 'insights.viewSamples': '{{name}} 샘플 보기', 'insights.backToPerformance': '성능 분석으로 돌아가기', 'insights.performanceTarget': '성능 샘플에 연결된 세션',
   'insights.performance': '성능 분석', 'insights.period': '기간', 'insights.days': '최근 {{count}}일',
   'insights.agent': 'Agent', 'insights.model': '모델', 'insights.project': '프로젝트', 'insights.all': '전체',
   'insights.unknown': '알 수 없음', 'insights.group': '비교 기준', 'insights.ttft50': '첫 토큰 시간 P50', 'insights.ttft95': '첫 토큰 시간 P95',

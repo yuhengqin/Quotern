@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { Button } from '@heroui/react';
-import { History as RotateCcwClock } from 'lucide-react';
+import { ArrowLeft, History as RotateCcwClock } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { BackToUsageLink } from '../components/BackToUsageLink';
 import { DashboardTimeRangeControl } from '../components/DashboardTimeRangeControl';
@@ -15,6 +15,7 @@ import { sourceLabel } from '@/lib/tokens';
 import type { DashboardDateRange } from '../lib/dashboard-date-range';
 import { parseSessionPageSearch, selectSessionPageRange, sessionAttributionKey, sessionPageRows, sessionTimeRangeControl, updateSessionPageSearch, type SessionPageSearch } from '../lib/session-page';
 import type { DashboardRange } from '../lib/dashboard-range';
+import '../i18n/insights-messages';
 
 export function SessionsPage() {
   const { t, i18n } = useTranslation();
@@ -48,12 +49,12 @@ export function SessionsPage() {
 
   return <div className="session-page min-w-0 pb-6">
     <header className="mb-5 min-w-0">
-      <BackToUsageLink />
+      {search.performanceReturn ? <Link to="/performance" search={search.performanceReturn} resetScroll={false} className="-ml-2 mb-3 inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 py-2 text-xs text-muted hover:bg-surface-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"><ArrowLeft size={14} aria-hidden />{t('insights.backToPerformance')}</Link> : <BackToUsageLink />}
       <div className="flex items-center gap-2"><RotateCcwClock className="size-6 text-accent" aria-hidden /><h1 className="text-2xl font-semibold tracking-tight">{t('usage.activity.pageTitle')}</h1></div>
       {search.scopeSources.length > 0 && <p className="mt-2 text-xs text-muted">{t('usage.activity.overviewScope', { sources: new Intl.ListFormat(i18n.resolvedLanguage).format(search.scopeSources.map(sourceLabel)) })}</p>}
     </header>
     {target ? <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <p className="text-xs text-muted">{t(target.period ? 'usage.detail.selectedRange' : 'usage.activity.notificationTarget')} · {sourceLabel(target.source)}</p>
+      <p className="text-xs text-muted">{t(search.performanceReturn ? 'insights.performanceTarget' : target.period ? 'usage.detail.selectedRange' : 'usage.activity.notificationTarget')} · {sourceLabel(target.source)}</p>
       <Button size="sm" variant="tertiary" onPress={() => update({ sessionSource: undefined, sessionId: undefined })}>{t('usage.activity.allSessions')}</Button>
     </div> : <div className="mb-4">
       <DashboardTimeRangeControl value={timeControl.value} customRange={timeControl.customRange} onChange={changeTimeRange} onCustomRangeChange={changeTimeRange} />

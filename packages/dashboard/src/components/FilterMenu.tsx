@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Autocomplete, Popover, Select } from '@heroui/react';
+import { Autocomplete, ComboBox, Popover, Select } from '@heroui/react';
 import { cn } from '../lib/utils';
 
 export const FILTER_MENU_MAX_HEIGHT = 320;
@@ -14,6 +14,12 @@ export function FilterSelectPopover({ className, ...props }: Omit<ComponentProps
 /** HeroUI keeps the search field and actions outside its shrinking listbox. */
 export function FilterAutocompletePopover({ className, ...props }: Omit<ComponentProps<typeof Autocomplete.Popover>, 'maxHeight'>) {
   return <Autocomplete.Popover {...props} maxHeight={FILTER_MENU_MAX_HEIGHT}
+    className={state => cn(MENU_WIDTH, typeof className === 'function' ? className(state) : className)} />;
+}
+
+/** Free-form identifiers retain ComboBox semantics inside the common menu bounds. */
+export function FilterComboBoxPopover({ className, ...props }: Omit<ComponentProps<typeof ComboBox.Popover>, 'maxHeight'>) {
+  return <ComboBox.Popover {...props} maxHeight={FILTER_MENU_MAX_HEIGHT}
     className={state => cn(MENU_WIDTH, typeof className === 'function' ? className(state) : className)} />;
 }
 

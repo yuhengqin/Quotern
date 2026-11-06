@@ -30,6 +30,7 @@ import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingCompariso
 import { filterSessionPricingGroups, parsePricingSearch } from '../lib/pricing-selection';
 import { HelpPopover } from '../components/HelpPopover';
 import { ManualPricingEditor } from '../components/ManualPricingEditor';
+import { isDemoMode } from '@/lib/demo-runtime';
 
 registerMessages(pricingMessages);
 
@@ -69,6 +70,10 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [editingModel, setEditingModel] = useState<string | null>(null);
+  const editorTrigger = useRef<HTMLButtonElement>(null), editorReturn = useRef<HTMLElement | null>(null);
+  const editModel = (id: string) => { editorReturn.current = document.activeElement as HTMLElement | null; setEditingModel(id); };
+  const closeEditor = () => { setEditingModel(null); requestAnimationFrame(() => { (editorReturn.current?.isConnected ? editorReturn.current : editorTrigger.current)?.focus({ preventScroll: true }); }); };
   const { currency, setCurrency, exchangeRate, exchangeStatus, refreshExchangeRate, setManualExchangeRate } = usePricingCurrency();
 
   useEffect(() => { setQuery(initialQuery); }, [initialQuery]);
@@ -100,13 +105,18 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
   }, [loadCatalog, retry]);
   useEffect(() => {
     let cancelled = false;
+    let sequence = 0;
     setUsageStatus('loading');
-    void loadUsage(30).then(data => {
-      if (!cancelled) { setUsage(data.models); setUsageStatus('ready'); }
-    }).catch(() => {
-      if (!cancelled) { setUsage([]); setUsageStatus('error'); }
-    });
-    return () => { cancelled = true; };
+    const refresh = () => {
+      const current = ++sequence;
+      void loadUsage(30).then(data => {
+        if (!cancelled && current === sequence) { setUsage(data.models); setUsageStatus('ready'); }
+      }).catch(() => {
+        if (!cancelled && current === sequence) { setUsage([]); setUsageStatus('error'); }
+      });
+    };
+    refresh(); window.addEventListener(DATA_SYNCED_EVENT, refresh);
+    return () => { cancelled = true; window.removeEventListener(DATA_SYNCED_EVENT, refresh); };
   }, [loadUsage, retry]);
 
   const directModels = useMemo(() => addPricingUsage(filterDirectPricingCatalog(catalog?.models ?? []), usage, catalog?.matching), [catalog, usage]);
@@ -179,8 +189,9 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
         </Button>
         <PricingMoreFilters filters={advancedFilters} onChange={setAdvancedFilters} currency={currency} exchangeRate={exchangeRate} exchangeStatus={exchangeStatus} onManualRate={setManualExchangeRate} onRefreshRate={() => { void refreshExchangeRate(); }} />
         <PricingCalculator scenario={scenario} onChange={setScenario} enabled={estimateEnabled} onEnabledChange={setEstimateEnabled} />
-        <ManualPricingEditor />
+        {!isDemoMode() && <Button ref={editorTrigger} size="sm" variant="secondary" className="h-8 min-h-8 text-xs" onPress={() => editModel('')}>{t('admin.pricing')}</Button>}
       </div>
+      {!isDemoMode() && <ManualPricingEditor model={editingModel} onClose={closeEditor} catalog={catalog?.models ?? []} currency={currency} exchangeRate={exchangeRate?.rate ?? null} />}
       {hasFilterChips && <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label={t('pricing.filters.selected')}>
         {sessionModels?.length && <ActiveFilter label={t('usage.detail.sessionModels')} onRemove={() => clearSessionModels()}>{t('usage.detail.sessionModelsCount', { count: sessionModels.length })}</ActiveFilter>}
         {query.trim() && <ActiveFilter label={t('pricing.filters.search')} onRemove={() => { setQuery(''); setDebouncedQuery(''); }}>{t('pricing.filters.searchChip', { query: query.trim() })}</ActiveFilter>}
@@ -236,7 +247,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
                 <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" aria-describedby={comparisonStatusId} isDisabled={selectedGroups.length < 2} onPress={() => setComparisonOpen(true)}><Columns2 className="size-3.5" aria-hidden />{t('pricing.compare.start')}</Button>
               </div>
             </div>
-            <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}:${usedOnly}`} groups={groups} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} query={debouncedQuery} selected={selected} onCompare={toggleComparison} scenario={estimateEnabled ? scenario : null} />
+            <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}:${usedOnly}`} groups={groups} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} query={debouncedQuery} selected={selected} onCompare={toggleComparison} onEdit={isDemoMode() ? undefined : editModel} scenario={estimateEnabled ? scenario : null} />
           </div>}
       <p className="shrink-0 text-[10px] text-muted">{t('pricing.summary.footnote', { rateNote })}</p>
       {comparisonOpen && selectedGroups.length >= 2 && <PricingComparison groups={selectedGroups} initialChannels={selectedChannels} onClose={() => setComparisonOpen(false)} scenario={scenario} onScenarioChange={value => { setScenario(value); setEstimateEnabled(true); }} currency={currency} exchangeRate={exchangeRate?.rate ?? null} usageStatus={usageStatus} />}

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyManualPricing, readManualPricing, updateManualPricing, validateManualPricing } from '../src/pricing/manual-pricing.js';
-import { applyRemotePricingOverlay, explainRowCost, getModelPricingRates, getReferencePricingData, resetPricingRuntime } from '../src/pricing/index.js';
+import { applyRemotePricingOverlay, explainRowCost, getModelPricingRates, getReferencePricingData, getPricingEditPreview, resetPricingRuntime } from '../src/pricing/index.js';
 
 test('manual rates preserve explicit zero, inherit missing fields and never contaminate reference pricing', () => {
   resetPricingRuntime();
@@ -40,4 +40,14 @@ test('manual persistence rejects invalid rates and concurrent stale revisions; d
     const final = await updateManualPricing(dir, next.revision, 'model', null);
     assert.deepEqual(final.document.models, {});
   } finally { await rm(dir, { recursive: true, force: true }); resetPricingRuntime(); }
+});
+
+test('edit preview uses reference matching and removal reveals an alias target override', () => {
+  resetPricingRuntime();
+  try {
+    applyRemotePricingOverlay({ exact: { 'test-model': { input: 2, output: 6 } }, alias: { 'test-alias': 'test-model' } });
+    applyManualPricing({ version: 1, models: { 'test-model': { input: 3 }, 'test-alias': { output: 0 } } });
+    assert.deepEqual(getPricingEditPreview('test-alias'), { reference: { input: 2, output: 6 }, effective: { input: 2, output: 0 }, restored: { input: 3, output: 6 } });
+    assert.deepEqual(getModelPricingRates('test-alias'), { input: 2, output: 0 }, 'preview never mutates runtime prices');
+  } finally { resetPricingRuntime(); }
 });

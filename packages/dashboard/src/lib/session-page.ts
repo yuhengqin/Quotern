@@ -4,6 +4,7 @@ import { dateRangeDays, type DashboardDateRange } from './dashboard-date-range.t
 import { DASHBOARD_RANGE_DAYS, isDashboardRange, type DashboardRange } from './dashboard-range.ts';
 import { localDateDaysAgo, localDateNow } from './stats-timezone.ts';
 import { relatedSessionActivity, type SessionSort, type SessionSortDirection } from './session-activity.ts';
+import { parsePerformanceSearch, type PerformanceSearch } from './performance-page.ts';
 
 export interface SessionScope {
   days: number;
@@ -35,6 +36,7 @@ export interface SessionPageSearch {
   sessionId?: string;
   sessionFocus?: string;
   sessionPeriod?: 'selected';
+  performanceReturn?: PerformanceSearch;
 }
 
 const date = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -66,6 +68,7 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
     pageSize: [12, 24, 48].includes(Number(raw.pageSize)) ? Number(raw.pageSize) : 12,
     ...(target ? { sessionSource: String(raw.sessionSource), sessionId: raw.sessionId as string, ...(typeof raw.sessionFocus === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.sessionFocus) ? { sessionFocus: raw.sessionFocus } : {}), ...(raw.sessionPeriod === 'selected' && calendar ? { sessionPeriod: 'selected' as const } : {}) } : {}),
+    ...(raw.performanceReturn && typeof raw.performanceReturn === 'object' && !Array.isArray(raw.performanceReturn) ? { performanceReturn: parsePerformanceSearch(raw.performanceReturn as Record<string, unknown>) } : {}),
   };
 }
 

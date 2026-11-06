@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { createSessionPageSearch, type SessionScope } from '../../../../../packages/dashboard/src/lib/session-page';
 import '../../../../../packages/dashboard/src/i18n/insights-messages';
+import { parsePerformanceSearch } from '../../../../../packages/dashboard/src/lib/performance-page';
 
 const primaryChromeBtn =
   'inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-[#1e80ff] px-2.5 text-[12px] font-medium text-white outline-none transition-colors hover:bg-[#1171ee] focus-visible:ring-2 focus-visible:ring-[#1e80ff]/40 disabled:pointer-events-none disabled:opacity-40 dark:bg-[#4b9cff] dark:hover:bg-[#3a8ff0]';
@@ -61,7 +62,7 @@ export function FilterChromeActions({ sessionScope }: { sessionScope?: SessionSc
     <div className="flex items-center gap-1">
       <AutoUpdateAction className={primaryChromeBtn} />
       {cliBackend && <Tooltip closeDelay={80} delay={100}>
-        <Tooltip.Trigger aria-label={t('insights.performance')} className={CHROME_ICON_BUTTON_CLASS_NAME} render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/performance" search={{ days: 7, source: '', model: '', project: '', groupBy: 'model' }} />}><Activity className="size-4" aria-hidden /></Tooltip.Trigger>
+        <Tooltip.Trigger aria-label={t('insights.performance')} className={CHROME_ICON_BUTTON_CLASS_NAME} render={props => <Link {...(props as ComponentPropsWithRef<'a'>)} role="link" to="/performance" search={parsePerformanceSearch({})} />}><Activity className="size-4" aria-hidden /></Tooltip.Trigger>
         <Tooltip.Content placement="bottom"><p>{t('insights.performance')}</p></Tooltip.Content>
       </Tooltip>}
       {cliBackend && sessionScope && <Tooltip closeDelay={80} delay={100}>

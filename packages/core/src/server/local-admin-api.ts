@@ -1,7 +1,9 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { readManualPricing, updateManualPricing, getModelPricingRates, getReferencePricingData, type ModelPricingRates } from '../pricing/index.js';
+import { readManualPricing, updateManualPricing, loadManualPricing, getPricingEditPreview, getPricingFingerprint, type ModelPricingRates, type PricingRecalculationJob, type PricingImpactScope } from '../pricing/index.js';
+import { touchedLocalDates } from '../aggregate-cache.js';
+import { localDateNow } from '../timezone.js';
 import type { LocalApiDeps } from './state.js';
 import { createDataBackup, verifyDataBackup, restoreDataBackup, MAX_BACKUP_DOCUMENT_BYTES } from '../backup.js';
 import { resolve } from 'node:path';
@@ -25,6 +27,38 @@ function isLocal(url: string, origin: string | undefined, ipc: boolean): boolean
 export function registerLocalAdminApi(parent: Hono, deps: LocalApiDeps): void {
   const app = new Hono<{ Bindings: { quoternRemoteAddress?: string } }>();
   const token = randomBytes(32).toString('hex');
+  let writingPricing = false;
+  let pricingJob: PricingRecalculationJob | null = null;
+  const pricingJobs = new Map<string, PricingRecalculationJob>();
+  const capabilities = { backgroundRecalculation: true };
+  const impactScope = (): PricingImpactScope => {
+    const dates = touchedLocalDates(deps.bucketStore.getRows()).filter(date => date < localDateNow()).sort();
+    return { days: dates.length, fromDate: dates[0] ?? null, toDate: dates.at(-1) ?? null };
+  };
+  const startRecalculation = (revision: string, background: boolean) => {
+    const job: PricingRecalculationJob = { id: randomUUID(), revision, status: 'running', scope: impactScope(), startedAt: new Date().toISOString() };
+    pricingJob = job;
+    pricingJobs.set(job.id, job);
+    if (pricingJobs.size > 32) pricingJobs.delete(pricingJobs.keys().next().value!);
+    const run = async () => {
+      try {
+        if (readManualPricing(deps.dataDir).revision !== revision) throw new Error('PRICING_CONFLICT');
+        loadManualPricing(deps.dataDir);
+        const fingerprint = getPricingFingerprint(), bucketRevision = deps.bucketStore.getRevision();
+        await deps.aggregateCache?.rebuildFromRows(deps.bucketStore.getRows());
+        if (readManualPricing(deps.dataDir).revision !== revision || getPricingFingerprint() !== fingerprint || deps.bucketStore.getRevision() !== bucketRevision) throw new Error('PRICING_CONFLICT');
+        job.status = 'succeeded';
+      } catch (error) {
+        job.status = 'failed'; job.error = error instanceof Error && error.message === 'PRICING_CONFLICT' ? 'PRICING_CONFLICT' : 'PRICING_RECALCULATION_FAILED';
+      } finally {
+        job.completedAt = new Date().toISOString();
+        try { deps.onPricingChange?.(); } catch { /* Notification cannot undo a completed save or rebuild. */ }
+      }
+    };
+    // Let the save response reach HTTP / IPC before starting the existing cache rebuild.
+    const completion = background ? new Promise<void>(resolve => { setTimeout(() => { void run().then(resolve); }, 0); }) : run();
+    return { job, completion };
+  };
   app.use('*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     const peer = c.env?.quoternRemoteAddress;
@@ -59,27 +93,43 @@ export function registerLocalAdminApi(parent: Hono, deps: LocalApiDeps): void {
   app.get('/pricing', c => {
     try {
       const model = c.req.query('model');
-      return c.json(ok({ ...readManualPricing(deps.dataDir), token,
-        ...(model && model.length <= 200 ? { reference: getReferencePricingData().exact[model] ?? null, effective: getModelPricingRates(model) } : {}) }));
+      const state = readManualPricing(deps.dataDir);
+      return c.json(ok({ ...state, token, capabilities, scope: impactScope(), job: pricingJob,
+        ...(model && model.length <= 200 ? getPricingEditPreview(model, state.document) : {}) }));
     } catch { return c.json(failure('INVALID_MANUAL_PRICING'), 500); }
+  });
+  app.get('/pricing/recalculation', c => {
+    const id = c.req.query('id');
+    return c.json(ok({ job: id ? pricingJobs.get(id) ?? null : pricingJob }));
+  });
+  app.post('/pricing/recalculation', async c => {
+    try {
+      const body = await c.req.json();
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => key !== 'revision') || typeof body.revision !== 'string') return c.json(failure('INVALID_LOCAL_ADMIN_REQUEST'), 400);
+      if (writingPricing || pricingJob?.status === 'running') return c.json(failure('PRICING_UPDATE_BUSY'), 409);
+      const state = readManualPricing(deps.dataDir);
+      if (body.revision !== state.revision) return c.json(failure('PRICING_CONFLICT'), 409);
+      return c.json(ok({ job: startRecalculation(state.revision, true).job }));
+    } catch { return c.json(failure('LOCAL_ADMIN_WRITE_FAILED'), 500); }
   });
   app.post('/pricing', async c => {
     let body: Record<string, unknown>;
     try {
       body = await c.req.json();
-      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['revision', 'model', 'rates'].includes(key))
-        || typeof body.revision !== 'string' || typeof body.model !== 'string' || body.rates === undefined) throw new Error();
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['revision', 'model', 'rates', 'background'].includes(key))
+        || typeof body.revision !== 'string' || typeof body.model !== 'string' || body.rates === undefined || (body.background !== undefined && typeof body.background !== 'boolean')) throw new Error();
     } catch { return c.json(failure('INVALID_LOCAL_ADMIN_REQUEST'), 400); }
+    if (writingPricing || pricingJob?.status === 'running') return c.json(failure('PRICING_UPDATE_BUSY'), 409);
+    writingPricing = true;
     try {
       const state = await updateManualPricing(deps.dataDir, body.revision as string, body.model as string, body.rates as ModelPricingRates | null);
-      let recalculated = true;
-      try { await deps.aggregateCache?.rebuildFromRows(deps.bucketStore.getRows()); } catch { recalculated = false; }
-      deps.onPricingChange?.();
-      return c.json(ok({ ...state, token, recalculated }));
+      const { job, completion } = startRecalculation(state.revision, body.background === true);
+      if (!body.background) await completion;
+      return c.json(ok({ ...state, token, capabilities, scope: job.scope, job, ...(!body.background ? { recalculated: job.status === 'succeeded' } : {}) }));
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
       return c.json(failure(['PRICING_CONFLICT', 'INVALID_MANUAL_PRICING'].includes(code) ? code : 'LOCAL_ADMIN_WRITE_FAILED'), code === 'PRICING_CONFLICT' ? 409 : code === 'INVALID_MANUAL_PRICING' ? 400 : 500);
-    }
+    } finally { writingPricing = false; }
   });
   parent.route(LOCAL_ADMIN_ROUTE, app);
 }

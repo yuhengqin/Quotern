@@ -13,6 +13,7 @@ import {
 import type { SyncResult } from '../src/sync/index.js';
 import { addLocalDays, localDateNow } from '../src/timezone.js';
 import type { QueueBucket } from '../src/types.js';
+import { applyManualPricing, resetPricingRuntime } from '../src/pricing/index.js';
 
 function makeRow(
   hourStart: string,
@@ -44,6 +45,23 @@ test('touchedLocalDates collects unique local dates', () => {
     makeRow(`${yesterday}T08:00:00.000Z`, 20),
   ]);
   assert.ok(dates.length >= 1);
+});
+
+test('historical reads stay complete while a pricing invalidation awaits recalculation', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-agg-price-pending-'));
+  try {
+    const yesterday = addLocalDays(localDateNow(), -1);
+    const rows = [makeRow(`${yesterday}T04:00:00.000Z`, 1_000_000, 'codex', 'custom-model')];
+    const cache = new AggregateCache(dir);
+    await cache.rebuildFromRows(rows);
+    applyManualPricing({ version: 1, models: { 'custom-model': { input: 5 } } });
+    assert.equal(cache.getDaily(rows, 7, '1970-01-01').days[0]?.costUsd, 5);
+    await cache.ensureLoaded();
+    assert.equal(cache.getDaily(rows, 7, '1970-01-01').days[0]?.tokens, 1_000_000);
+    assert.equal(cache.getHourly(rows, 7, '1970-01-01').hours[0]?.costUsd, 5);
+    assert.equal(cache.getModelBreakdown(rows, 7, '1970-01-01').models[0]?.costUsd, 5);
+    assert.equal(cache.getUsageSummary(rows, '1970-01-01').totalCostUsd, 5);
+  } finally { resetPricingRuntime(); await rm(dir, { recursive: true, force: true }); }
 });
 
 test('AggregateCache seals history and serves daily without rescanning today-only changes', async () => {

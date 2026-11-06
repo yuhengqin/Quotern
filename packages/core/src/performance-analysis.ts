@@ -18,12 +18,13 @@ export interface PerformanceSample {
   tokensPerSecond: number | null;
 }
 export type PerformanceGroup = 'model' | 'source' | 'project';
-export interface PerformanceFilters { model?: string; project?: string; groupBy?: PerformanceGroup }
+export interface PerformanceFilters { model?: string; project?: string; groupBy?: PerformanceGroup; compareModels?: string[] }
 export interface PerformanceReport {
   range: UsageBounds;
   summary: PerformanceMetrics;
   groups: Array<PerformanceMetrics & { label: string }>;
   trend: Array<PerformanceMetrics & { date: string }>;
+  comparison?: Array<{ model: string; trend: Array<PerformanceMetrics & { date: string }> }>;
   samples: PerformanceSample[];
   sampleCount: number;
   facets: { sources: string[]; models: string[]; projects: string[] };
@@ -93,6 +94,14 @@ export function buildPerformanceReport(
     summary: metrics(selected), sampleCount: selected.length,
     groups: [...grouped].map(([label, rows]) => ({ label, ...metrics(rows) })).sort((a, b) => (b.ttftSampleCount + b.speedSampleCount) - (a.ttftSampleCount + a.speedSampleCount) || a.label.localeCompare(b.label)),
     trend: [...dates].sort(([a], [b]) => a.localeCompare(b)).map(([date, rows]) => ({ date, ...metrics(rows) })),
+    ...(options.compareModels?.length ? { comparison: [...new Set(options.compareModels)].slice(0, 4).map(model => {
+      const days = new Map<string, PerformanceSample[]>();
+      for (const row of selected) if (row.model === model) {
+        const date = localDateAndHour(row.timestamp, options.timeZone).date;
+        const rows = days.get(date) ?? []; rows.push(row); days.set(date, rows);
+      }
+      return { model, trend: [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, rows]) => ({ date, ...metrics(rows) })) };
+    }) } : {}),
     samples: selected.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp) || a.id.localeCompare(b.id)).slice(0, 100),
     facets: { sources: facet('source'), models: facet('model'), projects: facet('project') } };
 }

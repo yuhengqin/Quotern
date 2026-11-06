@@ -28,6 +28,7 @@ const until = async (predicate, label) => {
 };
 const body = () => client.evaluate('document.body.innerText');
 const button = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
+const tab = text => `[...document.querySelectorAll('[role="tab"]')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const labelInput = label => `document.getElementById([...document.querySelectorAll('label')].find(el=>el.textContent.trim()===${JSON.stringify(label)})?.htmlFor)`;
 const select = label => `[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)} || el.parentElement?.textContent.includes(${JSON.stringify(label)}))`;
 const option = label => `[...document.querySelectorAll('[role="option"]')].find(el=>el.textContent.trim()===${JSON.stringify(label)})`;
@@ -53,7 +54,7 @@ async function seed() {
       const sessionId = `synthetic-${source}-${day}`, timestamp = iso(now - day * 86400 - 1200);
       const base = { source, sessionId, timestamp, projectLabel: project };
       const tokenParts = { input_tokens: 10000, output_tokens: 2000, cached_input_tokens: 3000, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 };
-      const evidence = Object.fromEntries(Array.from({ length: 6 }, (_, n) => [`request-${n}`, { ...base, id: `request-${n}`, kind: 'request', model, timestamp: iso(now - day * 86400 - 1200 + n * 20), ttftMs: 300 + day * 150 + n * 130, outputTokens: 400 + n * 80, durationMs: 2000 + n * 300 + day * 200 }]));
+      const evidence = Object.fromEntries(Array.from({ length: 6 }, (_, n) => [`request-${n}`, { ...base, id: `request-${n}`, kind: 'request', model, timestamp: iso(now - day * 86400 - 1200 + n * 20), ttftMs: day === (source === 'codex' ? 0 : 1) ? 300 + day * 150 + n * 130 : undefined, outputTokens: 400 + n * 80, durationMs: 2000 + n * 300 + day * 200 }]));
       files[`${sessionId}.jsonl`] = { complete: true, size: 0, mtimeMs: 0, ino: 0, offset: 0, guard: '', context: { sessionId }, evidence,
         messages: { user: { ...base, id: 'user', role: 'user' }, assistant: { ...base, id: 'assistant', role: 'assistant' } },
         observations: { usage: { ...base, id: 'usage', model, tokens: 15000, usageKnown: true, tokenParts, costUsd: null, costKind: 'estimated', costBasis: 'request-facts', billing: { service: source === 'codex' ? 'openai' : 'anthropic', mode: 'subscription', accountRef: source === 'codex' ? 'synthetic-account' : null, evidence: 'recorded' } } },
@@ -64,22 +65,28 @@ async function seed() {
   }
   for (const month of new Set(rows.map(row => row.hour_start.slice(0, 7)))) await writeFile(path.join(dataDir, `queue/${month}.jsonl`), rows.filter(row => row.hour_start.startsWith(month)).map(row => JSON.stringify(row)).join('\n') + '\n');
   const samples = [-1, 0].flatMap(cycle => Array.from({ length: 8 }, (_, n) => ({ at: now - 1800 + cycle * 18000 + n * 200, usedPercent: 10 + n * 7, resetsAt: now + 16200 + cycle * 18000, durationSeconds: 18000, service: 'openai', accountRef: 'synthetic-account' })));
+  const weeklySamples = [{ at: now - 7200, usedPercent: 10, resetsAt: now + 86400 }, { at: now - 3600, usedPercent: 15, resetsAt: now + 86400 }];
   await writeFile(path.join(quotaDir, 'history.json'), JSON.stringify({ 'codex:synthetic-private:account:18000': samples }));
   await writeFile(path.join(quotaDir, 'preferences.json'), JSON.stringify(DEFAULT_QUOTA_PREFERENCES));
   const provider = { id: 'codex', label: 'Codex', status: 'ready', planLabel: 'Pro', fetchedAt: now, queriedAt: now, stale: false, message: null, details: [], resetCredits: null, refreshing: false, nextRefreshAt: null, analyses: {}, service: null, windows: [{ id: 'account:18000', label: '5h', usedPercent: 59, resetsAt: now + 16200, durationSeconds: 18000 }] };
   const quota = { providers: [provider], preferences: DEFAULT_QUOTA_PREFERENCES, notice: null };
   const store = new BucketStore(); store.apply(rows);
   const aggregateCache = await createAggregateCache(dataDir, rows);
+  let failNextPriceUpdate = false;
+  const rebuild = aggregateCache.rebuildFromRows.bind(aggregateCache);
+  aggregateCache.rebuildFromRows = async rows => { await wait(500); if (failNextPriceUpdate) { failNextPriceUpdate = false; throw new Error('Synthetic cache write failure'); } await rebuild(rows); };
   const api = createLocalApiApp({ dataDir, bucketStore: store, aggregateCache, getConfig: () => config, sessionActionsIpc: true, desktopQuotaDirectory: quotaDir, getQuotaState: () => quota,
-    getQuotaHistory: () => ({ providerId: 'codex', label: 'Codex', revision: 1, windows: [{ id: 'account:18000', label: '5h', samples }] }) });
-  return { dataDir, api, quota };
+    getQuotaHistory: () => ({ providerId: 'codex', label: 'Codex', revision: 1, windows: [{ id: 'account:18000', label: '5h', samples }, { id: '7d', label: '7d', samples: weeklySamples }] }) });
+  return { dataDir, api, quota, failPriceUpdate: () => { failNextPriceUpdate = true; } };
 }
 
 async function main() {
-  const { dataDir, api, quota } = await seed();
+  const { dataDir, api, quota, failPriceUpdate } = await seed();
+  let missingPriceJob = false;
   ipcMain.handle('tud:api-request', async (_event, route, init) => {
     const response = await api.request(`http://tud.local${route}`, init);
     const result = await response.json();
+    if (missingPriceJob && route.startsWith('/functions/tud-local-admin/pricing/recalculation?id=')) { missingPriceJob = false; result.data.job = null; }
     calls.push({ route, method: init?.method ?? 'GET', status: response.status, success: result.success, message: result.message });
     return { status: response.status, body: result };
   });
@@ -107,22 +114,54 @@ async function main() {
   await client.click(select('Agent')); await client.click(option('Codex'));
   await until(async () => (await body()).includes('42 个样本'), 'source filters raw samples');
   await client.click(button('清除筛选')); await until(async () => (await body()).includes('84 个样本'), 'clear filters');
+  await client.click(`[...document.querySelectorAll('[role="columnheader"]')].find(el=>el.textContent.includes('首字时间 P95'))`);
+  await until(() => client.evaluate(`Boolean(document.querySelector('[aria-sort="ascending"]'))`), 'metric sorting');
+  for (const model of ['openai/gpt-6.1-sol', 'anthropic/claude-opus-4-8']) await client.click(`document.querySelector('input[aria-label="比较 ${model}"]').closest('label')`);
+  await until(async () => (await body()).includes('已选 2 个模型') && (await body()).includes('模型首字时间 P50'), 'two model trends');
+  await until(() => client.evaluate(`[...document.querySelectorAll('h2')].find(el=>el.textContent.includes('模型首字时间 P50'))?.closest('section').querySelectorAll('.recharts-line-dot').length === 2`), 'isolated model samples on different dates remain visible');
+  await client.evaluate(`[...document.querySelectorAll('h2')].find(el=>el.textContent.includes('模型首字时间 P50')).scrollIntoView({block:'start'}); true`);
+  await snapshot('desktop-performance-comparison');
+  await client.click(`document.querySelector('button[aria-label="查看 openai/gpt-6.1-sol 的样本"]')`);
+  await until(async () => (await body()).includes('42 个样本'), 'model row filters samples');
+  await client.evaluate(`document.querySelector('a[href*=sessionId]').scrollIntoView({block:'center'}); true`);
+  const returnHash = await client.evaluate('location.hash');
+  const returnTop = await client.evaluate('document.querySelector("[data-dashboard-scroll-container]")?.scrollTop ?? window.scrollY');
   await client.click("document.querySelector('a[href*=sessionId]')");
   await until(() => client.evaluate(`${dialog}.length > 0 && document.body.innerText.includes('本会话活动')`), 'sample opens exact session');
   await client.key('Escape');
-  checks.push('desktop-real-ipc-performance-filters-and-session-link');
+  assert.ok((await body()).includes('性能样本关联会话'));
+  await client.click(`[...document.querySelectorAll('a')].find(el=>el.textContent.includes('返回性能分析'))`);
+  await until(() => client.evaluate(`location.hash === ${JSON.stringify(returnHash)} && Math.abs((document.querySelector('[data-dashboard-scroll-container]')?.scrollTop ?? window.scrollY) - ${returnTop}) < 3`), 'performance return restores URL and scroll');
+  checks.push('desktop-real-ipc-performance-sort-compare-drilldown-and-return');
 
   await route('/pricing');
   await until(() => client.evaluate(`Boolean(${button('用户价格')})`), 'price manager');
   await client.click(button('用户价格'));
   await until(() => client.evaluate(`Boolean(${labelInput('完整模型 ID')})`), 'price form');
-  await client.fill(labelInput('完整模型 ID'), 'openai/gpt-6.1-sol');
+  await client.click(button('保存并更新估算'));
+  await until(async () => (await body()).includes('请至少填写一项单价') && (await body()).includes('请填写有效的完整模型 ID'), 'empty form has field errors');
+  assert.equal(await client.evaluate(`Boolean(${button('重试')})`), false, 'validation does not offer a network retry');
+  await client.key('Escape');
+  await client.fill('document.querySelector("input[type=search]")', 'gpt-6.1-sol');
+  await until(() => client.evaluate(`Boolean(document.querySelector('button[aria-label="编辑 openai/gpt-6.1-sol 的用户价格"]'))`), 'model row edit');
+  await client.click(`document.querySelector('button[aria-label="编辑 openai/gpt-6.1-sol 的用户价格"]')`);
+  await until(() => client.evaluate(`${labelInput('完整模型 ID')}?.value === 'openai/gpt-6.1-sol'`), 'row prefills exact ID');
+  await until(async () => (await body()).includes('当前生效') && (await body()).includes('修改后'), 'base rate preview');
   await client.fill(labelInput('输入'), '-1');
   await client.click(button('保存并更新估算'));
   await until(async () => (await body()).includes('0–1000000'), 'negative price rejected');
   await client.fill(labelInput('输入'), '0');
+  failPriceUpdate();
   await client.click(button('保存并更新估算'));
+  await until(async () => (await body()).includes('价格已保存 · 历史估算更新中'), 'save acknowledged before recalculation');
+  await until(async () => (await body()).includes('历史估算更新未完成'), 'recalculation failure is actionable');
+  const savedBeforeRetry = await readFile(path.join(dataDir, 'pricing-manual.json'), 'utf8');
+  missingPriceJob = true;
+  await client.click(button('重试更新估算'));
+  await until(async () => (await body()).includes('暂时无法确认估算更新结果'), 'missing job has a recovery action');
+  await client.click(button('重新读取并保留草稿'));
   await until(async () => (await body()).includes('已保存并更新估算'), 'price saved');
+  assert.equal(await readFile(path.join(dataDir, 'pricing-manual.json'), 'utf8'), savedBeforeRetry, 'retry does not resubmit a draft');
   assert.equal(JSON.parse(await readFile(path.join(dataDir, 'pricing-manual.json'), 'utf8')).models['openai/gpt-6.1-sol'].input, 0);
   assert.equal(await client.evaluate('document.activeElement.textContent.trim()'), '保存并更新估算');
   await snapshot('desktop-manual-pricing');
@@ -130,14 +169,19 @@ async function main() {
   await until(() => client.evaluate(`Boolean(${button('保存并更新估算')} && !${button('保存并更新估算')}.disabled && ${button('恢复参考价')}?.disabled)`), 'price override removed');
   assert.equal(JSON.parse(await readFile(path.join(dataDir, 'pricing-manual.json'), 'utf8')).models['openai/gpt-6.1-sol'], undefined);
   await client.key('Escape'); await until(() => client.evaluate(`${dialog}.length === 0`), 'Escape closes after save');
-  checks.push('desktop-price-validation-zero-persistence-revert-and-focus');
+  checks.push('desktop-price-row-prefill-preview-validation-background-failure-retry-revert-and-focus');
 
   await route('/dashboard');
   await until(() => client.evaluate(`Boolean(document.querySelector('button[aria-label="查看 Codex 额度详情"]'))`), 'quota card');
   await client.click(`document.querySelector('button[aria-label="查看 Codex 额度详情"]').parentElement`);
-  await client.click(button('额度历史'));
+  const historyCallsBefore = calls.filter(call => call.route.startsWith('/functions/tud-quota-history')).length;
+  await client.evaluate(`${tab('当前额度')}.focus(); true`); await client.key('ArrowRight');
+  assert.equal(calls.filter(call => call.route.startsWith('/functions/tud-quota-history')).length, historyCallsBefore, 'arrow focus does not fetch history');
+  await client.key('Enter');
   await until(async () => (await body()).includes('同账号本机 Token'), 'account-linked history');
   assert.ok((await body()).includes('1.5万'));
+  assert.equal(await client.evaluate(`${dialog}.length`), 1, 'history shares the details dialog');
+  assert.ok((await body()).includes('当前周期'));
   const point = await client.evaluate(`(() => { const r = [...${dialog}].at(-1).querySelector('.recharts-wrapper').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
   await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
   await until(() => client.evaluate(`Boolean([...${dialog}].at(-1).querySelector('.recharts-tooltip-wrapper')?.textContent)`), 'quota chart tooltip');
@@ -146,7 +190,12 @@ async function main() {
   window.setSize(390, 780); await wait(150); await fits(); await snapshot('desktop-quota-history-narrow');
   await client.click(select('观察周期')); await client.key('End'); await client.key('Enter');
   await until(async () => (await body()).includes('暂无可可靠关联的本机用量'), 'old cycle without attributed use');
-  await client.key('Escape'); await client.key('Escape');
+  assert.ok((await body()).includes('已结束'));
+  await client.click(select('额度窗口')); await client.key('End'); await client.key('Enter');
+  await until(async () => (await body()).includes('周限额') && (await body()).includes('起点未知'), 'localized weekly window keeps unknown cycle start');
+  await client.key('Escape');
+  await until(() => client.evaluate(`${dialog}.length === 0`), 'one Escape closes quota details');
+  assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-label")'), '查看 Codex 额度详情');
   checks.push('desktop-quota-cycle-selection-account-join-and-narrow-layout');
 
   window.setSize(1000, 920);
@@ -184,9 +233,10 @@ async function main() {
   await until(() => client.evaluate(`document.querySelector('input[name="token-unit-mode"][value="international"]').checked`), 'international token units selected');
   await client.key('Escape');
   await client.click(`document.querySelector('button[aria-label="查看 Codex 额度详情"]').parentElement`);
-  await client.click(button('额度历史'));
+  assert.equal(await client.evaluate(`${tab('当前额度')}.getAttribute('aria-selected')`), 'true', 'reopening starts at current quota');
+  await client.click(tab('额度历史'));
   await until(async () => (await body()).includes('同账号本机 Token') && (await body()).includes('15K'), 'quota history respects saved token units');
-  await client.key('Escape'); await client.key('Escape');
+  await client.key('Escape');
   for (const [value, heading] of [['en', 'Performance'], ['ja', 'パフォーマンス分析'], ['ko', '성능 분석']]) {
     await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "app" } })); true');
     await client.click(`document.querySelector('input[name="locale-preference"][value="${value}"]').closest('label')`);

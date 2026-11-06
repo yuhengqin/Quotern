@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Button, Card, Chip, Modal, ProgressBar, Tooltip } from '@heroui/react';
+import { Button, Card, Chip, Modal, ProgressBar, Tabs, Tooltip } from '@heroui/react';
 import { Button as AriaButton } from 'react-aria-components';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaDetail, localizeQuotaPaceDescription, localizeQuotaPaceLabel, localizeQuotaValueText, localizeQuotaWindowLabel } from 'quotern-i18n/quota';
@@ -11,7 +11,7 @@ import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
 import { formatSubscriptionResetTime, formatSubscriptionCountdown } from '../lib/subscription-time';
 import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows, quotaPaceMarker } from '../lib/quota-presentation';
 import { QuotaServiceDetails } from './QuotaServiceDetails';
-import { QuotaHistoryButton } from './QuotaHistoryPanel';
+import { QuotaHistoryPanel } from './QuotaHistoryPanel';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string }> = {
   operational: { dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
@@ -85,6 +85,9 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   };
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsTab, setDetailsTab] = useState('current');
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const detailsBody = useRef<HTMLDivElement>(null);
   const [hintVisible, setHintVisible] = useState(false);
   const [hintSource, setHintSource] = useState<'pointer' | 'focus'>('pointer');
   const [hintPosition, setHintPosition] = useState({ left: 0, top: 0 });
@@ -153,7 +156,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   const busy = provider.refreshing || refreshing;
   const lastQuery = provider.queriedAt ?? provider.fetchedAt;
   const refresh = async () => {
-    try { setError(null); setRefreshing(true); await onRefresh(provider.id); }
+    try { setError(null); setRefreshing(true); await onRefresh(provider.id); setHistoryRevision(value => value + 1); }
     catch { setError('refreshFailed'); }
     finally { setRefreshing(false); }
   };
@@ -170,6 +173,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
   const openDetails = () => {
     triggerRef.current?.focus({ preventScroll: true });
     hideHint();
+    setDetailsTab('current');
     setDetailsOpen(true);
   };
   return <>
@@ -226,12 +230,15 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
     </Card>
           <Modal.Backdrop isOpen={detailsOpen} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">
-              <Modal.Dialog aria-label={t('usage.quota.details', { provider: provider.label })} className="w-full max-w-md">
+              <Modal.Dialog aria-label={t('usage.quota.details', { provider: provider.label })} className="w-full max-w-xl">
                 <Modal.CloseTrigger aria-label={t('usage.quota.closeDetails')} />
                 <Modal.Header>
                   <Modal.Heading>{t('usage.quota.details', { provider: provider.label })}</Modal.Heading>
                 </Modal.Header>
-                <Modal.Body className="flex flex-col gap-5 [&>*]:shrink-0">
+                <Tabs selectedKey={detailsTab} keyboardActivation="manual" onSelectionChange={key => { setDetailsTab(String(key)); detailsBody.current?.scrollTo({ top: 0 }); }} variant="secondary" className="flex min-h-0 flex-col">
+                  <Tabs.ListContainer className="shrink-0 px-6"><Tabs.List aria-label={t('usage.quota.details', { provider: provider.label })}><Tabs.Tab id="current">{t('history.currentQuota')}<Tabs.Indicator /></Tabs.Tab><Tabs.Tab id="history">{t('history.title')}<Tabs.Indicator /></Tabs.Tab></Tabs.List></Tabs.ListContainer>
+                <Modal.Body ref={detailsBody}>
+                  <Tabs.Panel id="current" className="flex flex-col gap-5 pt-3">
                   {(provider.planLabel || provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ')}</p>}
                   {onSave && windows.some(window => window.resetsAt !== null) && <Button size="sm" variant="tertiary" className="w-fit" isDisabled={saving} onPress={() => void apply({ resetTimeMode: dateMode ? 'countdown' : 'date' })}>{t(dateMode ? 'usage.quota.showCountdown' : 'usage.quota.showDate')}</Button>}
                   {commonReset !== null && <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} />}
@@ -250,9 +257,12 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
                     <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.account')}</dt><dd>{proof?.identityVerified ? t('usage.quota.identityVerified') : t('usage.quota.noIdentityEvidence')}</dd></div>
                     <div className="flex flex-wrap justify-between gap-2"><dt>{t('usage.quota.lastQuery')}</dt><dd>{lastQuery !== null ? queryDate(lastQuery, locale) : busy ? t('usage.quota.querying') : t('usage.quota.noRecord')}</dd></div>
                   </dl>
+                  </Tabs.Panel>
+                  <Tabs.Panel id="history" className="min-w-0 pt-3"><QuotaHistoryPanel key={`${provider.id}:${proof?.accountRef ?? ''}`} providerId={provider.id} providerType={providerType} refreshVersion={historyRevision} /></Tabs.Panel>
                 </Modal.Body>
+                </Tabs>
                 <Modal.Footer>
-                  <QuotaHistoryButton providerId={provider.id} identity={proof?.accountRef} />
+                  {detailsTab === 'history' && error && <p role="status" className="text-xs text-danger">{errorMessage}</p>}
                   <Button aria-label={t('usage.quota.refreshAria', { provider: provider.label })} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
                     <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? t('usage.quota.refreshing') : t('usage.quota.refresh')}
                   </Button>

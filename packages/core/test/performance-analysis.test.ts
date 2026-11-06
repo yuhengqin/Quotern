@@ -73,3 +73,13 @@ test('recent sample limit never truncates aggregates and no evidence produces nu
   assert.equal(empty.summary.tokensPerSecond, null);
   assert.equal(empty.summary.sessionCount, 0);
 });
+
+test('model comparison uses all raw samples and obeys the current period and project', () => {
+  const report = buildPerformanceReport([
+    ...Array.from({ length: 120 }, (_, n) => sample(String(n), { ttftMs: n })),
+    sample('other', { model: 'model-b', ttftMs: 900, sessionId: 'two' }),
+  ], sessions, { ...options, compareModels: ['model-a', 'model-b'], project: 'Project A' });
+  assert.equal(report.comparison?.[0]?.trend[0]?.ttftSampleCount, 120);
+  assert.equal(report.comparison?.[0]?.trend[0]?.ttftP50Ms, 59);
+  assert.deepEqual(report.comparison?.[1]?.trend, []);
+});

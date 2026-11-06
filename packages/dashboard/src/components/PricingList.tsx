@@ -42,14 +42,15 @@ function getComparisonRow(event: { target: EventTarget | null; currentTarget: HT
   return row && event.currentTarget.contains(row) ? row : null;
 }
 
-function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, currency, exchangeRate, query, selected, onCompare }: {
+function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, currency, exchangeRate, query, selected, onCompare, onEdit }: {
   item: DisplayRow; sort: PricingSortDescriptor; hasUsage: boolean; expanded: boolean; onToggle: () => void; compact: boolean;
-  query: string; selected: boolean; onCompare: () => void;
+  query: string; selected: boolean; onCompare: () => void; onEdit?: (id: string) => void;
 } & PriceDisplay) {
   const { t, i18n } = useTranslation();
   const { group, variant, kind } = item;
   const name = getPricingModelName(group.model, group.displayName);
   const details = <PricingChannelDetails name={name} variant={variant} currency={currency} exchangeRate={exchangeRate} query={query} />;
+  const edit = onEdit && variant.row.billingMode !== 'subscription' && <Button size="sm" variant="ghost" className="!h-7 !min-h-7 !px-1.5 !text-[11px]" aria-label={t('admin.editModel', { model: variant.row.model })} onPress={() => onEdit(variant.row.model)}>{t('admin.edit')}</Button>;
   if (kind !== 'model') return <div className="ml-4 flex min-w-0 flex-1 items-center gap-2 border-l-2 border-border/70 pl-3 sm:ml-4">
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs">
       <span className="font-medium">{kind === 'subscription' ? t('pricing.list.subscription') : 'API'}</span>
@@ -58,7 +59,7 @@ function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, curr
       {compact && (kind === 'subscription' || variant.row.contextWindow !== primaryVariant(group).row.contextWindow) && <span className="text-[11px] text-muted">{formatPricingContext(variant.row.contextWindow, i18n.language)}</span>}
       {kind === 'subscription' && group.subscriptionVariants.some(other => other !== variant && other.row.contextWindow === variant.row.contextWindow) && <span className="max-w-40 truncate font-mono text-[10px] text-muted" title={variant.row.model.split('/')[0]}>{variant.row.model.split('/')[0]}</span>}
     </div>
-      {details}
+      {details}{edit}
   </div>;
 
   const provider = getPricingProvider(group.model);
@@ -88,7 +89,7 @@ function ModelIdentity({ item, sort, hasUsage, expanded, onToggle, compact, curr
         {suppliedModel && <span>{t('pricing.list.suppliedBy', { provider: providerLabel })}</span>}
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        {details}
+        {details}{edit}
         {group.subscriptionVariants.length > 0 && <Button
           aria-label={t('pricing.list.subscriptionChannelsAria', { provider: providerLabel, name })} aria-expanded={expanded} variant="ghost" size="sm"
           className="!h-6 !min-h-6 !gap-0.5 !rounded-md bg-accent-soft/60 !px-1.5 !text-[11px] text-accent-soft-foreground" onPress={onToggle}
@@ -111,10 +112,10 @@ function PricePair({ row, cache = false, subscriptionLabelKey = 'pricing.list.pl
   </div>;
 }
 
-export function PricingList({ groups, sort, hasUsage, onSortChange, currency, exchangeRate, query, selected, onCompare, scenario }: {
+export function PricingList({ groups, sort, hasUsage, onSortChange, currency, exchangeRate, query, selected, onCompare, scenario, onEdit }: {
   groups: PricingModelGroup[]; sort: PricingSortDescriptor; hasUsage: boolean;
   onSortChange: (sort: PricingSortDescriptor) => void;
-  query: string; selected: string[]; onCompare: (id: string) => void; scenario: PricingScenario | null;
+  query: string; selected: string[]; onCompare: (id: string) => void; scenario: PricingScenario | null; onEdit?: (id: string) => void;
 } & PriceDisplay) {
   const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -143,7 +144,7 @@ export function PricingList({ groups, sort, hasUsage, onSortChange, currency, ex
   });
   const mobile = width > 0 && width < 640;
   const wide = width >= (scenario ? 1040 : 960);
-  const identity = (item: DisplayRow) => <ModelIdentity item={item} sort={sort} hasUsage={hasUsage} expanded={expanded.has(item.group.id)} onToggle={() => toggle(item.group.id)} compact={!wide} currency={currency} exchangeRate={exchangeRate} query={query} selected={selected.includes(item.group.id)} onCompare={() => onCompare(item.group.id)} />;
+  const identity = (item: DisplayRow) => <ModelIdentity item={item} sort={sort} hasUsage={hasUsage} expanded={expanded.has(item.group.id)} onToggle={() => toggle(item.group.id)} compact={!wide} currency={currency} exchangeRate={exchangeRate} query={query} selected={selected.includes(item.group.id)} onCompare={() => onCompare(item.group.id)} onEdit={onEdit} />;
   const columns: TableColumn[] = [...(wide ? WIDE_COLUMNS : COMPACT_COLUMNS), ...(wide && scenario ? [{ id: 'estimate' as const, labelKey: 'pricing.list.estimate', minWidth: 112, width: 120 }] : [])];
   const handleSort = (descriptor: SortDescriptor) => {
     const column = columns.find(column => column.id === descriptor.column)?.id;

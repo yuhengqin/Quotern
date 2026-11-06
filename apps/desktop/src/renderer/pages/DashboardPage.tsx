@@ -11,6 +11,7 @@ import {
 import { DashboardLoadingSkeleton } from '@/components/DashboardLoadingSkeleton';
 import { DashboardOverviewCard } from '@/components/DashboardOverviewCard';
 import { SessionActivityPanel } from '@/components/SessionActivityPanel';
+import { UsageInsightsPanel } from '../../../../../packages/dashboard/src/components/UsageInsightsPanel';
 import { DashboardRangeSyncOverlay } from '@/components/DashboardRangeSyncOverlay';
 import { UsageTrendExplorer } from '@/components/UsageTrendExplorer';
 // 分时热力图：暂时注释，保留组件便于以后恢复
@@ -392,6 +393,7 @@ export function DashboardPage() {
             sessionMetricsLoading={sessionMetricsLoading}
             sessionMetricsError={sessionMetricsError}
           />
+          {!refreshing && range === dataRange && !costExplanation.loading && <UsageInsightsPanel report={costExplanation.report} />}
           <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section

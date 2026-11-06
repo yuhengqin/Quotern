@@ -34,9 +34,11 @@ import { useLocalePreference } from '@/hooks/useLocalePreference';
 import { useTranslation } from 'quotern-i18n/react';
 import { LanguagePreferenceControl } from '../../../../../packages/dashboard/src/components/LanguagePreferenceControl';
 import { ThemePreferenceControl } from '../../../../../packages/dashboard/src/components/ThemePreferenceControl';
+import { AgentIntegrationSettings } from '../../../../../packages/dashboard/src/components/AgentIntegrationSettings';
 import { useTheme } from '@/hooks/useTheme';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
+import { TrayPanelControl } from './TrayPanelControl';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
 import { FilterSelectPopover } from './FilterMenu';
 
@@ -125,7 +127,7 @@ export function SettingsPanel({
 
 /** Toggle which auto-detected subscription channels may appear on the dashboard. */
 function SubscriptionChannelSettings() {
-  return <QuotaSettings />;
+  return <div className="space-y-4"><TrayPanelControl /><QuotaSettings /></div>;
 }
 
 /** 自动更新 + 开机自启 + 设备信息。 */
@@ -309,6 +311,7 @@ function AppSettingsPanel() {
         </Card.Content>
       </Card>
       {error && <StatusBanner tone="error" title={t(error)} />}
+      <AgentIntegrationSettings />
       {autostartError && (
         <StatusBanner tone="error" title={t(autostartError)} />
       )}

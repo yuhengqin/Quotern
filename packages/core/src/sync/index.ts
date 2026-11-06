@@ -16,6 +16,7 @@ import { parseTraeIncremental } from '../parsers/trae.js';
 import { parseGeminiIncremental } from '../parsers/gemini.js';
 import { parseOpencodeIncremental } from '../parsers/opencode.js';
 import { parseCopilotIncremental } from '../parsers/copilot.js';
+import { parseMuseIncremental } from '../parsers/muse.js';
 import { parseAntigravityIncremental } from '../parsers/antigravity.js';
 import { parseOpenclawIncremental } from '../parsers/openclaw.js';
 import { parseAutoclawIncremental } from '../parsers/autoclaw.js';
@@ -841,6 +842,7 @@ export const SYNC_SOURCE_IDS = [
   'gemini',
   'opencode',
   'copilot',
+  'muse',
   'antigravity',
   'openclaw',
   'autoclaw',
@@ -933,6 +935,8 @@ async function syncTokenSource(
       return syncOpencode(dataDir, config, opts);
     case 'copilot':
       return syncCopilot(dataDir, config, opts);
+    case 'muse':
+      return syncSourceBuckets(dataDir, config, 'muse', parseMuseIncremental, { sharedCursors: opts?.sharedCursors });
     case 'antigravity':
       return syncAntigravity(dataDir, config, opts);
     case 'openclaw':

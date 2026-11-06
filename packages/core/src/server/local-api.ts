@@ -5,6 +5,7 @@ import { registerShareBackgroundApi } from './share-background-api.js';
 import { registerAchievementsApi } from './achievements-api.js';
 import { registerQuotaApi, isLocalPanelOrigin } from './quota-api.js';
 import { registerSessionActionsApi } from './session-actions-api.js';
+import { registerAgentApi } from './agent-api.js';
 import { SessionQueryService, type SessionRangeQuery } from '../session-query.js';
 import type { SessionListQuery } from '../session-list.js';
 import { sessionsToCsv } from '../session-csv.js';
@@ -106,6 +107,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     registerAchievementsApi(app, deps.dataDir);
     registerQuotaApi(app, deps.quota, deps.dataDir);
     registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
+    registerAgentApi(app, deps.dataDir, deps.sessionActionsIpc);
   }
 
   app.get('/health', (c) => {
@@ -253,7 +255,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const targetSource = c.req.query('sessionSource'), targetId = c.req.query('sessionId');
     const targeted = targetSource !== undefined || targetId !== undefined;
     const preview = Boolean(deps.demo && !targeted && c.req.query('preview') === '6' && c.req.query('format') !== 'csv');
-    if (targeted && (!['codex', 'claude', 'dsh'].includes(targetSource ?? '') || !targetId || targetId.length > 512 || /[\u0000-\u001f]/.test(targetId))) return c.json({ success: false, message: 'INVALID_SESSION_TARGET', data: null }, 400);
+    if (targeted && (!['codex', 'claude', 'dsh', 'antigravity', 'muse'].includes(targetSource ?? '') || !targetId || targetId.length > 512 || /[\u0000-\u001f]/.test(targetId))) return c.json({ success: false, message: 'INVALID_SESSION_TARGET', data: null }, 400);
     // Notification lookup reads already-collected history; it never starts collection or widens localCollectSince.
     const bounds = targeted ? undefined : readBounds(c, 7);
     if (bounds === null) return c.json({ success: false, message: 'INVALID_DATE_RANGE', data: null }, 400);

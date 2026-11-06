@@ -59,7 +59,7 @@ export function windowsResumeScript(directory: string, executable: string, args:
   if (values.some(value => /["\u0000\r\n]/.test(value))) throw new Error('SESSION_ACTION_LAUNCH_FAILED');
   const slots = values.map((_, index) => `QUOTERN_SESSION_LAUNCH_${index}`);
   const assignments = slots.map((slot, index) => `$env:${slot} = ${psLiteral(values[index]!.replace(/(\\+)$/, '$1$1'))}`).join('; ');
-  const command = '"' + slots.map(slot => `"%${slot}%"`).join(' ') + '"';
+  const command = '"' + slots.map((slot, index) => values[index] === '' ? '""' : `"%${slot}%"`).join(' ') + '"';
   const cmd = win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe');
   const cleanup = slots.map(slot => `$env:${slot} = $null`).join('; ');
   return setup + `${assignments}; try { & ${psLiteral(cmd)} /d /v:off /s /c ${psLiteral(command)} } finally { ${cleanup} }`;

@@ -23,7 +23,7 @@ export async function fetchSessionMetrics(days: number, range?: DashboardDateRan
 
 export async function fetchUsageReport(days: number, range?: DashboardDateRange, sources: readonly string[] = []): Promise<UsageReport> {
   const { others } = apiPrefixes();
-  const query = new URLSearchParams({ period: 'summary' });
+  const query = new URLSearchParams({ period: 'overview' });
   if (range) {
     appendDashboardRangeQuery(query, range);
   } else {

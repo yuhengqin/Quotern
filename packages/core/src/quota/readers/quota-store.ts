@@ -41,11 +41,12 @@ export function validQuotaProfiles(value: unknown): value is QuotaProfile[] {
 export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferences> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
-  return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline', 'serviceAlerts', 'quotaShortcut'].includes(key) ? typeof value === 'boolean'
+  return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline', 'serviceAlerts', 'quotaShortcut', 'compact'].includes(key) ? typeof value === 'boolean'
     : key === 'quotaShortcutAccelerator' ? normalizeQuotaShortcut(value) !== null
     : key === 'resetTimeMode' ? value === 'countdown' || value === 'date'
     : key === 'serviceComponents' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([id, ids]) =>
       SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && Array.isArray(ids) && ids.length <= 200 && new Set(ids).size === ids.length && ids.every(item => typeof item === 'string' && /^[a-zA-Z0-9_-]{1,300}$/.test(item))))
+    : key === 'providerOrder' ? Array.isArray(value) && value.length <= 100 && new Set(value).size === value.length && value.every(id => typeof id === 'string' && /^[a-z0-9][a-zA-Z0-9@_-]{0,100}$/.test(id))
     : key === 'paceModel' ? ['uniform', 'workdays', 'automatic'].includes(value as string)
     : key === 'channels' ? isSubscriptionChannelVisibility(value)
       : key === 'profiles' ? validQuotaProfiles(value) : false);

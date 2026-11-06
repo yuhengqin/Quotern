@@ -16,7 +16,8 @@ test('prompt, recommendation and provider descriptions remain read-only without 
     const result = await run(process.execPath, [bin, 'quota', 'recommend', '--provider', 'claude', '--model', 'opus', '--json', '--data-dir', dir]);
     assert.equal(JSON.parse(result.stdout).result, 'unknown');
     const metadata = await run(process.execPath, [bin, 'quota', 'providers', '--json', '--data-dir', dir]);
-    assert.equal(JSON.parse(metadata.stdout).providers.length, 13);
+    assert.equal(JSON.parse(metadata.stdout).providers.length, 14);
+    assert.ok(JSON.parse(metadata.stdout).providers.some(provider => provider.id === 'muse'));
     assert.deepEqual(await readdir(root), []);
     for (const args of [['recommend', '--provider', 'claude', '--refresh'], ['recommend', '--model', 'opus'], ['status', '--model', 'opus']]) {
       await assert.rejects(run(process.execPath, [bin, 'quota', ...args, '--data-dir', dir]), e => e.code === 1 && !e.stdout);

@@ -520,6 +520,10 @@ async function main(): Promise<void> {
   try {
     // Query before the runtime argument path: no startup, ownership or sync.
     const commandLine = extractCliLanguage(process.argv.slice(2));
+    if (commandLine.args[0] === 'agent') {
+      await (await import('./agent-command.js')).runAgentCommand(commandLine.args.slice(1));
+      return;
+    }
     if (commandLine.args[0] === 'demo') {
       try {
         const { runDemoCommand } = await import('./demo.js');

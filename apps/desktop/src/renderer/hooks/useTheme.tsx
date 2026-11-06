@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { useTheme as useHeroUITheme } from '@heroui/react';
+import { PaletteRuntime } from '../../../../../packages/dashboard/src/components/PaletteControl';
 import {
   isThemeMode,
   type Theme,
@@ -127,7 +128,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [theme, themeMode, setThemeMode, toggleTheme],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}><PaletteRuntime theme={theme} />{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {

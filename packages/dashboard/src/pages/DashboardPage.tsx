@@ -17,6 +17,7 @@ import { UsageTrendExplorer } from '@/components/UsageTrendExplorer';
 import { StatusBanner } from '@/components/StatusBanner';
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
 import { SessionActivityPanel } from '@/components/SessionActivityPanel';
+import { UsageInsightsPanel } from '../components/UsageInsightsPanel';
 import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
@@ -358,6 +359,7 @@ export function DashboardPage() {
             sessionMetricsLoading={sessionMetricsLoading}
             sessionMetricsError={sessionMetricsError}
           />
+          {!refreshing && range === dataRange && !costExplanation.loading && <UsageInsightsPanel report={costExplanation.report} />}
           <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
           <section

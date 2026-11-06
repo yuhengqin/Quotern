@@ -4,6 +4,7 @@ import { QuotaUsageCard } from './QuotaUsageCard';
 import { QuotaProfilesManager } from './QuotaProfilesManager';
 import { useQuotaState } from '../hooks/useQuotaState';
 import { distinctQuotaAllowances, isQuotaStatusOnly } from '../lib/quota-presentation';
+import { QuotaLayoutControl, orderQuotaProviders } from '../../../../../packages/dashboard/src/components/QuotaLayoutControl';
 
 interface SubscriptionUsageGridProps {
   className?: string;
@@ -15,7 +16,7 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
   const { state, error, save } = useQuotaState();
   if (!state) return error ? <p role="status" className="text-xs text-muted">{t(error)}</p> : null;
   const visible = state.providers.filter(provider => provider.profileLabel || provider.windows.length || provider.details.length || provider.planLabel || provider.fetchedAt || ['expired', 'access-denied', 'custom-provider'].includes(provider.status));
-  const allowances = distinctQuotaAllowances(visible.filter(provider => !isQuotaStatusOnly(provider)));
+  const allowances = orderQuotaProviders(distinctQuotaAllowances(visible.filter(provider => !isQuotaStatusOnly(provider))), state.preferences.providerOrder);
   const statuses = visible.filter(isQuotaStatusOnly);
 
   return (
@@ -23,7 +24,7 @@ export function SubscriptionUsageGrid({ className = '' }: SubscriptionUsageGridP
       aria-label={t('usage.quota.gridAria')}
       className={`grid items-stretch empty:hidden ${className}`.trim()}
     >
-      <div className="col-span-full -mb-1 flex justify-end"><QuotaProfilesManager preferences={state.preferences} providers={state.providers} onSave={save} /></div>
+      <div className="col-span-full -mb-1 flex flex-wrap justify-end gap-1"><QuotaLayoutControl preferences={state.preferences} providers={allowances} onSave={save} /><QuotaProfilesManager preferences={state.preferences} providers={state.providers} onSave={save} /></div>
       {allowances.map(provider => <QuotaUsageCard key={provider.id} provider={provider} preferences={state.preferences} />)}
       {statuses.length > 0 && <Card data-quota-status-group role="group" aria-label={t('usage.quota.statusGroup')} variant="secondary"
         className={`grid min-w-0 self-start gap-1 overflow-visible p-1 ${allowances.length ? '' : 'col-span-full grid-cols-subgrid'}`.trim()}>

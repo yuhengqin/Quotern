@@ -228,7 +228,8 @@ export class QuotaManager {
           window.durationSeconds && window.durationSeconds <= 21600 ? 'five-hour' : window.id);
         slot.observations.set(window.id, result.observation);
         // A jump across both thresholds produces one useful message at the higher level.
-        const alerts = result.alerts.includes('threshold-90') ? result.alerts.filter(kind => kind !== 'threshold-70') : result.alerts;
+        const alerts = result.alerts.includes('depleted') ? result.alerts.filter(kind => !kind.startsWith('threshold-'))
+          : result.alerts.includes('threshold-90') ? result.alerts.filter(kind => kind !== 'threshold-70') : result.alerts;
         for (const kind of alerts) if (kind === 'reset' ? this.preferences.resetAlerts : this.preferences.thresholdAlerts) {
           if (slot.reader.profileId && this.preferences.profiles?.find(profile => profile.id === slot.reader.profileId)?.alerts === false) continue;
           const alertKey = JSON.stringify([slot.reader.id, identity, window.id, kind, sample.resetsAt]);

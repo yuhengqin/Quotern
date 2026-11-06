@@ -152,7 +152,7 @@ export class SessionQueryService {
     const keys = new Set(result.map(sessionKey));
     const inWindow = (stamp: string) => { const date = localDateAndHour(stamp).date; return date >= state.options.fromDate! && date <= state.options.toDate! && inTimeBounds(stamp, state.options); };
     enrichSessionInsights(result, state.history.messages.filter(message => keys.has(sessionKey(message)) && inWindow(message.timestamp)),
-      state.history.evidence.filter(event => event.kind === 'metadata' || inWindow(event.timestamp)));
+      state.history.evidence.filter(event => event.kind === 'metadata' || inWindow(event.timestamp)), state.snapshot.sessions);
     const allRows = new Map(state.snapshot.sessions.map(row => [sessionKey(row), row]));
     for (const row of result) if (row.insights) {
       row.insights.orphan = Boolean(row.insights.parentId && !allRows.has(sessionKey({ source: row.source, sessionId: row.insights.parentId })));

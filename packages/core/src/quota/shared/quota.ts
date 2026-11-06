@@ -92,6 +92,8 @@ export interface QuotaProviderState {
   service: QuotaServiceStatus | null;
 }
 export interface QuotaPreferences {
+  providerOrder?: string[];
+  compact?: boolean;
   profiles?: QuotaProfile[];
   thresholdAlerts: boolean;
   resetAlerts: boolean;

@@ -191,7 +191,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
       onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
       onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
-    <Card.Content className={`relative ${grouped ? 'flex-row flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2' : compact ? 'gap-1.5 px-4 py-3' : 'gap-3 p-4'}`}>
+    <Card.Content className={`relative ${grouped ? 'flex-row flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2' : compact || preferences.compact ? 'gap-1.5 px-3 py-2' : 'gap-3 p-4'}`}>
       <div className={`grid min-w-0 items-start gap-x-2 ${headerService ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'} ${grouped ? 'shrink-0' : ''}`}>
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
           <div className="flex min-w-0 max-w-full items-center gap-2">
@@ -204,7 +204,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
       </div>
       {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">{t('usage.quota.ompRecord', { date: provider.provenance.observedAt ? queryDate(provider.provenance.observedAt, locale) : t('usage.quota.timeUnknown') })}{provider.provenance.identityVerified ? '' : ` · ${t('usage.quota.identityUnverified')}`}</p>}
       {commonReset !== null && <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} />}
-      {hasReading && <div className="flex flex-col gap-3">
+      {hasReading && <div className={`flex flex-col ${preferences.compact ? 'gap-1.5' : 'gap-3'}`}>
         {windows.slice(0, 3).map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} now={now} dateMode={dateMode} />)}
         {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
       </div>}

@@ -48,8 +48,8 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
       const vars = { provider: value.label, window: localizeQuotaWindowLabel(locale, value.provider, {
         id: value.windowId, label: value.windowLabel, groupLabel: value.windowGroupLabel, periodSeconds: value.windowPeriodSeconds,
       }), percent: value.kind === 'reset'
-        ? Math.round(100 - value.usedPercent) : value.kind === 'threshold-90' ? 90 : 70 };
-      const title = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetTitle' : 'native.quota.thresholdTitle', vars);
+        ? Math.round(100 - value.usedPercent) : value.kind === 'depleted' ? 100 : value.kind === 'threshold-90' ? 90 : 70 };
+      const title = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetTitle' : value.kind === 'depleted' ? 'native.quota.depletedTitle' : 'native.quota.thresholdTitle', vars);
       const body = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetBody' : 'native.quota.thresholdBody', vars)
         + (reset ? nativeText(locale, 'native.quota.resetsAt', { time: reset }) : '');
       void sendNotification(title, body).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));

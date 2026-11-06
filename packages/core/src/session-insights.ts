@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import type { SessionActivity } from './session-observation.js';
 import type { SessionMessage } from './session-metrics.js';
 import { sessionResumeCommand } from './session-resume.js';
+import { diagnoseSession, operationForCall, operationForResult, operationProjectKey, type SessionOperation, type SessionDiagnostics } from './session-diagnostics.js';
+import { sessionDispatches, type SessionDispatch } from './session-dispatch.js';
 
 export type SessionRelationKind = 'fork' | 'subagent' | 'unknown';
 /** Non-recursive usage snapshot for details, including targeted history responses. */
@@ -13,13 +15,18 @@ export type SessionRelatedUsage = Pick<SessionActivity, 'source' | 'sessionId' |
 };
 export interface SessionEvidence {
   source: string; sessionId: string; id: string; timestamp: string;
-  kind: 'metadata' | 'request' | 'turn' | 'tool' | 'retry' | 'error' | 'compaction' | 'coverage';
+  kind: 'metadata' | 'request' | 'turn' | 'tool' | 'tool-result' | 'retry' | 'error' | 'compaction' | 'coverage';
+  operation?: SessionOperation;
+  projectKey?: string;
+  sessionStart?: boolean;
   complete?: boolean;
   parentId?: string; relationKind?: SessionRelationKind; relationConflict?: boolean; agentRole?: string; agentNickname?: string;
   workingDirectory?: string; projectId?: string; model?: string; turnId?: string;
   edit?: boolean; outputTokens?: number; durationMs?: number; ttftMs?: number;
 }
 export interface SessionInsights {
+  diagnostics?: SessionDiagnostics;
+  dispatches?: SessionDispatch[];
   parentId: string | null; relationKind: SessionRelationKind; relationConflict: boolean; orphan: boolean;
   agentRole: string | null; agentNickname: string | null; workingDirectory: string | null;
   firstActivityAt: string | null; messageCount: number | null; ownTokens: number | null; ownCostUsd: number | null;
@@ -37,7 +44,7 @@ const str = (v: unknown): string => typeof v === 'string' ? v : '';
 const num = (v: unknown): number | undefined => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const transient = new WeakMap<object, { prompt?: string; nodes: Map<string, number>; requests:Map<string,{start:number|undefined;first:boolean;output:number|undefined}> }>();
-export interface EvidenceContext { sessionId: string; insightTurnId?: string; insightModel?: string; insightStart?: number; insightOutputAt?: number; insightTotalTokens?: number; insightBlocked?: boolean }
+export interface EvidenceContext { sessionId: string; insightProjectKey?: string; insightTurnId?: string; insightModel?: string; insightStart?: number; insightOutputAt?: number; insightTotalTokens?: number; insightBlocked?: boolean }
 /** Only allowlisted metadata survives this function. Tool inputs and prompt fingerprints never enter the context or result. */
 export function extractSessionEvidence(source: string, record: Obj, context: EvidenceContext): SessionEvidence[] {
   const p = obj(record.payload), m = obj(record.message);
@@ -55,19 +62,20 @@ export function extractSessionEvidence(source: string, record: Obj, context: Evi
     const parents = [spawn.parent_thread_id, origin.parent_thread_id, p.parent_thread_id, p.forked_from_id].map(str).filter(Boolean);
     const parent = parents[0], kind = str(p.thread_kind ?? p.thread_source);
     const subagent = Object.keys(origin).length > 0 || kind === 'subagent' || Boolean(p.parent_thread_id);
-    emit('metadata', 'session', { ...(parent ? { parentId: parent, relationKind: subagent ? 'subagent' : 'fork', relationConflict: new Set(parents).size > 1 } : {}), workingDirectory: str(p.cwd), agentRole: str(p.agent_role ?? spawn.agent_role), agentNickname: str(p.agent_nickname ?? spawn.agent_nickname) });
+    context.insightProjectKey = operationProjectKey(str(p.cwd));
+    emit('metadata', 'session', { sessionStart: true, projectKey: context.insightProjectKey, ...(parent ? { parentId: parent, relationKind: subagent ? 'subagent' : 'fork', relationConflict: new Set(parents).size > 1 } : {}), workingDirectory: str(p.cwd), agentRole: str(p.agent_role ?? spawn.agent_role), agentNickname: str(p.agent_nickname ?? spawn.agent_nickname) });
   }
   if (source === 'codex' && record.type === 'turn_context') {
     if(str(p.turn_id)!==context.insightTurnId){context.insightStart=Date.parse(clock);context.insightOutputAt=undefined;context.insightBlocked=false;}
     context.insightTurnId = str(p.turn_id) || context.insightTurnId;
     context.insightModel = str(p.model) || context.insightModel;
-    if (str(p.cwd)) emit('metadata', 'cwd', { workingDirectory: str(p.cwd) });
+    if (str(p.cwd)) { context.insightProjectKey = operationProjectKey(str(p.cwd)); emit('metadata', 'cwd', { workingDirectory: str(p.cwd), projectKey: context.insightProjectKey }); }
   }
   if (source === 'dsh' && record.type === 'session') {
     context.sessionId = str(record.id) || context.sessionId;
     if (str(record.parentSession)) emit('metadata', 'parent', { parentId: str(record.parentSession), relationKind: 'fork' });
   }
-  if (source === 'claude' && str(record.cwd)) emit('metadata', 'cwd', { workingDirectory: str(record.cwd) });
+  if (source === 'claude' && str(record.cwd)) { context.insightProjectKey = operationProjectKey(str(record.cwd)); emit('metadata', 'cwd', { workingDirectory: str(record.cwd), projectKey: context.insightProjectKey }); }
   const turnId = str(p.turn_id) || context.insightTurnId;
   if (source === 'codex' && record.type === 'event_msg') {
     if (p.type === 'task_started') { context.insightTurnId = str(p.turn_id) || context.insightTurnId; emit('turn', p.turn_id ?? record.timestamp, { turnId }); }
@@ -96,7 +104,13 @@ export function extractSessionEvidence(source: string, record: Obj, context: Evi
     const name = str(tool.name).toLowerCase().replace(/^(functions|tools)\./, '');
     const id = tool.call_id ?? tool.id;
     if (!id) continue;
-    emit('tool', id, { turnId: source === 'claude' ? str(record.parentUuid) || undefined : turnId, edit: ['apply_patch', 'edit', 'write', 'multiedit', 'notebookedit'].includes(name) });
+    emit('tool', id, { operation: operationForCall(name, tool.input ?? tool.arguments, context.insightProjectKey), turnId: source === 'claude' ? str(record.parentUuid) || undefined : turnId, edit: ['apply_patch', 'edit', 'write', 'multiedit', 'notebookedit'].includes(name) });
+  }
+  const results = source === 'claude' && record.type === 'user' && Array.isArray(m.content) ? m.content.map(obj).filter(x => x.type === 'tool_result')
+    : source === 'codex' && record.type === 'response_item' && ['function_call_output', 'custom_tool_call_output'].includes(str(p.type)) ? [p] : [];
+  for (const result of results) {
+    const id = result.tool_use_id ?? result.call_id;
+    if (id) emit('tool-result', id, { operation: operationForResult(result.content ?? result.output) });
   }
   const human = source === 'claude' && record.type === 'user' && !record.isMeta && !record.isCompactSummary
     ? m.content : source === 'codex' && record.type === 'response_item' && p.type === 'message' && p.role === 'user' ? p.content : undefined;
@@ -118,7 +132,7 @@ export function extractSessionEvidence(source: string, record: Obj, context: Evi
 
 const key = (source: string, id: string) => JSON.stringify([source, id]);
 const sumKnown = (rows: SessionActivity[], field: 'tokens' | 'costUsd'): number | null => rows.some(r => (field==='costUsd'?r.insights?.ownCostUsd:r.tokens) == null) ? null : rows.reduce((s, r) => s + (field==='costUsd'?r.insights?.ownCostUsd??0:r.tokens??0), 0);
-export function enrichSessionInsights(rows: SessionActivity[], messages: readonly SessionMessage[], evidence: readonly SessionEvidence[]): void {
+export function enrichSessionInsights(rows: SessionActivity[], messages: readonly SessionMessage[], evidence: readonly SessionEvidence[], candidates: readonly SessionActivity[] = rows): void {
   const grouped = new Map<string, SessionEvidence[]>(), messageGroups = new Map<string, SessionMessage[]>();
   const unique = new Map(evidence.map(e => [key(e.source, `${e.sessionId}:${e.id}`), e]));
   const forks=new Map<string,string>();for(const e of unique.values())if(e.kind==='metadata'&&e.relationKind==='fork'&&e.parentId)forks.set(key(e.source,e.sessionId),e.parentId);
@@ -147,7 +161,9 @@ export function enrichSessionInsights(rows: SessionActivity[], messages: readonl
       firstActivityAt: scopedMessages.map(m=>m.timestamp).sort()[0] ?? null, messageCount: scopedMessages.length?new Set(scopedMessages.map(m=>m.id)).size:complete?0:null, ownTokens: row.tokens, ownCostUsd: ownCost, subagentTokens: 0, subagentCostUsd: 0, combinedTokens: row.tokens, combinedCostUsd: ownCost, combinedKnownCostUsd: row.costUsd ?? 0, descendantCount: 0,
       performance: { tokensPerSecond: duration > 0 ? output / (duration / 1000) : null, estimatedRequestCount: requests.length, estimatedDurationMs: duration || null, ttftMs: ttft.length ? ttft.reduce((s,e)=>s+e.ttftMs!,0)/ttft.length : null, ttftSampleCount: ttft.length, kind: 'estimated' },
       signals: { toolCalls: tools.length || (complete?0:null), editTurns, retryTurns: retries || (complete?0:null), firstPass: complete&&editTurns!==null&&editTurns>0?editTurns===1&&retries===0:null, errorCount: events.filter(e=>e.kind==='error').length || (complete?0:null), compactionCount: events.filter(e=>e.kind==='compaction').length || (complete?0:null), costPerEdit: editTurns && ownCost !== null ? ownCost/editTurns : null, tokensPerEdit: editTurns && row.tokens !== null ? row.tokens/editTurns : null, coverage: supported ? complete?'complete':'partial' : 'unsupported' },
-      resumeCommand: resume ? [resume.executable, ...resume.args].join(' ') : null };
+      resumeCommand: resume ? [resume.executable, ...resume.args].join(' ') : null,
+      diagnostics: diagnoseSession(row, events, candidates, supported ? complete ? 'complete' : 'partial' : 'unsupported'),
+      dispatches: sessionDispatches(row, events, evidence, candidates) };
   }
   // Disconnect all participants in a cycle; never hide or remove a session.
   for (const row of rows) {

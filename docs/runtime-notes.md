@@ -24,6 +24,8 @@ Desktop 已运行时，另开 `quotern start` 会作为 observer 提供浏览器
 
 ## Hook 与后台轮询
 
+可选 Agent 行为 Hook 与现有采集 Hook 分开管理；配置、交接、Claude 插件和真实请求的边界见 [Agent 集成](agent-integrations.md)。`/functions/tud-agent` 要求本机请求，写操作还需要运行实例的动作 token；演示模式不注册此路由。自动开窗复用成功额度观测，但必须由当前 runtime owner 执行，开发隔离时禁用。
+
 Claude / Codex Hook 写入 `notify.signal`，常驻进程监听后调度同步。当前脚本为 POSIX 的 `notify.sh` 和 Windows 的 `notify.cmd` / `notify.ps1`，不需要在每次通知时启动 CLI。
 
 后台轮询以 1 分钟为起点，同一档位连续 3 个空轮次后逐步退避到 2、5 分钟；下一轮在上一轮完成后安排。Cursor 后台拉取还有 5 分钟最小间隔，手动或 Hook 触发不按该后台间隔限制。数值见 [paths.ts](../packages/core/src/paths.ts)。
@@ -47,6 +49,8 @@ worker 的启动请求合并，每代进程仅处理自己的消息与等待请�
 原生 SIGTRAP 应保持致命信号语义，普通 SIGTERM / SIGINT / exit 清理监听继续保留，见 [native-crash-signals.ts](../apps/desktop/src/main/native-crash-signals.ts) 及[对应测试](../apps/desktop/src/main/native-crash-signals.test.ts)。
 
 ## 窗口与 IPC 初始化
+
+托盘面板的固定状态与位置保存为 Electron userData 下的 `tray-panel.json`。固定后可拖动标题且失焦保持显示；恢复时按当前显示器工作区夹回可见位置。取消固定恢复原失焦隐藏行为，Escape 仍可暂时隐藏。仅使用本实例的窗口与状态，不影响其他 worktree。
 
 主窗口关闭后销毁 BrowserWindow 和 renderer，应用继续驻留托盘；用户再次打开时重建窗口。静默登录启动只影响第一次显示，后续明确的打开请求应正常显示窗口。
 

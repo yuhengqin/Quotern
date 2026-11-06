@@ -146,9 +146,9 @@ export function analyzeQuota(window: QuotaWindow, history: QuotaSample[], now: n
 }
 
 export interface QuotaObservation extends QuotaSample { crossed: number[]; highest: number }
-export type QuotaAlertKind = 'threshold-70' | 'threshold-90' | 'reset';
+export type QuotaAlertKind = 'threshold-70' | 'threshold-90' | 'depleted' | 'reset';
 export function evaluateQuotaAlerts(previous: QuotaObservation | null, current: QuotaSample, kind: string): { observation: QuotaObservation; alerts: QuotaAlertKind[] } {
-  const thresholds = kind === 'five-hour' || kind === '5h' ? [90] : [70, 90];
+  const thresholds = kind === 'five-hour' || kind === '5h' ? [90, 100] : [70, 90, 100];
   const baseline = () => ({ ...current, crossed: thresholds.filter(value => current.usedPercent >= value), highest: current.usedPercent });
   if (!previous) return { observation: baseline(), alerts: [] };
   if (current.at <= previous.at) return { observation: previous, alerts: [] };
@@ -158,7 +158,7 @@ export function evaluateQuotaAlerts(previous: QuotaObservation | null, current: 
   if (reset && previous.highest >= thresholds[0] && previous.usedPercent - current.usedPercent >= 10) alerts.push('reset');
   if (reset) return { observation: baseline(), alerts };
   for (const threshold of thresholds) if (!crossed.includes(threshold) && previous.usedPercent < threshold && current.usedPercent >= threshold) {
-    crossed.push(threshold); alerts.push(`threshold-${threshold}` as QuotaAlertKind);
+    crossed.push(threshold); alerts.push(threshold === 100 ? 'depleted' : `threshold-${threshold}` as QuotaAlertKind);
   }
   return { observation: { ...current, resetsAt: current.resetsAt ?? previous.resetsAt, crossed, highest: Math.max(previous.highest, current.usedPercent) }, alerts };
 }

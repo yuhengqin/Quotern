@@ -25,6 +25,8 @@
 
 ## JSONL 尾部与文件变化
 
+Muse 的 `model_completed` / `automated_review_completed` 以事件 ID 去重，输入计数包含缓存，普通输入扣除缓存读写。变化文件重读数值投影，按前后桶差额处理重写与后到项目元数据；保留帧只解析一层 `children[].record_json`，不递归任意正文。Muse 额度保留 `asOfMs`，无身份的缓存不用于可信账号提醒或自动请求。
+
 使用 [JsonlLineReader](../packages/core/src/parsers/jsonl-tail.ts) 返回的 `nextOffset` 保存字节偏移，不能用开始扫描时的文件大小代替实际消费位置。
 
 - 带换行的完整记录可以推进游标；损坏的已换行记录会被越过，避免永久卡住。

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { museRecords, orderedMuseFiles } from './parsers/muse.js';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
@@ -19,7 +20,7 @@ import { createCodexLineReader } from './parsers/codex-log-reader.js';
 import { localDateAndHour } from './timezone.js';
 import { inTimeBounds } from './usage-window.js';
 
-const VERSION = 11;
+const VERSION = 12;
 interface FileSnapshot {
   evidence?: Record<string, SessionEvidence>;
   complete: boolean;
@@ -56,7 +57,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     if (!pending) {
       pending = (async () => {
         const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-        if (![3, 4, 5, 6, 7, 8, 9, 10, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+        if (![3, 4, 5, 6, 7, 8, 9, 10, 11, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
         const after = await stat(path);
         // A sync may rename a newer snapshot while this read is in flight.
         if (`${after.mtimeMs}:${after.ctimeMs}:${after.size}:${after.ino}` !== stamp) return loadSource(path, source);
@@ -181,6 +182,7 @@ export async function syncSessionSource(
         const addObservation = (event: SessionObservation) => {
           if(event.cumulative){const latest=Object.values(observations).filter(e=>e.cumulative&&e.sessionId===event.sessionId).sort((a,b)=>b.timestamp.localeCompare(a.timestamp))[0];if(latest?.tokens===event.tokens)return;}
           const key = JSON.stringify([event.sessionId, event.id]);
+          if (source === 'muse' && observations[key]) return;
           observations[key] = mergeSessionObservation(observations[key], event);
         };
         const addTiming = (event: SessionTimingEvent) => {
@@ -194,6 +196,8 @@ export async function syncSessionSource(
           for await (const line of reader) {
             let record: Record<string, unknown>;
             try { record = JSON.parse(line) as Record<string, unknown>; } catch { fileComplete = false; continue; }
+            for (const item of source === 'muse' ? museRecords(record) : [record]) {
+            const record = item;
             const message = extractSessionMessage(source, record, context);
             const named = extractSessionTitle(source, record, context.sessionId);
             if (named && named.value.priority >= (titles[named.sessionId]?.priority ?? 0)) titles[named.sessionId] = named.value;
@@ -201,6 +205,7 @@ export async function syncSessionSource(
             for (const observation of extractSessionObservations(source, record, context)) addObservation(observation);
             for (const event of extractSessionEvidence(source, record, context)) {const {workingDirectory: _localDirectory,...safe}=event; evidence[JSON.stringify([event.sessionId,event.id])] = safe;}
             for (const event of extractSessionTimingEvents(source, record, context, message)) addTiming(event);
+            }
           }
           offset = source === 'codex' && input.kind === 'zstd' ? st.size : reader.nextOffset;
         } else {
@@ -213,6 +218,7 @@ export async function syncSessionSource(
           for (const event of snapshotObservations) addObservation(event);
         }
         fileComplete = fileComplete && !context.incomplete && (source !== 'kimi' || context.kimiContext === true);
+        if (source === 'muse' && context.projectLabel) for (const observation of Object.values(observations)) observation.projectLabel = context.projectLabel;
         if (source === 'codex' && context.legacyCodexMessages && !context.canonicalCodexMessages) fileComplete = false;
         if(['codex','claude'].includes(source))for(const sessionId of new Set([...Object.values(messages).map(m=>m.sessionId),...Object.values(observations).map(e=>e.sessionId)])) {
           const clocks=[...Object.values(messages).filter(m=>m.sessionId===sessionId).map(m=>m.timestamp),...Object.values(observations).filter(e=>e.sessionId===sessionId).map(e=>e.timestamp)].sort();
@@ -286,9 +292,10 @@ export async function readSessionHistory(
       const key = sessionTitleKey(source, id);
       if (value.priority >= (titles.get(key)?.priority ?? 0)) titles.set(key, value);
     }
-    for (const file of Object.values(stored.files)) for (const event of Object.values(file.observations ?? {})) {
+    for (const file of source === 'muse' ? orderedMuseFiles(stored.files) : Object.values(stored.files)) for (const event of Object.values(file.observations ?? {})) {
       if(source==='dsh'&&file.context.parentId&&event.seq!==undefined&&event.seq<=(file.context.inheritedThrough??-1))continue;
-      const key = JSON.stringify([event.source, event.sessionId, event.id]);
+      const key = JSON.stringify([event.source, source === 'muse' ? '' : event.sessionId, event.id]);
+      if (source === 'muse' && observations.has(key)) continue;
       observations.set(key, mergeSessionObservation(observations.get(key), event));
     }
   }

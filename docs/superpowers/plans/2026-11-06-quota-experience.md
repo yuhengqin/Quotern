@@ -66,3 +66,11 @@
 ## Claude 权益数据边界
 
 已核对现有 `claude-subscription.ts`、`claude-usage-parser.ts`、本机 Claude Code 2.1.318 的公开帮助及官方命令说明。当前可验证路线仍是已登录 CLI 的百分比额度窗口，未验证个人订阅额外用量金额、赠送余额、session credits 或重置批次/到期字段。参考项目通过 Claude.ai 网页会话访问内部组织路由，字段语义与本项目 CLI 契约不能等同。本次保留 CLI 读取，在详情提供 `https://claude.ai/settings/usage` 入口，不增加空权益面板，不读取浏览器 Cookie。完整自动接入需另有可信数据契约或脱敏样本；本次未宣称该能力已经实现。
+
+## 设置追补：默认提醒、生产入口与自定义快捷键
+
+- 按后续要求将服务故障/恢复提醒的默认值改为开启，已保存的明确关闭值不覆盖。测试通知仅在 Vite 开发 renderer 显示，生产 preview / 安装包不注册测试 IPC。快捷键开关文案改为「打开额度面板」，提供组合键名称输入、保存和四语言错误反馈。
+- Core 共享组合键校验与平台别名解析；主进程预约新注册后持久化，成功才释放旧注册，保存失败释放预约而保留旧注册。关闭保留组合，退出释放自身注册。独立只读审查发现的旧快捷键错误遮盖其他设置保存失败问题已修复，并通过真实 IPC 的磁盘失败场景验证。
+- Core 全量测试 759 通过、2 跳过，Core 脚本 16/16；Desktop 编译后测试 810 通过、20 跳过，Desktop 脚本 47/47；Vite Core 源码解析 4/4，四语言目录 1/1。Core / Desktop 构建、两端类型检查及 `git diff --check` 通过。本轮未重复根目录全仓测试。
+- 在独立 Electron profile、禁用全部订阅读取通道的配置下，以真实主进程 quota runtime、生产 preload / renderer 完成 12 项检查：默认提醒开启、生产按钮隐藏及测试 IPC 不可用、输入验证及错误关联、Windows 原生注册、冲突保留原组合、其他设置保存失败仍可见、解除冲突后替换、quota runtime 重建后从磁盘恢复、关闭保留选择、关闭时保存不遗留注册、窄屏无页面溢出。已查看正常、冲突、保存失败和窄屏截图。原生冲突由同进程的另一独立注册制造，不声称已枚举或识别其他应用的快捷键。
+- 日志位于 `.quotern-dev/quota-shortcut-core-test.log`、`quota-shortcut-desktop-test.log`、`quota-shortcut-build-final.log`；实际页面及 IPC 验收结果位于 `.quotern-dev/quota-shortcut-acceptance-1793955192207/result.json`。本轮没有重复物理按键触发、通知送达或 macOS/Linux 实机检查，也未生成安装器。

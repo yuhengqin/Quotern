@@ -9,7 +9,7 @@ import { resolveDataDir } from 'quotern-core';
 import { quotaFetch, recoverQuotaNetwork } from './quota-fetch';
 import { nativeText } from './native-messages';
 import { createQuotaShortcut } from './quota-shortcut';
-import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET } from '../shared/quota-desktop';
+import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET, QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut } from '../shared/quota-desktop';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
@@ -37,7 +37,7 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
   const manager = await createQuotaRuntime({ directory: path.join(app.getPath('userData'), 'quota'), fetch: quotaFetch,
     snapshot: { directory: resolveDataDir(), runtime: 'desktop' },
     onChanged: state => {
-      shortcut.setEnabled(state.preferences.quotaShortcut === true);
+      shortcut.setEnabled(state.preferences.quotaShortcut === true, state.preferences.quotaShortcutAccelerator);
       for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(QUOTA_CHANGED, state);
       options.onChanged(state);
     },
@@ -61,7 +61,7 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
     },
   });
   activeManager = manager;
-  shortcut.setEnabled(manager.getState().preferences.quotaShortcut === true);
+  shortcut.setEnabled(manager.getState().preferences.quotaShortcut === true, manager.getState().preferences.quotaShortcutAccelerator);
   for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET]) ipcMain.removeHandler(channel);
   ipcMain.handle(QUOTA_GET, () => { const state = manager.getState(); void manager.refresh('interaction'); return state; });
   ipcMain.handle(QUOTA_REFRESH, (_event, id: unknown) => {
@@ -71,16 +71,28 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
   let settingsQueue = Promise.resolve();
   ipcMain.handle(QUOTA_SET, (_event, patch: QuotaPreferencePatch) => {
     const pending = settingsQueue.then(async () => {
-      const wasEnabled = manager.getState().preferences.quotaShortcut === true;
-      if (patch?.quotaShortcut === true && !shortcut.setEnabled(true)) throw new Error('QUOTA_SHORTCUT_UNAVAILABLE');
-      try { return await manager.setPreferences(patch); }
-      catch (error) { shortcut.setEnabled(wasEnabled); throw error; }
+      if (patch?.quotaShortcut === undefined && patch?.quotaShortcutAccelerator === undefined) return manager.setPreferences(patch);
+      const preferences = manager.getState().preferences;
+      // Disabling an unavailable shortcut must remain possible without registering it first.
+      if (patch.quotaShortcut === false && patch.quotaShortcutAccelerator === undefined) {
+        const state = await manager.setPreferences(patch);
+        shortcut.setEnabled(false);
+        return state;
+      }
+      const accelerator = normalizeQuotaShortcut(patch.quotaShortcutAccelerator !== undefined
+        ? patch.quotaShortcutAccelerator : preferences.quotaShortcutAccelerator ?? QUOTA_SHORTCUT_ACCELERATOR);
+      if (!accelerator) throw new Error('QUOTA_SHORTCUT_INVALID');
+      return shortcut.save(patch.quotaShortcut ?? (preferences.quotaShortcut === true), accelerator,
+        () => manager.setPreferences({ ...patch, quotaShortcutAccelerator: accelerator }));
     });
     settingsQueue = pending.then(() => {}, () => {});
     return pending;
   });
   ipcMain.handle(QUOTA_SHORTCUT_GET, () => shortcut.isRegistered());
-  ipcMain.handle(QUOTA_TEST_NOTIFICATION, () => sendNotification(nativeText(options.getLocale(), 'native.quota.testTitle'), nativeText(options.getLocale(), 'native.quota.testBody')));
+  // A production preview is unpackaged too; only the Vite dev renderer exposes this action.
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
+    ipcMain.handle(QUOTA_TEST_NOTIFICATION, () => sendNotification(nativeText(options.getLocale(), 'native.quota.testTitle'), nativeText(options.getLocale(), 'native.quota.testBody')));
+  }
   let locked = powerMonitor.getSystemIdleState(60) === 'locked';
   let constrained = powerMonitor.isOnBatteryPower();
   const signals = () => manager.setSignals(locked, constrained);

@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { DEFAULT_QUOTA_PREFERENCES, type QuotaPreferences, type QuotaProfile, type QuotaSample } from '../shared/quota.js';
 import { isSubscriptionChannelVisibility, SUBSCRIPTION_CHANNELS } from '../shared/subscription-channels.js';
+import { normalizeQuotaShortcut } from '../shared/quota-shortcut.js';
 
 export type QuotaHistory = Record<string, QuotaSample[]>;
 export function pruneQuotaHistory(history: QuotaHistory, now: number): boolean {
@@ -41,6 +42,7 @@ export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferenc
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const raw = value as Record<string, unknown>;
   return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline', 'serviceAlerts', 'quotaShortcut'].includes(key) ? typeof value === 'boolean'
+    : key === 'quotaShortcutAccelerator' ? normalizeQuotaShortcut(value) !== null
     : key === 'resetTimeMode' ? value === 'countdown' || value === 'date'
     : key === 'serviceComponents' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([id, ids]) =>
       SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && Array.isArray(ids) && ids.length <= 200 && new Set(ids).size === ids.length && ids.every(item => typeof item === 'string' && /^[a-zA-Z0-9_-]{1,300}$/.test(item))))

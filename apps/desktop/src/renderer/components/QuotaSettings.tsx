@@ -1,30 +1,56 @@
 import { useEffect, useId, useState } from 'react';
-import { Button, Checkbox, Label, ListBox, Select } from '@heroui/react';
+import { Button, Checkbox, Description, FieldError, Input, Label, ListBox, Select, TextField } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { SUBSCRIPTION_CHANNELS } from '../../shared/subscription-channels';
 import type { QuotaPaceModel, QuotaPreferencePatch } from '../../shared/quota';
 import { useQuotaState } from '../hooks/useQuotaState';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
+import { QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut, resolveQuotaShortcut } from '../../shared/quota-desktop';
+
+function displayShortcut(value: string): string {
+  return (resolveQuotaShortcut(value, window.tud.platform) ?? value).replaceAll('Control', 'Ctrl').replaceAll('Command', 'Cmd')
+    .replaceAll('Super', window.tud.platform === 'win32' ? 'Win' : 'Super');
+}
 
 export function QuotaSettings() {
   const { t } = useTranslation();
   const { state, error, save } = useQuotaState();
   const [saving, setSaving] = useState(false);
   const [shortcutIssue, setShortcutIssue] = useState(false);
+  const [shortcutDraft, setShortcutDraft] = useState('');
+  const [shortcutError, setShortcutError] = useState<'invalid' | 'unavailable' | 'saveFailed' | null>(null);
+  const [shortcutSaved, setShortcutSaved] = useState(false);
+  const [saveErrorSource, setSaveErrorSource] = useState<'shortcut' | 'other' | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'shown' | 'requested' | 'failed' | null>(null);
+  const savedAccelerator = state?.preferences.quotaShortcutAccelerator ?? QUOTA_SHORTCUT_ACCELERATOR;
+  useEffect(() => { setShortcutDraft(displayShortcut(savedAccelerator)); }, [savedAccelerator]);
   useEffect(() => {
     let active = true;
+    setShortcutIssue(false);
     if (state?.preferences.quotaShortcut) void window.tud.quota.isShortcutRegistered().then(registered => { if (active) setShortcutIssue(!registered); }).catch(() => { if (active) setShortcutIssue(true); });
     return () => { active = false; };
-  }, [state?.preferences.quotaShortcut]);
+  }, [state?.preferences.quotaShortcut, savedAccelerator]);
   const paceLabelId = useId();
   const paceTriggerId = `${paceLabelId}-trigger`;
   const apply = async (patch: QuotaPreferencePatch) => {
-    setSaving(true); setShortcutIssue(false);
+    setSaving(true); setSaveErrorSource('other');
     try { await save(patch); }
-    catch (cause) { if (String(cause).includes('QUOTA_SHORTCUT_UNAVAILABLE')) setShortcutIssue(true); }
+    catch { /* useQuotaState presents the persistence failure. */ }
     finally { setSaving(false); }
+  };
+  const saveShortcut = async (enabled = state?.preferences.quotaShortcut === true) => {
+    setShortcutSaved(false); setShortcutError(null);
+    const accelerator = normalizeQuotaShortcut(shortcutDraft);
+    if (!accelerator || !resolveQuotaShortcut(accelerator, window.tud.platform)) { setShortcutError('invalid'); return; }
+    setSaving(true); setSaveErrorSource('shortcut');
+    try {
+      await save({ quotaShortcut: enabled, quotaShortcutAccelerator: accelerator });
+      setShortcutDraft(displayShortcut(accelerator)); setShortcutIssue(false); setShortcutSaved(true);
+    } catch (cause) {
+      setShortcutError(String(cause).includes('QUOTA_SHORTCUT_UNAVAILABLE') ? 'unavailable'
+        : String(cause).includes('QUOTA_SHORTCUT_INVALID') ? 'invalid' : 'saveFailed');
+    } finally { setSaving(false); }
   };
   const testNotification = async () => {
     setTesting(true); setTestResult(null);
@@ -34,7 +60,7 @@ export function QuotaSettings() {
   if (!state) return <p role="status" className="text-sm text-muted">{t(error ? 'desktop.quota.readFailed' : 'desktop.quota.loading')}</p>;
   const prefs = state.preferences;
   return <div className="flex flex-col gap-5">
-    {(error || state.notice) && !shortcutIssue && <p role="status" className="text-sm text-warning">{t(error ? 'desktop.quota.saveFailed' : 'desktop.quota.noticeGeneric')}</p>}
+    {(error || state.notice) && (!shortcutError || saveErrorSource !== 'shortcut') && <p role="status" className="text-sm text-warning">{t(error ? 'desktop.quota.saveFailed' : 'desktop.quota.noticeGeneric')}</p>}
     <div className="flex items-center gap-1">
       <p className="text-sm font-medium">{t('desktop.quota.title')}</p>
       <SettingsHelpPopover title={t('desktop.quota.title')}>
@@ -52,15 +78,33 @@ export function QuotaSettings() {
         <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>{t(labelKey)}</Checkbox.Content>
       </Checkbox>)}
     </div>
-    <div className="flex flex-col items-start gap-2">
+    {import.meta.env.DEV && <div className="flex flex-col items-start gap-2">
       <Button size="sm" variant="secondary" isDisabled={testing} onPress={() => void testNotification()}>{t(testing ? 'desktop.quota.testing' : 'desktop.quota.testNotification')}</Button>
       {testResult && <p role="status" className={`text-xs ${testResult === 'failed' ? 'text-danger' : 'text-muted'}`}>{t(`desktop.quota.test.${testResult}`)}</p>}
-    </div>
+    </div>}
     <div className="flex flex-col gap-2">
-      <Checkbox isSelected={prefs.quotaShortcut === true} isDisabled={saving} onChange={value => void apply({ quotaShortcut: value })}>
-        <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>{t('desktop.quota.shortcut', { keys: window.tud.platform === 'darwin' ? '⌘⇧U' : 'Ctrl+Shift+U' })}</Checkbox.Content>
+      <Checkbox isSelected={prefs.quotaShortcut === true} isDisabled={saving} onChange={value => {
+        setShortcutError(null); setShortcutSaved(false);
+        if (value) void saveShortcut(true); else void apply({ quotaShortcut: false });
+      }}>
+        <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>{t('desktop.quota.shortcut')}</Checkbox.Content>
       </Checkbox>
-      {shortcutIssue && <p role="status" className="text-xs text-amber-700 dark:text-amber-400">{t('desktop.quota.shortcutUnavailable')}</p>}
+      <div className="flex w-full max-w-md flex-wrap items-start gap-2">
+        <TextField className="min-w-0 flex-1 basis-48" value={shortcutDraft} isDisabled={saving} isInvalid={shortcutError !== null} validationBehavior="aria"
+          onChange={value => { setShortcutDraft(value); setShortcutError(null); setShortcutSaved(false); }}>
+          <Label>{t('desktop.quota.shortcutKeys')}</Label>
+          <Input autoComplete="off" spellCheck={false} maxLength={120} onKeyDown={event => {
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
+              event.preventDefault(); void saveShortcut();
+            }
+          }} />
+          <Description>{t('desktop.quota.shortcutHint', { keys: displayShortcut(QUOTA_SHORTCUT_ACCELERATOR) })}</Description>
+          <div role="status"><FieldError>{shortcutError && t(`desktop.quota.shortcutError.${shortcutError}`)}</FieldError></div>
+        </TextField>
+        <Button className="mt-6" size="sm" variant="secondary" isDisabled={saving} onPress={() => void saveShortcut()}>{t(saving ? 'desktop.quota.shortcutSaving' : 'desktop.quota.shortcutSave')}</Button>
+      </div>
+      {shortcutSaved && <p role="status" className="text-xs text-muted">{t('desktop.quota.shortcutSaved')}</p>}
+      {shortcutIssue && !shortcutError && <p role="status" className="text-xs text-amber-700 dark:text-amber-400">{t('desktop.quota.shortcutUnavailable')}</p>}
     </div>
     <div className="flex w-full max-w-xs flex-col gap-1.5">
       <div className="flex items-center gap-1">

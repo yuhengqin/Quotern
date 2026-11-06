@@ -1,5 +1,6 @@
 import type { SubscriptionChannelId } from './subscription-channels.js';
 import type { QuotaReadDiagnostic } from './quota-diagnostic.js';
+import { QUOTA_SHORTCUT_ACCELERATOR } from './quota-shortcut.js';
 
 export type QuotaPaceModel = 'uniform' | 'workdays' | 'automatic';
 export interface QuotaProfile {
@@ -102,10 +103,12 @@ export interface QuotaPreferences {
   serviceComponents?: Partial<Record<SubscriptionChannelId, string[]>>;
   resetTimeMode?: 'countdown' | 'date';
   quotaShortcut?: boolean;
+  quotaShortcutAccelerator?: string;
 }
 export const DEFAULT_QUOTA_PREFERENCES: QuotaPreferences = {
   thresholdAlerts: true, resetAlerts: true, showSparkline: true, paceModel: 'uniform', channels: {},
-  serviceAlerts: false, serviceComponents: {}, resetTimeMode: 'countdown', quotaShortcut: false,
+  serviceAlerts: true, serviceComponents: {}, resetTimeMode: 'countdown', quotaShortcut: false,
+  quotaShortcutAccelerator: QUOTA_SHORTCUT_ACCELERATOR,
 };
 export interface QuotaState {
   providers: QuotaProviderState[];

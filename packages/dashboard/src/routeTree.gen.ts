@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as DownloadRouteImport } from './routes/download'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AchievementsRouteImport } from './routes/achievements'
@@ -30,6 +31,11 @@ const SessionsRoute = SessionsRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerformanceRoute = PerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DownloadRoute = DownloadRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/achievements': typeof AchievementsRoute
   '/dashboard': typeof DashboardRoute
   '/download': typeof DownloadRoute
+  '/performance': typeof PerformanceRoute
   '/pricing': typeof PricingRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/achievements': typeof AchievementsRoute
   '/dashboard': typeof DashboardRoute
   '/download': typeof DownloadRoute
+  '/performance': typeof PerformanceRoute
   '/pricing': typeof PricingRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/achievements': typeof AchievementsRoute
   '/dashboard': typeof DashboardRoute
   '/download': typeof DownloadRoute
+  '/performance': typeof PerformanceRoute
   '/pricing': typeof PricingRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/dashboard'
     | '/download'
+    | '/performance'
     | '/pricing'
     | '/sessions'
     | '/settings'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/dashboard'
     | '/download'
+    | '/performance'
     | '/pricing'
     | '/sessions'
     | '/settings'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/dashboard'
     | '/download'
+    | '/performance'
     | '/pricing'
     | '/sessions'
     | '/settings'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AchievementsRoute: typeof AchievementsRoute
   DashboardRoute: typeof DashboardRoute
   DownloadRoute: typeof DownloadRoute
+  PerformanceRoute: typeof PerformanceRoute
   PricingRoute: typeof PricingRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/performance': {
+      id: '/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof PerformanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/download': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   AchievementsRoute: AchievementsRoute,
   DashboardRoute: DashboardRoute,
   DownloadRoute: DownloadRoute,
+  PerformanceRoute: PerformanceRoute,
   PricingRoute: PricingRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,

@@ -39,7 +39,7 @@ import {
   localDateNow,
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
-import { getQuotaRuntimeState } from './quota-runtime';
+import { getQuotaRuntimeState, getQuotaRuntimeHistory, getQuotaBackupDirectory } from './quota-runtime';
 import { createRecoverableSync } from './sync-recovery';
 import {
   invalidateSyncWorkerCursors,
@@ -256,6 +256,9 @@ function buildApp(state: {
   return createLocalApiApp({
     sessionActionsIpc: true,
     getQuotaState: getQuotaRuntimeState,
+    getQuotaHistory: getQuotaRuntimeHistory,
+    desktopQuotaDirectory: getQuotaBackupDirectory(),
+    onPricingChange: publishDataSynced,
     dataDir: state.dir,
     getConfig: state.getConfig,
     bucketStore: state.bucketStore,

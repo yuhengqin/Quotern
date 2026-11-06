@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { DEFAULT_QUOTA_PREFERENCES, type QuotaPreferences, type QuotaProfile, type QuotaSample } from '../shared/quota.js';
 import { isSubscriptionChannelVisibility } from '../shared/subscription-channels.js';
+import { withDataTransaction } from '../../data-transaction.js';
 
 export type QuotaHistory = Record<string, QuotaSample[]>;
 export function pruneQuotaHistory(history: QuotaHistory, now: number): boolean {
@@ -88,7 +89,9 @@ export async function openQuotaStore(directory: string): Promise<QuotaStore> {
         && typeof sample.at === 'number' && Number.isFinite(sample.at) && typeof sample.usedPercent === 'number'
         && Number.isFinite(sample.usedPercent) && sample.usedPercent >= 0 && sample.usedPercent <= 100
         && (sample.resetsAt === null || typeof sample.resetsAt === 'number' && Number.isFinite(sample.resetsAt)))
-        .sort((a, b) => a.at - b.at).slice(-50000);
+        .sort((a, b) => a.at - b.at).slice(-50000).map(sample => ({ at: sample.at, usedPercent: sample.usedPercent, resetsAt: sample.resetsAt,
+          ...(typeof sample.durationSeconds === 'number' && Number.isFinite(sample.durationSeconds) && sample.durationSeconds > 0 && sample.durationSeconds <= 366 * 86400 ? { durationSeconds: sample.durationSeconds } : {}),
+          ...(typeof sample.accountRef === 'string' && /^[a-f0-9]{64}$/.test(sample.accountRef) && typeof sample.service === 'string' && /^[a-z0-9-]{1,64}$/.test(sample.service) ? { accountRef: sample.accountRef, service: sample.service } : {}) }));
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') notice ??= '额度历史暂不可用，分析将从新的有效读数开始。';
@@ -96,12 +99,12 @@ export async function openQuotaStore(directory: string): Promise<QuotaStore> {
   let queue = Promise.resolve();
   const save = (file: string, value: unknown) => {
     const serialized = JSON.stringify(value);
-    const pending = queue.then(async () => {
+    const pending = queue.then(() => withDataTransaction(path.dirname(directory), async () => {
       await mkdir(directory, { recursive: true });
       const temporary = path.join(directory, `${file}.${process.pid}.tmp`);
       await writeFile(temporary, serialized, { mode: 0o600 });
       await rename(temporary, path.join(directory, file));
-    });
+    }));
     queue = pending.catch(() => {});
     return pending;
   };

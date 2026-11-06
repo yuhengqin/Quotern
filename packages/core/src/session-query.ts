@@ -11,6 +11,7 @@ import { enrichSessionInsights, type SessionEvidence } from './session-insights.
 import { pageSessionList, selectSessionList, sessionKey, sessionTree, type SessionDetailResponse, type SessionListPage, type SessionListQuery } from './session-list.js';
 import { localDateAndHour } from './timezone.js';
 import { inTimeBounds, type UsageBounds } from './usage-window.js';
+import { buildPerformanceReport, type PerformanceFilters, type PerformanceReport } from './performance-analysis.js';
 
 export interface SessionRangeQuery { days: number; bounds?: UsageBounds; sources?: string[]; collected?: boolean }
 interface RangeState {
@@ -60,7 +61,7 @@ export class SessionQueryService {
     const history = await this.readHistory(this.deps.dataDir, usageSources, options);
     if (this.deps.bucketStore.getRevision() !== bucketRevision) return this.range(query);
     const pricing = getPricingSnapshot();
-    if (pricing.builtin !== this.pricing.builtin || pricing.overlay !== this.pricing.overlay) {
+    if (pricing.builtin !== this.pricing.builtin || pricing.overlay !== this.pricing.overlay || pricing.manual !== this.pricing.manual) {
       this.pricing = pricing; this.ranges.clear(); this.prepared = new WeakMap();
     }
     let historyId = this.historyIds.get(history.observations);
@@ -135,6 +136,11 @@ export class SessionQueryService {
     if (page.range) page.range = { ...page.range, sources: query.sources ?? [] };
     this.labels(page);
     return page;
+  }
+
+  async performance(query: SessionRangeQuery, filters: PerformanceFilters): Promise<PerformanceReport> {
+    const state = await this.range(query);
+    return buildPerformanceReport(state.history.evidence, await this.titled(state), { ...state.options, ...filters });
   }
 
   private async hydrate(state: RangeState, identities?: Set<string>): Promise<SessionActivity[]> {

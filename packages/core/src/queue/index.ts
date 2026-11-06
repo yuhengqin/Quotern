@@ -2,6 +2,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { readdir, readFile, writeFile, appendFile, mkdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { withDataTransaction } from '../data-transaction.js';
 
 import type { ManifestFile, QueueBucket } from '../types.js';
 import { bucketKey, monthFromHourStart } from './keys.js';
@@ -82,6 +83,9 @@ export async function loadRecentBuckets(
 }
 
 export async function clearQueueBuckets(dataDir: string): Promise<void> {
+  return withDataTransaction(dataDir, () => clearQueueBucketsUnlocked(dataDir));
+}
+async function clearQueueBucketsUnlocked(dataDir: string): Promise<void> {
   const dir = queueDir(dataDir);
   if (!existsSync(dir)) return;
   const entries = await readdir(dir);
@@ -93,20 +97,25 @@ export async function clearQueueBuckets(dataDir: string): Promise<void> {
 }
 
 export async function clearCursors(dataDir: string): Promise<void> {
+  return withDataTransaction(dataDir, () => clearCursorsUnlocked(dataDir));
+}
+async function clearCursorsUnlocked(dataDir: string): Promise<void> {
   await writeFile(join(dataDir, 'cursors.json'), '{}\n', 'utf8');
   cursorsCache.set(dataDir, { value: {}, serialized: '{}' });
 }
 
 /** Reset incremental cursors + local queue so the next sync can re-collect. */
 export async function resetLocalUsageCache(dataDir: string): Promise<void> {
-  await clearCursors(dataDir);
-  await clearQueueBuckets(dataDir);
+  await withDataTransaction(dataDir, async () => { await clearCursors(dataDir); await clearQueueBuckets(dataDir); });
 }
 
 export async function appendBuckets(
   dataDir: string,
   buckets: QueueBucket[],
 ): Promise<void> {
+  return withDataTransaction(dataDir, () => appendBucketsUnlocked(dataDir, buckets));
+}
+async function appendBucketsUnlocked(dataDir: string, buckets: QueueBucket[]): Promise<void> {
   if (buckets.length === 0) return;
   const byMonth = new Map<string, QueueBucket[]>();
   for (const b of buckets) {
@@ -240,6 +249,9 @@ export async function loadCursors(dataDir: string): Promise<import('../types.js'
 }
 
 export async function saveCursors(dataDir: string, cursors: import('../types.js').CursorsFile): Promise<void> {
+  return withDataTransaction(dataDir, () => saveCursorsUnlocked(dataDir, cursors));
+}
+async function saveCursorsUnlocked(dataDir: string, cursors: import('../types.js').CursorsFile): Promise<void> {
   // Compact form: this file is rewritten after every sync and can be large
   // (dedup hashes); pretty-printing roughly doubles the serialize/write cost.
   const json = JSON.stringify(cursors);

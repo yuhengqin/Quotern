@@ -1,5 +1,8 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
+@source "../../../../../packages/dashboard/src/components/QuotaHistoryPanel.tsx";
+@source "../../../../../packages/dashboard/src/components/ManualPricingEditor.tsx";
+@source "../../../../../packages/dashboard/src/components/LocalBackupPanel.tsx";
 @import "@heroui/styles";
 @import "../../../../packages/dashboard/src/components/app-toast.css";
 @source "../../../../packages/dashboard/src/components/ThemePreferenceControl.tsx";
@@ -16,6 +19,8 @@
 @source "../../../../packages/dashboard/src/components/DashboardDateRangePicker.tsx";
 @source "../../../../packages/dashboard/src/components/BackToUsageLink.tsx";
 @source "../../../../packages/dashboard/src/pages/SessionsPage.tsx";
+@source "../../../../packages/dashboard/src/pages/PerformancePage.tsx";
+@source "../../../../packages/dashboard/src/components/InsightSelect.tsx";
 @source "../../../../packages/dashboard/src/components/ShareCardActions.tsx";
 @source "../../../../packages/dashboard/src/components/ShareCardCarousel.tsx";
 @source "../../../../packages/dashboard/src/components/ShareBackgroundPicker.tsx";

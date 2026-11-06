@@ -39,7 +39,11 @@ test('a failed worker stop cannot masquerade as an active runtime during update 
     if (id === 'quotern-core') return core;
     if (id === './sync-worker-host') return worker;
     if (id === './evict-cli-autostart') return { evictCliAutostart: noOp };
-    if (id === './quota-runtime') return { getQuotaRuntimeState: () => null };
+    if (id === './quota-runtime') return {
+      getQuotaRuntimeState: () => null,
+      getQuotaRuntimeHistory: () => null,
+      getQuotaBackupDirectory: () => 'fixture/quota',
+    };
     if (id === './sync-recovery') return require('./sync-recovery.js');
     return require(id);
   }, module, module.exports, { log() {}, warn() {}, error() {} });

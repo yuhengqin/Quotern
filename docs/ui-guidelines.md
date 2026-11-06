@@ -107,6 +107,16 @@
 
 ### 业务内复用入口
 
+新增诊断与本地数据管理入口均由 Dashboard 实现，Desktop 路由/设置直接引用，并在 `index.css` 登记 `@source`：
+
+| 能力 | 入口与使用点 | 适用边界及共享方式 |
+| --- | --- | --- |
+| 性能分析 | [PerformancePage](../packages/dashboard/src/pages/PerformancePage.tsx)，两端 `/performance` 与顶栏入口 | 原始样本的首字时间 P50/P95、估算速度、样本数、每日趋势；筛选和比较维度写入 URL，最近样本跳转到既有会话详情。未知指标保持 `—`，没有完整分母时不展示成功率 |
+| 诊断单选 | [InsightSelect](../packages/dashboard/src/components/InsightSelect.tsx)，性能页与额度历史使用 | HeroUI Select + FilterSelectPopover 的有标签单选组合；空值由调用者解释，继承公共键盘、焦点、尺寸和滚动约束 |
+| 额度历史 | [QuotaHistoryPanel](../packages/dashboard/src/components/QuotaHistoryPanel.tsx)，QuotaUsageCard 详情入口 | 按需读取当前账号窗口和周期，分开显示真实周期与实际观察区间；来源、覆盖和效率限制从相邻 HelpPopover 查看，无可归属记录保持空态 |
+| 用户价格 | [ManualPricingEditor](../packages/dashboard/src/components/ManualPricingEditor.tsx)，PricingPage 使用 | USD / 1M 的四项基础单价，留空继承、0 为零价，支持恢复参考价；保存反馈和冲突保留在弹窗，完成后焦点回到保存按钮以继续键盘关闭；演示隐藏 |
+| 本地备份 | [LocalBackupPanel](../packages/dashboard/src/components/LocalBackupPanel.tsx)，两端设置「应用」使用 | 创建/下载、文件校验和恢复到新目录；错误与完成结果靠近操作，恢复不切换当前实例，不覆盖现有目录；大文件受明确上限限制；演示隐藏 |
+
 通知会话定位复用共享 `SessionsPage` 与 `SessionActivityPanel.FocusedSession`：URL 的 `sessionSource + sessionId` 进行精确查询，自动打开详情弹窗；`sessionFocus` 让重复点击同一会话也重新定位。该模式不受列表分页/时间筛选遮挡，并明确显示读取的是已采集历史及服务端实际范围；缺记录时保留目标等待常规同步。关闭详情后焦点回到会话行，常规数据刷新不重新打开已关闭的弹窗。Dashboard 与 Desktop 使用同一页面和详情组件，`useSessionActivity` 两端同步支持目标参数，普通会话列表的筛选与关联展开行为保留。
 关联会话详情复用同一 `SessionDetailDialog` 内的查看栈：名字点击在当前弹窗显示完整子会话详情，顶部“返回上一会话”逐层恢复父会话的范围选择、原生折叠项、滚动和触发器焦点；关闭退出整个查看链，底层路由与列表保持。辅助独立打开链接在浏览器新标签页、Desktop 同文档 `/sessions` 精确目标窗口打开，保留 IPC；窗口 URL 携带 `sessionPeriod=selected` 和实际期间；共享 `session-activity-query` 将其转换为原有来源＋时间边界查询，再由 `FocusedSession` 按身份定位，兼容旧 runtime。原通知链接仍查询已采集历史。`session-detail-cache` 仅在本次弹窗期间缓存完整会话行，摘要行不作为完整详情；打开主会话、关联名称悬停或键盘聚焦时按精确身份、实际期间及列表来源范围读取，最多并发两个请求，重复身份合并。旧 runtime 404 回退来源快照，并复用其中完整兄弟行；关联用量投影不作为完整活动或操作信息。加载、缺记录和失败仍可返回，失败/缺记录可重试；隐藏的父内容不参与焦点和可访问名称。
 
@@ -206,6 +216,7 @@ import { FilterSelectPopover } from './FilterMenu';
 4. 执行相关类型检查和测试。菜单公共入口策略由 [ui-menu-contracts.test.ts](../packages/dashboard/src/lib/ui-menu-contracts.test.ts) 检查两个 renderer 的直接 Select/Autocomplete 浮层用法（含命名导入别名）；它随 Dashboard 现有测试进入 CI。该检查不能代替视觉、滚动和键盘验收，自定义 Popover 的语义及复用由代码审查核对。
 5. 按本节信息呈现矩阵验收默认界面和按需展开后的界面。单/多模型、完整/部分归属、standard/非默认档位、说明隐藏与打开、价格筛选/清除/未匹配都要检查；不能只测“字段存在”。[session-detail-presentation.test.ts](../packages/dashboard/src/lib/session-detail-presentation.test.ts) 和 [pricing-selection.test.ts](../packages/dashboard/src/lib/pricing-selection.test.ts) 随 Dashboard 测试进入三平台 CI；两端构建后运行 `corepack pnpm test:session-detail-ui`，由 [session-detail-smoke.mjs](../apps/desktop/scripts/session-detail-smoke.mjs) 实测 DOM、键盘、Popover 和窄屏。Windows CI 自动执行同一界面脚本。查看截图确认表头圆角、合计行与信息层级；自动断言不能替代视觉判断。
 6. 调整紧凑筛选尺寸后，两端构建并运行 `corepack pnpm test:session-pagination-ui`；[session-pagination-smoke.mjs](../apps/desktop/scripts/session-pagination-smoke.mjs) 同时检查会话列表与总览、分享、价格页的文本可见高度、长模型名称、Agent 图标、厂商选择/清除及焦点返回，覆盖 HTTP / IPC 与宽窄布局。核对生成的截图，不能仅凭字号类名断言文字完整。
+7. 调整性能分析、额度历史、用户价格或本地备份流程后，构建并运行 `corepack pnpm test:keeper-insights-ui`；[keeper-insights-smoke.mjs](../apps/desktop/scripts/keeper-insights-smoke.mjs) 使用独立 Electron 窗口、真实 Core API 与 preload IPC，验证筛选/会话跳转、价格校验/保存/恢复/焦点、额度周期与曲线日期、备份下载/文件校验/目标冲突/真实恢复，以及 Token 单位和四语言。额度来源与原生偏好为合成 fixture；人工核对输出截图，系统文件选择器及真实账号另行验收。
 
 ```bash
 pnpm --filter quotern-dashboard exec tsc --noEmit

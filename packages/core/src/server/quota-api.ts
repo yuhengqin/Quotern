@@ -5,7 +5,7 @@ import { validQuotaPatch } from '../quota/readers/quota-store.js';
 import { isSubscriptionChannelId } from '../quota/shared/subscription-channels.js';
 import { quotaDirectoryKey } from '../quota/snapshot.js';
 
-export type LocalQuotaRuntime = Pick<QuotaManager, 'getState' | 'refresh' | 'setPreferences'>;
+export type LocalQuotaRuntime = Pick<QuotaManager, 'getState' | 'refresh' | 'setPreferences'> & Partial<Pick<QuotaManager, 'getHistory'>>;
 const ROUTE = '/functions/tud-quota';
 const failure = (message: string) => ({ success: false as const, message, data: null });
 const ok = <T>(data: T) => ({ success: true as const, message: 'ok', data });

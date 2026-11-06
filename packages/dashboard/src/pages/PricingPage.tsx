@@ -29,6 +29,7 @@ import {
 import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingComparison } from '../lib/pricing-workbench';
 import { filterSessionPricingGroups, parsePricingSearch } from '../lib/pricing-selection';
 import { HelpPopover } from '../components/HelpPopover';
+import { ManualPricingEditor } from '../components/ManualPricingEditor';
 
 registerMessages(pricingMessages);
 
@@ -178,6 +179,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
         </Button>
         <PricingMoreFilters filters={advancedFilters} onChange={setAdvancedFilters} currency={currency} exchangeRate={exchangeRate} exchangeStatus={exchangeStatus} onManualRate={setManualExchangeRate} onRefreshRate={() => { void refreshExchangeRate(); }} />
         <PricingCalculator scenario={scenario} onChange={setScenario} enabled={estimateEnabled} onEnabledChange={setEstimateEnabled} />
+        <ManualPricingEditor />
       </div>
       {hasFilterChips && <div className="flex shrink-0 flex-wrap items-center gap-1" aria-label={t('pricing.filters.selected')}>
         {sessionModels?.length && <ActiveFilter label={t('usage.detail.sessionModels')} onRemove={() => clearSessionModels()}>{t('usage.detail.sessionModelsCount', { count: sessionModels.length })}</ActiveFilter>}

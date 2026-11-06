@@ -70,6 +70,7 @@ quotern start
 | `quotern statusline` | 从 Claude stdin 显示会话费用、今日估价、上下文和会话平均费用速率 |
 | `quotern demo export --out <文件>` | 将已采集数据匿名化导出为独立演示快照 |
 | `quotern demo start --file <文件>` | 只读运行演示快照，默认端口 8253 |
+| `quotern backup create\|verify\|restore` | 创建、校验本地数据备份，或恢复到新目录 |
 | `quotern quota [status\|forecast\|diagnostics]` | 只读查询额度、预测或安全来源诊断，支持 JSON |
 | `quotern quota recommend` / `quotern quota providers` | 只读账号建议 / 版本化渠道描述 |
 | `quotern prompt` | 通用终端单行额度摘要，只读缓存 |
@@ -107,6 +108,23 @@ JSON 使用 `schemaVersion: 1`，包含 `summary`、`rows`、`filters` 和 `cove
 `overview` 额外返回 `breakdowns.daily`、`breakdowns.models`、`breakdowns.projects`：同一次读取后筛选的记录生成全部维度，共用顶层范围、筛选和覆盖说明，不能将不同维度相加。`rows` 保留总计行；CSV 的 `period` 列分别标识 `summary/daily/models/projects`。Skill 将“查看用量信息”等宽泛请求默认交付为 Quotern 样式的综合 HTML 概览；明确的单项查询仍按问题简洁回答。
 
 Agent 可使用随 npm 包分发的 [quotern-usage Skill](./packages/cli/skills/quotern-usage/SKILL.md)。推荐通过 `npx skills` 跨工具安装，见 [安装方法](./README.md#推荐使用-npx-skills-安装)；也可让 Agent 按 [安装助手说明](./README_AI.md) 执行。手动复制完整 Skill 文件夹作为备用。Skill 只调用上述 JSON 查询，不维护第二套解析器，也不会隐式启动或修复服务。
+
+## 本地备份与恢复
+
+浏览器或 Desktop 的「设置 → 应用 → 本地备份」可创建备份、选择文件校验，并恢复到新目录。命令行示例：
+
+```bash
+quotern backup create --out /backups/quotern.json --data-dir /path/to/data
+quotern backup verify --file /backups/quotern.json
+quotern backup restore --file /backups/quotern.json --target /path/to/new-data
+quotern usage --data-dir /path/to/new-data --days 7 --json
+```
+
+CLI 创建备份前退出使用同一数据目录的 Desktop/CLI runtime；在拥有 runtime 的本机面板内创建时，会与采集写入互斥。输出文件必须位于源数据目录之外且尚不存在。恢复前检查清单、SHA-256、成员路径及数据结构，目标必须是新目录，父目录须已存在。恢复不会切换正在运行的实例，也不会覆盖原数据。
+
+备份保留用量、已采集会话、游标、统计/采集起点、最近同步时间、成就、额度历史/偏好及用户价格，不含登录凭据、设备身份、日志、远端价格缓存、分享背景或 Electron 外观/宠物设置。Desktop 页面创建的备份另外保存其 `userData/quota` 到 `desktop/quota`；普通 CLI 创建只覆盖选定数据目录内的文件。它是本地数据备份，不是匿名演示文件，仍包含会话元数据及游标中的本地路径。
+
+单文件内容最多 64 MiB，所有成员合计最多 128 MiB，JSON 文档最多 256 MiB。恢复目录保留游标供同机续采；跨机外部日志路径和身份不保证相同。恢复后先用只读报表核对；切换正式目录及还原 Desktop 的 `desktop/quota` 前，按[运行维护说明](docs/runtime-notes.md#本地备份恢复)停用对应实例。
 
 ## 额度查询与只读 MCP
 

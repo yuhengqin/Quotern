@@ -520,6 +520,11 @@ async function main(): Promise<void> {
   try {
     // Query before the runtime argument path: no startup, ownership or sync.
     const commandLine = extractCliLanguage(process.argv.slice(2));
+    if (commandLine.args[0] === 'backup') {
+      try { await (await import('./backup.js')).runBackupCommand(commandLine.args.slice(1)); }
+      catch (error) { throw new CliUserError(error instanceof Error ? error.message : 'Backup failed'); }
+      return;
+    }
     if (commandLine.args[0] === 'demo') {
       try {
         const { runDemoCommand } = await import('./demo.js');

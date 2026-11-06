@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, watchFile, unwatchFile } from 'node:fs';
 import { writeFile, rename, unlink } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { getManualPricing, applyManualPricing, loadManualPricing, manualPricingPath, type ManualPricingDocument } from './manual-pricing.js';
+export * from './manual-pricing.js';
 import { isDeepStrictEqual } from 'node:util';
 import { EnvHttpProxyAgent } from 'undici';
 import { mergeModelsDevPricing, MODELS_DEV_URL } from './models-dev.mjs';
@@ -47,28 +49,41 @@ let remoteOverlay: PricingData | null = null;
 const modelMatchCache = new Map<string, ReturnType<typeof lookupPricingStacked>>();
 let matchedBuiltin = builtinPricing;
 let matchedOverlay: PricingData | null = remoteOverlay;
+let matchedManual = getManualPricing();
 
 /** Catalog identity is stable between applied snapshots; observations reuse model matches. */
 function currentModelMatch(model: string, source?: string | null): ReturnType<typeof lookupPricingStacked> {
-  if (matchedBuiltin !== builtinPricing || matchedOverlay !== remoteOverlay) {
-    modelMatchCache.clear(); matchedBuiltin = builtinPricing; matchedOverlay = remoteOverlay;
+  if (matchedBuiltin !== builtinPricing || matchedOverlay !== remoteOverlay || matchedManual !== getManualPricing()) {
+    modelMatchCache.clear(); matchedBuiltin = builtinPricing; matchedOverlay = remoteOverlay; matchedManual = getManualPricing();
   }
   const key = JSON.stringify([source ?? null, model]);
   let result = modelMatchCache.get(key);
   if (!result) {
     result = lookupPricingStacked(model, remoteOverlay, builtinPricing, source ?? null);
+    const explicitMatch = result.source === 'exact' || result.source === 'alias' || result.source.startsWith('sourceAlias:');
+    const manual = Object.hasOwn(matchedManual.models, model) ? matchedManual.models[model] : explicitMatch && result.matchedModel && Object.hasOwn(matchedManual.models, result.matchedModel) ? matchedManual.models[result.matchedModel] : undefined;
+    if (manual) result = { ...result, hit: true, value: { ...result.value, ...manual }, matchedModel: result.matchedModel ?? model, source: 'manual' };
     modelMatchCache.set(key, result);
     while (modelMatchCache.size > 1024) modelMatchCache.delete(modelMatchCache.keys().next().value!);
   }
   return result;
 }
 
-export interface PricingSnapshot { builtin: PricingData; overlay: PricingData | null }
+export interface PricingSnapshot { builtin: PricingData; overlay: PricingData | null; manual?: ManualPricingDocument }
 /** Capture both matching layers; flattening them changes alias/fuzzy precedence. */
-export function getPricingSnapshot(): PricingSnapshot { return { builtin: builtinPricing, overlay: remoteOverlay }; }
+export function getPricingSnapshot(): PricingSnapshot { return { builtin: builtinPricing, overlay: remoteOverlay, manual: getManualPricing() }; }
+let fingerprintState: PricingSnapshot | null = null, fingerprint = '';
+export function getPricingFingerprint(): string {
+  const next = getPricingSnapshot();
+  if (!fingerprintState || next.builtin !== fingerprintState.builtin || next.overlay !== fingerprintState.overlay || next.manual !== fingerprintState.manual) {
+    fingerprintState = next; fingerprint = createHash('sha256').update(JSON.stringify(next)).digest('hex');
+  }
+  return fingerprint;
+}
 /** Explicit, process-local replay for the separate demo process. Null restores packaged pricing. */
 export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
   builtinPricing = snapshot?.builtin ?? packagedPricing;
+  applyManualPricing(snapshot?.manual ?? { version: 1, models: {} });
   applyRemotePricingOverlay(snapshot?.overlay ?? null);
 }
 
@@ -261,6 +276,7 @@ export function applyRemotePricingOverlay(data: PricingData | null): void {
 
 /** Load a previously saved overlay from `dataDir`. Invalid/missing files are ignored. */
 export function loadCachedPricingOverlay(dataDir: string): boolean {
+  try { loadManualPricing(dataDir); } catch { /* Keep the last validated manual layer. Management reports corrupt files. */ }
   try {
     const raw = readFileSync(pricingOverlayPath(dataDir), 'utf8');
     const parsed: unknown = JSON.parse(raw);
@@ -306,7 +322,7 @@ export function getRemotePricingOverlay(): PricingData | null {
 }
 
 /** Full display/conversion snapshot; cost matching continues to use layered lookup. */
-export function getEffectivePricingData(): PricingData {
+export function getReferencePricingData(): PricingData {
   if (!remoteOverlay) return builtinPricing;
   return {
     ...builtinPricing, ...remoteOverlay,
@@ -319,12 +335,20 @@ export function getEffectivePricingData(): PricingData {
   };
 }
 
+/** UI catalog includes explicit manual IDs; fuzzy cost lookup continues to use reference layers. */
+export function getEffectivePricingData(): PricingData {
+  const reference = getReferencePricingData(), manual = getManualPricing().models;
+  if (!Object.keys(manual).length) return reference;
+  return { ...reference, exact: { ...reference.exact, ...Object.fromEntries(Object.keys(manual).map(model => [model, getModelPricingRates(model)!])) } };
+}
+
 /** Test helper: clear overlay and cancel any pending refresh. */
 export function resetPricingRuntime(): void {
   pricingRefreshStop?.();
   pricingRefreshStop = null;
   pricingRefreshController = null;
   remoteOverlay = null;
+  applyManualPricing({ version: 1, models: {} });
   pricingRefreshUrl = null;
   pricingUpdatedAt = null;
   lastOverlayFingerprint = null;
@@ -350,7 +374,7 @@ async function fetchAndApplyOverlay(
     const raw: unknown = await res.json();
     const requested = new URL(url), upstream = new URL(MODELS_DEV_URL);
     const isModelsDev = requested.origin === upstream.origin && requested.pathname === upstream.pathname;
-    const converted = isModelsDev ? mergeModelsDevPricing(getEffectivePricingData(), raw) : raw;
+    const converted = isModelsDev ? mergeModelsDevPricing(getReferencePricingData(), raw) : raw;
     const validated = validatePricingData(converted);
     if (!validated.ok) throw new Error(validated.error);
     signal?.throwIfAborted();
@@ -379,11 +403,19 @@ export function startPricingRefresh(
   pricingRefreshStop?.();
   pricingRefreshStop = null;
   if (opts.dataDir) loadCachedPricingOverlay(opts.dataDir);
+  const manualFile = opts.dataDir ? manualPricingPath(opts.dataDir) : null;
+  const onManualChange = () => {
+    try { if (opts.dataDir && loadManualPricing(opts.dataDir)) opts.onUpdate?.(getPricingStatus()); }
+    catch (error) { opts.onError?.(error); }
+  };
+  if (manualFile) watchFile(manualFile, { interval: 1000, persistent: false }, onManualChange);
+  const stopManualWatch = () => { if (manualFile) unwatchFile(manualFile, onManualChange); };
   const url = opts.url.trim();
   pricingRefreshUrl = url || null;
   if (!url) {
-    const noop = (() => {}) as PricingRefreshHandle;
+    const noop = stopManualWatch as PricingRefreshHandle;
     noop.ready = Promise.resolve(getPricingStatus().hasOverlay);
+    pricingRefreshStop = noop;
     return noop;
   }
 
@@ -424,6 +456,7 @@ export function startPricingRefresh(
       : Promise.resolve(getPricingStatus().hasOverlay);
 
   const stop = (() => {
+    stopManualWatch();
     controller.abort();
     clearTimeout(networkTimeout);
   }) as PricingRefreshHandle;
@@ -470,7 +503,7 @@ export function getModelPricingRates(model:string,opts?:{source?:string}):ModelP
 
 export function isModelPriced(model: string, source?: string): boolean {
   const result = currentModelMatch(model, source);
-  return hasNonZeroPricing(result.value);
+  return result.source === 'manual' || hasNonZeroPricing(result.value);
 }
 
 /** Match server/API cost precision: keep 8 decimals until UI rounds to cents. */
@@ -508,6 +541,7 @@ export function computeRowCost(row: QueueBucket): number {
 export type CostKind = 'reported' | 'model_estimate' | 'default_estimate' | 'unpriced';
 
 export interface RowCostExplanation {
+  manualPricing?: boolean;
   /** Category amounts from the same effective rates as the cost calculation. */
   items?: TokenCostItem[];
   requestPricing?: { requests: number; ruleReferences: string[]; legacyTokens: number; serviceTiers: string[] };
@@ -556,6 +590,7 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
   const entirelyUnpriced = tokens > 0 && unpricedTokens >= tokens;
   return {
     source: row.source, model: row.model, matchedModel: match.matchedModel ?? null,
+    ...(match.source === 'manual' ? { manualPricing: true } : {}),
     matchMethod: match.source, priceTable: match.table ?? null, priceUpdatedAt,
     costKind: entirelyUnpriced || !match.value ? 'unpriced' : match.source === 'default' ? 'default_estimate' : 'model_estimate',
     costUsd: entirelyUnpriced || !match.value ? null : computeRowCost(row),

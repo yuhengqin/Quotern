@@ -2,7 +2,8 @@ import { performance } from 'node:perf_hooks';
 import { analyzeQuota, evaluateQuotaAlerts, normalizeQuotaSnapshot, type QuotaAlertKind, type QuotaObservation } from '../shared/quota-analysis.js';
 import { quotaWindowPeriodSeconds, type QuotaPreferences, type QuotaPreferencePatch, type QuotaProfile, type QuotaProviderState, type QuotaServiceStatus, type QuotaState } from '../shared/quota.js';
 import type { SubscriptionChannelId } from '../shared/subscription-channels.js';
-import { quotaIdentity, quotaEvidence } from './quota-identity.js';
+import { quotaIdentity, quotaEvidence, privateQuotaEvidence } from './quota-identity.js';
+import type { QuotaHistorySource } from '../quota-history.js';
 import { captureQuotaRead, quotaReadAttempts, quotaReadRetryAfter } from './quota-fetch-state.js';
 import type { QuotaDiagnosticCode } from '../shared/quota-diagnostic.js';
 import { validQuotaPatch, pruneQuotaHistory, assertQuotaProfileDirectories, type QuotaStore } from './quota-store.js';
@@ -47,6 +48,7 @@ export class QuotaManager {
   private statusPending: Promise<void> | null = null;
   private settingsQueue = Promise.resolve();
   private lastMaintenance: number | null = null;
+  private historyRevision = 0;
   private readonly sentAlerts = new Set<string>();
   constructor(private readonly deps: {
     readers: QuotaReader[]; store: QuotaStore; now?: () => number; monotonic?: () => number; timeZone?: string;
@@ -101,6 +103,16 @@ export class QuotaManager {
       }
       return state;
     }) };
+  }
+  getHistory(id: string): QuotaHistorySource | null {
+    const slot = this.slots.find(item => this.key(item.reader) === id && this.enabled(item));
+    if (!slot || !slot.identity || slot.reader.observationOnly) return null;
+    const prefix = `${slot.reader.id}:${slot.identity}:`;
+    return { providerId: slot.reader.id, label: slot.state.label, revision: this.historyRevision,
+      windows: Object.entries(this.deps.store.history).filter(([key]) => key.startsWith(prefix)).map(([key, rows]) => {
+        const id = key.slice(prefix.length), window = slot.state.windows.find(window => window.id === id);
+        return { id, label: window?.label ?? id, groupLabel: window?.groupLabel, samples: structuredClone(rows) };
+      }) };
   }
   private emit(): void { if (!this.disposed) this.deps.onChanged?.(this.getState()); }
   reportNotice(message: string): void { this.notice = message; this.emit(); }
@@ -163,6 +175,7 @@ export class QuotaManager {
       const normalized = this.project(slot.reader, raw);
       normalized.queriedAt = this.now();
       const identity = quotaIdentity(raw);
+      if (identity !== slot.identity) this.historyRevision++;
       if (normalized.stale && !identity) {
         // An old reader may retain data without proving its account. Never promote it
         // into the shared current-account view, notification baseline or history.
@@ -203,15 +216,19 @@ export class QuotaManager {
       slot.state = normalized;
       if (slot.reader.observationOnly) { slot.identity = identity; return; }
       if (normalized.status !== 'ready') { slot.identity = null; slot.captured = 0; slot.observations.clear(); return; }
-      if (normalized.stale) return;
       if (identity !== slot.identity) { slot.identity = identity; slot.captured = 0; slot.observations.clear(); }
+      if (normalized.stale) return;
       if (!identity || !normalized.fetchedAt || normalized.fetchedAt <= slot.captured) return;
       slot.captured = normalized.fetchedAt;
       const present = new Set<string>();
       for (const window of normalized.windows) {
         if (window.analysisEligible === false) continue;
         present.add(window.id);
-        const sample = { at: normalized.fetchedAt, usedPercent: window.usedPercent, resetsAt: window.timeKind === 'expiry' ? null : window.resetsAt };
+        const proof = normalized.provenance;
+        const service = raw && typeof raw === 'object' ? privateQuotaEvidence(raw)?.account.service : undefined;
+        const sample = { at: normalized.fetchedAt, usedPercent: window.usedPercent, resetsAt: window.timeKind === 'expiry' ? null : window.resetsAt,
+          ...(window.durationSeconds && window.durationSeconds > 0 ? { durationSeconds: window.durationSeconds } : {}),
+          ...(proof?.identityVerified && proof.accountRef && service ? { accountRef: proof.accountRef, service } : {}) };
         const key = `${slot.reader.id}:${identity}:${window.id}`;
         const history = this.deps.store.history[key] ??= [];
         if (!history.length || sample.at > history.at(-1)!.at) history.push(sample);

@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { lock } from 'proper-lockfile';
+import { withDataTransaction } from './data-transaction.js';
 
 import type { TudConfig } from './types.js';
 import {
@@ -275,6 +276,7 @@ export async function loadConfig(dataDir?: string): Promise<LoadConfigResult> {
 
 /** Caller holds the config lock, including initialization and migration writes. */
 async function loadConfigUnlocked(dir: string): Promise<LoadConfigResult> {
+  if (existsSync(`${dir}/.backup-restore-incomplete`)) throw new Error('BACKUP_INCOMPLETE');
   const path = configPath(dir);
   if (!existsSync(path)) {
     const { deviceId } = await resolveOrCreateDeviceId();
@@ -333,6 +335,9 @@ export async function saveConfig(dir: string, config: TudConfig): Promise<void> 
 }
 
 async function withConfigLock<T>(dir: string, operation: () => Promise<T>): Promise<T> {
+  return withDataTransaction(dir, () => withConfigFileLock(dir, operation));
+}
+async function withConfigFileLock<T>(dir: string, operation: () => Promise<T>): Promise<T> {
   // Both the main process and sync worker must use the same lock. It also
   // covers a config that does not exist yet, and recovers locks left by crashes.
   const release = await lock(configPath(dir), {

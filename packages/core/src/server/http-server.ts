@@ -8,6 +8,7 @@ import { isApiPath, serveStatic } from './static.js';
 import { DEFAULT_PORT } from '../paths.js';
 import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
 import { SESSION_ACTIONS_ROUTE } from './session-actions-api.js';
+import { LOCAL_ADMIN_ROUTE, MAX_LOCAL_ADMIN_BYTES } from './local-admin-api.js';
 import { demoMetadata, type DemoMetadata } from '../demo/types.js';
 import type { DemoBootstrap } from '../demo/bootstrap.js';
 
@@ -43,6 +44,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
   const server = createServer(async (req, res) => {
     const url = req.url ?? '/';
     const sessionAction = url.split('?')[0]!.replace(/\/$/, '') === SESSION_ACTIONS_ROUTE;
+    const localAdmin = url.split('?')[0]!.startsWith(`${LOCAL_ADMIN_ROUTE}/`);
     if (opts.demo && !['GET', 'HEAD'].includes(req.method ?? 'GET')) {
       res.statusCode = 403; res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ success: false, message: 'DEMO_READ_ONLY', data: null })); req.resume(); return;
@@ -50,7 +52,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
 
     if (isApiPath(url)) {
       try {
-        const limit = sessionAction ? 4096 : url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
+        const limit = localAdmin ? MAX_LOCAL_ADMIN_BYTES : sessionAction ? 4096 : url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
         if (Number(req.headers['content-length']) > limit) throw new ShareBackgroundError('背景请求超过大小限制', 413);
         const body =
           req.method !== 'GET' && req.method !== 'HEAD'
@@ -63,7 +65,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
         }
 
         const response = await opts.honoApp.fetch(
-          new Request(sessionAction ? `http://${req.headers.host ?? 'invalid.local'}${url}` : `http://${host}:${port}${url}`, {
+          new Request(sessionAction || localAdmin ? `http://${req.headers.host ?? 'invalid.local'}${url}` : `http://${host}:${port}${url}`, {
             method: req.method,
             headers,
             body: body as BodyInit | undefined,
@@ -81,7 +83,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
         if (err instanceof ShareBackgroundError) {
           res.statusCode = err.status;
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(JSON.stringify({ success: false, message: sessionAction ? 'INVALID_SESSION_ACTION' : err.message, data: null }));
+          res.end(JSON.stringify({ success: false, message: localAdmin ? 'LOCAL_ADMIN_TOO_LARGE' : sessionAction ? 'INVALID_SESSION_ACTION' : err.message, data: null }));
           req.resume();
           return;
         }

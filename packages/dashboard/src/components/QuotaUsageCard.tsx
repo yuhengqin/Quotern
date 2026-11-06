@@ -7,6 +7,7 @@ import { useTranslation } from 'quotern-i18n/react';
 import { RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from 'quotern-core/quota/shared/quota';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
+import { QuotaHistoryButton } from './QuotaHistoryPanel';
 import { formatSubscriptionResetTime } from '../lib/subscription-time';
 import { commonQuotaResetAt, isQuotaStatusOnly, quotaDisplayDetails, quotaForecasts, quotaTrendWindows, sortQuotaWindows } from '../lib/quota-presentation';
 
@@ -232,6 +233,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, onRef
                   </dl>
                 </Modal.Body>
                 <Modal.Footer>
+                  <QuotaHistoryButton providerId={provider.id} identity={proof?.accountRef} />
                   <Button aria-label={t('usage.quota.refreshAria', { provider: provider.label })} className="w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
                     <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? t('usage.quota.refreshing') : t('usage.quota.refresh')}
                   </Button>

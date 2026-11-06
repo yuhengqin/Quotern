@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LocalBackupPanel } from '../../../../../packages/dashboard/src/components/LocalBackupPanel';
 import {
   Alert,
   Button,
@@ -455,6 +456,7 @@ function AppSettingsPanel() {
 
       <AutoUpdateSettings />
 
+      <LocalBackupPanel />
       {!loading && config && (
         <Card variant="tertiary" className="rounded-xl shadow-none">
           <Card.Header>

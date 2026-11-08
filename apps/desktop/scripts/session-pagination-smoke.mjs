@@ -68,7 +68,8 @@ async function api(route, init = {}) {
   if (url.pathname === '/functions/tud-ensure-local-range') return { status: 200, body: { success: true, message: 'ok', data: { expanded: false, localCollectSince: demo.collectSince, statsSince: demo.collectSince, sync: null, message: 'fixture' } } };
   if (url.pathname === '/functions/tud-session-list' && Number(url.searchParams.get('page')) === failurePage) return { status: 500, body: { success: false, message: 'FIXTURE_PAGE_FAILURE', data: null } };
   const response = await hono.request(route, init);
-  return { status: response.status, body: await response.json() };
+  const text = await response.text();
+  return { status: response.status, body: response.headers.get('content-type')?.includes('application/json') ? JSON.parse(text) : { success: false, message: text, data: null } };
 }
 const until = async (predicate, label) => { for (let i = 0; i < 100; i++) { if (await predicate()) return; await wait(75); } throw Error('Timed out: ' + label); };
 async function captureSettled(window, filename) {
@@ -462,6 +463,7 @@ async function main() {
   ipcMain.handle('dashboard-range:set', (_event, value) => value);
   ipcMain.handle('dsh-pet:navigation-get', () => null);
   ipcMain.handle('dsh-pet:navigation-ack', () => {});
+  ipcMain.handle('quota:navigation:get', () => null);
   ipcMain.handle('tud:api-request', (_event, route, init) => api(route, init));
   ipcMain.handle('quota:get', () => ({ providers: [], preferences: DEFAULT_QUOTA_PREFERENCES, notice: null }));
   ipcMain.handle('share-backgrounds:request', (_event, request) => { assert.deepEqual(request, { operation: 'legacy' }); return []; });

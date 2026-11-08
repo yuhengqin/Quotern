@@ -9,10 +9,12 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { normalizeTrayPanel, TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, type TrayPanelState } from '../shared/tray-panel';
+import { normalizeTrayPanel, TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, TRAY_PANEL_MODE, type TrayPanelState } from '../shared/tray-panel';
+import { QUOTA_NAVIGATION, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE, type QuotaNavigationRequest, type QuotaNavigationTarget } from '../shared/quota-navigation';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
 import { quotaPopoverBounds, quotaTraySummary } from './tray-quota';
@@ -58,6 +60,7 @@ const POPOVER_INITIAL_HEIGHT = POPOVER_MIN_HEIGHT;
 export interface TrayPopoverOptions {
   getLocale: () => SupportedLocale;
   showMainWindow: () => void;
+  getMainWindow?: () => BrowserWindow | null;
   openSettings: () => void;
   /** Same as in-app「同步数据」→ POST tud-trigger-sync. */
   triggerSync: () => void;
@@ -78,6 +81,10 @@ let quotaLevel = -1;
 /** Latest content height reported by the renderer, used when re-anchoring. */
 let popoverHeight = POPOVER_INITIAL_HEIGHT;
 let panelState: TrayPanelState = { pinned: false };
+let pendingNavigation: QuotaNavigationRequest | null = null;
+let popoverDialogOpen = false;
+const supportsPopover = isMac || process.platform === 'win32';
+const navigationWindow = () => supportsPopover ? popover : currentOptions?.getMainWindow?.();
 let positioningPanel = false;
 function savePanel() {
   const file = path.join(app.getPath('userData'), 'tray-panel.json');
@@ -188,7 +195,7 @@ function ensurePopover(): BrowserWindow {
     try { savePanel(); } catch { console.warn('[quotern] panel position could not be saved'); }
   });
   popover.once('ready-to-show', () => { if (panelState.pinned && popover && tray) { positionPopoverNearTray(tray, popoverHeight); popover.showInactive(); } });
-  popover.webContents.on('before-input-event', (_event, input) => { if (input.key === 'Escape') { lastHiddenAt = Date.now(); popover?.hide(); } });
+  popover.webContents.on('before-input-event', (_event, input) => { if (input.type === 'keyDown' && !input.isAutoRepeat && input.key === 'Escape' && !popoverDialogOpen) { lastHiddenAt = Date.now(); popover?.hide(); } });
   popover.on('close', (e) => {
     // Hide instead of destroy on user close to allow re-toggling.
     if (shouldTrayPopoverPreventClose()) {
@@ -284,12 +291,14 @@ function togglePopover(): void {
 }
 
 /** Reuse the tray panel for the global shortcut and quota notifications. */
-export function showQuotaPopover(): void {
-  if (!tray || (!isMac && process.platform !== 'win32')) { currentOptions?.showMainWindow(); return; }
+export function showQuotaPopover(target?: QuotaNavigationTarget): void {
+  if (target) pendingNavigation = { ...target, requestId: randomUUID() };
+  if (!tray || !supportsPopover) { currentOptions?.showMainWindow(); navigationWindow()?.webContents.send(QUOTA_NAVIGATION); return; }
   currentOptions?.onOpen?.();
   const w = ensurePopover();
   positionPopoverNearTray(tray, popoverHeight);
   w.show(); w.focus();
+  if (target) w.webContents.send(QUOTA_NAVIGATION);
 }
 
 /** Hide the macOS tray popover if visible (e.g. before focusing the main window). */
@@ -332,11 +341,25 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
   currentOptions = options;
   try { panelState = normalizeTrayPanel(JSON.parse(readFileSync(path.join(app.getPath('userData'), 'tray-panel.json'), 'utf8'))); } catch { panelState = { pinned: false }; }
-  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET]) ipcMain.removeHandler(channel);
+  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_MODE, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
+  const ownsNavigation = (event: Electron.IpcMainInvokeEvent) => {
+    const target = navigationWindow();
+    return target && !target.isDestroyed() && event.sender === target.webContents && event.senderFrame === target.webContents.mainFrame;
+  };
+  ipcMain.handle(QUOTA_NAVIGATION_GET, event => ownsNavigation(event) ? pendingNavigation : null);
+  ipcMain.handle(QUOTA_NAVIGATION_ACK, (event, requestId: unknown) => { if (ownsNavigation(event) && pendingNavigation?.requestId === requestId) pendingNavigation = null; });
+  ipcMain.handle(QUOTA_DIALOG_STATE, (event, open: unknown) => { if (event.sender === popover?.webContents && typeof open === 'boolean') popoverDialogOpen = open; });
   ipcMain.handle(TRAY_PANEL_GET, () => panelState);
   ipcMain.handle(TRAY_PANEL_SET, (event, pinned: unknown) => {
     if (typeof pinned !== 'boolean' || !BrowserWindow.fromWebContents(event.sender)) throw new Error('INVALID_TRAY_PANEL');
     return setPanelPinned(pinned);
+  });
+  ipcMain.handle(TRAY_PANEL_MODE, (event, mode: unknown) => {
+    if (!['full', 'summary'].includes(String(mode)) || !BrowserWindow.fromWebContents(event.sender)) throw new Error('INVALID_TRAY_PANEL');
+    const previous = panelState; panelState = { ...panelState, mode: mode as 'full' | 'summary' };
+    try { savePanel(); } catch (error) { panelState = previous; throw error; }
+    for (const item of BrowserWindow.getAllWindows()) item.webContents.send(TRAY_PANEL_CHANGED, panelState);
+    return panelState;
   });
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
@@ -370,7 +393,8 @@ export function disposeTrayPopover(): void {
   iconGeneration++; quotaLevel = -1;
   markTrayPopoverQuitting();
   ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
-  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET]) ipcMain.removeHandler(channel);
+  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_MODE, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
+  pendingNavigation = null; popoverDialogOpen = false;
   if (popover && !popover.isDestroyed()) {
     popover.removeAllListeners('blur');
     popover.removeAllListeners('close');

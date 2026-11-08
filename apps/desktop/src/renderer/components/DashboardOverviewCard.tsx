@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { AchievementActivityLink } from '../../../../../packages/dashboard/src/achievements/AchievementEntry';
 
 interface DashboardOverviewCardProps {
+  quickView?: boolean;
   /** Ordered hourly or daily buckets for the selected dashboard range. */
   metricTrendRows: readonly UsageMetricTrendPoint[];
   metricTrendPeriodLabel: string;
@@ -67,6 +68,7 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
   costExplanationLoading = false,
   costExplanationError = false,
   belowMetrics,
+  quickView = false,
 }: DashboardOverviewCardProps) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
@@ -147,8 +149,8 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
 
   return (
     <section aria-label={t('usage.page.overview')} className="w-full">
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {metrics.map((metric) => (
+      <div className={`grid grid-cols-2 gap-2.5 ${quickView ? '' : 'lg:grid-cols-4'}`}>
+        {(quickView ? metrics.slice(0, 2) : metrics).map((metric) => (
           <Card
             className={cn(
               'min-w-0 overflow-hidden rounded-2xl p-3',
@@ -225,11 +227,11 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
         ))}
       </div>
 
-      <DashboardSessionCards metrics={sessionMetrics} loading={sessionMetricsLoading} error={sessionMetricsError} />
+      {!quickView && <DashboardSessionCards metrics={sessionMetrics} loading={sessionMetricsLoading} error={sessionMetricsError} />}
 
       {belowMetrics}
 
-      <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
+      {!quickView && <div className="mt-4 rounded-2xl border border-border/60 bg-surface p-4 sm:p-5">
         <HeatmapSection
           days={heatmapDays}
           modelRows={modelRows}
@@ -237,7 +239,7 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
           selectedDate={selectedDate}
         />
           <AchievementActivityLink />
-      </div>
+      </div>}
     </section>
   );
 });

@@ -11,6 +11,7 @@ import { parseOpenSettingsDetail, type OpenSettingsDetail } from '../shared/sett
 import { DSH_PET_GET, DSH_PET_ACTION, DSH_PET_CHANGED, DSH_PET_NAVIGATION, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK, type DshPetAction, type DshPetState, type SessionNavigation } from '../shared/dsh-pet';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET } from '../shared/quota-desktop';
+import { QUOTA_NAVIGATION, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE, type QuotaNavigationRequest } from '../shared/quota-navigation';
 import {
   AUTO_UPDATE_ACK_COMPLETED_CHANNEL,
   AUTO_UPDATE_CHECK_CHANNEL,
@@ -267,6 +268,14 @@ const tudApi = {
     ipcRenderer.send(TRAY_POPOVER_RESIZE_CHANNEL, height),
   getTrayPanel: (): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_GET),
   setTrayPanelPinned: (pinned: boolean): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_SET, pinned),
+  setTrayPanelMode: (mode: 'summary' | 'full'): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_MODE, mode),
+  getQuotaNavigation: (): Promise<QuotaNavigationRequest | null> => ipcRenderer.invoke(QUOTA_NAVIGATION_GET),
+  acknowledgeQuotaNavigation: (requestId: string): Promise<void> => ipcRenderer.invoke(QUOTA_NAVIGATION_ACK, requestId),
+  setQuotaDialogOpen: (open: boolean): Promise<void> => ipcRenderer.invoke(QUOTA_DIALOG_STATE, open),
+  onQuotaNavigation: (callback: () => void) => {
+    const listener = () => callback(); ipcRenderer.on(QUOTA_NAVIGATION, listener);
+    return () => ipcRenderer.removeListener(QUOTA_NAVIGATION, listener);
+  },
   onTrayPanelChanged: (callback: (state: TrayPanelState) => void) => {
     const listener = (_event: unknown, state: TrayPanelState) => callback(state);
     ipcRenderer.on(TRAY_PANEL_CHANGED, listener);
@@ -430,4 +439,4 @@ const tudApi = {
 contextBridge.exposeInMainWorld('tud', tudApi);
 
 export type TudApi = typeof tudApi;
-import { TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, type TrayPanelState } from '../shared/tray-panel';
+import { TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, TRAY_PANEL_MODE, type TrayPanelState } from '../shared/tray-panel';

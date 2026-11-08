@@ -88,6 +88,8 @@ Windows Desktop 的宠物下载使用 Electron `net.fetch`，遵循默认 sessio
 
 恢复先校验全部成员，再独占创建目标，写入期间保留 `.backup-restore-incomplete`。中途失败的目录不能用于运行，应保留原备份及源数据，改用另一个新目标重试。正式采用恢复结果时，退出 Desktop 与 CLI，保留当前数据目录备份后再切换；不要覆盖正在运行的数据。Desktop 快照中的 `desktop/quota` 属于 Electron `userData/quota`，不会因为更换统计目录而自动生效，需在应用退出后单独还原到对应 `userData`。普通 CLI 快照不包含统计目录之外的 Desktop 额度设置。
 
+本机面板的校验预览显示文件类别、有限的来源列表及实际用量桶首末时间（UTC），不代表期间每一天都有数据。保护恢复使用 `restore-protected` 动作，在当前统计目录 `backups/before-restore-*.json` 原子发布保护快照后才创建恢复目标。保护失败不会开始恢复；保护成功、恢复失败的响应仍返回保护路径。保护文件不自动清理，也不嵌套进入后续备份。旧 `restore` 动作保持原语义；同一运行端拒绝并行备份操作（409/BACKUP_BUSY）。新目录仅有所选备份内容，不与当前数据合并，不自动切换实例。
+
 ## 升级前迁移状态
 
 运行时只读取 Quotern 的设备身份和 Desktop 配置目录，识别 Quotern 进程及自启服务。已有安装在升级前需完成一次显式迁移。

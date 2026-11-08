@@ -11,8 +11,14 @@ export function QuotaServiceDetails({ status, selected, saving, onSelect, onOpen
   const components = status.components ?? [];
   const ids = selected ?? components.map(component => component.id);
   const incidents = status.incidents ?? [];
+  const followed = components.filter(component => ids.includes(component.id));
+  const attention = status.stale ? [] : followed.filter(component => component.level !== 'operational');
+  const secondary = followed.filter(component => !attention.includes(component));
+  const rows = (items: typeof components) => items.map(component => <div key={component.id} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs">
+    <span className="min-w-0 break-words">{component.name}</span><span className="text-muted">{t(`usage.quota.service.${status.stale ? 'unknown' : component.level}`)}</span>
+  </div>);
   const label = status.selectionEmpty ? t('usage.quota.noServices') : t(`usage.quota.service.${status.stale ? 'unknown' : status.level}`);
-  return <section aria-label={t('usage.quota.serviceDetails')} className="flex min-w-0 flex-col gap-3 border-t border-separator pt-4">
+  return <section data-quota-service-details tabIndex={-1} aria-label={t('usage.quota.serviceDetails')} className="flex min-w-0 flex-col gap-3 border-t border-separator pt-4 outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="text-sm font-medium">{t('usage.quota.serviceDetails')}</h3>
       <Button size="sm" variant="tertiary" onPress={() => void onOpenExternal(status.url)}>{t('usage.quota.officialStatus')} ↗</Button>
@@ -28,9 +34,8 @@ export function QuotaServiceDetails({ status, selected, saving, onSelect, onOpen
     <p role="status" className={`text-sm ${!status.stale && !['operational', 'unknown'].includes(status.level) ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>{label}</p>
     {status.stale && <p className="text-xs text-muted">{t('usage.quota.statusStale')}</p>}
     {!status.selectionEmpty && <div className="flex flex-col gap-2">
-      {components.filter(component => ids.includes(component.id)).map(component => <div key={component.id} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs">
-        <span className="min-w-0 break-words">{component.name}</span><span className="text-muted">{t(`usage.quota.service.${status.stale ? 'unknown' : component.level}`)}</span>
-      </div>)}
+      {rows(attention)}
+      {secondary.length > 0 && <details><summary className="cursor-pointer text-xs text-muted focus-visible:outline-2 focus-visible:outline-accent">{t(status.stale ? 'island.quota.serviceList' : 'island.quota.healthyServices', { count: secondary.length })}</summary><div className="mt-3 flex flex-col gap-2">{rows(secondary)}</div></details>}
     </div>}
     {incidents.map(incident => <details key={incident.id} className="rounded-lg border border-separator p-3" open>
       <summary className="cursor-pointer break-words text-sm font-medium focus-visible:outline-2 focus-visible:outline-accent">{incident.name}</summary>

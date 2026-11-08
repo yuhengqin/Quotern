@@ -87,6 +87,11 @@ declare global {
       resizeTrayPopover: (height: number) => void;
       getTrayPanel: () => Promise<import('../shared/tray-panel').TrayPanelState>;
       setTrayPanelPinned: (pinned: boolean) => Promise<import('../shared/tray-panel').TrayPanelState>;
+      setTrayPanelMode: (mode: 'summary' | 'full') => Promise<import('../shared/tray-panel').TrayPanelState>;
+      getQuotaNavigation: () => Promise<import('../shared/quota-navigation').QuotaNavigationRequest | null>;
+      acknowledgeQuotaNavigation: (requestId: string) => Promise<void>;
+      setQuotaDialogOpen: (open: boolean) => Promise<void>;
+      onQuotaNavigation: (callback: () => void) => () => void;
       onTrayPanelChanged: (callback: (state: import('../shared/tray-panel').TrayPanelState) => void) => () => void;
       getDashboardRange: () => Promise<
         import('../shared/dashboard-range').DashboardRange

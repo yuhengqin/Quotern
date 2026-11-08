@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { useQuotaNavigation } from '../hooks/useQuotaNavigation';
 import { ToastQueue } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 // Sidebar / FAB chrome temporarily hidden — actions moved to FilterChromeActions.
@@ -35,6 +36,7 @@ import { parseSessionPageSearch } from '../../../../../packages/dashboard/src/li
 export function AppShell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const quotaNavigation = useQuotaNavigation();
   const pathname = useLocation({ select: (location) => location.pathname });
   // const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -44,6 +46,11 @@ export function AppShell() {
   const [toastQueue] = useState(
     () => new ToastQueue<AppToastContent>({ maxVisibleToasts: 2 }),
   );
+  useEffect(() => {
+    if (!quotaNavigation) return;
+    setSettingsOpen(false); setAboutOpen(false);
+    void navigate({ to: '/dashboard', resetScroll: false });
+  }, [quotaNavigation?.requestId, navigate]);
 
   // useEffect(() => {
   //   setSidebarCollapsed(readSidebarCollapsed());

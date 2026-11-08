@@ -10,23 +10,24 @@ import { quotaFetch, recoverQuotaNetwork } from './quota-fetch';
 import { nativeText } from './native-messages';
 import { createQuotaShortcut } from './quota-shortcut';
 import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET, QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut } from '../shared/quota-desktop';
+import type { QuotaNavigationTarget } from '../shared/quota-navigation';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
 export function getQuotaRuntimeHistory(providerId: string) { return activeManager?.getHistory(providerId) ?? null; }
 export function getQuotaBackupDirectory() { return path.join(app.getPath('userData'), 'quota'); }
 
-export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; showQuota(): void; getLocale(): SupportedLocale }) {
+export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; showQuota(target?: QuotaNavigationTarget): void; getLocale(): SupportedLocale }) {
   const notifications = new Set<Notification>();
   const shortcut = createQuotaShortcut({ register: (key, action) => globalShortcut.register(key, action), unregister: key => globalShortcut.unregister(key), open: options.showQuota });
-  const sendNotification = (title: string, body: string) => new Promise<'shown' | 'requested'>((resolve, reject) => {
+  const sendNotification = (title: string, body: string, target?: QuotaNavigationTarget) => new Promise<'shown' | 'requested'>((resolve, reject) => {
     if (!Notification.isSupported()) { reject(new Error('notifications unavailable')); return; }
     const notification = new Notification({ title, body, silent: true });
     notifications.add(notification);
     const timeout = setTimeout(() => resolve('requested'), 5000);
     timeout.unref?.();
     notification.once('show', () => { clearTimeout(timeout); resolve('shown'); });
-    notification.once('click', options.showQuota);
+    notification.once('click', () => options.showQuota(target));
     notification.once('close', () => { clearTimeout(timeout); notifications.delete(notification); resolve('requested'); });
     notification.once('failed', () => {
       clearTimeout(timeout); notifications.delete(notification);
@@ -54,12 +55,12 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
       const title = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetTitle' : value.kind === 'depleted' ? 'native.quota.depletedTitle' : 'native.quota.thresholdTitle', vars);
       const body = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetBody' : 'native.quota.thresholdBody', vars)
         + (reset ? nativeText(locale, 'native.quota.resetsAt', { time: reset }) : '');
-      void sendNotification(title, body).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));
+      void sendNotification(title, body, { providerId: value.providerId ?? value.provider, providerType: value.provider, windowId: value.windowId, accountRef: value.accountRef }).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));
     },
     notifyService: value => {
       const locale = options.getLocale(), recovered = value.level === 'operational';
       void sendNotification(nativeText(locale, recovered ? 'native.quota.serviceRestored' : 'native.quota.serviceIssue', { provider: value.label }),
-        nativeText(locale, 'native.quota.serviceBody')).catch(() => manager.reportNotice(nativeText(locale, 'native.quota.deliveryFailed')));
+        nativeText(locale, 'native.quota.serviceBody'), { providerId: value.provider, providerType: value.provider }).catch(() => manager.reportNotice(nativeText(locale, 'native.quota.deliveryFailed')));
     },
   });
   activeManager = manager;

@@ -1,5 +1,6 @@
 import jetBrainsMonoDataUrl from '@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url&inline';
 import { toBlob } from 'html-to-image';
+import { shareDimensions, type ShareAspect } from './share-presentation';
 
 const PNG_MIME_TYPE = 'image/png';
 const TRANSPARENT_IMAGE_PLACEHOLDER =
@@ -50,18 +51,19 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-export async function renderShareCardPng(node: HTMLElement): Promise<Blob> {
+export async function renderShareCardPng(node: HTMLElement, aspect: ShareAspect = '2:3'): Promise<Blob> {
   await waitForShareImageAssets(node);
+  const size = shareDimensions(aspect);
 
   const blob = await toBlob(node, {
     cacheBust: true,
-    canvasHeight: SHARE_CARD_EXPORT_HEIGHT,
-    canvasWidth: SHARE_CARD_EXPORT_WIDTH,
+    canvasHeight: size.exportHeight,
+    canvasWidth: size.exportWidth,
     fontEmbedCSS: SHARE_CARD_FONT_EMBED_CSS,
-    height: SHARE_CARD_DESIGN_HEIGHT,
+    height: size.height,
     imagePlaceholder: TRANSPARENT_IMAGE_PLACEHOLDER,
     pixelRatio: 1,
-    width: SHARE_CARD_DESIGN_WIDTH,
+    width: size.width,
   });
 
   if (!blob) throw new Error('生成分享图片失败');

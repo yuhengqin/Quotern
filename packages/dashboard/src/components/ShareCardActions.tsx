@@ -10,9 +10,8 @@ import {
   copyShareCardPng,
   downloadShareCardPng,
   renderShareCardPng,
-  SHARE_CARD_DESIGN_HEIGHT,
-  SHARE_CARD_DESIGN_WIDTH,
 } from '../lib/share-card-image';
+import { shareDimensions, type SharePresentation, type ShareCostEvidence } from '../lib/share-presentation';
 import { ShareCardArtwork } from './ShareCardCarousel';
 import { AppToastRegion } from './AppToastRegion';
 import type { SharePosterDetails, ShareCardTheme } from './SharePosterArtwork';
@@ -36,6 +35,8 @@ async function withMinimumPendingTime<T>(operation: Promise<T>): Promise<T> {
 }
 
 interface ExportRequest {
+  presentation?: SharePresentation;
+  costEvidence?: ShareCostEvidence | null;
   backgroundImage?: string;
   theme: ShareCardTheme;
   details?: SharePosterDetails;
@@ -67,6 +68,8 @@ const ACTION_LABEL_KEYS: Record<ShareAction, Record<ShareActionState, string>> =
 };
 
 export function ShareCardActions({
+  presentation,
+  costEvidence,
   onExportSuccess,
   backgroundImage,
   theme = 'neon',
@@ -80,6 +83,8 @@ export function ShareCardActions({
   userName,
 }: {
   onExportSuccess?: () => void;
+  presentation?: SharePresentation;
+  costEvidence?: ShareCostEvidence | null;
   backgroundImage?: string;
   theme?: ShareCardTheme;
   disabled?: boolean;
@@ -120,7 +125,7 @@ export function ShareCardActions({
 
     const request = exportRequest;
     processingRequestIdRef.current = request.id;
-    void renderShareCardPng(exportNodeRef.current)
+    void renderShareCardPng(exportNodeRef.current, request.presentation?.aspect)
       .then(request.resolve, request.reject)
       .finally(() => {
         processingRequestIdRef.current = null;
@@ -154,6 +159,8 @@ export function ShareCardActions({
     nextRequestIdRef.current = id;
     return new Promise<Blob>((resolve, reject) => {
       setExportRequest({
+        presentation: presentation ? { ...presentation } : undefined,
+        costEvidence: costEvidence ? { ...costEvidence } : null,
         backgroundImage,
         theme,
         details,
@@ -244,8 +251,8 @@ export function ShareCardActions({
               aria-hidden="true"
               className="pointer-events-none fixed left-[-10000px] top-0 z-[-1] overflow-hidden opacity-100"
               style={{
-                height: `${SHARE_CARD_DESIGN_HEIGHT}px`,
-                width: `${SHARE_CARD_DESIGN_WIDTH}px`,
+                height: `${shareDimensions(exportRequest.presentation?.aspect).height}px`,
+                width: `${shareDimensions(exportRequest.presentation?.aspect).width}px`,
               }}
             >
               <div
@@ -254,11 +261,13 @@ export function ShareCardActions({
                 style={{
                   background: exportRequest.color,
                   borderRadius: '6px',
-                  height: `${SHARE_CARD_DESIGN_HEIGHT}px`,
-                  width: `${SHARE_CARD_DESIGN_WIDTH}px`,
+                  height: `${shareDimensions(exportRequest.presentation?.aspect).height}px`,
+                  width: `${shareDimensions(exportRequest.presentation?.aspect).width}px`,
                 }}
               >
                 <ShareCardArtwork
+                  presentation={exportRequest.presentation}
+                  costEvidence={exportRequest.costEvidence}
                   backgroundImage={exportRequest.backgroundImage}
                   theme={exportRequest.theme}
                   avatarUrl={exportRequest.avatarUrl}

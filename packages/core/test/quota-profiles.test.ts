@@ -131,6 +131,7 @@ test('multi-account threshold and reset notifications identify the profile', asy
   clock++; used = 95;
   await manager.refresh('manual');
   assert.deepEqual(notices.map(value => value.label).sort(), ['Codex · 个人', 'Codex · 工作']);
+  assert.deepEqual(notices.map(value => (value as unknown as { providerId: string }).providerId).sort(), ['codex@个人', 'codex@工作']);
   assert.ok(notices.every(value => value.windowId === 'five-hour' && value.windowPeriodSeconds === 18000));
   clock = 2001; used = 1; reset = 3000;
   await manager.refresh('manual');

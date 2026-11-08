@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { link, lstat, mkdir, open, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { withDataTransaction } from './data-transaction.js';
 import { readRuntimeOwner, isPidAlive } from './runtime-pid.js';
@@ -15,7 +15,21 @@ const MAX_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_FILES = 10_000;
 export interface BackupFile { path: string; bytes: number; sha256: string; content: string }
 export interface DataBackup { schemaVersion: 1; createdAt: string; files: BackupFile[] }
-export interface BackupSummary { createdAt: string; fileCount: number; bytes: number; fingerprint: string }
+export type BackupContentCategory = 'usage' | 'sessions' | 'settings' | 'cursors' | 'achievements' | 'quota' | 'pricing';
+export interface BackupContents {
+  usageRows: number;
+  /** Actual usage bucket timestamps, in UTC. Never inferred from configuration. */
+  from: string | null;
+  to: string | null;
+  sources: string[];
+  sourcesTruncated: boolean;
+  categories: { kind: BackupContentCategory; files: number }[];
+}
+export interface BackupSummary { createdAt: string; fileCount: number; bytes: number; fingerprint: string; contents?: BackupContents }
+export interface ProtectedRestoreResult {
+  protection: { path: string; summary: BackupSummary };
+  restore: { ok: true; target: string; summary: BackupSummary } | { ok: false; code: string };
+}
 const hash = (content: string) => createHash('sha256').update(content).digest('hex');
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const stamp = (value: unknown): value is string => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value));
@@ -30,7 +44,7 @@ function safeConfig(value: unknown): Record<string, unknown> {
   return Object.fromEntries(['statsSince', 'localCollectSince', 'lastSyncAt'].filter(key => value[key] !== undefined).map(key => [key, value[key]]));
 }
 
-function validateContent(path: string, content: string): void {
+function validateContent(path: string, content: string, onUsage?: (row: Record<string, unknown>) => void): void {
   if (path.startsWith('desktop/quota/')) path = path.slice('desktop/'.length);
   try {
     if (path.startsWith('queue/')) {
@@ -40,6 +54,7 @@ function validateContent(path: string, content: string): void {
         if (!record(row) || !stamp(row.hour_start) || !['source', 'model', 'project'].every(key => typeof row[key] === 'string')
           || !['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_creation_input_tokens'].every(key => typeof row[key] === 'number' && Number.isFinite(row[key]) && (row[key] as number) >= 0)
           || row.reasoning_output_tokens !== undefined && (typeof row.reasoning_output_tokens !== 'number' || !Number.isFinite(row.reasoning_output_tokens) || row.reasoning_output_tokens < 0)) fail();
+        onUsage?.(row);
       }
       return;
     }
@@ -68,6 +83,12 @@ export function verifyDataBackup(input: unknown): BackupSummary {
   if (!record(input) || input.schemaVersion !== 1 || !stamp(input.createdAt) || Object.keys(input).some(key => !['schemaVersion', 'createdAt', 'files'].includes(key))
     || !Array.isArray(input.files) || !input.files.length || input.files.length > MAX_FILES) fail();
   let bytes = 0;
+  let usageRows = 0, from = Infinity, to = -Infinity, sourcesTruncated = false;
+  const sources = new Set<string>(), categories = new Map<BackupContentCategory, number>();
+  const addSource = (source: string) => {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(source) || (sources.size >= 100 && !sources.has(source))) { sourcesTruncated = true; return; }
+    sources.add(source);
+  };
   const seen = new Set<string>(), metadata: Array<{ path: string; bytes: number; sha256: string }> = [];
   for (const raw of input.files) {
     if (!record(raw) || Object.keys(raw).some(key => !['path', 'bytes', 'sha256', 'content'].includes(key)) || typeof raw.path !== 'string' || !allowed(raw.path)
@@ -78,11 +99,22 @@ export function verifyDataBackup(input: unknown): BackupSummary {
     bytes += size;
     if (size !== raw.bytes || bytes > MAX_BACKUP_BYTES) fail('BACKUP_TOO_LARGE_OR_SIZE');
     if (hash(raw.content) !== raw.sha256) fail('BACKUP_HASH_MISMATCH');
-    validateContent(raw.path, raw.content);
+    validateContent(raw.path, raw.content, row => {
+      usageRows++;
+      const at = Date.parse(row.hour_start as string);
+      from = Math.min(from, at); to = Math.max(to, at); addSource(row.source as string);
+    });
+    const category: BackupContentCategory = raw.path.startsWith('queue/') ? 'usage' : raw.path.startsWith('sessions/') ? 'sessions'
+      : raw.path.includes('quota/') ? 'quota' : raw.path.startsWith('achievements/') ? 'achievements'
+        : raw.path === 'cursors.json' ? 'cursors' : raw.path === 'pricing-manual.json' ? 'pricing' : 'settings';
+    categories.set(category, (categories.get(category) ?? 0) + 1);
+    if (category === 'sessions') addSource(raw.path.slice('sessions/'.length, -'.json'.length));
     metadata.push({ path: raw.path, bytes: size, sha256: raw.sha256 });
   }
   if (!seen.has('config.json')) fail();
-  return { createdAt: input.createdAt, fileCount: seen.size, bytes, fingerprint: hash(JSON.stringify({ schemaVersion: 1, createdAt: input.createdAt, files: metadata })) };
+  return { createdAt: input.createdAt, fileCount: seen.size, bytes, fingerprint: hash(JSON.stringify({ schemaVersion: 1, createdAt: input.createdAt, files: metadata })),
+    contents: { usageRows, from: usageRows ? new Date(from).toISOString() : null, to: usageRows ? new Date(to).toISOString() : null,
+      sources: [...sources].sort(), sourcesTruncated, categories: [...categories].map(([kind, files]) => ({ kind, files })) } };
 }
 
 export function parseDataBackup(text: string): DataBackup {
@@ -167,4 +199,33 @@ export async function restoreDataBackup(input: unknown, requestedTarget: string)
     await unlink(join(target, BACKUP_INCOMPLETE_FILE));
   });
   return { ...summary, target };
+}
+
+/** Persist the current instance first. A later restore failure must not hide that path. */
+export async function restoreDataBackupWithProtection(input: unknown, requestedTarget: string, dataDir: string, options: { desktopQuotaDirectory?: string } = {}): Promise<ProtectedRestoreResult> {
+  verifyDataBackup(input);
+  if (!requestedTarget || !isAbsolute(requestedTarget)) fail('BACKUP_TARGET_ABSOLUTE');
+  let protection: ProtectedRestoreResult['protection'];
+  try {
+    const current = await createDataBackup(dataDir, options);
+    const dir = await realpath(dataDir), backupDir = join(dir, 'backups');
+    try { await mkdir(backupDir, { mode: 0o700 }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+    const stat = await lstat(backupDir);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || await realpath(backupDir) !== backupDir) fail('BACKUP_LINK');
+    const path = join(backupDir, `before-restore-${current.createdAt.replace(/[:.]/g, '-')}-${randomUUID()}.json`);
+    const temporary = `${path}.tmp`;
+    const handle = await open(temporary, 'wx', 0o600);
+    try {
+      try { await handle.writeFile(JSON.stringify(current)); await handle.sync(); } finally { await handle.close(); }
+      await link(temporary, path);
+    } finally { await unlink(temporary).catch(() => {}); }
+    protection = { path, summary: verifyDataBackup(current) };
+  } catch { return fail('BACKUP_PROTECTION_FAILED'); }
+  try {
+    const { target, ...summary } = await restoreDataBackup(input, requestedTarget);
+    return { protection, restore: { ok: true, target, summary } };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : '';
+    return { protection, restore: { ok: false, code: /^BACKUP_[A-Z_]+$/.test(code) ? code : 'LOCAL_ADMIN_WRITE_FAILED' } };
+  }
 }

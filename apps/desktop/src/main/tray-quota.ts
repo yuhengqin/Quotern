@@ -2,13 +2,18 @@ import type { QuotaProviderState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaWindowLabel } from 'quotern-i18n/quota';
 import { nativeText } from './native-messages';
-import { selectTrayQuota } from '../shared/tray-quota-summary';
+
+function tightestQuota(providers: QuotaProviderState[]) {
+  return providers.filter(provider => provider.status === 'ready' && !provider.stale)
+    .flatMap(provider => provider.windows.filter(window => window.analysisEligible !== false).map(window => ({ provider, window })))
+    .sort((a, b) => b.window.usedPercent - a.window.usedPercent)[0];
+}
 export function quotaTrayTitle(providers: QuotaProviderState[], locale: SupportedLocale = 'zh-CN'): string {
-  const tightest = selectTrayQuota(providers);
+  const tightest = tightestQuota(providers);
   return tightest ? nativeText(locale, 'native.tray.quotaTitle', { provider: tightest.provider.label, percent: Math.round(100 - tightest.window.usedPercent) }) : '—';
 }
 export function quotaTraySummary(providers: QuotaProviderState[], locale: SupportedLocale = 'zh-CN'): { level: 0 | 1 | 2; text: string } {
-  const tightest = selectTrayQuota(providers);
+  const tightest = tightestQuota(providers);
   if (!tightest) return { level: 0, text: nativeText(locale, 'native.tray.noQuota') };
   return { level: tightest.window.usedPercent >= 90 ? 2 : tightest.window.usedPercent >= 70 ? 1 : 0,
     text: nativeText(locale, 'native.tray.remaining', {
@@ -17,16 +22,7 @@ export function quotaTraySummary(providers: QuotaProviderState[], locale: Suppor
     }) };
 }
 interface Rect { x: number; y: number; width: number; height: number }
-export function quotaPopoverBounds(icon: Rect, work: Rect, width: number, height: number, anchor?: Pick<Rect, 'x' | 'y'>): Rect {
-  if (anchor) {
-    const w = Math.min(width, work.width), h = Math.min(height, work.height);
-    return {
-      x: Math.max(work.x, Math.min(anchor.x, work.x + work.width - w)),
-      y: Math.max(work.y, Math.min(anchor.y, work.y + work.height - h)),
-      width: w,
-      height: h,
-    };
-  }
+export function quotaPopoverBounds(icon: Rect, work: Rect, width: number, height: number): Rect {
   const w = Math.min(width, Math.max(1, work.width - 12)), h = Math.min(height, Math.max(1, work.height - 12));
   const missing = !icon.width && !icon.height;
   const x = missing ? work.x + work.width - w - 6 : icon.x + icon.width / 2 - w / 2;

@@ -39,7 +39,6 @@ import { AgentIntegrationSettings } from '../../../../../packages/dashboard/src/
 import { useTheme } from '@/hooks/useTheme';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
-import { TrayPanelControl } from './TrayPanelControl';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
 import { FilterSelectPopover } from './FilterMenu';
 
@@ -113,7 +112,7 @@ export function SettingsPanel({
           </Tabs.Panel>
         )}
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="subscription">
-          {tab === 'subscription' && <SubscriptionChannelSettings />}
+          {tab === 'subscription' && <QuotaSettings />}
         </Tabs.Panel>
         <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
           {tab === 'app' && <AppSettingsPanel />}
@@ -124,11 +123,6 @@ export function SettingsPanel({
       </Tabs>
     </div>
   );
-}
-
-/** Toggle which auto-detected subscription channels may appear on the dashboard. */
-function SubscriptionChannelSettings() {
-  return <div className="space-y-4"><TrayPanelControl /><QuotaSettings /></div>;
 }
 
 /** 自动更新 + 开机自启 + 设备信息。 */

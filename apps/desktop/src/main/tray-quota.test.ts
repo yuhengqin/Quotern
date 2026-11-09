@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { quotaTraySummary, quotaPopoverBounds, quotaTrayTitle } from './tray-quota';
-import { selectTrayQuota } from '../shared/tray-quota-summary';
 import { normalizeQuotaSnapshot } from '../shared/quota-analysis';
 import { mapAntigravityModels } from '../shared/antigravity-subscription';
 import { mapOpenCodeUsage } from '../shared/opencode-subscription';
@@ -54,27 +53,4 @@ test('popover fits a secondary work area and a taskbar with unavailable icon bou
   const fallback = quotaPopoverBounds({ x: 0, y: 0, width: 0, height: 0 }, work, 430, 300);
   assert.equal(fallback.x + fallback.width, -6);
   assert.equal(fallback.y + fallback.height, 594);
-});
-
-test('a pinned panel expands within its own display and shrinks back to its anchor', () => {
-  const work = { x: -800, y: 0, width: 800, height: 600 };
-  const anchor = { x: -380, y: 464 };
-  assert.deepEqual(quotaPopoverBounds({ ...anchor, width: 0, height: 0 }, work, 446, 716, anchor),
-    { x: -446, y: 0, width: 446, height: 600 });
-  assert.deepEqual(quotaPopoverBounds({ ...anchor, width: 0, height: 0 }, work, 376, 128, anchor),
-    { ...anchor, width: 376, height: 128 });
-});
-
-test('compact quota uses the tightest current window, honoring provider priority when available', () => {
-  const codex = normalizeQuotaSnapshot('codex', 'Codex', {
-    status: 'ready', fiveHour: { usedPercent: 100, resetsAt: 1_700_000_000 }, weekly: { usedPercent: 45 },
-  });
-  const claude = normalizeQuotaSnapshot('claude', 'Claude', { status: 'ready', fiveHour: { usedPercent: 95 } });
-  const stale = normalizeQuotaSnapshot('cursor', 'Cursor', { status: 'ready', stale: true, fiveHour: { usedPercent: 100 } });
-  const now = 1_800_000_000;
-  assert.equal(selectTrayQuota([codex, claude, stale], { now })?.provider.id, 'claude');
-  const preferred = selectTrayQuota([codex, claude, stale], { now, providerOrder: ['cursor', 'codex'] });
-  assert.equal(preferred?.provider.id, 'codex');
-  assert.equal(preferred?.window.id, 'weekly');
-  assert.equal(selectTrayQuota([stale], { now }), undefined);
 });

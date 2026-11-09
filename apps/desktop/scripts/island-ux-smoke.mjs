@@ -26,7 +26,6 @@ app.on('browser-window-created', (_event, window) => { for (const event of ['sho
 let server, trayController, mainWindow, downloadPath, downloaded = 0, failPreference = false, failShareReport = false, locale = 'zh-CN';
 const until = async (predicate, label) => { for (let n = 0; n < 150; n++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
 const button = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
-const namedButton = label => `[...document.querySelectorAll('button')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)})`;
 const select = label => `[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)} || el.parentElement?.textContent.includes(${JSON.stringify(label)}))`;
 const option = text => `[...document.querySelectorAll('[role="option"]')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const body = client => client.evaluate('document.body.innerText');
@@ -95,7 +94,10 @@ async function main() {
   ipcMain.handle('share-card:copy-image', (_event, data) => { clipboard.writeImage(nativeImage.createFromDataURL(data)); return true; });
   trayController = await import('../out/main/island-tray-test.mjs');
   const trayOptions = { getLocale: () => locale, showMainWindow: () => mainWindow?.show(), getMainWindow: () => mainWindow, openSettings: () => {}, triggerSync: () => {} };
+  await writeFile(path.join(output, 'profile/tray-panel.json'), JSON.stringify({ pinned: true, x: -800.3, y: 25.4, mode: 'full' }));
   trayController.createTrayPopover(trayOptions);
+  await wait(250);
+  assert.equal(BrowserWindow.getAllWindows().length, 0, 'legacy pin settings do not automatically open a tray window');
 
   async function exercise(window, client, mode) {
     await until(() => client.evaluate('Boolean(document.querySelector("[data-quota-card]"))'), mode + ' quota loaded');
@@ -201,6 +203,7 @@ async function main() {
   const nativeInputs = [];
   panel.webContents.on('before-input-event', (_event, input) => nativeInputs.push({ type: input.type, key: input.key }));
   await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'cold notification dialog');
+  assert.equal(await client.evaluate(`Boolean(${button('固定额度面板')})`), false, 'tray popover has no pin control');
   panel.show(); panel.focus();
   await until(() => client.evaluate('document.activeElement?.dataset.quotaWindow === "weekly"'), 'cold notification focuses its exact window');
   await shot(client, 'tray-notification-detail');
@@ -217,42 +220,24 @@ async function main() {
   panel.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
   panel.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
   await until(() => !panel.isVisible(), 'second Escape hides the panel');
+  await wait(250);
   trayController.showQuotaPopover();
   await client.click(button('摘要'));
   await until(() => client.evaluate(`Boolean(${button('完整')}) && !document.querySelector('.tray-popover__usage')`), 'native summary');
-  await client.click(button('固定简洁面板'));
-  const isCompact = () => client.evaluate('Boolean(document.querySelector(".tray-popover--summary"))');
-  await until(async () => JSON.parse(requireReadPanel()).pinned && await isCompact(), 'pin defaults to the compact panel');
-  const compactBounds = panel.getBounds();
-  assert.deepEqual([compactBounds.width, compactBounds.height], [376, 128]);
-  assert.ok((await body(client)).includes('剩余 8%'));
-  await client.click(namedButton('展开完整面板'));
-  await until(() => client.evaluate('Boolean(document.querySelector(".tray-popover__usage"))'), 'expanded panel restores full usage despite the saved unpinned summary');
-  await client.click(namedButton('收起为简洁面板'));
-  await until(isCompact, 'collapse returns to the compact panel');
-  assert.deepEqual(panel.getBounds(), compactBounds);
+  await client.click(button('完整'));
+  await until(() => client.evaluate(`Boolean(${button('摘要')}) && Boolean(document.querySelector('.tray-popover__usage'))`), 'native full mode');
+  await client.click(button('摘要'));
+  await until(() => client.evaluate(`Boolean(${button('完整')}) && !document.querySelector('.tray-popover__usage')`), 'native summary restored');
+  const summaryHeight = panel.getBounds().height;
   trayController.showQuotaPopover(target);
   await until(() => client.evaluate('document.activeElement?.dataset.quotaWindow === "weekly"'), 'repeated notification');
-  assert.ok(panel.getBounds().height > compactBounds.height, 'details have enough height'); await closeDetails(client);
-  panel.setPosition(80, 100); await wait(200);
-  // setPosition does not end a native Windows drag; exercise its completion callback separately.
-  assert.deepEqual(panel.getPosition(), [80, 100]); panel.emit('moved');
-  const saved = JSON.parse(requireReadPanel()); assert.equal(saved.mode, 'summary');
-  assert.ok(Math.abs(saved.x - 80) < 5 && Math.abs(saved.y - 100) < 5);
-  await client.click(namedButton('收起为简洁面板'));
-  await until(isCompact, 'compact panel restores the new anchor');
-  assert.deepEqual(panel.getPosition(), [80, 100]); await shot(client, 'tray-compact-panel');
-  await client.click(namedButton('取消固定'));
-  await until(() => client.evaluate(`Boolean(${button('完整')}) && !document.querySelector('.tray-popover__usage')`), 'unpin restores the saved summary');
-  panel.hide();
-  await until(() => !panel.isVisible() && !panel.isFocused(), 'unpinned tray finishes hiding');
-  // Let the native blur settle before requesting the next foreground show.
+  assert.ok(panel.getBounds().height >= summaryHeight, 'details have enough height'); await closeDetails(client);
+  mainWindow.focus();
+  await until(() => !panel.isVisible(), 'tray hides after main window focus');
   await wait(250);
   trayController.showQuotaPopover();
-  await until(() => panel.isVisible() && panel.isFocused(), 'unpinned tray reopens');
+  await until(() => panel.isVisible(), 'tray reopens after blur');
   await shot(client, 'tray-summary-reopened');
-  await client.click(button('固定简洁面板'));
-  await until(isCompact, 'repinning defaults to the compact panel');
   provider.provenance.accountRef = 'synthetic-account-b'; publish();
   trayController.showQuotaPopover(target);
   await until(async () => (await body(client)).includes('账号已变更或无法确认'), 'old account alert is not misrouted');
@@ -269,13 +254,11 @@ async function main() {
   trayController.showQuotaPopover({ ...target, windowId: 'retired-window' });
   await until(async () => (await body(client)).includes('额度窗口已不可用'), 'missing window feedback');
   await closeDetails(client);
-  checks.push('windows-native-tray-cold-and-repeat-navigation-identity-deduplication-summary-pin-position-callback-and-escape');
+  checks.push('windows-native-tray-no-legacy-pin-auto-open-navigation-identity-deduplication-summary-full-and-escape');
   for (const client of clients) assert.deepEqual(client.errors, []);
   await writeFile(path.join(output, 'results.json'), JSON.stringify({ ok: true, checks, output }, null, 2));
   console.log(JSON.stringify({ ok: true, checks, output }));
 }
-function requireReadPanel() { return fileSystemRead(path.join(output, 'profile/tray-panel.json'), 'utf8'); }
-import { readFileSync as fileSystemRead } from 'node:fs';
 const deadline = setTimeout(() => { console.error('Island UI acceptance exceeded 240 seconds'); app.exit(2); }, 240_000);
 void app.whenReady().then(main).catch(async error => {
   console.error(error); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error));

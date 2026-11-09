@@ -266,22 +266,14 @@ const tudApi = {
    */
   resizeTrayPopover: (height: number) =>
     ipcRenderer.send(TRAY_POPOVER_RESIZE_CHANNEL, height),
-  getTrayPanel: (): Promise<TrayPanelViewState> => ipcRenderer.invoke(TRAY_PANEL_GET),
-  setTrayPanelPinned: (pinned: boolean): Promise<TrayPanelViewState> => ipcRenderer.invoke(TRAY_PANEL_SET, pinned),
-  setTrayPanelMode: (mode: 'summary' | 'full'): Promise<TrayPanelViewState> => ipcRenderer.invoke(TRAY_PANEL_MODE, mode),
-  setTrayPanelExpanded: (expanded: boolean): Promise<TrayPanelViewState> => ipcRenderer.invoke(TRAY_PANEL_SET_EXPANDED, expanded),
-  hideTrayPanel: () => ipcRenderer.send(TRAY_PANEL_HIDE),
+  getTrayPanel: (): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_GET),
+  setTrayPanelMode: (mode: 'summary' | 'full'): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_MODE, mode),
   getQuotaNavigation: (): Promise<QuotaNavigationRequest | null> => ipcRenderer.invoke(QUOTA_NAVIGATION_GET),
   acknowledgeQuotaNavigation: (requestId: string): Promise<void> => ipcRenderer.invoke(QUOTA_NAVIGATION_ACK, requestId),
   setQuotaDialogOpen: (open: boolean): Promise<void> => ipcRenderer.invoke(QUOTA_DIALOG_STATE, open),
   onQuotaNavigation: (callback: () => void) => {
     const listener = () => callback(); ipcRenderer.on(QUOTA_NAVIGATION, listener);
     return () => ipcRenderer.removeListener(QUOTA_NAVIGATION, listener);
-  },
-  onTrayPanelChanged: (callback: (state: TrayPanelViewState) => void) => {
-    const listener = (_event: unknown, state: TrayPanelViewState) => callback(state);
-    ipcRenderer.on(TRAY_PANEL_CHANGED, listener);
-    return () => ipcRenderer.removeListener(TRAY_PANEL_CHANGED, listener);
   },
 
   getDashboardRange: (): Promise<DashboardRange> =>
@@ -441,4 +433,4 @@ const tudApi = {
 contextBridge.exposeInMainWorld('tud', tudApi);
 
 export type TudApi = typeof tudApi;
-import { TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_SET_EXPANDED, TRAY_PANEL_HIDE, TRAY_PANEL_CHANGED, TRAY_PANEL_MODE, type TrayPanelViewState } from '../shared/tray-panel';
+import { TRAY_PANEL_GET, TRAY_PANEL_MODE, type TrayPanelState } from '../shared/tray-panel';

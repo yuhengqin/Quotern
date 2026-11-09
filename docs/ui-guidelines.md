@@ -55,9 +55,7 @@
 
 交接预览的目录、日志、集成配置和本机访问失败在操作附近说明原因及下一步；重试和保存失败保留草稿，复制失败提供手动复制提示。两端使用同一 `SessionHandoff`。预览复用已采集会话的文件定位，不把用量索引按小型 Agent 配置的大小上限处理；只在显式预览时读取有限日志尾部。
 
-`UsageInsightsPanel` 从当前报表读取最多三项结论，并带范围进入会话页；`SessionDiagnosticsSection` 在会话详情区分工具记录、粗略输出体积和推断关联，具体证据按需展开。
-
-Desktop「简洁面板」复用 [TrayPopoverView](../apps/desktop/src/renderer/components/TrayPopoverView.tsx)，可从托盘标题或订阅设置固定。固定后默认用 360×112 DIP 显示一条有效额度，按已设置的账号优先顺序选择，无优先账号时显示剩余比例最低的额度。百分比读数过期后等待刷新；重置时间沿用额度时间设置。标题可拖动，箭头按钮支持鼠标和键盘展开或收起，完整面板仍提供全部额度、用量与操作入口。额度排列的「紧凑卡片」只调整完整面板内卡片间距。
+`UsageInsightsPanel` 从当前报表读取最多三项结论，并带范围进入会话页；`SessionDiagnosticsSection` 在会话详情区分工具记录、粗略输出体积和推断关联，具体证据按需展开。Desktop [TrayPopoverView](../apps/desktop/src/renderer/components/TrayPopoverView.tsx) 按需显示额度摘要或完整用量概览。额度排列的「紧凑卡片」只调整间距，额度信息和详情入口仍可访问。
 
 1. **先确定用户要判断或执行什么。** 正文优先展示结果和动作，不按 DTO 字段顺序铺开页面。新增一行文字、标签或说明时，确认它是否改变用户当前判断；默认界面没有这种价值的内容进入按需入口。
 2. **默认配置不制造标签。** `standard`、`unknown` 等无区分价值的服务档位不显示，也不生成空白副行；非默认档位才补充标识。这条针对配置/身份标签，不适用于记录到的零值；未知测量值保持未知，不伪装成零。
@@ -224,7 +222,7 @@ Desktop「订阅」设置中的服务故障/恢复提醒默认开启，已有明
 ### 额度、快速查看与分享
 
 - 双端额度卡继续共用 `packages/dashboard/src/components/QuotaUsageCard.tsx`；重点窗口选择只改变显示顺序，默认自动选择有效且最紧张的窗口。偏好以卡片 ID 隔离；缺失或过期选择回退当前读数，不屏蔽其他窗口及风险。正常服务列表与来源时间由原生 details 按需展开，异常保持可见。`QuotaRecoveryActions.tsx` 提供只读登录指引与复制命令；有自定义目录时显示目录和指引，不拼接未转义的终端命令。
-- Desktop 通知经 `shared/quota-navigation.ts` 保存待处理目标，renderer 订阅后读取、定位并确认。额度窗口目标必须校验匿名账号引用；同一 profile 换号不定位到新账号。服务状态通知只定位服务。未固定时的「摘要／完整」偏好与固定状态、坐标共同保存在 `tray-panel.json`；固定后收到通知并打开时展开完整面板，再定位目标。卡片详情打开时扩大高度，Esc 先关闭详情。
+- Desktop 通知经 `shared/quota-navigation.ts` 保存待处理目标，renderer 订阅后读取、定位并确认。额度窗口目标必须校验匿名账号引用；同一 profile 换号不定位到新账号。服务状态通知只定位服务。「摘要／完整」偏好保存在 `tray-panel.json`。卡片详情打开时扩大高度，Esc 先关闭详情。
 - 两端总览的 `DashboardViewControl.tsx` 共用可见的快速／完整切换，保存在 `tud.dashboardQuickView`；默认完整，快速模式保留费用、总 Token、额度、洞察和原筛选。`DashboardOverviewCard` 的独立副本一起维护，完整分析不删减。
 - 分享入口共用 `ShareActivityModalContent`、`ShareCardCarousel`、`SharePosterArtwork` 与 `ShareCardActions`。`lib/share-presentation.ts` 集中定义画幅尺寸、累计 Token 和费用证据语义；预览与冻结的导出请求使用同一参数。详细卡片默认 2:3；主指标版式支持 Token／费用，其他画幅为 1:1、4:5、9:16。累计线只使用实际日期记录，单点不伪造趋势。`hooks/useShareReport.ts` 按分享期间与 Agent 筛选在本次会话内缓存同份报表的费用、Token、模型和累计日期，不单独刷新费用。缺失／全未知显示“—”，部分计价标注范围，已知零仍显示零；旧 runtime 无报表时保留原用量快照且费用未知，配文共用该口径。新共用组件样式登记 Desktop 的 `@source`。
 - `LocalBackupPanel.tsx` 由双端直接共用。预览日期取实际用量桶时间，来源列表有边界，配置起点不视为覆盖范围。保护恢复默认勾选，服务端成功保存保护文件才开始新目录恢复；目标冲突时仍展示保护路径。旧 API 和 v1 文件可继续使用。所有按钮由同步互斥入口防止重复提交。
@@ -236,7 +234,7 @@ Desktop「订阅」设置中的服务故障/恢复提醒默认开启，已有明
 5. 按本节信息呈现矩阵验收默认界面和按需展开后的界面。单/多模型、完整/部分归属、standard/非默认档位、说明隐藏与打开、价格筛选/清除/未匹配都要检查；不能只测“字段存在”。[session-detail-presentation.test.ts](../packages/dashboard/src/lib/session-detail-presentation.test.ts) 和 [pricing-selection.test.ts](../packages/dashboard/src/lib/pricing-selection.test.ts) 随 Dashboard 测试进入三平台 CI；两端构建后运行 `corepack pnpm test:session-detail-ui`，由 [session-detail-smoke.mjs](../apps/desktop/scripts/session-detail-smoke.mjs) 实测 DOM、键盘、Popover 和窄屏。Windows CI 自动执行同一界面脚本。查看截图确认表头圆角、合计行与信息层级；自动断言不能替代视觉判断。
 6. 调整紧凑筛选尺寸后，两端构建并运行 `corepack pnpm test:session-pagination-ui`；[session-pagination-smoke.mjs](../apps/desktop/scripts/session-pagination-smoke.mjs) 同时检查会话列表与总览、分享、价格页的文本可见高度、长模型名称、Agent 图标、厂商选择/清除及焦点返回，覆盖 HTTP / IPC 与宽窄布局。核对生成的截图，不能仅凭字号类名断言文字完整。
 7. 调整性能分析、额度历史、用户价格或本地备份流程后，构建并运行 `corepack pnpm test:keeper-insights-ui`；[keeper-insights-smoke.mjs](../apps/desktop/scripts/keeper-insights-smoke.mjs) 使用独立 Electron 窗口、真实 Core API 与 preload IPC，验证筛选/会话跳转、价格校验/保存/恢复/焦点、额度周期与曲线日期、备份下载/文件校验/目标冲突/真实恢复，以及 Token 单位和四语言。额度来源与原生偏好为合成 fixture；人工核对输出截图，系统文件选择器及真实账号另行验收。
-8. 调整额度关注、提醒定位、托盘摘要、总览快速查看或分享编辑后，构建并运行 `corepack pnpm test:island-ux-ui`。独立合成数据覆盖 HTTP/IPC 保存失败与重试后的焦点、正常服务折叠、完整/快速切换、分享三版式四画幅内容边界及 PNG 尺寸、快照稳定、窄屏与四语言，以及真实 Windows 托盘的通知目标、换号撤销、摘要/固定和 Esc。位置测试使用原生 setPosition 加移动完成回调，不能代替人工拖拽；未发送真实系统通知。
+8. 调整额度关注、提醒定位、托盘摘要、总览快速查看或分享编辑后，构建并运行 `corepack pnpm test:island-ux-ui`。独立合成数据覆盖 HTTP/IPC 保存失败与重试后的焦点、正常服务折叠、完整/快速切换、分享三版式四画幅内容边界及 PNG 尺寸、快照稳定、窄屏与四语言，以及 Windows 托盘的通知目标、换号撤销、摘要/完整切换、旧设置兼容和 Esc。通知定位使用合成目标。
 
 ```bash
 pnpm --filter quotern-dashboard exec tsc --noEmit

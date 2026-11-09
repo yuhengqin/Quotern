@@ -16,7 +16,6 @@ import {
   ProgressBar,
   Skeleton,
   Tabs,
-  Tooltip,
 } from '@heroui/react';
 import {
   DASHBOARD_RANGE_DAYS,
@@ -40,18 +39,14 @@ import {
   summarizeTrendRows,
 } from '@/lib/usage-filter';
 import { Check } from '@gravity-ui/icons';
-import { ChevronDownIcon, ChevronUpIcon, XIcon } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
-import { TrayPanelPinButton, useTrayPanel } from './TrayPanelControl';
 import { DEFAULT_DASHBOARD_RANGE } from '../../shared/dashboard-range';
 import {
   TRAY_PANEL_WIDTH,
   TRAY_PANEL_MIN_HEIGHT,
   TRAY_PANEL_MAX_HEIGHT,
   TRAY_PANEL_GUTTER,
-  TRAY_SUMMARY_WIDTH,
-  TRAY_SUMMARY_HEIGHT,
 } from '../../shared/tray-popover-layout';
 import './TrayPopoverView.css';
 
@@ -59,11 +54,6 @@ const POPOVER_SHELL_STYLE = {
   '--tray-panel-width': `${TRAY_PANEL_WIDTH}px`,
   '--tray-panel-max-height': `${TRAY_PANEL_MAX_HEIGHT}px`,
   '--tray-panel-gutter': `${TRAY_PANEL_GUTTER}px`,
-} as CSSProperties;
-const SUMMARY_SHELL_STYLE = {
-  ...POPOVER_SHELL_STYLE,
-  '--tray-panel-width': `${TRAY_SUMMARY_WIDTH}px`,
-  '--tray-panel-max-height': `${TRAY_SUMMARY_HEIGHT}px`,
 } as CSSProperties;
 
 /** Tabs update immediately; data fetch waits until after paint. */
@@ -84,12 +74,6 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 export function TrayPopoverView() {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.resolvedLanguage);
-  const panel = useTrayPanel();
-  const panelReady = panel.state !== null;
-  const pinned = panel.state?.pinned === true;
-  const compact = pinned && !panel.state?.expanded;
-  const summaryOnly = !pinned && panel.state?.mode === 'summary';
-  const showUsage = !compact && !summaryOnly;
   const [range, setRange] = useState<DashboardRange>(DEFAULT_DASHBOARD_RANGE);
   const dataRange = useDeferredDashboardRange(range);
   const rangeDays = DASHBOARD_RANGE_DAYS[dataRange];
@@ -108,7 +92,24 @@ export function TrayPopoverView() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [panelMode, setPanelMode] = useState<'summary' | 'full' | null>(null);
+  const [savingPanelMode, setSavingPanelMode] = useState(false);
+  const [panelModeFailed, setPanelModeFailed] = useState(false);
+  const summaryOnly = panelMode === 'summary';
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    void window.tud.getTrayPanel().then(({ mode }) => {
+      if (!disposed) setPanelMode(mode ?? 'full');
+    }).catch(() => {
+      if (!disposed) {
+        setPanelMode('full');
+        setPanelModeFailed(true);
+      }
+    });
+    return () => { disposed = true; };
+  }, []);
 
   useEffect(() => {
     const openDialogs = new Set<string>();
@@ -121,6 +122,19 @@ export function TrayPopoverView() {
     window.addEventListener('quotern:quota-dialog', onDialog);
     return () => { window.removeEventListener('quotern:quota-dialog', onDialog); void window.tud.setQuotaDialogOpen?.(false).catch(() => {}); };
   }, []);
+
+  const togglePanelMode = async () => {
+    setSavingPanelMode(true);
+    setPanelModeFailed(false);
+    try {
+      const { mode } = await window.tud.setTrayPanelMode(summaryOnly ? 'full' : 'summary');
+      setPanelMode(mode ?? 'full');
+    } catch {
+      setPanelModeFailed(true);
+    } finally {
+      setSavingPanelMode(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +284,6 @@ export function TrayPopoverView() {
 
   /** Keep the native tray window fitted to the rendered header and content. */
   useEffect(() => {
-    if (!panelReady || compact) return;
     const contentEl = contentRef.current;
     if (!contentEl) return;
 
@@ -303,7 +316,7 @@ export function TrayPopoverView() {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, [panelReady, compact, summaryOnly, dialogOpen, loading, error]);
+  }, [loading, error, summaryOnly, dialogOpen]);
 
   const comparisonLabel = range === 'today'
     ? t('desktop.tray.comparedYesterday')
@@ -418,45 +431,21 @@ export function TrayPopoverView() {
     );
   }, [availableTools, selectedTools, visibleSummary.totalTokens]);
 
-  if (!panelReady) return null;
-
-  const toggleLabel = t(compact ? 'desktop.tray.expand' : 'desktop.tray.collapse');
-  const hideLabel = t('desktop.tray.hide');
   return (
-    <div className={`tray-popover font-sans text-foreground${compact ? ' tray-popover--summary' : ''}`} style={compact ? SUMMARY_SHELL_STYLE : POPOVER_SHELL_STYLE}>
+    <div className="tray-popover font-sans text-foreground" style={POPOVER_SHELL_STYLE}>
       <header
         ref={headerRef}
-        className={`tray-popover__header flex flex-col ${compact ? 'border-b border-separator px-3 py-1' : 'gap-2 px-4 py-2'}`}
+        className="tray-popover__header flex flex-col gap-2 px-4 py-2"
       >
-        <div className="flex items-center gap-1">
-          <h1 className={`${pinned ? 'tray-panel-drag ' : ''}min-w-0 flex-1 self-stretch content-center text-sm font-semibold`}>{t(compact ? 'desktop.tray.compactPanel' : 'desktop.tray.overview')}</h1>
-          {!pinned && (
-            <Button size="sm" variant="tertiary" isPending={panel.busy} onPress={() => { void panel.toggleMode(); }}>
-              {t(summaryOnly ? 'island.panel.full' : 'island.panel.summary')}
-            </Button>
-          )}
-          <TrayPanelPinButton panel={panel} iconOnly={pinned} />
-          {pinned && (
-            <Tooltip>
-              <Button aria-expanded={!compact} aria-label={toggleLabel} isPending={panel.busy}
-                className="size-8 min-w-8 p-0" size="sm" variant="tertiary" isIconOnly onPress={() => { void panel.toggleExpanded(); }}>
-                {compact ? <ChevronDownIcon aria-hidden className="size-4" /> : <ChevronUpIcon aria-hidden className="size-4" />}
-              </Button>
-              <Tooltip.Content placement="bottom">{toggleLabel}</Tooltip.Content>
-            </Tooltip>
-          )}
-          {!compact && <ThemeToggle />}
-          {pinned && (
-            <Tooltip>
-              <Button aria-label={hideLabel} className="size-8 min-w-8 p-0" size="sm" variant="tertiary" isIconOnly onPress={() => window.tud.hideTrayPanel()}>
-                <XIcon aria-hidden className="size-4" />
-              </Button>
-              <Tooltip.Content placement="bottom">{hideLabel}</Tooltip.Content>
-            </Tooltip>
-          )}
+        <div className="flex items-center justify-between">
+          <h1 className="min-w-0 flex-1 py-1 text-sm font-semibold text-foreground">{t('desktop.tray.overview')}</h1>
+          <Button size="sm" variant="tertiary" isDisabled={panelMode === null} isPending={savingPanelMode} onPress={() => { void togglePanelMode(); }}>
+            {t(summaryOnly ? 'island.panel.full' : 'island.panel.summary')}
+          </Button>
+          <ThemeToggle />
         </div>
-        {!compact && panel.error && <p role="alert" className="text-xs text-danger">{t('desktop.tray.panelFailed')}</p>}
-        {showUsage && <div className="flex min-w-0 items-center gap-2">
+        {panelModeFailed && <p role="alert" className="text-xs text-danger">{t('desktop.tray.modeFailed')}</p>}
+        {!summaryOnly && <div className="flex min-w-0 items-center gap-2">
           <Tabs
             className="w-fit shrink-0 text-center"
             selectedKey={range}
@@ -509,11 +498,9 @@ export function TrayPopoverView() {
       </header>
 
       <div className="tray-popover__body">
-        <div ref={contentRef} className={compact ? undefined : 'px-4 pb-4'}>
-          {compact && panel.error ? (
-            <p role="alert" className="tray-popover__summary text-sm text-danger">{t('desktop.tray.panelFailed')}</p>
-          ) : <SubscriptionUsageGrid compact={compact} summaryOnly={summaryOnly} className="mb-3 grid-cols-1 gap-2.5" />}
-          {showUsage && (loading ? (
+        <div ref={contentRef} className="px-4 pb-4">
+          <SubscriptionUsageGrid className="mb-3 grid-cols-1 gap-2.5" summaryOnly={summaryOnly} />
+          {!summaryOnly && (loading ? (
             <div className="relative isolate min-h-40">
               <DashboardRangeSyncOverlay visible />
               <TrayLoadingSkeleton />
@@ -606,7 +593,7 @@ export function TrayPopoverView() {
         </div>
       </div>
 
-      {!compact && <footer
+      <footer
         ref={footerRef}
         className="tray-popover__footer flex items-center gap-1.5 px-4 py-2"
       >
@@ -634,7 +621,7 @@ export function TrayPopoverView() {
           {t('desktop.tray.openMain')}
           <span aria-hidden="true">↗</span>
         </Button>
-      </footer>}
+      </footer>
     </div>
   );
 }

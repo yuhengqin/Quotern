@@ -51,9 +51,9 @@ import {
 type DesktopSettingsTabId = SettingsTabId;
 
 const TAB_ITEMS = [
+  { id: 'appearance', labelKey: 'desktop.settings.tabs.appearance', Icon: Palette },
   { id: 'pet', labelKey: 'desktop.pet.tab', Icon: PawPrint },
   { id: 'subscription', labelKey: 'settings.tabs.subscription', Icon: CreditCard },
-  { id: 'appearance', labelKey: 'desktop.settings.tabs.appearance', Icon: Palette },
   { id: 'integrations', labelKey: 'agent.title', Icon: Plug },
   { id: 'data', labelKey: 'desktop.settings.tabs.data', Icon: Database },
   { id: 'app', labelKey: 'settings.tabs.app', Icon: Settings },

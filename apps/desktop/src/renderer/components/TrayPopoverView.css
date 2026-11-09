@@ -44,7 +44,6 @@ body:has(.tray-popover),
 
 /* Keep the allowance cards' typography intact. */
 .tray-popover__header,
-.tray-popover__usage,
 .tray-popover__footer {
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
@@ -80,17 +79,4 @@ body:has(.tray-popover),
   padding-block: 4px;
   padding-inline: 16px;
   column-gap: 8px;
-}
-
-.tray-popover__trend {
-  gap: 8px;
-  border-radius: 12px;
-}
-
-.tray-popover__trend > .card__header {
-  align-items: center;
-}
-
-.tray-popover__trend [data-slot="chart"] {
-  height: 6.5rem;
 }

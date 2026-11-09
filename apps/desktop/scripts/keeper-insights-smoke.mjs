@@ -100,7 +100,6 @@ async function main() {
   ipcMain.handle('dashboard-range:set', (_event, value) => value);
   ipcMain.handle('dsh-pet:navigation-get', () => null);
   ipcMain.handle('quota:navigation:get', () => null);
-  ipcMain.handle('tray-panel:get', () => ({ pinned: false }));
   for (const channel of ['autostart:get', 'autostart:get-hidden', 'tray-usage:get']) ipcMain.handle(channel, () => false);
   ipcMain.handle('tray-usage-mode:get', () => 'both');
   ipcMain.handle('quota:get', () => quota);

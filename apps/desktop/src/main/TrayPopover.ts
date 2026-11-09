@@ -12,8 +12,6 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
-import { readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { normalizeTrayPanel, TRAY_PANEL_GET, TRAY_PANEL_MODE, type TrayPanelState } from '../shared/tray-panel';
 import { QUOTA_NAVIGATION, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE, type QuotaNavigationRequest, type QuotaNavigationTarget } from '../shared/quota-navigation';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
@@ -80,7 +78,6 @@ let iconGeneration = 0;
 let quotaLevel = -1;
 /** Latest content height reported by the renderer, used when re-anchoring. */
 let popoverHeight = POPOVER_INITIAL_HEIGHT;
-let panelState: TrayPanelState = {};
 let pendingNavigation: QuotaNavigationRequest | null = null;
 let popoverDialogOpen = false;
 const supportsPopover = isMac || process.platform === 'win32';
@@ -306,9 +303,7 @@ export function setTrayQuotaState(state: QuotaState): void {
 export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
   currentOptions = options;
-  const panelPath = path.join(app.getPath('userData'), 'tray-panel.json');
-  try { panelState = normalizeTrayPanel(JSON.parse(readFileSync(panelPath, 'utf8'))); } catch { panelState = {}; }
-  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_MODE, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
+  for (const channel of [QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
   const ownsNavigation = (event: Electron.IpcMainInvokeEvent) => {
     const target = navigationWindow();
     return target && !target.isDestroyed() && event.sender === target.webContents && event.senderFrame === target.webContents.mainFrame;
@@ -316,16 +311,6 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
   ipcMain.handle(QUOTA_NAVIGATION_GET, event => ownsNavigation(event) ? pendingNavigation : null);
   ipcMain.handle(QUOTA_NAVIGATION_ACK, (event, requestId: unknown) => { if (ownsNavigation(event) && pendingNavigation?.requestId === requestId) pendingNavigation = null; });
   ipcMain.handle(QUOTA_DIALOG_STATE, (event, open: unknown) => { if (event.sender === popover?.webContents && typeof open === 'boolean') popoverDialogOpen = open; });
-  ipcMain.handle(TRAY_PANEL_GET, () => panelState);
-  ipcMain.handle(TRAY_PANEL_MODE, (event, mode: unknown) => {
-    if ((mode !== 'full' && mode !== 'summary') || event.sender !== popover?.webContents) throw new Error('INVALID_TRAY_PANEL');
-    const next: TrayPanelState = { mode };
-    const temporary = panelPath + '.tmp';
-    writeFileSync(temporary, JSON.stringify(next));
-    renameSync(temporary, panelPath);
-    panelState = next;
-    return panelState;
-  });
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
   trayMenu = buildTrayMenu(options);
@@ -357,7 +342,7 @@ export function disposeTrayPopover(): void {
   iconGeneration++; quotaLevel = -1;
   markTrayPopoverQuitting();
   ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
-  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_MODE, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
+  for (const channel of [QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
   pendingNavigation = null; popoverDialogOpen = false;
   if (popover && !popover.isDestroyed()) {
     popover.removeAllListeners('blur');

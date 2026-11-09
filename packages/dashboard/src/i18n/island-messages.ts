@@ -12,8 +12,6 @@ export const islandMessages: Record<string, readonly [string, string, string, st
   'island.share.cumulative': ['累计 Token', 'Cumulative tokens', '累計トークン', '누적 토큰'],
   'island.quota.navigationUnavailable': ['提醒对应的账号已变更或无法确认，请从面板选择账号。', 'The account in this alert has changed or cannot be verified. Choose an account in the panel.', '通知のアカウントが変更されたか確認できません。パネルで選択してください。', '알림의 계정이 변경되었거나 확인되지 않습니다. 패널에서 계정을 선택하세요.'],
   'island.quota.windowUnavailable': ['提醒对应的额度窗口已不可用，以下是该账号当前的额度。', 'This alert’s window is no longer available. Current allowances for this account are shown below.', '通知の枠は利用できません。以下に現在の使用枠を表示します。', '알림의 한도를 더 이상 사용할 수 없습니다. 아래에서 현재 한도를 확인하세요.'],
-  'island.panel.summary': ['摘要', 'Summary', '概要', '요약'],
-  'island.panel.full': ['完整', 'Full', 'すべて', '전체'],
   'island.dashboard.quick': ['快速查看', 'Quick view', 'クイック表示', '빠른 보기'],
   'island.dashboard.full': ['完整分析', 'Full analysis', '詳細分析', '전체 분석'],
   'island.dashboard.view': ['总览显示方式', 'Overview view', '概要の表示方法', '개요 표시 방식'],

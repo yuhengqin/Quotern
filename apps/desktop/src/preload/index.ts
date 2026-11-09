@@ -266,8 +266,6 @@ const tudApi = {
    */
   resizeTrayPopover: (height: number) =>
     ipcRenderer.send(TRAY_POPOVER_RESIZE_CHANNEL, height),
-  getTrayPanel: (): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_GET),
-  setTrayPanelMode: (mode: 'summary' | 'full'): Promise<TrayPanelState> => ipcRenderer.invoke(TRAY_PANEL_MODE, mode),
   getQuotaNavigation: (): Promise<QuotaNavigationRequest | null> => ipcRenderer.invoke(QUOTA_NAVIGATION_GET),
   acknowledgeQuotaNavigation: (requestId: string): Promise<void> => ipcRenderer.invoke(QUOTA_NAVIGATION_ACK, requestId),
   setQuotaDialogOpen: (open: boolean): Promise<void> => ipcRenderer.invoke(QUOTA_DIALOG_STATE, open),
@@ -433,4 +431,3 @@ const tudApi = {
 contextBridge.exposeInMainWorld('tud', tudApi);
 
 export type TudApi = typeof tudApi;
-import { TRAY_PANEL_GET, TRAY_PANEL_MODE, type TrayPanelState } from '../shared/tray-panel';

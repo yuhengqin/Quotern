@@ -13,7 +13,10 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
-import { normalizeTrayPanel, TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_CHANGED, TRAY_PANEL_MODE, type TrayPanelState } from '../shared/tray-panel';
+import {
+  normalizeTrayPanel, TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_SET_EXPANDED, TRAY_PANEL_HIDE, TRAY_PANEL_CHANGED, TRAY_PANEL_MODE,
+  type TrayPanelState, type TrayPanelViewState,
+} from '../shared/tray-panel';
 import { QUOTA_NAVIGATION, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE, type QuotaNavigationRequest, type QuotaNavigationTarget } from '../shared/quota-navigation';
 import type { QuotaState } from '../shared/quota';
 import type { SupportedLocale } from 'quotern-i18n';
@@ -24,6 +27,8 @@ import {
   TRAY_WINDOW_WIDTH as POPOVER_WIDTH,
   TRAY_WINDOW_MIN_HEIGHT as POPOVER_MIN_HEIGHT,
   TRAY_WINDOW_MAX_HEIGHT as POPOVER_MAX_HEIGHT,
+  TRAY_SUMMARY_WINDOW_WIDTH,
+  TRAY_SUMMARY_WINDOW_HEIGHT,
 } from '../shared/tray-popover-layout';
 import { pokeSyncOnForeground } from './local-runtime';
 import {
@@ -53,6 +58,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isMac = process.platform === 'darwin';
 
 const TRAY_POPOVER_RESIZE_CHANNEL = 'tray-popover:resize';
+const TRAY_INVOKE_CHANNELS = [
+  TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_SET_EXPANDED, TRAY_PANEL_MODE,
+  QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE,
+];
 
 /** Initial height; the renderer reports its real content height on first paint. */
 const POPOVER_INITIAL_HEIGHT = POPOVER_MIN_HEIGHT;
@@ -85,21 +94,43 @@ let pendingNavigation: QuotaNavigationRequest | null = null;
 let popoverDialogOpen = false;
 const supportsPopover = isMac || process.platform === 'win32';
 const navigationWindow = () => supportsPopover ? popover : currentOptions?.getMainWindow?.();
-let positioningPanel = false;
+let panelExpanded = false;
+let positionedBounds: Electron.Rectangle | undefined;
+
+function panelViewState(): TrayPanelViewState {
+  return { ...panelState, expanded: !panelState.pinned || panelExpanded };
+}
+
 function savePanel() {
   const file = path.join(app.getPath('userData'), 'tray-panel.json');
   const temporary = file + '.tmp';
   writeFileSync(temporary, JSON.stringify(panelState)); renameSync(temporary, file);
 }
-function setPanelPinned(pinned: boolean): TrayPanelState {
+function setPanelPinned(pinned: boolean): TrayPanelViewState {
   const previous = panelState; panelState = { ...panelState, pinned };
   try { savePanel(); } catch (error) { panelState = previous; throw error; }
+  if (previous.pinned !== pinned) panelExpanded = false;
   const window = ensurePopover(); window.setMovable(pinned);
-  if (tray) positionPopoverNearTray(tray, popoverHeight);
+  if (tray) positionPopoverNearTray(tray);
   if (pinned) { window.show(); window.focus(); }
   else if (!window.isFocused()) { window.hide(); }
-  for (const item of BrowserWindow.getAllWindows()) item.webContents.send(TRAY_PANEL_CHANGED, panelState);
-  return panelState;
+  const state = panelViewState();
+  for (const item of BrowserWindow.getAllWindows()) item.webContents.send(TRAY_PANEL_CHANGED, state);
+  return state;
+}
+
+function setPanelExpanded(expanded: boolean): TrayPanelViewState {
+  if (panelState.pinned && panelExpanded !== expanded) {
+    panelExpanded = expanded;
+    if (tray) positionPopoverNearTray(tray);
+    popover?.webContents.send(TRAY_PANEL_CHANGED, panelViewState());
+  }
+  return panelViewState();
+}
+
+function hidePanel(): void {
+  lastHiddenAt = Date.now();
+  popover?.hide();
 }
 
 function resolveTrayIconPath(): string {
@@ -156,13 +187,10 @@ function buildTrayMenu(options: TrayPopoverOptions): Menu {
 function ensurePopover(): BrowserWindow {
   if (popover && !popover.isDestroyed()) return popover;
 
+  const expanded = panelViewState().expanded;
   popover = new BrowserWindow({
-    width: POPOVER_WIDTH,
-    height: POPOVER_INITIAL_HEIGHT,
-    minWidth: POPOVER_WIDTH,
-    maxWidth: POPOVER_WIDTH,
-    minHeight: POPOVER_INITIAL_HEIGHT,
-    maxHeight: POPOVER_INITIAL_HEIGHT,
+    width: expanded ? POPOVER_WIDTH : TRAY_SUMMARY_WINDOW_WIDTH,
+    height: expanded ? POPOVER_INITIAL_HEIGHT : TRAY_SUMMARY_WINDOW_HEIGHT,
     show: false,
     frame: false,
     fullscreenable: false,
@@ -170,8 +198,7 @@ function ensurePopover(): BrowserWindow {
     // fill its corners. Keep transparency stable across renderer theme changes.
     transparent: true,
     backgroundColor: '#00000000',
-    // Transparent windows must not be user-resizable. Programmatic setBounds
-    // still works; positionPopoverNearTray unlocks the min/max bounds first.
+    // Transparent windows must not be user-resizable; main sets their bounds.
     resizable: false,
     movable: panelState.pinned,
     minimizable: false,
@@ -188,14 +215,22 @@ function ensurePopover(): BrowserWindow {
   });
 
   popover.webContents.on('context-menu', (e) => e.preventDefault());
-  popover.on('blur', () => { if (!panelState.pinned) { lastHiddenAt = Date.now(); popover?.hide(); } });
+  popover.on('blur', () => { if (!panelState.pinned) hidePanel(); });
   popover.on('moved', () => {
-    if (!panelState.pinned || positioningPanel || !popover) return;
-    const [x, y] = popover.getPosition(); panelState = { ...panelState, x, y };
+    if (!panelState.pinned || !popover) return;
+    const [x, y] = popover.getPosition();
+    // A resize can move the window to keep it on screen. Only a user move
+    // should replace the saved anchor used when collapsing the window again.
+    if (x === positionedBounds?.x && y === positionedBounds?.y) return;
+    if (x === panelState.x && y === panelState.y) return;
+    positionedBounds = undefined;
+    panelState = { ...panelState, x, y };
     try { savePanel(); } catch { console.warn('[quotern] panel position could not be saved'); }
   });
-  popover.once('ready-to-show', () => { if (panelState.pinned && popover && tray) { positionPopoverNearTray(tray, popoverHeight); popover.showInactive(); } });
-  popover.webContents.on('before-input-event', (_event, input) => { if (input.type === 'keyDown' && !input.isAutoRepeat && input.key === 'Escape' && !popoverDialogOpen) { lastHiddenAt = Date.now(); popover?.hide(); } });
+  popover.once('ready-to-show', () => { if (panelState.pinned && popover && tray && !popover.isVisible()) { positionPopoverNearTray(tray); popover.showInactive(); } });
+  popover.webContents.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && !input.isAutoRepeat && input.key === 'Escape' && !popoverDialogOpen) hidePanel();
+  });
   popover.on('close', (e) => {
     // Hide instead of destroy on user close to allow re-toggling.
     if (shouldTrayPopoverPreventClose()) {
@@ -224,36 +259,30 @@ async function loadPopoverRenderer(window: BrowserWindow): Promise<void> {
 }
 
 /**
- * Anchor the popover to the tray icon at `height`.
- *
- * Called both on show and whenever the renderer reports a new content height,
- * so a growing popover stays pinned under the tray icon instead of drifting or
- * spilling off the bottom of the work area.
+ * Fit the current view to its display, using the compact panel's anchor when pinned.
  */
-function positionPopoverNearTray(t: Tray, height: number): void {
+function positionPopoverNearTray(t: Tray): void {
   if (!popover) return;
   const bounds = t.getBounds();
   const display = screen.getDisplayNearestPoint(bounds.width || bounds.height ? {
     x: bounds.x,
     y: bounds.y,
   } : screen.getCursorScreenPoint());
-  const work = display.workArea;
-  const target = quotaPopoverBounds(bounds, work, POPOVER_WIDTH, height);
+  const expanded = panelViewState().expanded;
+  const width = expanded ? POPOVER_WIDTH : TRAY_SUMMARY_WINDOW_WIDTH;
+  const height = expanded ? popoverHeight : TRAY_SUMMARY_WINDOW_HEIGHT;
+  let work = display.workArea;
+  let anchor: Electron.Point | undefined;
   if (panelState.pinned) {
-    const current = popover.getBounds();
-    const x = panelState.x ?? (popover.isVisible() ? current.x : target.x), y = panelState.y ?? (popover.isVisible() ? current.y : target.y);
-    const area = screen.getDisplayNearestPoint({ x, y }).workArea;
-    target.height = Math.min(height, area.height);
-    target.x = Math.max(area.x, Math.min(x, area.x + area.width - target.width));
-    target.y = Math.max(area.y, Math.min(y, area.y + area.height - target.height));
+    if (panelState.x !== undefined && panelState.y !== undefined) {
+      anchor = { x: panelState.x, y: panelState.y };
+      work = screen.getDisplayNearestPoint(anchor).workArea;
+    } else {
+      anchor = quotaPopoverBounds(bounds, work, TRAY_SUMMARY_WINDOW_WIDTH, TRAY_SUMMARY_WINDOW_HEIGHT);
+    }
   }
-  positioningPanel = true;
-  popover.setMinimumSize(target.width, Math.min(POPOVER_MIN_HEIGHT, target.height));
-  popover.setMaximumSize(target.width, POPOVER_MAX_HEIGHT);
-  popover.setBounds(target);
-  popover.setMinimumSize(target.width, target.height);
-  popover.setMaximumSize(target.width, target.height);
-  positioningPanel = false;
+  positionedBounds = quotaPopoverBounds(bounds, work, width, height, anchor);
+  popover.setBounds(positionedBounds);
 }
 
 function handlePopoverResize(
@@ -272,7 +301,7 @@ function handlePopoverResize(
   );
   if (clamped === popoverHeight) return;
   popoverHeight = clamped;
-  positionPopoverNearTray(tray, clamped);
+  if (panelViewState().expanded) positionPopoverNearTray(tray);
 }
 
 function togglePopover(): void {
@@ -285,7 +314,8 @@ function togglePopover(): void {
     return;
   }
   pokeSyncOnForeground();
-  positionPopoverNearTray(tray, popoverHeight);
+  setPanelExpanded(false);
+  positionPopoverNearTray(tray);
   w.show();
   w.focus();
 }
@@ -296,7 +326,8 @@ export function showQuotaPopover(target?: QuotaNavigationTarget): void {
   if (!tray || !supportsPopover) { currentOptions?.showMainWindow(); navigationWindow()?.webContents.send(QUOTA_NAVIGATION); return; }
   currentOptions?.onOpen?.();
   const w = ensurePopover();
-  positionPopoverNearTray(tray, popoverHeight);
+  setPanelExpanded(true);
+  positionPopoverNearTray(tray);
   w.show(); w.focus();
   if (target) w.webContents.send(QUOTA_NAVIGATION);
 }
@@ -341,7 +372,8 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
   if (tray) return;
   currentOptions = options;
   try { panelState = normalizeTrayPanel(JSON.parse(readFileSync(path.join(app.getPath('userData'), 'tray-panel.json'), 'utf8'))); } catch { panelState = { pinned: false }; }
-  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_MODE, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
+  panelExpanded = false;
+  for (const channel of TRAY_INVOKE_CHANNELS) ipcMain.removeHandler(channel);
   const ownsNavigation = (event: Electron.IpcMainInvokeEvent) => {
     const target = navigationWindow();
     return target && !target.isDestroyed() && event.sender === target.webContents && event.senderFrame === target.webContents.mainFrame;
@@ -349,17 +381,25 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
   ipcMain.handle(QUOTA_NAVIGATION_GET, event => ownsNavigation(event) ? pendingNavigation : null);
   ipcMain.handle(QUOTA_NAVIGATION_ACK, (event, requestId: unknown) => { if (ownsNavigation(event) && pendingNavigation?.requestId === requestId) pendingNavigation = null; });
   ipcMain.handle(QUOTA_DIALOG_STATE, (event, open: unknown) => { if (event.sender === popover?.webContents && typeof open === 'boolean') popoverDialogOpen = open; });
-  ipcMain.handle(TRAY_PANEL_GET, () => panelState);
+  ipcMain.handle(TRAY_PANEL_GET, panelViewState);
   ipcMain.handle(TRAY_PANEL_SET, (event, pinned: unknown) => {
     if (typeof pinned !== 'boolean' || !BrowserWindow.fromWebContents(event.sender)) throw new Error('INVALID_TRAY_PANEL');
     return setPanelPinned(pinned);
   });
   ipcMain.handle(TRAY_PANEL_MODE, (event, mode: unknown) => {
-    if (!['full', 'summary'].includes(String(mode)) || !BrowserWindow.fromWebContents(event.sender)) throw new Error('INVALID_TRAY_PANEL');
-    const previous = panelState; panelState = { ...panelState, mode: mode as 'full' | 'summary' };
+    if ((mode !== 'full' && mode !== 'summary') || !BrowserWindow.fromWebContents(event.sender)) throw new Error('INVALID_TRAY_PANEL');
+    const previous = panelState; panelState = { ...panelState, mode };
     try { savePanel(); } catch (error) { panelState = previous; throw error; }
-    for (const item of BrowserWindow.getAllWindows()) item.webContents.send(TRAY_PANEL_CHANGED, panelState);
-    return panelState;
+    const state = panelViewState();
+    for (const item of BrowserWindow.getAllWindows()) item.webContents.send(TRAY_PANEL_CHANGED, state);
+    return state;
+  });
+  ipcMain.handle(TRAY_PANEL_SET_EXPANDED, (event, expanded: unknown) => {
+    if (event.sender !== popover?.webContents || typeof expanded !== 'boolean') throw new Error('INVALID_TRAY_PANEL');
+    return setPanelExpanded(expanded);
+  });
+  ipcMain.on(TRAY_PANEL_HIDE, event => {
+    if (event.sender === popover?.webContents) hidePanel();
   });
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
@@ -393,7 +433,8 @@ export function disposeTrayPopover(): void {
   iconGeneration++; quotaLevel = -1;
   markTrayPopoverQuitting();
   ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
-  for (const channel of [TRAY_PANEL_GET, TRAY_PANEL_SET, TRAY_PANEL_MODE, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE]) ipcMain.removeHandler(channel);
+  ipcMain.removeAllListeners(TRAY_PANEL_HIDE);
+  for (const channel of TRAY_INVOKE_CHANNELS) ipcMain.removeHandler(channel);
   pendingNavigation = null; popoverDialogOpen = false;
   if (popover && !popover.isDestroyed()) {
     popover.removeAllListeners('blur');

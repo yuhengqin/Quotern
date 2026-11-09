@@ -42,6 +42,16 @@ body:has(.tray-popover),
     inset 0 0 0 1px color-mix(in srgb, var(--foreground) 14%, transparent);
 }
 
+.tray-popover--summary {
+  height: var(--tray-panel-max-height);
+  border-radius: 12px;
+}
+
+.tray-popover__summary {
+  padding: 6px 12px;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
 /* Keep the allowance cards' typography intact. */
 .tray-popover__header,
 .tray-popover__usage,

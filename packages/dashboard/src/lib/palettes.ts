@@ -1,5 +1,5 @@
 export const PALETTES = [
-  ['default', 'Quotern', '', ''], ['ocean', '海洋 · Ocean', '#075985', '#7dd3fc'],
+  ['default', '天蓝 · Sky Blue', '', ''], ['ocean', '海洋 · Ocean', '#075985', '#7dd3fc'],
   ['cobalt', '钴蓝 · Cobalt', '#1d4ed8', '#93c5fd'], ['indigo', '靛青 · Indigo', '#4338ca', '#a5b4fc'],
   ['violet', '紫罗兰 · Violet', '#6d28d9', '#c4b5fd'], ['plum', '梅紫 · Plum', '#86198f', '#f0abfc'],
   ['rose', '玫瑰 · Rose', '#be123c', '#fda4af'], ['coral', '珊瑚 · Coral', '#b91c1c', '#fca5a5'],

@@ -371,8 +371,9 @@ async function exerciseDashboardFixes(window, client, mode) {
   const shot = async name => captureSettled(window, path.join(output, `${mode}-fix-${name}.png`));
   await until(() => client.evaluate('Boolean(document.querySelector("button[aria-label=\\"查看 Cursor 模型明细\\"]"))'), mode + ' dashboard loaded');
   await client.evaluate('window.__dashboardDocumentStart = performance.timeOrigin; window.dispatchEvent(new CustomEvent("tud:open-settings", {detail:{tab:"app"}})); true');
-  await until(() => client.evaluate('Boolean(document.querySelector("input[value=international]"))'), mode + ' token preferences');
   if (mode === 'desktop') await until(() => client.evaluate('(()=>{const control=document.querySelector("#desktop-open-at-login");return Boolean(control)&&!control.matches(":disabled,[aria-disabled=true],[data-disabled]")&&!control.querySelector(":disabled")})()'), 'settled Desktop preferences');
+  if (mode === 'desktop') await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", {detail:{tab:"appearance"}})); true');
+  await until(() => client.evaluate('Boolean(document.querySelector("input[value=international]"))'), mode + ' token preferences');
   await client.click('document.querySelector("input[value=international]").closest("label")');
   await until(() => client.evaluate('document.querySelector("input[value=international]")?.checked && document.querySelector("main").innerText.includes("1M")'), mode + ' reactive number units');
   assert.equal(await client.evaluate('performance.timeOrigin === window.__dashboardDocumentStart && Boolean(document.querySelector("[role=dialog]"))'), true, 'unit changes preserve the document and settings');

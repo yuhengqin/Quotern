@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Info, PawPrint, Settings } from 'lucide-react';
+import { CreditCard, Database, Info, Palette, PawPrint, Plug, Settings } from 'lucide-react';
 import { LocalBackupPanel } from '../../../../../packages/dashboard/src/components/LocalBackupPanel';
 import {
   Alert,
@@ -53,6 +53,9 @@ type DesktopSettingsTabId = SettingsTabId;
 const TAB_ITEMS = [
   { id: 'pet', labelKey: 'desktop.pet.tab', Icon: PawPrint },
   { id: 'subscription', labelKey: 'settings.tabs.subscription', Icon: CreditCard },
+  { id: 'appearance', labelKey: 'desktop.settings.tabs.appearance', Icon: Palette },
+  { id: 'integrations', labelKey: 'agent.title', Icon: Plug },
+  { id: 'data', labelKey: 'desktop.settings.tabs.data', Icon: Database },
   { id: 'app', labelKey: 'settings.tabs.app', Icon: Settings },
   { id: 'about', labelKey: 'settings.tabs.about', Icon: Info },
 ] as const;
@@ -79,6 +82,9 @@ export function SettingsPanel({
   const panels = {
     pet: <PetSettingsCard request={petRequest} />,
     subscription: <QuotaSettings />,
+    appearance: <AppearanceSettingsPanel />,
+    integrations: <AgentIntegrationSettings />,
+    data: <DataSettingsPanel />,
     app: <AppSettingsPanel />,
     about: <AboutContent />,
   };
@@ -116,7 +122,9 @@ export function SettingsPanel({
           >
             {tab === id && (
               <>
-                <h2 className="mb-4 text-lg font-semibold text-foreground">{t(labelKey)}</h2>
+                {id !== 'integrations' && (
+                  <h2 className="mb-4 text-lg font-semibold text-foreground">{t(labelKey)}</h2>
+                )}
                 {panels[id]}
               </>
             )}
@@ -127,15 +135,80 @@ export function SettingsPanel({
   );
 }
 
-/** 自动更新 + 开机自启 + 设备信息。 */
-function AppSettingsPanel() {
+function AppearanceSettingsPanel() {
   const { t } = useTranslation();
   const { themeMode, setThemeMode } = useTheme();
-  const { preference, locale, systemLocale, setPreference } = useLocalePreference();
+  const { preference, systemLocale, setPreference } = useLocalePreference();
   const [localeError, setLocaleError] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <LanguagePreferenceControl
+            value={preference}
+            systemLocale={systemLocale}
+            onChange={(next) => {
+              setLocaleError(false);
+              void setPreference(next).catch((reason) => {
+                console.error('[quotern-desktop] failed to persist locale:', reason);
+                setLocaleError(true);
+              });
+            }}
+          />
+        </Card.Content>
+      </Card>
+      {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
+        </Card.Content>
+      </Card>
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <RadioGroup
+            name="token-unit-mode"
+            value={getTokenUnitMode()}
+            variant="secondary"
+            onChange={(next) => {
+              if (next !== 'localized' && next !== 'international') return;
+              if (next === getTokenUnitMode()) return;
+              setTokenUnitMode(next);
+            }}
+          >
+            <div className="flex items-center gap-1">
+              <Label>{t('settings.tokenUnit.label')}</Label>
+              <SettingsHelpPopover title={t('settings.tokenUnit.label')}>
+                <p>{t('settings.tokenUnit.description')}</p>
+              </SettingsHelpPopover>
+            </div>
+            <Radio value="localized">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                {t('settings.tokenUnit.localized')}
+              </Radio.Content>
+            </Radio>
+            <Radio value="international">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                {t('settings.tokenUnit.international')}
+              </Radio.Content>
+            </Radio>
+          </RadioGroup>
+        </Card.Content>
+      </Card>
+    </div>
+  );
+}
+
+function AppSettingsPanel() {
+  const { t } = useTranslation();
   const cliMode = true;
   const isMac = window.tud?.platform === 'darwin';
-  const [config, setConfig] = useState<TudConfigView | null>(null);
   const [openAtLogin, setOpenAtLogin] = useState(true);
   const [autostartLoading, setAutostartLoading] = useState(true);
   const [autostartError, setAutostartError] = useState<string | null>(null);
@@ -144,32 +217,6 @@ function AppSettingsPanel() {
   const [trayUsageMode, setTrayUsageMode] = useState<TrayUsageMode>('both');
   const [trayUsageLoading, setTrayUsageLoading] = useState(true);
   const [trayUsageError, setTrayUsageError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchConfig()
-      .then((data) => {
-        if (!cancelled) {
-          setConfig(data);
-          setError(null);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          console.error('[quotern-desktop] failed to load config:', e);
-          setError('settings.loadConfigFailed');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     setAutostartLoading(true);
@@ -286,29 +333,6 @@ function AppSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Card variant="tertiary" className="rounded-xl shadow-none">
-        <Card.Content>
-          <LanguagePreferenceControl
-            value={preference}
-            systemLocale={systemLocale}
-            onChange={(next) => {
-              setLocaleError(false);
-              void setPreference(next).catch((reason) => {
-                console.error('[quotern-desktop] failed to persist locale:', reason);
-                setLocaleError(true);
-              });
-            }}
-          />
-        </Card.Content>
-      </Card>
-      {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
-      <Card variant="tertiary" className="rounded-xl shadow-none">
-        <Card.Content>
-          <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
-        </Card.Content>
-      </Card>
-      {error && <StatusBanner tone="error" title={t(error)} />}
-      <AgentIntegrationSettings />
       {autostartError && (
         <StatusBanner tone="error" title={t(autostartError)} />
       )}
@@ -419,48 +443,39 @@ function AppSettingsPanel() {
         </div>
       )}
 
-      <Card variant="tertiary" className="rounded-xl shadow-none">
-        <Card.Content>
-          <RadioGroup
-            name="token-unit-mode"
-            value={getTokenUnitMode()}
-            variant="secondary"
-            onChange={(next) => {
-              if (next !== 'localized' && next !== 'international') return;
-              if (next === getTokenUnitMode()) return;
-              setTokenUnitMode(next);
-            }}
-          >
-            <div className="flex items-center gap-1">
-              <Label>{t('settings.tokenUnit.label')}</Label>
-              <SettingsHelpPopover title={t('settings.tokenUnit.label')}>
-                <p>{t('settings.tokenUnit.description')}</p>
-              </SettingsHelpPopover>
-            </div>
-            <Radio value="localized">
-              <Radio.Content>
-                <Radio.Control>
-                  <Radio.Indicator />
-                </Radio.Control>
-                {t('settings.tokenUnit.localized')}
-              </Radio.Content>
-            </Radio>
-            <Radio value="international">
-              <Radio.Content>
-                <Radio.Control>
-                  <Radio.Indicator />
-                </Radio.Control>
-                {t('settings.tokenUnit.international')}
-              </Radio.Content>
-            </Radio>
-          </RadioGroup>
-        </Card.Content>
-      </Card>
-
       <AutoUpdateSettings />
+    </div>
+  );
+}
 
+function DataSettingsPanel() {
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
+  const [config, setConfig] = useState<TudConfigView | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchConfig()
+      .then((data) => {
+        if (!cancelled) setConfig(data);
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          console.error('[quotern-desktop] failed to load config:', reason);
+          setError(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-5">
       <LocalBackupPanel />
-      {!loading && config && (
+      {error && <StatusBanner tone="error" title={t('settings.loadConfigFailed')} />}
+      {config && (
         <Card variant="tertiary" className="rounded-xl shadow-none">
           <Card.Header>
             <Card.Title>{t('settings.device.title')}</Card.Title>

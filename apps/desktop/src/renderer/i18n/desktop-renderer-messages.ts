@@ -22,6 +22,8 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'desktop.quota.shortcutUnavailable': ['当前快捷键已被占用或系统不支持。可修改后保存，或点击“保存快捷键”重试。', 'The current shortcut is in use or unsupported. Change it and save, or click Save shortcut to retry.', '現在のショートカットは使用中、または未対応です。変更して保存するか、「ショートカットを保存」で再試行してください。', '현재 단축키가 사용 중이거나 지원되지 않습니다. 변경 후 저장하거나 단축키 저장을 눌러 다시 시도하세요.'],
   'desktop.quota.menuBar': ['订阅剩余额度', 'Subscription quota remaining', 'サブスクリプションの残り利用枠', '구독 잔여 한도'],
   'desktop.settings.help': ['查看「{{label}}」说明', 'About {{label}}', '「{{label}}」の説明を表示', '{{label}} 도움말 보기'],
+  'desktop.settings.tabs.appearance': ['外观与语言', 'Appearance & language', '外観と言語', '모양 및 언어'],
+  'desktop.settings.tabs.data': ['数据与备份', 'Data & backup', 'データとバックアップ', '데이터 및 백업'],
   'desktop.pet.preview.calm': ['平静', 'Calm', '落ち着き', '차분함'],
   'desktop.pet.preview.thinking': ['思考', 'Thinking', '思考中', '생각 중'],
   'desktop.pet.preview.multitask': ['多任务', 'Multitasking', 'マルチタスク', '멀티태스킹'],

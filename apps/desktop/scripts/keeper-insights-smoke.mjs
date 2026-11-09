@@ -200,8 +200,8 @@ async function main() {
   checks.push('desktop-quota-cycle-selection-account-join-and-narrow-layout');
 
   window.setSize(1000, 920);
-  // Use the production shell navigation event to select the application settings tab.
-  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "app" } })); true');
+  // Use the production shell navigation event to select the data settings tab.
+  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "data" } })); true');
   await until(() => client.evaluate(`Boolean(${button('创建并下载备份')})`), 'backup settings');
   await client.click(button('创建并下载备份'));
   await until(() => downloaded, 'backup download completes');
@@ -239,6 +239,7 @@ async function main() {
   assert.equal(await client.evaluate(`Boolean(${button('恢复到新目录')})`), false);
   checks.push('desktop-backup-content-preview-protection-conflict-path-and-real-restore');
 
+  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "appearance" } })); true');
   await client.click(`document.querySelector('input[name="token-unit-mode"][value="international"]').closest('label')`);
   await until(() => client.evaluate(`document.querySelector('input[name="token-unit-mode"][value="international"]').checked`), 'international token units selected');
   await client.key('Escape');
@@ -248,7 +249,7 @@ async function main() {
   await until(async () => (await body()).includes('同账号本机 Token') && (await body()).includes('15K'), 'quota history respects saved token units');
   await client.key('Escape');
   for (const [value, heading] of [['en', 'Performance'], ['ja', 'パフォーマンス分析'], ['ko', '성능 분석']]) {
-    await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "app" } })); true');
+    await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "appearance" } })); true');
     await client.click(`document.querySelector('input[name="locale-preference"][value="${value}"]').closest('label')`);
     await until(() => localeState().resolved === value, `locale ${value}`);
     await client.key('Escape');

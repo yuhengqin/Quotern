@@ -1,4 +1,4 @@
-import { Button, Label, ListBox, Modal, Select, Spinner } from '@heroui/react';
+import { Button, Input, Label, ListBox, Modal, Select, Spinner, TextField } from '@heroui/react';
 import { useMemo, useState } from 'react';
 import { normalizeLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
@@ -13,6 +13,9 @@ import { getShareCardVariant, SHARE_CARD_VARIANTS, ShareCardCarousel, type Share
 import { ShareCardActions } from './ShareCardActions';
 import { ShareBackgroundPicker } from './ShareBackgroundPicker';
 import { FilterSelectPopover } from './FilterMenu';
+import { useShareReport } from '../hooks/useShareReport';
+import { buildShareCaption, DEFAULT_SHARE_PRESENTATION, shareCostText, type ShareAspect, type SharePresentation } from '../lib/share-presentation';
+import { formatTokens, formatUsd } from '../lib/format';
 
 import { registerMessages } from 'quotern-i18n';
 import { shareMessages } from '../i18n/share-messages';
@@ -27,6 +30,9 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
   const backgrounds = useShareBackgrounds();
+  const [presentation, setPresentation] = useState<SharePresentation>(DEFAULT_SHARE_PRESENTATION);
+  const [userName, setUserName] = useState('');
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectionRevision, setSelectionRevision] = useState(0);
   const variants = useMemo<ShareCardVariant[]>(() => [...SHARE_CARD_VARIANTS.map((variant) => ({ ...variant, label: t(`share.variant.${variant.id}`) })), ...(backgrounds.ready ? backgrounds.items : []).map((item) => ({
@@ -50,7 +56,26 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
     selectedSources: [...new Set((initial?.filters.selectedSources ?? []).map(normalizeSourceId))],
   }));
   const { data, loading, error, retry } = useShareData(initial, filters.rangeDays, filters.selectedDate, filters.dateRange);
-  const preview = useMemo(() => data ? buildShareSnapshot(data, filters, locale) : null, [data, filters, locale]);
+  const cost = useShareReport(filters, Boolean(data) && !loading && !error);
+  const preview = useMemo(() => {
+    if (!data) return null;
+    const snapshot = buildShareSnapshot(data, filters, locale);
+    const report = cost.report;
+    if (!report?.breakdowns) return snapshot;
+    return { ...snapshot,
+      summary: { ...snapshot.summary, totalTokens: report.summary.tokens, totalCostUsd: report.summary.knownCostUsd,
+        inputTokens: report.summary.inputTokens, outputTokens: report.summary.outputTokens,
+        cachedInputTokens: report.summary.cacheReadTokens, cacheCreationInputTokens: report.summary.cacheWriteTokens },
+      details: {
+        sources: [...new Set(report.breakdowns.models.flatMap(row => row.source ? [row.source] : []))],
+        days: report.breakdowns.daily.map(row => ({ date: row.key, tokens: row.tokens })),
+        models: report.breakdowns.models.map(row => ({ model: row.model ?? row.label, tokens: row.tokens })),
+      },
+    };
+  }, [data, filters, locale, cost.report]);
+  const costEvidence = data && !loading && !error && cost.report?.breakdowns && !cost.loading ? {
+    knownCostUsd: cost.report.summary.knownCostUsd, tokens: cost.report.summary.tokens, unpricedTokens: cost.report.summary.costExplanation.unpricedTokens,
+  } : null;
   const sources = [...new Set([
     ...(initial && !initial.loading && !initial.error ? initial.details?.sources ?? [] : []),
     ...filters.selectedSources,
@@ -61,7 +86,16 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
   const rangeValue = filters.selectedDate ? `date:${filters.selectedDate}` : filters.dateRange ? 'custom' : String(filters.rangeDays);
   const rangeLabel = filters.selectedDate ?? shareRangeLabel(filters.rangeDays, locale, filters.dateRange);
   const inheritedRangeLabel = shareRangeLabel(initial?.filters.rangeDays ?? 1, locale, inheritedRange);
-  const disabled = loading || error !== null || !preview;
+  const disabled = loading || cost.loading || error !== null || !preview;
+  const copyCaption = async () => {
+    if (!preview || disabled) return;
+    const text = buildShareCaption({ userName, rangeLabel, toolLabel: preview.toolLabel, metrics: [
+      [t('share.poster.estimatedCost'), shareCostText(costEvidence, formatUsd, t('island.share.partialCost'))],
+      [t('share.poster.totalTokens'), formatTokens(preview.summary.totalTokens)],
+      ...(presentation.layout === 'details' ? [[t('share.poster.inputTokens'), formatTokens(preview.summary.inputTokens)], [t('share.poster.outputTokens'), formatTokens(preview.summary.outputTokens)]] as [string, string][] : []),
+    ] });
+    try { await navigator.clipboard.writeText(text); setCopyState('done'); } catch { setCopyState('failed'); }
+  };
 
   return (
     <>
@@ -110,18 +144,36 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             onChange={(selectedSources) => setFilters((current) => ({ ...current, selectedSources }))}
           />
         </div>
+        <div className="mx-auto mb-3 grid max-w-xl grid-cols-2 items-end gap-2 px-4 sm:grid-cols-3">
+          <Select aria-label={t('island.share.content')} value={presentation.layout} onChange={key => { if (key) setPresentation(current => ({ ...current, layout: String(key) as SharePresentation['layout'] })); }}>
+            <Label>{t('island.share.content')}</Label><Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+            <FilterSelectPopover><ListBox>{['details', 'tokens', 'cost'].map(value => <ListBox.Item key={value} id={value} textValue={t(`island.share.${value}`)}>{t(`island.share.${value}`)}<ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></FilterSelectPopover>
+          </Select>
+          <Select aria-label={t('island.share.aspect')} value={presentation.aspect} onChange={key => { if (key) setPresentation(current => ({ ...current, aspect: String(key) as ShareAspect })); }}>
+            <Label>{t('island.share.aspect')}</Label><Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+            <FilterSelectPopover><ListBox>{['2:3', '1:1', '4:5', '9:16'].map(value => <ListBox.Item key={value} id={value} textValue={value}>{value}<ListBox.ItemIndicator /></ListBox.Item>)}</ListBox></FilterSelectPopover>
+          </Select>
+          <TextField className="col-span-2 sm:col-span-1" value={userName} onChange={setUserName} maxLength={40}>
+            <Label>{t('island.share.author')}</Label><Input placeholder={t('share.poster.defaultUser')} />
+          </TextField>
+        </div>
+        {cost.failed && <div className="mb-3 flex flex-wrap items-center justify-center gap-2 px-4">
+          <p role="status" className="text-xs text-warning">{t('island.share.reportUnavailable')}</p>
+          <Button size="sm" variant="secondary" onPress={cost.retry}>{t('share.retry')}</Button>
+        </div>}
         <ShareBackgroundPicker library={backgrounds} selectedVariant={currentVariant}
           deletingId={deletingId} onCancelDelete={() => setDeletingId(null)}>
           {(onUpload, onAdjust) => <div className="relative w-full" aria-busy={loading}>
             <ShareCardCarousel activeIndex={currentIndex} selectionRevision={selectionRevision} onActiveIndexChange={selectVariant} variants={variants} disabled={backgrounds.loading || backgrounds.busy}
+              presentation={presentation} costEvidence={costEvidence} userName={userName}
               onAddBackground={onUpload} addBackgroundDisabled={!backgrounds.ready || backgrounds.readOnly}
               onAdjustBackground={onAdjust} onDeleteBackground={() => setDeletingId(currentVariant.id)}
               replaceBackground={backgrounds.items.length >= MAX_SHARE_BACKGROUNDS}
-              rangeLabel={rangeLabel} reservedHeight={300} summary={preview?.summary ?? null}
+              rangeLabel={rangeLabel} reservedHeight={390} summary={preview?.summary ?? null}
               details={preview?.details} toolLabel={preview?.toolLabel} />
             {disabled && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl bg-surface/90 p-6 text-center" role="status" aria-live="polite">
-                {loading ? <><Spinner size="sm" /><span className="text-sm text-muted">{t('share.previewLoading')}</span></> : <>
+                {loading || cost.loading ? <><Spinner size="sm" /><span className="text-sm text-muted">{t('share.previewLoading')}</span></> : <>
                   <p className="text-sm text-muted">{error ? t('share.previewError') : t('share.previewEmpty')}</p>
                   <Button size="sm" variant="secondary" onPress={retry}>{t('share.retry')}</Button>
                 </>}
@@ -130,10 +182,13 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
           </div>}
         </ShareBackgroundPicker>
       </Modal.Body>
-      <Modal.Footer className="mt-3 shrink-0 justify-center">
+      <Modal.Footer className="mt-3 shrink-0 flex-wrap justify-center">
         <ShareCardActions color={currentVariant.color} theme={currentVariant.theme} backgroundImage={currentVariant.backgroundImage} rangeLabel={rangeLabel}
+          presentation={presentation} costEvidence={costEvidence} userName={userName}
           onExportSuccess={backgrounds.selectedId ? () => backgrounds.markUsed(currentVariant.id) : undefined}
           summary={preview?.summary ?? null} details={preview?.details} toolLabel={preview?.toolLabel} disabled={disabled || backgrounds.loading || backgrounds.busy} />
+        <Button variant="tertiary" isDisabled={disabled} onPress={() => void copyCaption()}>{t('island.share.copyCaption')}</Button>
+        {copyState !== 'idle' && <p role="status" className={`w-full text-center text-xs ${copyState === 'failed' ? 'text-danger' : 'text-muted'}`}>{t(copyState === 'failed' ? 'island.share.copyFailed' : 'island.quota.copied')}</p>}
       </Modal.Footer>
     </>
   );

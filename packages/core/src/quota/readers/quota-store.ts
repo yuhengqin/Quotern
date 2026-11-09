@@ -48,6 +48,8 @@ export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferenc
     : key === 'serviceComponents' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([id, ids]) =>
       SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && Array.isArray(ids) && ids.length <= 200 && new Set(ids).size === ids.length && ids.every(item => typeof item === 'string' && /^[a-zA-Z0-9_-]{1,300}$/.test(item))))
     : key === 'providerOrder' ? Array.isArray(value) && value.length <= 100 && new Set(value).size === value.length && value.every(id => typeof id === 'string' && /^[a-z0-9][a-zA-Z0-9@_-]{0,100}$/.test(id))
+    : key === 'preferredWindows' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length <= 100 && Object.entries(value).every(([id, window]) =>
+      /^[a-z0-9][a-zA-Z0-9@_-]{0,100}$/.test(id) && typeof window === 'string' && window.length <= 300 && !/[\x00-\x1f\x7f]/.test(window)))
     : key === 'paceModel' ? ['uniform', 'workdays', 'automatic'].includes(value as string)
     : key === 'channels' ? isSubscriptionChannelVisibility(value)
       : key === 'profiles' ? validQuotaProfiles(value) : false);

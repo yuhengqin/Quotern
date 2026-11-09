@@ -99,6 +99,8 @@ export interface QuotaProviderState {
 }
 export interface QuotaPreferences {
   providerOrder?: string[];
+  /** Specific card ID -> preferred window ID; empty means automatic risk selection. */
+  preferredWindows?: Record<string, string>;
   compact?: boolean;
   profiles?: QuotaProfile[];
   thresholdAlerts: boolean;
@@ -124,6 +126,13 @@ export interface QuotaState {
   notice: string | null;
 }
 export type QuotaPreferencePatch = Partial<QuotaPreferences>;
+export interface QuotaNavigationTarget {
+  providerId: string;
+  providerType: string;
+  windowId?: string;
+  /** Verified public account reference; never a credential fingerprint. */
+  accountRef?: string;
+}
 export const QUOTA_GET = 'quota:get';
 export const QUOTA_REFRESH = 'quota:refresh';
 export const QUOTA_SET = 'quota:set';

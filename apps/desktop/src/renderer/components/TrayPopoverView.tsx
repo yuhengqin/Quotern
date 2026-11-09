@@ -93,6 +93,24 @@ export function TrayPopoverView() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [summaryOnly, setSummaryOnly] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    const update = (state: Awaited<ReturnType<typeof window.tud.getTrayPanel>>) => { if (!disposed) setSummaryOnly(state.mode === 'summary'); };
+    void window.tud.getTrayPanel?.().then(update).catch(() => {});
+    const unsubscribe = window.tud.onTrayPanelChanged?.(update);
+    const openDialogs = new Set<string>();
+    const onDialog = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; open: boolean }>).detail;
+      if (detail.open) openDialogs.add(detail.id); else openDialogs.delete(detail.id);
+      const open = openDialogs.size > 0;
+      setDialogOpen(open); void window.tud.setQuotaDialogOpen?.(open).catch(() => {});
+    };
+    window.addEventListener('quotern:quota-dialog', onDialog);
+    return () => { disposed = true; unsubscribe?.(); window.removeEventListener('quotern:quota-dialog', onDialog); void window.tud.setQuotaDialogOpen?.(false).catch(() => {}); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,7 +266,7 @@ export function TrayPopoverView() {
     const measure = () => {
       const header = headerRef.current?.offsetHeight ?? 0;
       const footer = footerRef.current?.offsetHeight ?? 0;
-      const natural = header + contentEl.offsetHeight + footer;
+      const natural = dialogOpen ? TRAY_PANEL_MAX_HEIGHT : header + contentEl.offsetHeight + footer;
       const clamped = Math.ceil(
         Math.min(Math.max(natural, TRAY_PANEL_MIN_HEIGHT), TRAY_PANEL_MAX_HEIGHT)
           + TRAY_PANEL_GUTTER * 2,
@@ -274,7 +292,7 @@ export function TrayPopoverView() {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, [loading, error]);
+  }, [loading, error, summaryOnly, dialogOpen]);
 
   const comparisonLabel = range === 'today'
     ? t('desktop.tray.comparedYesterday')
@@ -397,10 +415,10 @@ export function TrayPopoverView() {
       >
         <div className="flex items-center justify-between">
           <h1 className="tray-panel-drag min-w-0 flex-1 py-1 text-sm font-semibold text-foreground">{t('desktop.tray.overview')}</h1>
-          <TrayPanelControl />
+          <TrayPanelControl showMode />
           <ThemeToggle />
         </div>
-        <div className="flex min-w-0 items-center gap-2">
+        {!summaryOnly && <div className="flex min-w-0 items-center gap-2">
           <Tabs
             className="w-fit shrink-0 text-center"
             selectedKey={range}
@@ -449,13 +467,13 @@ export function TrayPopoverView() {
               />
             ) : null}
           </div>
-        </div>
+        </div>}
       </header>
 
       <div className="tray-popover__body">
         <div ref={contentRef} className="px-4 pb-4">
-          <SubscriptionUsageGrid className="mb-3 grid-cols-1 gap-2.5" />
-          {loading ? (
+          <SubscriptionUsageGrid className="mb-3 grid-cols-1 gap-2.5" summaryOnly={summaryOnly} />
+          {!summaryOnly && (loading ? (
             <div className="relative isolate min-h-40">
               <DashboardRangeSyncOverlay visible />
               <TrayLoadingSkeleton />
@@ -544,7 +562,7 @@ export function TrayPopoverView() {
                 />
               )}
             </div>
-          )}
+          ))}
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { readManualPricing, updateManualPricing, loadManualPricing, getPricingEd
 import { touchedLocalDates } from '../aggregate-cache.js';
 import { localDateNow } from '../timezone.js';
 import type { LocalApiDeps } from './state.js';
-import { createDataBackup, verifyDataBackup, restoreDataBackup, MAX_BACKUP_DOCUMENT_BYTES } from '../backup.js';
+import { createDataBackup, verifyDataBackup, restoreDataBackup, restoreDataBackupWithProtection, MAX_BACKUP_DOCUMENT_BYTES } from '../backup.js';
 import { resolve } from 'node:path';
 
 export const LOCAL_ADMIN_ROUTE = '/functions/tud-local-admin';
@@ -28,6 +28,7 @@ export function registerLocalAdminApi(parent: Hono, deps: LocalApiDeps): void {
   const app = new Hono<{ Bindings: { quoternRemoteAddress?: string } }>();
   const token = randomBytes(32).toString('hex');
   let writingPricing = false;
+  let backupBusy = false;
   let pricingJob: PricingRecalculationJob | null = null;
   const pricingJobs = new Map<string, PricingRecalculationJob>();
   const capabilities = { backgroundRecalculation: true };
@@ -73,22 +74,25 @@ export function registerLocalAdminApi(parent: Hono, deps: LocalApiDeps): void {
   });
   app.use('*', bodyLimit({ maxSize: MAX_LOCAL_ADMIN_BYTES, onError: c => c.json(failure('LOCAL_ADMIN_TOO_LARGE'), 413) }));
   app.use('/pricing', bodyLimit({ maxSize: 2_000_000, onError: c => c.json(failure('LOCAL_ADMIN_TOO_LARGE'), 413) }));
-  app.get('/backup', c => c.json(ok({ token, dataDir: resolve(deps.dataDir), suggestedTarget: `${resolve(deps.dataDir)}-restored-${new Date().toISOString().replace(/[:.]/g, '-')}` })));
+  app.get('/backup', c => c.json(ok({ token, dataDir: resolve(deps.dataDir), protectedRestore: true, suggestedTarget: `${resolve(deps.dataDir)}-restored-${new Date().toISOString().replace(/[:.]/g, '-')}` })));
   app.post('/backup', async c => {
+    if (backupBusy) return c.json(failure('BACKUP_BUSY'), 409);
+    backupBusy = true;
     try {
       const body: unknown = await c.req.json();
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('BACKUP_INVALID');
       const input = body as Record<string, unknown>;
-      const keys = input.action === 'create' ? ['action'] : input.action === 'verify' ? ['action', 'backup'] : input.action === 'restore' ? ['action', 'backup', 'target'] : [];
+      const keys = input.action === 'create' ? ['action'] : input.action === 'verify' ? ['action', 'backup'] : input.action === 'restore' || input.action === 'restore-protected' ? ['action', 'backup', 'target'] : [];
       if (!keys.length || Object.keys(input).some(key => !keys.includes(key))) throw new Error('BACKUP_INVALID');
       if (input.action === 'create') { const backup = await createDataBackup(deps.dataDir, { desktopQuotaDirectory: deps.desktopQuotaDirectory }); return c.json(ok({ backup, summary: verifyDataBackup(backup) })); }
       if (input.action === 'verify') return c.json(ok(verifyDataBackup(input.backup)));
       if (typeof input.target !== 'string' || input.target.length > 4096) throw new Error('BACKUP_TARGET_ABSOLUTE');
+      if (input.action === 'restore-protected') return c.json(ok(await restoreDataBackupWithProtection(input.backup, input.target, deps.dataDir, { desktopQuotaDirectory: deps.desktopQuotaDirectory })));
       return c.json(ok(await restoreDataBackup(input.backup, input.target)));
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
       return c.json(failure(/^BACKUP_[A-Z_]+$/.test(code) ? code : (error as NodeJS.ErrnoException)?.code === 'ELOCKED' ? 'BACKUP_BUSY' : 'LOCAL_ADMIN_WRITE_FAILED'), 400);
-    }
+    } finally { backupBusy = false; }
   });
   app.get('/pricing', c => {
     try {

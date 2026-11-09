@@ -13,23 +13,26 @@ export function useShareReport(filters: ShareFilters, enabled: boolean) {
   const days = filters.rangeDays;
   const key = JSON.stringify([days, start, end, fromTime, toTime, sources]);
   const cache = useRef(new Map<string, UsageReport>());
-  const [state, setState] = useState<{ key: string; loading: boolean; report: UsageReport | null }>({ key: '', loading: false, report: null });
+  const [revision, setRevision] = useState(0);
+  const [state, setState] = useState<{ key: string; loading: boolean; failed: boolean; report: UsageReport | null }>({ key: '', loading: false, failed: false, report: null });
   const available = enabled && isCliBackend();
   useEffect(() => {
     if (!available) return;
     const cached = cache.current.get(key);
-    if (cached) { setState({ key, loading: false, report: cached }); return; }
+    if (cached) { setState({ key, loading: false, failed: false, report: cached }); return; }
     let cancelled = false;
-    setState({ key, loading: true, report: null });
+    setState({ key, loading: true, failed: false, report: null });
     void fetchUsageReport(days, start && end ? { start, end, fromTime, toTime } : undefined, sources ? sources.split(',') : []).then(report => {
       if (cancelled) return;
       cache.current.set(key, report);
-      setState({ key, loading: false, report });
-    }).catch(() => { if (!cancelled) setState({ key, loading: false, report: null }); });
+      setState({ key, loading: false, failed: false, report });
+    }).catch(() => { if (!cancelled) setState({ key, loading: false, failed: true, report: null }); });
     return () => { cancelled = true; };
-  }, [available, key, days, start, end, fromTime, toTime, sources]);
+  }, [available, key, days, start, end, fromTime, toTime, sources, revision]);
   return {
     report: available && state.key === key ? state.report : null,
     loading: available && (state.key !== key || state.loading),
+    failed: available && state.key === key && state.failed,
+    retry: () => setRevision((current) => current + 1),
   };
 }

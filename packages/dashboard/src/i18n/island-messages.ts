@@ -7,6 +7,7 @@ export const islandMessages: Record<string, readonly [string, string, string, st
   'island.share.author': ['署名', 'Author', '表示名', '표시 이름'],
   'island.share.copyCaption': ['复制配文', 'Copy caption', '投稿文をコピー', '설명 복사'],
   'island.share.copyFailed': ['配文复制失败，请重试。', 'Could not copy the caption. Retry.', '投稿文をコピーできませんでした。再試行してください。', '설명을 복사하지 못했습니다. 다시 시도하세요.'],
+  'island.share.reportUnavailable': ['无法读取报表，预览使用已有用量，费用暂不可用。', 'Could not load the report. The preview uses available usage data without cost.', 'レポートを取得できませんでした。取得済みの使用量を表示し、費用は表示しません。', '보고서를 불러오지 못했습니다. 기존 사용량을 표시하며 비용은 표시할 수 없습니다.'],
   'island.share.partialCost': ['已计价部分（估算）', 'Priced portion (estimated)', '価格判明分（推定）', '가격 확인 부분 (예상)'],
   'island.share.cumulative': ['累计 Token', 'Cumulative tokens', '累計トークン', '누적 토큰'],
   'island.quota.navigationUnavailable': ['提醒对应的账号已变更或无法确认，请从面板选择账号。', 'The account in this alert has changed or cannot be verified. Choose an account in the panel.', '通知のアカウントが変更されたか確認できません。パネルで選択してください。', '알림의 계정이 변경되었거나 확인되지 않습니다. 패널에서 계정을 선택하세요.'],

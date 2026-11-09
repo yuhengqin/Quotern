@@ -62,7 +62,7 @@ export interface QuotaUsageCardProps {
   onOpenExternal?: (url: string) => unknown;
   onSave?: (patch: QuotaPreferencePatch) => Promise<unknown>;
   summaryOnly?: boolean;
-  navigation?: { requestId: string; windowId?: string };
+  navigation?: { requestId: string; windowId?: string; handled: boolean };
   onNavigationHandled?: (requestId: string) => void;
 }
 
@@ -106,7 +106,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
   useEffect(() => {
-    if (!navigation || openedRequest.current === navigation.requestId) return;
+    if (!navigation || navigation.handled || openedRequest.current === navigation.requestId) return;
     openedRequest.current = navigation.requestId;
     setActiveTarget(navigation); setDetailsTab('current'); setHintVisible(false); setDetailsOpen(true);
     onNavigationHandled?.(navigation.requestId);

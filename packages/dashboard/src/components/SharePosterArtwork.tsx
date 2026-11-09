@@ -95,7 +95,8 @@ export function ShareCardArtwork({
   const daySpan = cumulative.length ? Math.max(1, Date.parse(cumulative.at(-1)!.date) - firstDay) : 1;
   const total = Math.max(1, cumulative.at(-1)?.tokens ?? 0);
   const points = cumulative.map(row => `${4 + (Date.parse(row.date) - firstDay) / daySpan * 252},${54 - row.tokens / total * 48}`).join(' ');
-  const displayName = userName?.trim() || text('share.poster.defaultUser');
+  const customName = userName?.trim();
+  const displayName = customName || text('share.poster.defaultUser');
   const agentSources = [...new Map((details?.sources ?? []).map((source) => [sourceLabel(source), source])).values()];
   const extraAgents = agentSources.slice(4);
   const agentBadge: CSSProperties = {
@@ -132,9 +133,9 @@ export function ShareCardArtwork({
         <img alt="" src={quoternQrLogoUrl} style={{ width: 22, height: 22 }} />
         <div style={{ flex: 1 }}><div style={{ fontSize: 9, letterSpacing: 2 }}>QUOTERN</div><div style={{ fontSize: 15, fontWeight: 700 }}>{text('share.poster.reportTitle')}</div></div>
       </header>
-      <div style={{ marginTop: square ? 8 : 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 9 }}>
-        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <div style={{ marginTop: square ? 8 : 12, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '3px 8px', fontSize: 9 }}>
+        <span style={{ flex: '1 1 0', minWidth: 120, overflowWrap: 'anywhere' }}>{displayName}</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
           <span style={{ whiteSpace: 'nowrap' }}>{rangeLabel || text('share.range.allTime')}</span>
           {agentSources.length > 0 && (
             <div role="group" aria-label={text('share.poster.agentScope')} style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
@@ -175,7 +176,7 @@ export function ShareCardArtwork({
           );
         })}
       </dl>}
-      <section style={{ marginTop: square ? 8 : focus ? 10 : 24 }} aria-label={text('share.poster.modelRanking')}>
+      <section style={{ marginTop: square ? 8 : focus || customName ? 10 : 24 }} aria-label={text('share.poster.modelRanking')}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, paddingBottom: 6, borderBottom: `1px solid ${rule}` }}><span>{text('share.poster.modelList')}</span><span>TOP 03</span></div>
         {models.slice(0, 3).map(([model, tokens], index) => (
           <div key={model} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: square ? '3px 0' : '6px 0', borderBottom: `1px solid ${rule}`, fontSize: 10, lineHeight: 1.5 }}>

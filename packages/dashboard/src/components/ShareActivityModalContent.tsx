@@ -157,6 +157,10 @@ export function ShareSession({ initial, activeIndex, onActiveIndexChange }: {
             <Label>{t('island.share.author')}</Label><Input placeholder={t('share.poster.defaultUser')} />
           </TextField>
         </div>
+        {cost.failed && <div className="mb-3 flex flex-wrap items-center justify-center gap-2 px-4">
+          <p role="status" className="text-xs text-warning">{t('island.share.reportUnavailable')}</p>
+          <Button size="sm" variant="secondary" onPress={cost.retry}>{t('share.retry')}</Button>
+        </div>}
         <ShareBackgroundPicker library={backgrounds} selectedVariant={currentVariant}
           deletingId={deletingId} onCancelDelete={() => setDeletingId(null)}>
           {(onUpload, onAdjust) => <div className="relative w-full" aria-busy={loading}>

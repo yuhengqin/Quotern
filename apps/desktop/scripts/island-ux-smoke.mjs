@@ -9,7 +9,8 @@ import { app, BrowserWindow, clipboard, ipcMain, nativeImage } from 'electron';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), workspace = path.resolve(desktop, '../..');
-const output = path.resolve(process.argv[2] ?? path.join(workspace, `.quotern-dev/island-ui-${Date.now()}`));
+const outputArg = process.argv.slice(2).find(argument => !argument.startsWith('--'));
+const output = path.resolve(outputArg ?? path.join(workspace, `.quotern-dev/island-ui-${Date.now()}`));
 assert.ok(!existsSync(output), 'Use a fresh dedicated output directory');
 await mkdir(path.join(output, 'profile'), { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
@@ -22,7 +23,7 @@ app.on('window-all-closed', () => {});
 const windows = [], clients = [], checks = [];
 const windowEvents = [];
 app.on('browser-window-created', (_event, window) => { for (const event of ['show', 'hide', 'focus', 'blur', 'ready-to-show']) window.on(event, () => windowEvents.push({ event, id: window.id, at: Date.now() })); });
-let server, trayController, mainWindow, downloadPath, downloaded = 0, failPreference = false, locale = 'zh-CN';
+let server, trayController, mainWindow, downloadPath, downloaded = 0, failPreference = false, failShareReport = false, locale = 'zh-CN';
 const until = async (predicate, label) => { for (let n = 0; n < 150; n++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
 const button = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const select = label => `[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)} || el.parentElement?.textContent.includes(${JSON.stringify(label)}))`;
@@ -64,7 +65,13 @@ async function main() {
   const publish = () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('quota:changed', quota); };
   const runtime = { getState: () => quota, refresh: async () => quota, setPreferences: async patch => { if (failPreference) { failPreference = false; throw Error('Synthetic write failure'); } quota.preferences = { ...quota.preferences, ...patch, preferredWindows: { ...quota.preferences.preferredWindows, ...patch.preferredWindows } }; publish(); return quota; } };
   const api = createLocalApiApp({ dataDir, bucketStore: store, getConfig: () => config, sessionActionsIpc: true, quota: runtime });
-  const request = async (route, init) => { const response = await api.request(`http://localhost${route}`, init); return { status: response.status, body: await response.json() }; };
+  const request = async (route, init) => {
+    if (failShareReport && route.startsWith('/functions/tud-usage-report?')) {
+      return { status: 500, body: { success: false, message: 'Synthetic report failure', data: null } };
+    }
+    const response = await api.request(`http://localhost${route}`, init);
+    return { status: response.status, body: await response.json() };
+  };
   server = createServer(async (req, res) => {
     if (req.url.startsWith('/functions/')) { const chunks = []; for await (const chunk of req) chunks.push(chunk); const result = await request(req.url, { method: req.method, headers: req.headers, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) }); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
     const root = path.join(workspace, 'packages/dashboard/dist'), pathname = new URL(req.url, 'http://localhost').pathname;
@@ -111,8 +118,13 @@ async function main() {
     await shot(client, mode + '-quick');
     await client.click(button('完整分析'));
     await until(() => client.evaluate('Boolean(document.querySelector(".recharts-wrapper"))'), mode + ' complete charts retained');
+    failShareReport = true;
     await client.click('document.querySelector("button[aria-label=分享]")');
     await until(() => client.evaluate(`Boolean(${select('主指标')})`), mode + ' share editor');
+    await until(() => client.evaluate(`Boolean(${button('重试')})`), mode + ' share report error offers retry');
+    assert.match(await body(client), /无法读取报表/);
+    failShareReport = false;
+    await client.click(button('重试'));
     await client.click(select('主指标')); await client.click(option('Token 总量'));
     await client.fill('document.querySelector("[role=dialog] input[maxlength]")', '合成署名 · Test');
     const poster = 'document.querySelector("[role=dialog] article:not([aria-hidden=true])")';
@@ -144,13 +156,23 @@ async function main() {
       }
       await shot(client, mode + (label === '详细卡片' ? '-details-square' : '-cost-square'));
     }
-    await client.click(button('复制配文')); await until(async () => (await body(client)).includes('已复制'), 'caption copied');
-    assert.ok(clipboard.readText().includes('合成署名 · Test') && clipboard.readText().includes('Token'));
+    if (!process.argv.includes('--skip-system-clipboard')) {
+      await client.click(button('复制配文')); await until(async () => (await body(client)).includes('已复制'), 'caption copied');
+      assert.ok(clipboard.readText().includes('合成署名 · Test') && clipboard.readText().includes('Token'));
+    }
     await client.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 780, deviceScaleFactor: 1, mobile: false });
     await shot(client, mode + '-share-narrow');
     assert.equal(await client.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
     if (mode === 'desktop') {
-      await client.fill('document.querySelector("[role=dialog] input[maxlength]")', 'Long author name with spaces · 日本語 · 한국어');
+      const longAuthor = '极长中文署名用于验证图片没有截断'.repeat(3).slice(0, 40);
+      await client.fill('document.querySelector("[role=dialog] input[maxlength]")', longAuthor);
+      await client.click(select('主指标')); await client.click(option('详细卡片'));
+      for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
+        await client.click(select('画幅')); await client.click(option(aspect));
+        assert.ok(await client.evaluate(`(() => { const author = [...${poster}.querySelectorAll('span')].find(el => el.textContent === ${JSON.stringify(longAuthor)}); return author && author.scrollWidth <= author.clientWidth + 1; })()`), `poster shows the entire signature at ${aspect}`);
+        await assertPosterFits();
+        if (aspect === '9:16') await shot(client, 'desktop-share-long-author');
+      }
       for (const [value, label] of [['en', 'Main metric'], ['ja', '主な指標'], ['ko', '주요 지표'], ['zh-CN', '主指标']]) {
         locale = value; window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'en' });
         await until(async () => (await body(client)).includes(label), 'share locale ' + value);
@@ -217,6 +239,11 @@ async function main() {
   trayController.showQuotaPopover(target);
   await until(() => client.evaluate('document.activeElement?.dataset.quotaWindow === "weekly"'), 'deduplicated account is resolved');
   await closeDetails(client);
+  quota.providers.push({ ...provider, id: target.providerId, profileLabel: '工作', fetchedAt: now + 1 });
+  publish();
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-quota-card="${target.providerId}"]'))`), 'refreshed reading wins account deduplication');
+  await wait(150);
+  assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), false, 'refresh does not reopen a dismissed notification');
   trayController.showQuotaPopover({ ...target, windowId: 'retired-window' });
   await until(async () => (await body(client)).includes('额度窗口已不可用'), 'missing window feedback');
   await closeDetails(client);

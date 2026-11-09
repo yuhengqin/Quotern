@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CreditCard, Info, PawPrint, Settings } from 'lucide-react';
 import { LocalBackupPanel } from '../../../../../packages/dashboard/src/components/LocalBackupPanel';
 import {
   Alert,
@@ -49,20 +50,12 @@ import {
 
 type DesktopSettingsTabId = SettingsTabId;
 
-const TAB_ITEMS: { id: DesktopSettingsTabId; labelKey: string }[] = [
-  { id: 'pet', labelKey: 'desktop.pet.tab' },
-  { id: 'subscription', labelKey: 'settings.tabs.subscription' },
-  { id: 'app', labelKey: 'settings.tabs.app' },
-  { id: 'about', labelKey: 'settings.tabs.about' },
-];
-
-/**
- * Dialog is `max-h-[90vh]`. Header + tab list take ~9rem, so a 78vh panel
- * overflows the body and gets clipped. Bound the panel to the leftover space
- * so `overflow-y-auto` both scrolls and stays fully visible.
- */
-const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+const TAB_ITEMS = [
+  { id: 'pet', labelKey: 'desktop.pet.tab', Icon: PawPrint },
+  { id: 'subscription', labelKey: 'settings.tabs.subscription', Icon: CreditCard },
+  { id: 'app', labelKey: 'settings.tabs.app', Icon: Settings },
+  { id: 'about', labelKey: 'settings.tabs.about', Icon: Info },
+] as const;
 
 export function SettingsPanel({
   activeTab,
@@ -82,44 +75,53 @@ export function SettingsPanel({
     useState<DesktopSettingsTabId>(getDefaultSettingsTab);
   const tab = activeTab ?? uncontrolledTab;
   const setTab = onTabChange ?? setUncontrolledTab;
+  const items = TAB_ITEMS.filter(({ id }) => id !== 'pet' || isWindows);
+  const panels = {
+    pet: <PetSettingsCard request={petRequest} />,
+    subscription: <QuotaSettings />,
+    app: <AppSettingsPanel />,
+    about: <AboutContent />,
+  };
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
       <AppToastProvider queue={toastQueue} />
       <Tabs
-        className="flex min-h-0 w-full flex-1 flex-col text-center"
+        orientation="vertical"
+        className="min-h-0 w-full flex-1 gap-0"
         selectedKey={tab}
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List aria-label={t('settings.tabs.category')} className="w-fit">
-            {TAB_ITEMS.filter((item) => item.id !== 'pet' || isWindows).map((item) => (
-              <Tabs.Tab
-                className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
-                id={item.id}
-                key={item.id}
-              >
-                {t(item.labelKey)}
-                <Tabs.Indicator className="bg-accent" />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
+        <Tabs.List
+          aria-label={t('settings.tabs.category')}
+          className="w-32 shrink-0 gap-2 overflow-y-auto overscroll-contain border-e border-separator bg-surface-secondary/50 p-2.5 sm:w-44 sm:py-4"
+        >
+          {items.map(({ id, labelKey, Icon }) => (
+            <Tabs.Tab
+              className="group h-auto min-h-12 shrink-0 justify-start gap-2 rounded-lg px-2.5 py-2 text-start leading-snug text-foreground hover:bg-default hover:opacity-100 aria-selected:bg-accent/10 aria-selected:font-semibold aria-selected:text-foreground"
+              id={id}
+              key={id}
+            >
+              <Icon className="size-4 shrink-0 text-muted group-aria-selected:text-accent" aria-hidden="true" />
+              <span className="min-w-0 wrap-break-word">{t(labelKey)}</span>
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
 
-        {isWindows && (
-          <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">
-            {tab === 'pet' && <PetSettingsCard request={petRequest} />}
+        {items.map(({ id, labelKey }) => (
+          <Tabs.Panel
+            className="ms-0 min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 text-start sm:px-6 sm:pt-5"
+            id={id}
+            key={id}
+          >
+            {tab === id && (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-foreground">{t(labelKey)}</h2>
+                {panels[id]}
+              </>
+            )}
           </Tabs.Panel>
-        )}
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="subscription">
-          {tab === 'subscription' && <QuotaSettings />}
-        </Tabs.Panel>
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
-          {tab === 'app' && <AppSettingsPanel />}
-        </Tabs.Panel>
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="about">
-          {tab === 'about' && <AboutContent />}
-        </Tabs.Panel>
+        ))}
       </Tabs>
     </div>
   );

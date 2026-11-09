@@ -94,7 +94,7 @@ export function SettingsPanel({
 
 function AppSettingsPanel() {
   const { t } = useTranslation();
-  const { themeMode, setThemeMode } = useTheme();
+  const { theme, themeMode, setThemeMode } = useTheme();
   const { preference, locale, systemLocale, setPreference } = useLocalePreference();
   const [config, setConfig] = useState<TudConfigView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,7 +129,7 @@ function AppSettingsPanel() {
         <LanguagePreferenceControl value={preference} systemLocale={systemLocale} onChange={setPreference} />
       </Surface>
       <Surface className="rounded-xl p-4" variant="secondary">
-        <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
+        <ThemePreferenceControl value={themeMode} theme={theme} onChange={setThemeMode} />
       </Surface>
       <Surface className="rounded-xl p-4" variant="secondary">
         <RadioGroup

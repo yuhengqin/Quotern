@@ -137,7 +137,7 @@ export function SettingsPanel({
 
 function AppearanceSettingsPanel() {
   const { t } = useTranslation();
-  const { themeMode, setThemeMode } = useTheme();
+  const { theme, themeMode, setThemeMode } = useTheme();
   const { preference, systemLocale, setPreference } = useLocalePreference();
   const [localeError, setLocaleError] = useState(false);
 
@@ -161,7 +161,7 @@ function AppearanceSettingsPanel() {
       {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
       <Card variant="tertiary" className="rounded-xl shadow-none">
         <Card.Content>
-          <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
+          <ThemePreferenceControl value={themeMode} theme={theme} onChange={setThemeMode} />
         </Card.Content>
       </Card>
       <Card variant="tertiary" className="rounded-xl shadow-none">

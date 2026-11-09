@@ -1,11 +1,12 @@
 import { useLayoutEffect, useSyncExternalStore } from 'react';
-import { Label, ListBox, Select } from '@heroui/react';
+import { Label, Radio, RadioGroup } from '@heroui/react';
+import { Check } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { registerMessages } from 'quotern-i18n';
 import { demoStorageKey } from '@/lib/demo-runtime';
 import { PALETTES, validPalette, type PaletteId } from '../lib/palettes';
-import { FilterSelectPopover } from './FilterMenu';
-registerMessages({ 'zh-CN': { 'settings.palette': '配色主题' }, en: { 'settings.palette': 'Color palette' }, ja: { 'settings.palette': 'カラーパレット' }, ko: { 'settings.palette': '색상 테마' } });
+import type { Theme } from '../lib/theme';
+registerMessages({ 'zh-CN': { 'settings.palette': '强调色' }, en: { 'settings.palette': 'Accent color' }, ja: { 'settings.palette': 'アクセントカラー' }, ko: { 'settings.palette': '강조 색상' } });
 const event = 'quotern:palette-changed';
 let fallback: PaletteId = 'default';
 const key = () => demoStorageKey('quotern-palette');
@@ -29,12 +30,41 @@ export function PaletteRuntime({ theme }: { theme: 'light' | 'dark' }) {
   }, [selected, theme]);
   return null;
 }
-export function PaletteControl() {
+export function PaletteControl({ theme }: { theme: Theme }) {
   const { t, i18n } = useTranslation(), selected = usePalette();
-  const label = (value: typeof PALETTES[number]) => (i18n.resolvedLanguage ?? '').startsWith('zh') ? value[1] : value[1].split(' · ').at(-1)!;
-  return <Select aria-label={t('settings.palette')} value={selected} onChange={value => { if (validPalette(value)) { fallback = value; try { localStorage.setItem(key(), value); } catch {} window.dispatchEvent(new Event(event)); } }}>
-    <Label>{t('settings.palette')}</Label><Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger><FilterSelectPopover><ListBox aria-label={t('settings.palette')}>
-      {PALETTES.map(row => <ListBox.Item key={row[0]} id={row[0]} textValue={label(row)}><span aria-hidden className="mr-2 inline-block size-3 rounded-full" style={{ backgroundColor: row[2] || 'var(--accent)' }} />{label(row)}<ListBox.ItemIndicator /></ListBox.Item>)}
-    </ListBox></FilterSelectPopover>
-  </Select>;
+  const showChineseNames = (i18n.resolvedLanguage ?? '').startsWith('zh');
+
+  const selectPalette = (value: string) => {
+    if (!validPalette(value)) return;
+    fallback = value;
+    try { localStorage.setItem(key(), value); } catch {}
+    window.dispatchEvent(new Event(event));
+  };
+
+  return (
+    <RadioGroup name="accent-palette" value={selected} variant="secondary" onChange={selectPalette}>
+      <Label>{t('settings.palette')}</Label>
+      <div className="appearance-options">
+        {PALETTES.map(([id, name, light, dark]) => {
+          const names = name.split(' · ');
+          return (
+            <Radio key={id} value={id}>
+              <Radio.Content className="appearance-option appearance-option--palette">
+                <span
+                  aria-hidden="true"
+                  className="appearance-palette-swatch"
+                  data-theme={id === 'default' ? 'default' : undefined}
+                  style={{ backgroundColor: (theme === 'dark' ? dark : light) || 'var(--accent)' }}
+                />
+                <span title={showChineseNames && names.length > 1 ? name : undefined}>
+                  {showChineseNames ? names[0] : names.at(-1)}
+                </span>
+                <Check aria-hidden="true" className="appearance-option-check" />
+              </Radio.Content>
+            </Radio>
+          );
+        })}
+      </div>
+    </RadioGroup>
+  );
 }

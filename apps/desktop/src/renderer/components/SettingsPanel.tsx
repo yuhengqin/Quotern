@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { CreditCard, Database, Info, Palette, PawPrint, Plug, Settings } from 'lucide-react';
 import { LocalBackupPanel } from '../../../../../packages/dashboard/src/components/LocalBackupPanel';
+import { UsageRecoveryPanel } from '../../../../../packages/dashboard/src/components/UsageRecoveryPanel';
 import {
   Alert,
   Button,
@@ -39,7 +41,6 @@ import { AgentIntegrationSettings } from '../../../../../packages/dashboard/src/
 import { useTheme } from '@/hooks/useTheme';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { QuotaSettings } from './QuotaSettings';
-import { TrayPanelControl } from './TrayPanelControl';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
 import { FilterSelectPopover } from './FilterMenu';
 
@@ -50,20 +51,15 @@ import {
 
 type DesktopSettingsTabId = SettingsTabId;
 
-const TAB_ITEMS: { id: DesktopSettingsTabId; labelKey: string }[] = [
-  { id: 'pet', labelKey: 'desktop.pet.tab' },
-  { id: 'subscription', labelKey: 'settings.tabs.subscription' },
-  { id: 'app', labelKey: 'settings.tabs.app' },
-  { id: 'about', labelKey: 'settings.tabs.about' },
-];
-
-/**
- * Dialog is `max-h-[90vh]`. Header + tab list take ~9rem, so a 78vh panel
- * overflows the body and gets clipped. Bound the panel to the leftover space
- * so `overflow-y-auto` both scrolls and stays fully visible.
- */
-const SETTINGS_SCROLL_PANEL =
-  'max-h-[calc(90vh-9rem)] overflow-y-auto p-4 pb-8 text-left';
+const TAB_ITEMS = [
+  { id: 'appearance', labelKey: 'desktop.settings.tabs.appearance', Icon: Palette },
+  { id: 'pet', labelKey: 'desktop.pet.tab', Icon: PawPrint },
+  { id: 'subscription', labelKey: 'settings.tabs.subscription', Icon: CreditCard },
+  { id: 'integrations', labelKey: 'agent.title', Icon: Plug },
+  { id: 'data', labelKey: 'desktop.settings.tabs.data', Icon: Database },
+  { id: 'app', labelKey: 'settings.tabs.app', Icon: Settings },
+  { id: 'about', labelKey: 'settings.tabs.about', Icon: Info },
+] as const;
 
 export function SettingsPanel({
   activeTab,
@@ -83,63 +79,137 @@ export function SettingsPanel({
     useState<DesktopSettingsTabId>(getDefaultSettingsTab);
   const tab = activeTab ?? uncontrolledTab;
   const setTab = onTabChange ?? setUncontrolledTab;
+  const items = TAB_ITEMS.filter(({ id }) => id !== 'pet' || isWindows);
+  const panels = {
+    pet: <PetSettingsCard request={petRequest} />,
+    subscription: <QuotaSettings />,
+    appearance: <AppearanceSettingsPanel />,
+    integrations: <AgentIntegrationSettings />,
+    data: <DataSettingsPanel />,
+    app: <AppSettingsPanel />,
+    about: <AboutContent />,
+  };
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
       <AppToastProvider queue={toastQueue} />
       <Tabs
-        className="flex min-h-0 w-full flex-1 flex-col text-center"
+        orientation="vertical"
+        className="min-h-0 w-full flex-1 gap-0"
         selectedKey={tab}
         onSelectionChange={(key) => setTab(String(key) as DesktopSettingsTabId)}
       >
-        <Tabs.ListContainer className="m-3 mr-14 w-fit">
-          <Tabs.List aria-label={t('settings.tabs.category')} className="w-fit">
-            {TAB_ITEMS.filter((item) => item.id !== 'pet' || isWindows).map((item) => (
-              <Tabs.Tab
-                className="h-6 w-fit px-3 text-xs font-normal aria-selected:text-accent-foreground"
-                id={item.id}
-                key={item.id}
-              >
-                {t(item.labelKey)}
-                <Tabs.Indicator className="bg-accent" />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
+        <Tabs.List
+          aria-label={t('settings.tabs.category')}
+          className="w-32 shrink-0 gap-2 overflow-y-auto overscroll-contain border-e border-separator bg-surface-secondary/50 p-2.5 sm:w-44 sm:py-4"
+        >
+          {items.map(({ id, labelKey, Icon }) => (
+            <Tabs.Tab
+              className="group h-auto min-h-12 shrink-0 justify-start gap-2 rounded-lg px-2.5 py-2 text-start leading-snug text-foreground hover:bg-default hover:opacity-100 aria-selected:bg-accent/10 aria-selected:font-semibold aria-selected:text-foreground"
+              id={id}
+              key={id}
+            >
+              <Icon className="size-4 shrink-0 text-muted group-aria-selected:text-accent" aria-hidden="true" />
+              <span className="min-w-0 wrap-break-word">{t(labelKey)}</span>
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
 
-        {isWindows && (
-          <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="pet">
-            {tab === 'pet' && <PetSettingsCard request={petRequest} />}
+        {items.map(({ id, labelKey }) => (
+          <Tabs.Panel
+            className="ms-0 min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-8 text-start sm:px-6 sm:pt-5"
+            id={id}
+            key={id}
+          >
+            {tab === id && (
+              <>
+                {id !== 'integrations' && (
+                  <h2 className="mb-4 text-lg font-semibold text-foreground">{t(labelKey)}</h2>
+                )}
+                {panels[id]}
+              </>
+            )}
           </Tabs.Panel>
-        )}
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="subscription">
-          {tab === 'subscription' && <SubscriptionChannelSettings />}
-        </Tabs.Panel>
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="app">
-          {tab === 'app' && <AppSettingsPanel />}
-        </Tabs.Panel>
-        <Tabs.Panel className={SETTINGS_SCROLL_PANEL} id="about">
-          {tab === 'about' && <AboutContent />}
-        </Tabs.Panel>
+        ))}
       </Tabs>
     </div>
   );
 }
 
-/** Toggle which auto-detected subscription channels may appear on the dashboard. */
-function SubscriptionChannelSettings() {
-  return <div className="space-y-4"><TrayPanelControl /><QuotaSettings /></div>;
+function AppearanceSettingsPanel() {
+  const { t } = useTranslation();
+  const { theme, themeMode, setThemeMode } = useTheme();
+  const { preference, systemLocale, setPreference } = useLocalePreference();
+  const [localeError, setLocaleError] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <LanguagePreferenceControl
+            value={preference}
+            systemLocale={systemLocale}
+            onChange={(next) => {
+              setLocaleError(false);
+              void setPreference(next).catch((reason) => {
+                console.error('[quotern-desktop] failed to persist locale:', reason);
+                setLocaleError(true);
+              });
+            }}
+          />
+        </Card.Content>
+      </Card>
+      {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <ThemePreferenceControl value={themeMode} theme={theme} onChange={setThemeMode} />
+        </Card.Content>
+      </Card>
+      <Card variant="tertiary" className="rounded-xl shadow-none">
+        <Card.Content>
+          <RadioGroup
+            name="token-unit-mode"
+            value={getTokenUnitMode()}
+            variant="secondary"
+            onChange={(next) => {
+              if (next !== 'localized' && next !== 'international') return;
+              if (next === getTokenUnitMode()) return;
+              setTokenUnitMode(next);
+            }}
+          >
+            <div className="flex items-center gap-1">
+              <Label>{t('settings.tokenUnit.label')}</Label>
+              <SettingsHelpPopover title={t('settings.tokenUnit.label')}>
+                <p>{t('settings.tokenUnit.description')}</p>
+              </SettingsHelpPopover>
+            </div>
+            <Radio value="localized">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                {t('settings.tokenUnit.localized')}
+              </Radio.Content>
+            </Radio>
+            <Radio value="international">
+              <Radio.Content>
+                <Radio.Control>
+                  <Radio.Indicator />
+                </Radio.Control>
+                {t('settings.tokenUnit.international')}
+              </Radio.Content>
+            </Radio>
+          </RadioGroup>
+        </Card.Content>
+      </Card>
+    </div>
+  );
 }
 
-/** 自动更新 + 开机自启 + 设备信息。 */
 function AppSettingsPanel() {
   const { t } = useTranslation();
-  const { themeMode, setThemeMode } = useTheme();
-  const { preference, locale, systemLocale, setPreference } = useLocalePreference();
-  const [localeError, setLocaleError] = useState(false);
   const cliMode = true;
   const isMac = window.tud?.platform === 'darwin';
-  const [config, setConfig] = useState<TudConfigView | null>(null);
   const [openAtLogin, setOpenAtLogin] = useState(true);
   const [autostartLoading, setAutostartLoading] = useState(true);
   const [autostartError, setAutostartError] = useState<string | null>(null);
@@ -148,32 +218,6 @@ function AppSettingsPanel() {
   const [trayUsageMode, setTrayUsageMode] = useState<TrayUsageMode>('both');
   const [trayUsageLoading, setTrayUsageLoading] = useState(true);
   const [trayUsageError, setTrayUsageError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchConfig()
-      .then((data) => {
-        if (!cancelled) {
-          setConfig(data);
-          setError(null);
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          console.error('[quotern-desktop] failed to load config:', e);
-          setError('settings.loadConfigFailed');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     setAutostartLoading(true);
@@ -290,29 +334,6 @@ function AppSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Card variant="tertiary" className="rounded-xl shadow-none">
-        <Card.Content>
-          <LanguagePreferenceControl
-            value={preference}
-            systemLocale={systemLocale}
-            onChange={(next) => {
-              setLocaleError(false);
-              void setPreference(next).catch((reason) => {
-                console.error('[quotern-desktop] failed to persist locale:', reason);
-                setLocaleError(true);
-              });
-            }}
-          />
-        </Card.Content>
-      </Card>
-      {localeError && <StatusBanner tone="error" title={t('settings.language.saveFailed')} />}
-      <Card variant="tertiary" className="rounded-xl shadow-none">
-        <Card.Content>
-          <ThemePreferenceControl value={themeMode} onChange={setThemeMode} />
-        </Card.Content>
-      </Card>
-      {error && <StatusBanner tone="error" title={t(error)} />}
-      <AgentIntegrationSettings />
       {autostartError && (
         <StatusBanner tone="error" title={t(autostartError)} />
       )}
@@ -423,48 +444,40 @@ function AppSettingsPanel() {
         </div>
       )}
 
-      <Card variant="tertiary" className="rounded-xl shadow-none">
-        <Card.Content>
-          <RadioGroup
-            name="token-unit-mode"
-            value={getTokenUnitMode()}
-            variant="secondary"
-            onChange={(next) => {
-              if (next !== 'localized' && next !== 'international') return;
-              if (next === getTokenUnitMode()) return;
-              setTokenUnitMode(next);
-            }}
-          >
-            <div className="flex items-center gap-1">
-              <Label>{t('settings.tokenUnit.label')}</Label>
-              <SettingsHelpPopover title={t('settings.tokenUnit.label')}>
-                <p>{t('settings.tokenUnit.description')}</p>
-              </SettingsHelpPopover>
-            </div>
-            <Radio value="localized">
-              <Radio.Content>
-                <Radio.Control>
-                  <Radio.Indicator />
-                </Radio.Control>
-                {t('settings.tokenUnit.localized')}
-              </Radio.Content>
-            </Radio>
-            <Radio value="international">
-              <Radio.Content>
-                <Radio.Control>
-                  <Radio.Indicator />
-                </Radio.Control>
-                {t('settings.tokenUnit.international')}
-              </Radio.Content>
-            </Radio>
-          </RadioGroup>
-        </Card.Content>
-      </Card>
-
       <AutoUpdateSettings />
+    </div>
+  );
+}
 
+function DataSettingsPanel() {
+  const { t } = useTranslation();
+  const { locale } = useLocalePreference();
+  const [config, setConfig] = useState<TudConfigView | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchConfig()
+      .then((data) => {
+        if (!cancelled) setConfig(data);
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          console.error('[quotern-desktop] failed to load config:', reason);
+          setError(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-5">
       <LocalBackupPanel />
-      {!loading && config && (
+      <UsageRecoveryPanel />
+      {error && <StatusBanner tone="error" title={t('settings.loadConfigFailed')} />}
+      {config && (
         <Card variant="tertiary" className="rounded-xl shadow-none">
           <Card.Header>
             <Card.Title>{t('settings.device.title')}</Card.Title>

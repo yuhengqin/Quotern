@@ -6,7 +6,7 @@ import { aggregateLocalMetrics, type LocalUsageMetrics } from './local-metrics.j
 import { normalizeProjectName } from './project-label.js';
 import { normalizeSyncSource } from './sync/index.js';
 import { configPath } from './paths.js';
-import { loadBucketsForRange } from './queue/index.js';
+import { loadUsageSnapshot } from './queue/index.js';
 import {
   applyRemotePricingOverlay, computeRowCost, explainRowCost,
   loadCachedPricingOverlay, roundCostUsd, type RowCostExplanation,
@@ -274,10 +274,10 @@ export async function readUsageReport(dataDir: string, query: UsageReportQuery, 
   const collectSince = typeof config.localCollectSince === 'string' && config.localCollectSince.trim()
     ? config.localCollectSince : config.statsSince;
   if (typeof collectSince !== 'string' || !Number.isFinite(Date.parse(collectSince))) throw new Error('本地配置的采集起点无效');
-  const rows = await loadBucketsForRange(dataDir, collectSince);
+  const { rows, since } = await loadUsageSnapshot(dataDir, collectSince);
   if (!loadCachedPricingOverlay(dataDir)) applyRemotePricingOverlay(null);
   return buildUsageReport(rows, query, {
-    collectSince, snapshot: 'persisted', now: options?.now,
+    collectSince: since, snapshot: 'persisted', now: options?.now,
     lastSyncAt: typeof config.lastSyncAt === 'string' && Number.isFinite(Date.parse(config.lastSyncAt)) ? config.lastSyncAt : null,
   });
 }

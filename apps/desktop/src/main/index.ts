@@ -665,6 +665,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     createTrayPopover({
       getLocale: getNativeLocale,
       showMainWindow,
+      getMainWindow,
       openSettings: () => openSettings(),
       triggerSync,
       togglePet: () => toggleCurrentPet?.(),

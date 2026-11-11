@@ -99,6 +99,7 @@ async function main() {
   ipcMain.handle('dashboard-range:get', () => 'last-7-days');
   ipcMain.handle('dashboard-range:set', (_event, value) => value);
   ipcMain.handle('dsh-pet:navigation-get', () => null);
+  ipcMain.handle('quota:navigation:get', () => null);
   for (const channel of ['autostart:get', 'autostart:get-hidden', 'tray-usage:get']) ipcMain.handle(channel, () => false);
   ipcMain.handle('tray-usage-mode:get', () => 'both');
   ipcMain.handle('quota:get', () => quota);
@@ -199,8 +200,8 @@ async function main() {
   checks.push('desktop-quota-cycle-selection-account-join-and-narrow-layout');
 
   window.setSize(1000, 920);
-  // Use the production shell navigation event to select the application settings tab.
-  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "app" } })); true');
+  // Use the production shell navigation event to select the data settings tab.
+  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "data" } })); true');
   await until(() => client.evaluate(`Boolean(${button('创建并下载备份')})`), 'backup settings');
   await client.click(button('创建并下载备份'));
   await until(() => downloaded, 'backup download completes');
@@ -212,9 +213,18 @@ async function main() {
   const { nodeId } = await client.call('DOM.querySelector', { nodeId: root.nodeId, selector: 'input[type=file]' });
   await client.call('DOM.setFileInputFiles', { nodeId, files: [downloaded] });
   await until(async () => (await body()).includes('校验通过'), 'file input verifies saved backup');
+  await until(() => client.evaluate('Boolean(document.querySelector("[data-backup-preview]"))'), 'validated content preview');
+  assert.ok((await body()).includes('用量记录时间（UTC）'));
+  assert.ok((await body()).includes('包含来源：Claude · Codex'));
+  assert.ok((await body()).includes('新目录只包含该备份的内容'));
   await client.fill(labelInput('恢复目录（必须尚不存在）'), dataDir);
   await client.click(button('恢复到新目录'));
   await until(async () => (await body()).includes('目标已存在'), 'existing directory rejected');
+  await until(async () => (await body()).includes('保护备份已保存'), 'protection remains visible after restore conflict');
+  const protectionFiles = (await import('node:fs/promises')).readdir;
+  const protections = await protectionFiles(path.join(dataDir, 'backups'));
+  assert.equal(protections.length, 1);
+  verifyDataBackup(JSON.parse(await readFile(path.join(dataDir, 'backups', protections[0]), 'utf8')));
   const restored = path.join(output, 'restored');
   await client.fill(labelInput('恢复目录（必须尚不存在）'), restored);
   await client.click(button('恢复到新目录'));
@@ -227,8 +237,9 @@ async function main() {
   await client.call('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [broken] });
   await until(async () => (await body()).includes('备份校验失败'), 'corrupt backup rejected');
   assert.equal(await client.evaluate(`Boolean(${button('恢复到新目录')})`), false);
-  checks.push('desktop-backup-download-file-verification-errors-and-real-restore');
+  checks.push('desktop-backup-content-preview-protection-conflict-path-and-real-restore');
 
+  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "appearance" } })); true');
   await client.click(`document.querySelector('input[name="token-unit-mode"][value="international"]').closest('label')`);
   await until(() => client.evaluate(`document.querySelector('input[name="token-unit-mode"][value="international"]').checked`), 'international token units selected');
   await client.key('Escape');
@@ -238,7 +249,7 @@ async function main() {
   await until(async () => (await body()).includes('同账号本机 Token') && (await body()).includes('15K'), 'quota history respects saved token units');
   await client.key('Escape');
   for (const [value, heading] of [['en', 'Performance'], ['ja', 'パフォーマンス分析'], ['ko', '성능 분석']]) {
-    await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "app" } })); true');
+    await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "appearance" } })); true');
     await client.click(`document.querySelector('input[name="locale-preference"][value="${value}"]').closest('label')`);
     await until(() => localeState().resolved === value, `locale ${value}`);
     await client.key('Escape');

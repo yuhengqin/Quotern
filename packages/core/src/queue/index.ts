@@ -7,6 +7,7 @@ import { withDataTransaction } from '../data-transaction.js';
 import type { ManifestFile, QueueBucket } from '../types.js';
 import { bucketKey, monthFromHourStart } from './keys.js';
 import { manifestPath, queueDir } from '../paths.js';
+import { activeRecoveryRows, mergeRecoveryRows, readRecoveryRows, RECOVERY_FILE, recoveryFloor } from '../usage-recovery.js';
 
 async function visitJsonlFile(
   filePath: string,
@@ -82,6 +83,15 @@ export async function loadRecentBuckets(
   return loadBucketsForRange(dataDir, statsSince);
 }
 
+/** Reports see imported requests without folding them into the collector's raw queue. */
+export async function loadUsageSnapshot(dataDir: string, statsSince: string): Promise<{ rows: QueueBucket[]; since: string }> {
+  const recovered = await readRecoveryRows(dataDir);
+  if (!recovered.length) return { rows: await loadBucketsForRange(dataDir, statsSince), since: statsSince };
+  const base = await loadBucketsForRange(dataDir, '0001-01-01T00:00:00.000Z');
+  const since = recoveryFloor(statsSince, recovered);
+  return { rows: filterSince(mergeRecoveryRows(base, activeRecoveryRows(base, recovered)), since), since };
+}
+
 export async function clearQueueBuckets(dataDir: string): Promise<void> {
   return withDataTransaction(dataDir, () => clearQueueBucketsUnlocked(dataDir));
 }
@@ -106,7 +116,10 @@ async function clearCursorsUnlocked(dataDir: string): Promise<void> {
 
 /** Reset incremental cursors + local queue so the next sync can re-collect. */
 export async function resetLocalUsageCache(dataDir: string): Promise<void> {
-  await withDataTransaction(dataDir, async () => { await clearCursors(dataDir); await clearQueueBuckets(dataDir); });
+  await withDataTransaction(dataDir, async () => {
+    await clearCursors(dataDir); await clearQueueBuckets(dataDir);
+    await unlink(join(dataDir, RECOVERY_FILE)).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
+  });
 }
 
 export async function appendBuckets(

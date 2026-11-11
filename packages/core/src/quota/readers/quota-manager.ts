@@ -16,6 +16,8 @@ export interface QuotaReader {
 }
 export interface QuotaNotification {
   provider: string;
+  providerId?: string;
+  accountRef?: string;
   label: string;
   /** Legacy display label retained for custom pools and existing consumers. */
   window: string;
@@ -190,6 +192,7 @@ export class QuotaManager {
         // An old reader may retain data without proving its account. Never promote it
         // into the shared current-account view, notification baseline or history.
         normalized.windows = []; normalized.details = []; normalized.planLabel = null; normalized.fetchedAt = null;
+        normalized.resetCredits = null; normalized.resetCreditExpirations = null;
         normalized.status = 'temporarily-unavailable'; normalized.message = '暂时无法确认当前账号额度，请稍后重试';
       }
       const temporary = ['unavailable', 'temporarily-unavailable'].includes(normalized.status) || normalized.stale;
@@ -254,7 +257,7 @@ export class QuotaManager {
           if (this.sentAlerts.has(alertKey)) continue;
           this.sentAlerts.add(alertKey);
           if (this.sentAlerts.size > 5000) this.sentAlerts.delete(this.sentAlerts.values().next().value!);
-          try { this.deps.notify({ provider: slot.reader.id, label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), windowId: window.id, windowLabel: window.label, windowGroupLabel: window.groupLabel, windowPeriodSeconds: quotaWindowPeriodSeconds(window), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
+          try { this.deps.notify({ provider: slot.reader.id, providerId: this.key(slot.reader), ...(proof?.identityVerified && proof.accountRef ? { accountRef: proof.accountRef } : {}), label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), windowId: window.id, windowLabel: window.label, windowGroupLabel: window.groupLabel, windowPeriodSeconds: quotaWindowPeriodSeconds(window), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
           catch { this.notice = '系统通知暂不可用，额度卡片仍会继续更新。'; }
         }
       }
@@ -273,7 +276,8 @@ export class QuotaManager {
     if (!validQuotaPatch(patch)) return Promise.reject(new Error('无效的额度设置'));
     const pending = this.settingsQueue.then(async () => {
       if (this.disposed) throw new Error('额度服务已退出');
-      const next = { ...this.preferences, ...patch, channels: { ...this.preferences.channels, ...patch.channels }, serviceComponents: { ...this.preferences.serviceComponents, ...patch.serviceComponents } };
+      const next = { ...this.preferences, ...patch, channels: { ...this.preferences.channels, ...patch.channels }, serviceComponents: { ...this.preferences.serviceComponents, ...patch.serviceComponents }, preferredWindows: { ...this.preferences.preferredWindows, ...patch.preferredWindows } };
+      if (!validQuotaPatch(next)) throw new Error('无效的额度设置');
       if (patch.profiles) assertQuotaProfileDirectories(patch.profiles, this.preferences.profiles ?? []);
       try { await this.deps.store.savePreferences(next); }
       catch { this.notice = '额度设置保存失败，已保留原设置。'; this.emit(); throw new Error(this.notice); }

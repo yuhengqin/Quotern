@@ -11,7 +11,7 @@ import {
 } from 'react';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
 import { ShareCardArtwork, type SharePosterDetails, type ShareCardTheme } from './SharePosterArtwork';
-import { SHARE_CARD_DESIGN_WIDTH, SHARE_CARD_DESIGN_HEIGHT } from '../lib/share-card-image';
+import { shareDimensions, type SharePresentation, type ShareCostEvidence } from '../lib/share-presentation';
 
 export const SHARE_CARD_COLORS = ['#100b35', '#f8f5ee'] as const;
 
@@ -58,6 +58,8 @@ function shouldReduceMotion() {
 export { ShareCardArtwork } from './SharePosterArtwork';
 
 function ShareCard({
+  presentation,
+  costEvidence,
   theme,
   backgroundImage,
   avatarUrl,
@@ -72,6 +74,8 @@ function ShareCard({
   userName,
 }: {
   theme: ShareCardTheme;
+  presentation?: SharePresentation;
+  costEvidence?: ShareCostEvidence | null;
   backgroundImage?: string;
   avatarUrl?: string;
   color: string;
@@ -86,15 +90,16 @@ function ShareCard({
 }) {
   const previewRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const dimensions = shareDimensions(presentation?.aspect);
   useLayoutEffect(() => {
     const node = previewRef.current;
     if (!node) return;
-    const resize = () => setScale(Number.parseFloat(getComputedStyle(node).width) / SHARE_CARD_DESIGN_WIDTH);
+    const resize = () => setScale(Number.parseFloat(getComputedStyle(node).width) / dimensions.width);
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [dimensions.width]);
   return (
     <div
       ref={previewRef}
@@ -103,8 +108,10 @@ function ShareCard({
       onTransitionEnd={onTransitionEnd}
       style={style}
     >
-      <div style={{ width: SHARE_CARD_DESIGN_WIDTH, height: SHARE_CARD_DESIGN_HEIGHT, borderRadius: 16, overflow: 'hidden', backgroundColor: color, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+      <div style={{ width: dimensions.width, height: dimensions.height, borderRadius: 16, overflow: 'hidden', backgroundColor: color, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
         <ShareCardArtwork
+        presentation={presentation}
+        costEvidence={costEvidence}
         avatarUrl={avatarUrl}
         details={details}
         theme={theme}
@@ -135,6 +142,8 @@ export function getShareCardVariant(index: number, variants = SHARE_CARD_VARIANT
 }
 
 export function ShareCardCarousel({
+  presentation,
+  costEvidence,
   variants = SHARE_CARD_VARIANTS,
   disabled = false,
   selectionRevision = 0,
@@ -154,6 +163,8 @@ export function ShareCardCarousel({
   userName,
 }: {
   variants?: ShareCardVariant[];
+  presentation?: SharePresentation;
+  costEvidence?: ShareCostEvidence | null;
   disabled?: boolean;
   selectionRevision?: number;
   reservedHeight?: number;
@@ -177,6 +188,8 @@ export function ShareCardCarousel({
   const variantIds = variants.map(({ id }) => id).join(',');
   useEffect(() => { setTransition(null); }, [variantIds, activeIndex, selectionRevision]);
   const currentIndex = Math.max(0, Math.min(activeIndex, variants.length - 1));
+  const dimensions = shareDimensions(presentation?.aspect);
+  const aspectRatio = dimensions.width / dimensions.height;
 
   useEffect(() => {
     if (transition?.phase !== 'prepare') return undefined;
@@ -240,9 +253,9 @@ export function ShareCardCarousel({
         </Button>
 
         <div
-          className="group/preview relative aspect-2/3 w-full min-w-0 justify-self-center"
+          className="group/preview relative w-full min-w-0 justify-self-center"
           // Reserve vertical space for dialog controls and export actions.
-          style={{ maxWidth: `min(360px, calc((90dvh - ${reservedHeight}px) * 2 / 3))` }}
+          style={{ aspectRatio, maxWidth: `min(360px, max(150px, calc((90dvh - ${reservedHeight}px) * ${aspectRatio})))` }}
         >
           {variants.map((variant, cardIndex) => {
             const position = getPreviewPosition(cardIndex - stackActiveIndex);
@@ -250,10 +263,11 @@ export function ShareCardCarousel({
             return (
               <div
                 aria-hidden="true"
-                className={`absolute left-1/2 top-1/2 h-[92%] aspect-2/3 rounded-[28px] ${CARD_TRANSITION_CLASS}`}
+                className={`absolute left-1/2 top-1/2 h-[92%] rounded-[28px] ${CARD_TRANSITION_CLASS}`}
                 key={variant.id}
                 style={{
                   ...getCardSurfaceStyle(variant.color, variant.backgroundImage),
+                  aspectRatio,
                   opacity: position.opacity,
                   transform: getCardTransform(position.offset, position.rotation),
                   zIndex: position.zIndex,
@@ -265,6 +279,7 @@ export function ShareCardCarousel({
           {transition ? (
             <>
               <ShareCard
+                presentation={presentation} costEvidence={costEvidence}
                 avatarUrl={avatarUrl}
                 details={details}
                 color={getShareCardVariant(transition.fromIndex, variants).color}
@@ -284,6 +299,7 @@ export function ShareCardCarousel({
                 userName={userName}
               />
               <ShareCard
+                presentation={presentation} costEvidence={costEvidence}
                 avatarUrl={avatarUrl}
                 details={details}
                 color={getShareCardVariant(transition.toIndex, variants).color}
@@ -305,6 +321,7 @@ export function ShareCardCarousel({
             </>
           ) : (
             <ShareCard
+              presentation={presentation} costEvidence={costEvidence}
               avatarUrl={avatarUrl}
               details={details}
               color={activeVariant.color}

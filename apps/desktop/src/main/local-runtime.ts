@@ -255,6 +255,7 @@ function buildApp(state: {
 }): LocalApiApp {
   return createLocalApiApp({
     sessionActionsIpc: true,
+    usageRecoveryEnabled: () => runtime?.role === 'owner',
     getQuotaState: getQuotaRuntimeState,
     getQuotaHistory: getQuotaRuntimeHistory,
     desktopQuotaDirectory: getQuotaBackupDirectory(),

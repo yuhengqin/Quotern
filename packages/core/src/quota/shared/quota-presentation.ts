@@ -1,5 +1,5 @@
 import { quotaWindowPeriodSeconds } from './quota.js';
-import type { QuotaAnalysis, QuotaProviderState, QuotaWindow } from './quota.js';
+import type { QuotaAnalysis, QuotaNavigationTarget, QuotaProviderState, QuotaWindow } from './quota.js';
 
 export function isQuotaStatusOnly(provider: Pick<QuotaProviderState, 'windows' | 'details' | 'resetCredits'>): boolean {
   return provider.windows.length === 0 && provider.details.length === 0 && provider.resetCredits === null;
@@ -32,6 +32,23 @@ export function sortQuotaWindows(windows: QuotaWindow[]): QuotaWindow[] {
     .sort((a, b) => periodOrder(b)! - periodOrder(a)!);
   let index = 0;
   return windows.map(window => periodOrder(window) === null ? window : sorted[index++]);
+}
+
+/** A quick glance must never present an old cycle or stale reading as current. */
+export function primaryQuotaWindow(provider: Pick<QuotaProviderState, 'windows' | 'stale' | 'status'>, preferred?: string, now = Date.now() / 1000): QuotaWindow | null {
+  if (provider.stale || provider.status !== 'ready') return null;
+  const live = provider.windows.filter(window => Number.isFinite(window.usedPercent) && (window.resetsAt === null || window.resetsAt > now));
+  const selected = preferred ? live.find(window => window.id === preferred) : undefined;
+  return selected ?? live.filter(window => window.analysisEligible !== false).sort((a, b) => b.usedPercent - a.usedPercent)[0] ?? live[0] ?? null;
+}
+
+/** Same-card IDs can survive account changes. Only verified identity permits quota navigation. */
+export function resolveQuotaNavigation(target: QuotaNavigationTarget, providers: QuotaProviderState[]): QuotaProviderState | null {
+  const candidates = providers.filter(provider => (provider.providerId ?? provider.id) === target.providerType);
+  if (!target.windowId) return candidates.find(provider => provider.id === target.providerId) ?? candidates[0] ?? null;
+  if (!target.accountRef) return null;
+  const sameAccount = candidates.filter(provider => provider.provenance?.identityVerified && provider.provenance.accountRef === target.accountRef);
+  return sameAccount.find(provider => provider.id === target.providerId) ?? sameAccount[0] ?? null;
 }
 
 function quotaScope(providerId: string, window: QuotaWindow): string {

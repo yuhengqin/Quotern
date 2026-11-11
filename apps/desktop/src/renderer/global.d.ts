@@ -85,9 +85,10 @@ declare global {
         url: string,
       ) => Promise<{ ok: boolean; message?: string }>;
       resizeTrayPopover: (height: number) => void;
-      getTrayPanel: () => Promise<import('../shared/tray-panel').TrayPanelState>;
-      setTrayPanelPinned: (pinned: boolean) => Promise<import('../shared/tray-panel').TrayPanelState>;
-      onTrayPanelChanged: (callback: (state: import('../shared/tray-panel').TrayPanelState) => void) => () => void;
+      getQuotaNavigation: () => Promise<import('../shared/quota-navigation').QuotaNavigationRequest | null>;
+      acknowledgeQuotaNavigation: (requestId: string) => Promise<void>;
+      setQuotaDialogOpen: (open: boolean) => Promise<void>;
+      onQuotaNavigation: (callback: () => void) => () => void;
       getDashboardRange: () => Promise<
         import('../shared/dashboard-range').DashboardRange
       >;

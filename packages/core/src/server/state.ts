@@ -15,9 +15,11 @@ import { notifyScriptPath, pollIntervalLabel, pollIntervalSeconds } from '../pat
 import {
   clearCursors,
   loadRecentBuckets,
+  filterSince,
   loadCursors,
 } from '../queue/index.js';
 import { bucketKey } from '../queue/keys.js';
+import { activeRecoveryRows, mergeRecoveryRows, readRecoveryRows, recoveryFloor } from '../usage-recovery.js';
 import {
   countClaudeRows,
   countCodexRows,
@@ -66,15 +68,42 @@ export class BucketStore {
    */
   private rows = new Map<string, QueueBucket>();
   private revision = 0;
+  private recovered: QueueBucket[] = [];
+  private activeRecovery: QueueBucket[] = [];
+  private displaySince = '';
+  private earliestRecovery = '';
+  private projected: QueueBucket[] | null = null;
 
   async reload(dataDir: string, statsSince: string): Promise<void> {
-    const rows = await loadRecentBuckets(dataDir, statsSince);
+    const recovered = await readRecoveryRows(dataDir);
+    const rows = await loadRecentBuckets(dataDir, recovered.length ? '0001-01-01T00:00:00.000Z' : statsSince);
+    this.replace(rows, recovered, statsSince);
+  }
+
+  replace(rows: QueueBucket[], recovered: QueueBucket[], statsSince: string): void {
     this.rows = new Map(rows.map((row) => [bucketKey(row), row]));
+    this.recovered = recovered;
+    this.earliestRecovery = recovered.length ? recoveryFloor('9999-12-31T23:59:59.999Z', recovered) : '';
+    this.displaySince = this.reportSince(statsSince);
+    this.updateRecovery();
     this.revision++;
   }
 
   getRows(): QueueBucket[] {
-    return Array.from(this.rows.values());
+    return this.projected ?? Array.from(this.rows.values());
+  }
+
+  reportSince(collectSince: string): string {
+    return this.earliestRecovery && Date.parse(this.earliestRecovery) < Date.parse(collectSince) ? this.earliestRecovery : collectSince;
+  }
+
+  private updateRecovery(): QueueBucket[] {
+    if (!this.recovered.length) { this.projected = null; this.activeRecovery = []; return []; }
+    const previous = new Set(this.activeRecovery);
+    this.activeRecovery = activeRecoveryRows(this.rows.values(), this.recovered);
+    const active = new Set(this.activeRecovery);
+    this.projected = filterSince(mergeRecoveryRows([...this.rows.values()], this.activeRecovery), this.displaySince);
+    return [...this.activeRecovery.filter(row => !previous.has(row)), ...[...previous].filter(row => !active.has(row))];
   }
 
   getRevision(): number { return this.revision; }
@@ -83,11 +112,13 @@ export class BucketStore {
     await this.reload(dataDir, statsSince);
   }
 
-  apply(buckets: QueueBucket[]): void {
+  apply(buckets: QueueBucket[]): QueueBucket[] {
     for (const bucket of buckets) {
       this.rows.set(bucketKey(bucket), bucket);
     }
-    if (buckets.length) this.revision++;
+    if (!buckets.length) return [];
+    this.revision++;
+    return [...buckets, ...this.updateRecovery()];
   }
 }
 
@@ -103,6 +134,7 @@ export interface LocalApiDeps {
   getQuotaHistory?(providerId: string): import('../quota/quota-history.js').QuotaHistorySource | null;
   /** Desktop keeps quota separately from the CLI data directory. */
   desktopQuotaDirectory?: string;
+  usageRecoveryEnabled?: boolean | (() => boolean);
   dataDir: string;
   getConfig: () => TudConfig;
   bucketStore: BucketStore;
@@ -328,11 +360,9 @@ export async function applySyncResults(
   results: SyncResult[],
 ): Promise<QueueBucket[]> {
   const written = collectWrittenBuckets(results);
-  if (written.length > 0) {
-    deps.bucketStore.apply(written);
-  }
+  const touched = deps.bucketStore.apply(written);
   if (deps.aggregateCache) {
-    await deps.aggregateCache.onBucketsChanged(deps.bucketStore.getRows(), written);
+    await deps.aggregateCache.onBucketsChanged(deps.bucketStore.getRows(), touched);
   }
   return written;
 }
@@ -434,7 +464,9 @@ export async function createAggregateCache(
   if (cache.sealedDayCount() === 0 && rows.length > 0) {
     await cache.rebuildFromRows(rows);
   } else {
-    await cache.onBucketsChanged(rows, [], true);
+    // Recovery and the sealed cache are separate files. Reseal imported dates
+    // at startup even if a prior process ended before it could publish them.
+    await cache.onBucketsChanged(rows, await readRecoveryRows(dataDir), true);
   }
   return cache;
 }
@@ -452,14 +484,12 @@ export function createApplyAfterSync(deps: {
     const written = collectWrittenBuckets(results);
     const store = deps.getBucketStore();
     const cache = deps.getAggregateCache();
-    if (written.length > 0) {
-      store.apply(written);
-    }
+    const touched = store.apply(written);
     // History (`date < today`) is read only from the sealed cache. Yesterday is
     // still "today" until midnight, so an empty poll after the day rolls never
     // reaches onBucketsChanged and the panel shows that day as 0 until restart.
     if (cache && (written.length > 0 || cache.needsCalendarSeal())) {
-      await cache.onBucketsChanged(store.getRows(), written);
+      await cache.onBucketsChanged(store.getRows(), touched);
     }
     // Skip Renderer poke when sync wrote nothing (unless forceNotify for round end).
     if (opts?.quiet) return;

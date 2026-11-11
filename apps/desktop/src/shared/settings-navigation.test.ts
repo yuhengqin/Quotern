@@ -10,3 +10,10 @@ test('settings navigation carries the exact pet and a distinct request through t
   assert.deepEqual(parseOpenSettingsDetail({ tab: 'about', pet: null }), { tab: 'about' });
   assert.deepEqual(parseOpenSettingsDetail(null), {});
 });
+
+test('settings navigation accepts the split Desktop sections and keeps the app destination', () => {
+  for (const tab of ['appearance', 'integrations', 'data', 'app']) {
+    assert.deepEqual(parseOpenSettingsDetail({ tab }), { tab });
+  }
+  assert.deepEqual(parseOpenSettingsDetail({ tab: 'unknown-section' }), {});
+});

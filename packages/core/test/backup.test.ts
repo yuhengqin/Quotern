@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { createDataBackup, restoreDataBackup, verifyDataBackup } from '../src/backup.js';
+import * as backupModule from '../src/backup.js';
 import { withDataTransaction } from '../src/data-transaction.js';
 import { readSessionHistory, syncSessionSource } from '../src/session-collector.js';
 
@@ -42,6 +43,46 @@ test('backup round trip preserves collected data, excludes credentials and resto
   assert.equal(await readFile(join(target, 'queue/2026-11.jsonl'), 'utf8'), await readFile(join(dir, 'queue/2026-11.jsonl'), 'utf8'));
   await assert.rejects(restoreDataBackup(backup, target), /BACKUP_TARGET_EXISTS/);
   await assert.rejects(restoreDataBackup(backup, dir), /BACKUP_TARGET_EXISTS/);
+}));
+
+test('v1 preview derives actual usage dates and bounded sources from validated contents, not configuration', async () => fixture(async (root, dir) => {
+  await collectSession(root, dir);
+  await writeFile(join(dir, 'queue/2026-11.jsonl'), [row, { ...row, hour_start: '2026-11-03T12:00:00Z', source: 'claude' }, { ...row, source: 'x'.repeat(5000) }].map(value => JSON.stringify(value)).join('\n'));
+  const backup = await createDataBackup(dir);
+  const contents = (verifyDataBackup(backup) as unknown as { contents: { usageRows: number; from: string | null; to: string | null; sources: string[]; sourcesTruncated: boolean; categories: { kind: string; files: number }[] } }).contents;
+  assert.equal(contents.usageRows, 3);
+  assert.equal(contents.from, '2026-11-01T00:00:00.000Z');
+  assert.equal(contents.to, '2026-11-03T12:00:00.000Z');
+  assert.deepEqual(contents.sources, ['claude', 'codex']);
+  assert.equal(contents.sourcesTruncated, true);
+  assert.ok(contents.categories.some(value => value.kind === 'sessions' && value.files === 1));
+  const empty = verifyDataBackup({ ...backup, files: backup.files.filter(file => file.path === 'config.json') }) as unknown as { contents: typeof contents };
+  assert.equal(empty.contents.from, null); assert.equal(empty.contents.to, null); assert.equal(empty.contents.usageRows, 0);
+}));
+
+test('protected restore persists current contents separately and retains the snapshot path after a restore conflict', async () => fixture(async (root, dir) => {
+  const restore = (backupModule as unknown as { restoreDataBackupWithProtection: (backup: unknown, target: string, dir: string) => Promise<{ protection: { path: string }; restore: { ok: boolean; code?: string; target?: string } }> }).restoreDataBackupWithProtection;
+  assert.equal(typeof restore, 'function');
+  const backup = await createDataBackup(dir);
+  await writeFile(join(dir, 'queue/2026-11.jsonl'), JSON.stringify({ ...row, input_tokens: 99 }) + '\n');
+  const target = join(root, 'protected-restored');
+  const result = await restore(backup, target, dir);
+  assert.equal(result.restore.ok, true);
+  const protection = JSON.parse(await readFile(result.protection.path, 'utf8'));
+  assert.ok(protection.files.find((file: { path: string }) => file.path.startsWith('queue/')).content.includes('99'));
+  assert.equal(await readFile(join(target, 'queue/2026-11.jsonl'), 'utf8'), backup.files.find(file => file.path.startsWith('queue/'))!.content);
+  const conflict = await restore(backup, target, dir);
+  assert.deepEqual(conflict.restore, { ok: false, code: 'BACKUP_TARGET_EXISTS' });
+  verifyDataBackup(JSON.parse(await readFile(conflict.protection.path, 'utf8')));
+}));
+
+test('a failed protection write prevents creation of the restore target', async () => fixture(async (root, dir) => {
+  const restore = (backupModule as unknown as { restoreDataBackupWithProtection: (backup: unknown, target: string, dir: string) => Promise<unknown> }).restoreDataBackupWithProtection;
+  assert.equal(typeof restore, 'function');
+  const backup = await createDataBackup(dir), target = join(root, 'should-not-exist');
+  await writeFile(join(dir, 'backups'), 'occupied');
+  await assert.rejects(restore(backup, target, dir), /BACKUP_PROTECTION_FAILED/);
+  await assert.rejects(stat(target), { code: 'ENOENT' });
 }));
 
 test('backup round trip preserves the current collected session format and tool results', async () => fixture(async (root, dir) => {

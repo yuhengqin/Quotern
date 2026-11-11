@@ -55,6 +55,8 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
     fetchedAt: timestamp(raw.fetchedAt), queriedAt: null, stale: raw.stale === true,
     message: typeof raw.message === 'string' ? raw.message : null, windows, details,
     resetCredits: finite(raw.resetCredits) && raw.resetCredits >= 0 ? raw.resetCredits : null,
+    ...(id === 'codex' ? { resetCreditExpirations: Array.isArray(raw.resetCreditExpirations)
+      ? raw.resetCreditExpirations.slice(0, 100).filter(value => finite(value) && value > 0 && value <= 8.64e12).sort((a, b) => a - b) : null } : {}),
     refreshing: false, nextRefreshAt: null, analyses: {}, service: null };
 }
 

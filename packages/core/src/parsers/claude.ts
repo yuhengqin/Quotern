@@ -254,8 +254,9 @@ export interface ParseClaudeResult {
 export async function parseClaudeIncremental(
   cursors: CursorsFile,
   statsSince: string,
+  selectedFiles?: readonly string[],
 ): Promise<{ result: ParseClaudeResult; cursors: CursorsFile }> {
-  const files = await listClaudeProjectFiles();
+  const files = selectedFiles ?? await listClaudeProjectFiles();
   const sinceMs = new Date(statsSince).getTime();
   const allProjectsDirs = claudeProjectsDirs();
 

@@ -1,0 +1,21 @@
+.quota-layout-item { position: relative; min-width: 0; scroll-margin: 1rem; }
+.quota-layout-item[data-compact] { align-self: start; }
+.quota-layout-preview, .quota-layout-preview > [data-quota-card] { height: 100%; }
+.quota-layout-item[data-editing] { cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+.quota-layout-item[data-editing] > .quota-layout-preview > [data-quota-card] { cursor: inherit; outline: 1px dashed color-mix(in oklab, var(--color-accent) 40%, transparent); outline-offset: 2px; }
+.quota-layout-item[data-dragging] { border-radius: var(--radius-3xl, 1.5rem); outline: 2px dashed var(--color-accent); background: color-mix(in oklab, var(--color-accent) 8%, transparent); }
+.quota-layout-item[data-dragging] > .quota-layout-preview { position: relative; z-index: 30; background: var(--color-surface); box-shadow: var(--shadow-lg, 0 12px 28px #0003); border-radius: inherit; }
+.quota-layout-item[data-status-row] { border-radius: .75rem; }
+.quota-drag-handle { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 28px; height: 32px; margin-inline-start: -4px; border-radius: .5rem; color: var(--color-muted); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+.quota-drag-handle:hover, .quota-drag-handle:focus-visible { color: var(--color-accent); background: color-mix(in oklab, var(--color-accent) 10%, transparent); }
+.quota-drag-handle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.quota-drag-handle:disabled { opacity: .4; cursor: default; }
+[data-quota-dragging], [data-quota-dragging] * { cursor: grabbing !important; }
+.quota-drop-indicator { position: absolute; z-index: 40; pointer-events: none; border-radius: 2px; background: var(--color-accent); }
+.quota-drop-indicator[data-axis=x] { top: 0; bottom: 0; width: 4px; }
+.quota-drop-indicator[data-axis=x][data-placement=before] { left: -7px; }
+.quota-drop-indicator[data-axis=x][data-placement=after] { right: -7px; }
+.quota-drop-indicator[data-axis=y] { left: 0; right: 0; height: 4px; }
+.quota-drop-indicator[data-axis=y][data-placement=before] { top: -7px; }
+.quota-drop-indicator[data-axis=y][data-placement=after] { bottom: -7px; }
+@media (forced-colors: active) { .quota-drop-indicator { background: Highlight; } .quota-layout-item[data-editing] > .quota-layout-preview > [data-quota-card] { outline-color: Highlight; } }

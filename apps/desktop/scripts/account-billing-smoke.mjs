@@ -125,8 +125,14 @@ async function exercise(window, client, mode, data) {
   assert.equal(await client.evaluate(`(${panel('extra')}).innerText.includes('$1.25')`), true, 'other source is retained');
   await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'billing closed');
   await until(() => client.evaluate(`document.activeElement===(${button('实际消费')})`), 'billing trigger focus restored');
+  await client.click(button('编辑布局'));
+  await until(() => client.evaluate(`Boolean(${button('取消')})`), 'quota layout editing');
+  assert.equal(await client.evaluate(`Boolean(${button('实际消费')}) || Boolean(${button('监控目录')})`), false, 'management actions are hidden during layout editing');
+  await client.click(button('取消'));
+  await until(() => client.evaluate(`Boolean(${button('实际消费')}) && Boolean(${button('监控目录')})`), 'management actions restored after layout editing');
+  await shot(window, mode + '-overview-after-layout');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
-  checks.push(mode + ': launch/default/keyboard-auto, draft-preserving-error, organization-picker, zero/unknown/subcent, partial-stale, model/key-breakdown, 375px/1280px, disconnect-isolation, Escape/focus');
+  checks.push(mode + ': launch/default/keyboard-auto, draft-preserving-error, organization-picker, zero/unknown/subcent, partial-stale, model/key-breakdown, 375px/1280px, disconnect-isolation, Escape/focus, layout-mode-restore');
 }
 async function main() {
   const browserData = await fixture('browser'), server = createHttpServer({ honoApp: browserData.api, staticDir: path.join(workspace, 'packages/dashboard/dist'), host: '127.0.0.1', port: 0 }); servers.push(server);
@@ -138,6 +144,7 @@ async function main() {
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' })); ipcMain.handle('auto-update:get-state', () => ({ status: 'unsupported', currentVersion: 'fixture' }));
   ipcMain.handle('autostart:get', () => false); ipcMain.handle('autostart:get-hidden', () => false); ipcMain.handle('dashboard-range:get', () => 'last-7-days'); ipcMain.handle('dashboard-range:set', (_e, v) => v);
   ipcMain.handle('dsh-pet:navigation-get', () => null); ipcMain.handle('dsh-pet:navigation-ack', () => {});
+  ipcMain.handle('quota:navigation:get', () => null); ipcMain.handle('quota:navigation:ack', () => {});
   ipcMain.handle('tud:api-request', async (_event, route, init) => { const response = await desktopData.api.request(new URL(route, 'http://tud.local').href, init); return { status: response.status, body: await response.json() }; });
   ipcMain.handle('quota:get', () => desktopData.quota); ipcMain.handle('share-backgrounds:request', () => []);
   const window = new BrowserWindow({ width: 1280, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);

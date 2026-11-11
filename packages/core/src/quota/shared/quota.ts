@@ -92,6 +92,8 @@ export interface QuotaProviderState {
   windows: QuotaWindow[];
   details: { id: string; label: string; text: string; valueKind?: 'unlimited' | 'exhausted'; resetsAt: number | null }[];
   resetCredits: number | null;
+  /** Account-scoped, available Codex reset credits, as Unix seconds. Null means detail unavailable. */
+  resetCreditExpirations?: number[] | null;
   refreshing: boolean;
   nextRefreshAt: number | null;
   analyses: Record<string, QuotaAnalysis>;
@@ -99,6 +101,8 @@ export interface QuotaProviderState {
 }
 export interface QuotaPreferences {
   providerOrder?: string[];
+  /** Specific card ID -> preferred window ID; empty means automatic risk selection. */
+  preferredWindows?: Record<string, string>;
   compact?: boolean;
   profiles?: QuotaProfile[];
   thresholdAlerts: boolean;
@@ -124,6 +128,13 @@ export interface QuotaState {
   notice: string | null;
 }
 export type QuotaPreferencePatch = Partial<QuotaPreferences>;
+export interface QuotaNavigationTarget {
+  providerId: string;
+  providerType: string;
+  windowId?: string;
+  /** Verified public account reference; never a credential fingerprint. */
+  accountRef?: string;
+}
 export const QUOTA_GET = 'quota:get';
 export const QUOTA_REFRESH = 'quota:refresh';
 export const QUOTA_SET = 'quota:set';

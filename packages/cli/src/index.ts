@@ -297,6 +297,7 @@ async function cmdStart(portArg?: number, hostArg?: string, daysAgo?: number): P
 
   const app = createLocalApiApp({
     quota: quotaRuntime,
+    usageRecoveryEnabled: () => runtimeRole === 'owner',
     dataDir: dir,
     getConfig,
     bucketStore,

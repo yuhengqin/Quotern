@@ -20,6 +20,7 @@ export interface CodexRateLimitWindow {
 export interface CodexSubscriptionSnapshot {
   windows?: QuotaWindow[];
   resetCredits?: number | null;
+  resetCreditExpirations?: number[] | null;
   retryAfterSeconds?: number;
   status: CodexSubscriptionStatus;
   hasAccount: boolean;

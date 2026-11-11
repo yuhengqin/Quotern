@@ -1,5 +1,6 @@
 import type { SupportedLocale } from 'quotern-i18n';
 import { improvementMessages } from './improvement-messages.ts';
+import { islandMessages } from './island-messages.ts';
 
 // Keep the four translations beside each other so every usage key exists in
 // every offline catalog. Interpolation is handled by i18next.
@@ -13,6 +14,8 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.quota.expiredAt': ['已到期', 'Expired', '期限切れ', '만료됨'],
   'usage.quota.showDate': ['显示重置日期', 'Show reset dates', 'リセット日時を表示', '재설정 날짜 표시'],
   'usage.quota.showCountdown': ['显示重置倒计时', 'Show reset countdowns', 'リセットまでの時間を表示', '재설정 남은 시간 표시'],
+  'usage.quota.timeToDate': ['切换为日期', 'Switch to date and time', '日時表示に切り替え', '날짜와 시간으로 전환'],
+  'usage.quota.timeToCountdown': ['切换为倒计时', 'Switch to countdown', '残り時間に切り替え', '남은 시간으로 전환'],
   'usage.quota.paceMarker': ['节奏参考：此时预计剩余 {{percent}}%', 'Pace reference: {{percent}}% expected remaining now', 'ペース基準：現在の想定残量 {{percent}}%', '페이스 기준: 현재 예상 잔여 {{percent}}%'],
   'usage.quota.serviceDetails': ['服务状态与事件', 'Service status and incidents', 'サービス状態と障害', '서비스 상태 및 장애'],
   'usage.quota.officialStatus': ['官方状态页', 'Official status page', '公式ステータスページ', '공식 상태 페이지'],
@@ -27,6 +30,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.quota.incidentLink': ['查看完整事件', 'View full incident', '障害の詳細を表示', '전체 장애 내역 보기'],
   'usage.quota.claudeUsage': ['在 Claude 查看金额与赠送权益', 'View spending and grants in Claude', 'Claude で金額と特典を確認', 'Claude에서 지출 및 혜택 확인'],
   ...improvementMessages,
+  ...islandMessages,
   'usage.detail.backSession': ['返回上一会话', 'Back to previous session', '前のセッションに戻る', '이전 세션으로 돌아가기'],
   'usage.detail.openSeparate': ['独立打开 {{name}}', 'Open {{name}} separately', '{{name}} を別ウィンドウで開く', '{{name}} 별도로 열기'],
   'usage.detail.relatedMissing': ['当前期间未找到该会话', 'This session was not found in this period', 'この期間にセッションが見つかりません', '이 기간에 세션을 찾을 수 없습니다'],

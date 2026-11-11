@@ -23,6 +23,12 @@
 
 证据：[范围扩展测试](../packages/core/test/range-expand.test.ts)、[项目迁移测试](../packages/core/test/workbuddy-autoclaw-migration.test.ts)、[ensureLocalCollectRange](../packages/core/src/server/state.ts)。
 
+## 旧日志用量补录
+
+在设置的本地备份附近选择 Claude Code 的原始 `.jsonl`，预览后再确认。每批最多 20 个文件、8 MiB；本机采集实例负责写入。预览仅保留冻结的数值候选，不能确定身份或与旧统计重叠的记录不补入。Codex 的分叉与账本补差暂无法可靠对账，不作为补录来源。当前支持原始日志，不将 Quotern 备份文件当作日志导入。
+
+确认会在数据锁内重新核对，若已采集到预览中的记录，须重新预览。补录保存在 `usage-recovery.json`，只保留请求哈希、日期、项目标签、模型及用量证据，不保留日志正文或凭据。读取时将它与正常用量合并；后来采集到同一请求时以正常读数为准。补录可扩展报表的起点，不更改采集设置及游标；计入本地备份，不生成会话正文或补造实际费用。
+
 ## JSONL 尾部与文件变化
 
 Muse 的 `model_completed` / `automated_review_completed` 以事件 ID 去重，输入计数包含缓存，普通输入扣除缓存读写。变化文件重读数值投影，按前后桶差额处理重写与后到项目元数据；保留帧只解析一层 `children[].record_json`，不递归任意正文。Muse 额度保留 `asOfMs`，无身份的缓存不用于可信账号提醒或自动请求。

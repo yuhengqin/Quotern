@@ -191,6 +191,7 @@ export class QuotaManager {
         // An old reader may retain data without proving its account. Never promote it
         // into the shared current-account view, notification baseline or history.
         normalized.windows = []; normalized.details = []; normalized.planLabel = null; normalized.fetchedAt = null;
+        normalized.resetCredits = null; normalized.resetCreditExpirations = null;
         normalized.status = 'temporarily-unavailable'; normalized.message = '暂时无法确认当前账号额度，请稍后重试';
       }
       const temporary = ['unavailable', 'temporarily-unavailable'].includes(normalized.status) || normalized.stale;

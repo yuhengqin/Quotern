@@ -3,6 +3,7 @@
 @source "../../../../packages/dashboard/src/components/QuotaHistoryPanel.tsx";
 @source "../../../../packages/dashboard/src/components/ManualPricingEditor.tsx";
 @source "../../../../packages/dashboard/src/components/LocalBackupPanel.tsx";
+@source "../../../../packages/dashboard/src/components/UsageRecoveryPanel.tsx";
 @source "../../../../packages/dashboard/src/components/PerformanceTrend.tsx";
 @import "@heroui/styles";
 @import "../../../../packages/dashboard/src/components/app-toast.css";

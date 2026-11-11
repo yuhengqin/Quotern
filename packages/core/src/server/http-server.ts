@@ -9,6 +9,8 @@ import { DEFAULT_PORT } from '../paths.js';
 import { MAX_BACKGROUND_REQUEST_BYTES, SHARE_BACKGROUNDS_ROUTE, ShareBackgroundError } from '../share-backgrounds.js';
 import { SESSION_ACTIONS_ROUTE } from './session-actions-api.js';
 import { LOCAL_ADMIN_ROUTE, MAX_LOCAL_ADMIN_BYTES } from './local-admin-api.js';
+import { USAGE_RECOVERY_PATH } from './usage-recovery-api.js';
+import { RECOVERY_REQUEST_BYTES } from '../usage-recovery.js';
 import { demoMetadata, type DemoMetadata } from '../demo/types.js';
 import type { DemoBootstrap } from '../demo/bootstrap.js';
 
@@ -45,6 +47,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
     const url = req.url ?? '/';
     const sessionAction = url.split('?')[0]!.replace(/\/$/, '') === SESSION_ACTIONS_ROUTE;
     const localAdmin = url.split('?')[0]!.startsWith(`${LOCAL_ADMIN_ROUTE}/`);
+    const usageRecovery = url.split('?')[0]!.replace(/\/$/, '') === `${LOCAL_ADMIN_ROUTE}${USAGE_RECOVERY_PATH}`;
     if (opts.demo && !['GET', 'HEAD'].includes(req.method ?? 'GET')) {
       res.statusCode = 403; res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ success: false, message: 'DEMO_READ_ONLY', data: null })); req.resume(); return;
@@ -52,7 +55,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
 
     if (isApiPath(url)) {
       try {
-        const limit = localAdmin ? MAX_LOCAL_ADMIN_BYTES : sessionAction ? 4096 : url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
+        const limit = usageRecovery ? RECOVERY_REQUEST_BYTES : localAdmin ? MAX_LOCAL_ADMIN_BYTES : sessionAction ? 4096 : url.split('?')[0] === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
         if (Number(req.headers['content-length']) > limit) throw new ShareBackgroundError('背景请求超过大小限制', 413);
         const body =
           req.method !== 'GET' && req.method !== 'HEAD'

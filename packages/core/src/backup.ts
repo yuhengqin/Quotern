@@ -31,9 +31,11 @@ export interface ProtectedRestoreResult {
   restore: { ok: true; target: string; summary: BackupSummary } | { ok: false; code: string };
 }
 const hash = (content: string) => createHash('sha256').update(content).digest('hex');
+import { RECOVERY_FILE, validateRecoveryDocument } from './usage-recovery.js';
+
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const stamp = (value: unknown): value is string => typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value));
-const allowed = (path: string) => ['config.json', 'cursors.json', 'pricing-manual.json', 'achievements/state.json', 'quota/history.json', 'quota/preferences.json'].includes(path)
+const allowed = (path: string) => ['config.json', 'cursors.json', 'pricing-manual.json', RECOVERY_FILE, 'achievements/state.json', 'quota/history.json', 'quota/preferences.json'].includes(path)
   || ['desktop/quota/history.json', 'desktop/quota/preferences.json'].includes(path)
   || /^queue\/\d{4}-(?:0[1-9]|1[0-2])\.jsonl$/.test(path) || /^sessions\/[a-z][a-z0-9-]{0,63}\.json$/.test(path);
 function fail(code = 'BACKUP_INVALID'): never { throw new Error(code); }
@@ -63,7 +65,8 @@ function validateContent(path: string, content: string, onUsage?: (row: Record<s
     if (path === 'config.json') {
       const projected = safeConfig(value);
       if (Object.keys(value).some(key => !Object.hasOwn(projected, key))) fail();
-    } else if (path === 'pricing-manual.json') validateManualPricing(value);
+    } else if (path === RECOVERY_FILE) validateRecoveryDocument(value).forEach(row => onUsage?.({ ...row }));
+    else if (path === 'pricing-manual.json') validateManualPricing(value);
     else if (path.startsWith('sessions/')) validateBackupSessions(value, path.slice(9, -5));
     else if (path === 'cursors.json') validateBackupCursors(value);
     else if (path === 'quota/preferences.json') { if (!validQuotaPatch(value)) fail(); }
@@ -104,7 +107,7 @@ export function verifyDataBackup(input: unknown): BackupSummary {
       const at = Date.parse(row.hour_start as string);
       from = Math.min(from, at); to = Math.max(to, at); addSource(row.source as string);
     });
-    const category: BackupContentCategory = raw.path.startsWith('queue/') ? 'usage' : raw.path.startsWith('sessions/') ? 'sessions'
+    const category: BackupContentCategory = raw.path === RECOVERY_FILE || raw.path.startsWith('queue/') ? 'usage' : raw.path.startsWith('sessions/') ? 'sessions'
       : raw.path.includes('quota/') ? 'quota' : raw.path.startsWith('achievements/') ? 'achievements'
         : raw.path === 'cursors.json' ? 'cursors' : raw.path === 'pricing-manual.json' ? 'pricing' : 'settings';
     categories.set(category, (categories.get(category) ?? 0) + 1);
@@ -127,7 +130,7 @@ export function parseDataBackup(text: string): DataBackup {
 
 async function sourceFiles(dir: string, desktopQuotaDirectory?: string): Promise<Array<{ path: string; full: string }>> {
   const paths: Array<{ path: string; full: string }> = [];
-  for (const file of ['config.json', 'cursors.json', 'pricing-manual.json']) {
+  for (const file of ['config.json', 'cursors.json', 'pricing-manual.json', RECOVERY_FILE]) {
     try { const stat = await lstat(join(dir, file)); if (!stat.isFile() || stat.isSymbolicLink()) fail('BACKUP_LINK'); paths.push({ path: file, full: join(dir, file) }); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   }

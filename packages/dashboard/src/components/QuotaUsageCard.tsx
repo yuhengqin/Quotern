@@ -14,6 +14,7 @@ import { QuotaServiceDetails } from './QuotaServiceDetails';
 import { QuotaHistoryPanel } from './QuotaHistoryPanel';
 import { FilterSelectPopover } from './FilterMenu';
 import { QuotaRecoveryActions } from './QuotaRecoveryActions';
+import '../i18n/usage-recovery-messages';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string }> = {
   operational: { dotClassName: 'bg-emerald-600 dark:bg-emerald-400' },
@@ -84,6 +85,8 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', tick); };
   }, []);
   const dateMode = preferences.resetTimeMode === 'date';
+  const creditExpirations = providerType === 'codex' && !provider.stale && provider.status === 'ready'
+    ? (provider.resetCreditExpirations ?? []).filter(at => at * 1000 > now.getTime()) : [];
   const apply = async (patch: QuotaPreferencePatch) => {
     if (!onSave || savingRef.current) return;
     savingRef.current = true;
@@ -285,7 +288,15 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
                 <Modal.Body ref={detailsBody}>
                   <Tabs.Panel id="current" className="flex flex-col gap-5 pt-3">
                   {activeTarget?.windowId && !windows.some(window => window.id === activeTarget.windowId) && <p role="status" className="text-sm text-warning">{t('island.quota.windowUnavailable')}</p>}
-                  {(provider.planLabel || provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ')}</p>}
+                  {(provider.planLabel || providerType !== 'codex' && provider.resetCredits !== null) && <p className="text-sm">{[provider.planLabel, providerType !== 'codex' && provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ')}</p>}
+                  {providerType === 'codex' && (provider.resetCredits !== null || creditExpirations.length > 0) && <div className="space-y-1 text-sm">
+                    {provider.resetCredits !== null && <p>{t('usage.quota.resetCredits', { count: provider.resetCredits })}</p>}
+                    {creditExpirations.length > 0 && <><p className="text-xs text-muted">{t('credits.expirations')}</p><ul className="space-y-1 text-xs tabular-nums">{creditExpirations.map((at, index) => {
+                      const expiry = new Date(at * 1000);
+                      return <li key={`${at}:${index}`}><time dateTime={expiry.toISOString()}>{expiry.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</time></li>;
+                    })}</ul></>}
+                    {(provider.resetCredits ?? 0) > creditExpirations.length && <p className="text-xs text-muted">{t(creditExpirations.length ? 'credits.someExpiryUnavailable' : 'credits.expiryUnavailable')}</p>}
+                  </div>}
                   {onSave && windows.length > 1 && <Select aria-label={t('island.quota.preferredWindow')} value={windows.some(window => window.id === preferredWindow) ? `window:${preferredWindow}` : 'automatic'} aria-busy={saving}
                     onChange={key => { if (key !== null) void apply({ preferredWindows: { [provider.id]: String(key).startsWith('window:') ? String(key).slice(7) : '' } }); }}>
                     <Label>{t('island.quota.preferredWindow')}</Label><Select.Trigger aria-disabled={saving}><Select.Value /><Select.Indicator /></Select.Trigger>

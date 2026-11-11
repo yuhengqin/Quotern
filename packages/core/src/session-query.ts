@@ -50,7 +50,7 @@ export class SessionQueryService {
 
   private async range(query: SessionRangeQuery): Promise<RangeState> {
     const bucketRevision = this.deps.bucketStore.getRevision();
-    const window = resolveAggregateWindow(query.days, resolveLocalCollectSince(this.deps.getConfig()), undefined, query.bounds);
+    const window = resolveAggregateWindow(query.days, this.deps.bucketStore.reportSince(resolveLocalCollectSince(this.deps.getConfig())), undefined, query.bounds);
     const fromDate = query.collected ? window.statsSinceDate : window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
     const options = { ...query.bounds, fromDate, toDate: window.toDate, ...(query.sources?.length ? { sources: [...new Set(query.sources)].sort() } : {}) };
     const rows = this.deps.bucketStore.getRows().filter(row => {

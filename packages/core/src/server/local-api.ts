@@ -34,7 +34,6 @@ import { aggregateUsageTrend, type TrendGranularity } from '../usage-trend.js';
 import {
   ensureLocalCollectRange,
   getHookStatus,
-  getUsageSummary,
   runSync,
   getSyncStatusPayload,
 } from './state.js';
@@ -123,13 +122,13 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
   const summaryHandler = async (c: Context) => {
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
-    const statsSince = resolveLocalCollectSince(config);
+    const statsSince = deps.bucketStore.reportSince(resolveLocalCollectSince(config));
     if (deps.demo) return c.json(ok(aggregateUsageSummary(rows, statsSince, undefined, demoNow)));
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
       return c.json(ok(deps.aggregateCache.getUsageSummary(rows, statsSince)));
     }
-    return c.json(ok(getUsageSummary(config, rows)));
+    return c.json(ok(aggregateUsageSummary(rows, statsSince)));
   };
 
   app.get('/functions/tud-usage-summary', summaryHandler);
@@ -176,7 +175,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
         sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
         model: params.get('model') ?? undefined,
         project: params.get('project') ?? undefined,
-      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime', now: demoNow })));
+      }, { collectSince: deps.bucketStore.reportSince(resolveLocalCollectSince(config)), lastSyncAt: config.lastSyncAt, snapshot: 'runtime', now: demoNow })));
     } catch (error) {
       return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_USAGE_QUERY', data: null }, 400);
     }
@@ -197,7 +196,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
         fromTime: params.get('fromTime') ?? undefined, toTime: params.get('toTime') ?? undefined,
         sources: params.has('sources') ? params.get('sources')!.split(',') : undefined,
         model: params.get('model') ?? undefined, project: params.get('project') ?? undefined,
-      }, { collectSince: resolveLocalCollectSince(config), lastSyncAt: config.lastSyncAt, snapshot: 'runtime', now: demoNow })));
+      }, { collectSince: deps.bucketStore.reportSince(resolveLocalCollectSince(config)), lastSyncAt: config.lastSyncAt, snapshot: 'runtime', now: demoNow })));
     } catch (error) {
       return c.json({ success: false, message: error instanceof Error ? error.message : 'INVALID_TREND_QUERY', data: null }, 400);
     }
@@ -210,7 +209,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const sources = rawSources?.split(',').map((source) => normalizeSyncSource(source));
     if (sources?.some((source) => !source)) return c.json({ success: false, message: 'INVALID_SOURCE', data: null }, 400);
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 90));
-    const window = resolveAggregateWindow(days, resolveLocalCollectSince(deps.getConfig()), undefined, bounds);
+    const window = resolveAggregateWindow(days, deps.bucketStore.reportSince(resolveLocalCollectSince(deps.getConfig())), undefined, bounds);
     const fromDate = window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
     const usageSources = [...new Set(deps.bucketStore.getRows().filter((row) => {
       const date = localDateAndHour(row.hour_start).date;
@@ -342,7 +341,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 90));
-    const statsSince = resolveLocalCollectSince(config);
+    const statsSince = deps.bucketStore.reportSince(resolveLocalCollectSince(config));
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
       return c.json(ok(deps.aggregateCache.getDaily(rows, days, statsSince, bounds)));
@@ -356,7 +355,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 1));
-    const statsSince = resolveLocalCollectSince(config);
+    const statsSince = deps.bucketStore.reportSince(resolveLocalCollectSince(config));
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
       return c.json(ok(deps.aggregateCache.getHourly(rows, days, statsSince, bounds)));
@@ -370,7 +369,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const config = deps.getConfig();
     const rows = deps.bucketStore.getRows();
     const days = Math.min(365, Math.max(1, Number(c.req.query('days')) || 30));
-    const statsSince = resolveLocalCollectSince(config);
+    const statsSince = deps.bucketStore.reportSince(resolveLocalCollectSince(config));
     if (deps.aggregateCache) {
       await deps.aggregateCache.ensureLoaded();
       return c.json(
@@ -387,7 +386,8 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const hooks = deps.getHookStatus
       ? await deps.getHookStatus()
       : await getHookStatus(deps.dataDir);
-    return c.json(ok(await getSyncStatusPayload(deps.dataDir, config, rows, hooks)));
+    const status = await getSyncStatusPayload(deps.dataDir, config, rows, hooks);
+    return c.json(ok({ ...status, statsSince: deps.bucketStore.reportSince(status.statsSince) }));
   });
 
   app.get('/functions/tud-config', (c) => {

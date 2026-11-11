@@ -92,6 +92,8 @@ export interface QuotaProviderState {
   windows: QuotaWindow[];
   details: { id: string; label: string; text: string; valueKind?: 'unlimited' | 'exhausted'; resetsAt: number | null }[];
   resetCredits: number | null;
+  /** Account-scoped, available Codex reset credits, as Unix seconds. Null means detail unavailable. */
+  resetCreditExpirations?: number[] | null;
   refreshing: boolean;
   nextRefreshAt: number | null;
   analyses: Record<string, QuotaAnalysis>;

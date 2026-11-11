@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CreditCard, Database, Info, Palette, PawPrint, Plug, Settings } from 'lucide-react';
 import { LocalBackupPanel } from '../../../../../packages/dashboard/src/components/LocalBackupPanel';
+import { UsageRecoveryPanel } from '../../../../../packages/dashboard/src/components/UsageRecoveryPanel';
 import {
   Alert,
   Button,
@@ -474,6 +475,7 @@ function DataSettingsPanel() {
   return (
     <div className="flex flex-col gap-5">
       <LocalBackupPanel />
+      <UsageRecoveryPanel />
       {error && <StatusBanner tone="error" title={t('settings.loadConfigFailed')} />}
       {config && (
         <Card variant="tertiary" className="rounded-xl shadow-none">

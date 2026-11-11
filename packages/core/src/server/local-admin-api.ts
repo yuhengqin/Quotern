@@ -7,6 +7,7 @@ import { localDateNow } from '../timezone.js';
 import type { LocalApiDeps } from './state.js';
 import { createDataBackup, verifyDataBackup, restoreDataBackup, restoreDataBackupWithProtection, MAX_BACKUP_DOCUMENT_BYTES } from '../backup.js';
 import { resolve } from 'node:path';
+import { registerUsageRecovery } from './usage-recovery-api.js';
 
 export const LOCAL_ADMIN_ROUTE = '/functions/tud-local-admin';
 export const MAX_LOCAL_ADMIN_BYTES = MAX_BACKUP_DOCUMENT_BYTES + 1_000_000;
@@ -135,5 +136,6 @@ export function registerLocalAdminApi(parent: Hono, deps: LocalApiDeps): void {
       return c.json(failure(['PRICING_CONFLICT', 'INVALID_MANUAL_PRICING'].includes(code) ? code : 'LOCAL_ADMIN_WRITE_FAILED'), code === 'PRICING_CONFLICT' ? 409 : code === 'INVALID_MANUAL_PRICING' ? 400 : 500);
     } finally { writingPricing = false; }
   });
+  registerUsageRecovery(app, deps, token);
   parent.route(LOCAL_ADMIN_ROUTE, app);
 }

@@ -7,6 +7,7 @@ import { codexPlanLabel, mapCodexRateLimitWindows, type CodexSubscriptionSnapsho
 import { createSubscriptionCache } from './subscription-cache.js';
 
 const USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+const RESET_CREDITS_URL = 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits';
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -16,6 +17,20 @@ function claims(token: unknown): Record<string, unknown> {
   catch { return {}; }
 }
 function text(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
+function creditCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+function creditExpirations(value: unknown, now: number): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const credits = new Map<string, number>();
+  for (const raw of value.slice(0, 100)) {
+    const item = record(raw), id = text(item.id), expiry = text(item.expires_at);
+    if (!id || text(item.status).toLowerCase() !== 'available' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(expiry)) continue;
+    const at = Date.parse(expiry);
+    if (Number.isFinite(at) && at > now) credits.set(id, Math.min(at, credits.get(id) ?? at));
+  }
+  return [...credits.values()].sort((a, b) => a - b).map(at => at / 1000);
+}
 export function parseCodexCredentials(value: unknown) {
   const auth = record(value), tokens = record(auth.tokens);
   const info = record(claims(tokens.id_token)['https://api.openai.com/auth']);
@@ -35,7 +50,7 @@ export function mapCodexUsage(value: unknown) {
   };
   const credits = record(data.rate_limit_reset_credits).available_count;
   return { planLabel: codexPlanLabel(data.plan_type), windows: codexQuotaWindows(value),
-    resetCredits: typeof credits === 'number' && Number.isInteger(credits) && credits >= 0 ? credits : null,
+    resetCredits: creditCount(credits),
     ...mapCodexRateLimitWindows({ primary: window(limits.primary_window), secondary: window(limits.secondary_window) }) };
 }
 function unavailable(status: CodexSubscriptionSnapshot['status'], message: string, hasAccount = false, planLabel: string | null = null): CodexSubscriptionSnapshot {
@@ -55,6 +70,7 @@ export function createCodexSubscriptionReader(deps: {
 }) {
   const now = deps.now ?? Date.now;
   const cache = createSubscriptionCache<CodexSubscriptionSnapshot>(now);
+  let detailBackoff: { account: string; until: number } | undefined;
   return async (options: { forceRefresh?: boolean } = {}): Promise<CodexSubscriptionSnapshot> => {
     let raw: string;
     try { raw = await deps.readAuth(); }
@@ -81,10 +97,11 @@ export function createCodexSubscriptionReader(deps: {
       if (credentials.expiresAt !== null && credentials.expiresAt <= now()) return fail('expired', 'Codex 登录已过期，请重新登录');
       if (!credentials.accountId) return fail('access-denied', 'Codex 登录信息缺少账号标识，请重新登录');
       try {
-        const response = await deps.fetch(USAGE_URL, {
+        const request: RequestInit = {
           headers: { Authorization: `Bearer ${credentials.accessToken}`, 'ChatGPT-Account-Id': credentials.accountId, Accept: 'application/json' },
-          signal: AbortSignal.timeout(20_000), redirect: 'error', credentials: 'omit', cache: 'no-store',
-        });
+          redirect: 'error', credentials: 'omit', cache: 'no-store',
+        };
+        const response = await deps.fetch(USAGE_URL, { ...request, signal: AbortSignal.timeout(20_000) });
         observeQuotaResponse(response);
         if (response.status === 401) return fail('expired', 'Codex 登录已过期，请重新登录');
         if (response.status === 403) return fail('access-denied', 'Codex 额度访问受限，请检查账号权限');
@@ -94,12 +111,33 @@ export function createCodexSubscriptionReader(deps: {
           return annotate({ ...fail('unavailable', 'Codex 额度请求过于频繁，请稍后重试'), retryAfterSeconds: Math.max(1, Math.min(3600, Number.isFinite(seconds) ? seconds : 120)) }, null);
         }
         if (!response.ok) return fail('unavailable', '暂时无法读取 Codex 额度');
-        const windows = mapCodexUsage(await response.json());
+        const data: unknown = await response.json();
+        const windows = mapCodexUsage(data);
         if (!windows.windows.length) {
           recordQuotaAttempt({ stage: 'parse', outcome: 'failure', code: 'INVALID_RESPONSE' });
           return fail('unavailable', 'Codex 暂未返回可用额度');
         }
-        return annotate({ status: 'ready' as const, hasAccount: true, ...windows, planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt: Math.floor(now() / 1000), stale: false, message: null }, Math.floor(now() / 1000));
+        const fetchedAt = Math.floor(now() / 1000);
+        let resetCredits = windows.resetCredits;
+        let resetCreditExpirations = creditExpirations(record(record(data).rate_limit_reset_credits).credits, now());
+        if (resetCredits !== null && resetCredits > 0 && resetCreditExpirations === null && (detailBackoff?.account !== credentials.accountId || now() >= detailBackoff.until)) {
+          const backoff = (seconds: number) => { detailBackoff = { account: credentials.accountId, until: now() + seconds * 1000 }; };
+          try {
+            const detail = await deps.fetch(RESET_CREDITS_URL, { ...request, signal: AbortSignal.timeout(3000) });
+            if (detail.ok) {
+              const body = record(await detail.json());
+              resetCredits = creditCount(body.available_count) ?? resetCredits;
+              resetCreditExpirations = creditExpirations(body.credits, now());
+              if (resetCreditExpirations === null) backoff(300);
+            } else if (detail.status === 429) {
+              const retry = detail.headers.get('retry-after');
+              const seconds = retry && /^\d+$/.test(retry) ? Number(retry) : retry ? (Date.parse(retry) - now()) / 1000 : 300;
+              backoff(Math.min(3600, Math.max(1, Number.isFinite(seconds) ? seconds : 300)));
+            } else backoff(detail.status === 404 || detail.status === 403 ? 900 : 300);
+          } catch { backoff(300); }
+        }
+        return annotate({ status: 'ready' as const, hasAccount: true, ...windows, resetCredits, resetCreditExpirations: resetCredits === 0 ? [] : resetCreditExpirations,
+          planLabel: windows.planLabel ?? credentials.planLabel, fetchedAt, stale: false, message: null }, fetchedAt);
       } catch (error) {
         observeQuotaError(error);
         logCodexRequestError(error);

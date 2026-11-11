@@ -17,6 +17,8 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 独立修改任务默认按「一个独立任务 = 一个分支 + 一个 worktree」隔离；满足条件的单任务串行开发可直接在干净的 **main** 修改。适用条件、同任务协作和整合要求见 [Git 标准](docs/git-workflow.md)。
 
+每个独立修改任务完成并通过适用验证后，必须及时创建本地原子提交，仅包含本任务变更，不等待用户再次要求。用户明确要求暂不提交时遵从；验证未通过或变更归属不明时，先说明并解决阻塞，不绕过检查。
+
 维护注意事项：[架构](docs/architecture-notes.md)、[数据采集与统计](docs/data-notes.md)、[运行维护](docs/runtime-notes.md)、[开发协作](docs/development-notes.md)。
 
 ## UI 开发

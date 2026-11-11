@@ -14,6 +14,8 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.quota.expiredAt': ['已到期', 'Expired', '期限切れ', '만료됨'],
   'usage.quota.showDate': ['显示重置日期', 'Show reset dates', 'リセット日時を表示', '재설정 날짜 표시'],
   'usage.quota.showCountdown': ['显示重置倒计时', 'Show reset countdowns', 'リセットまでの時間を表示', '재설정 남은 시간 표시'],
+  'usage.quota.timeToDate': ['切换为日期', 'Switch to date and time', '日時表示に切り替え', '날짜와 시간으로 전환'],
+  'usage.quota.timeToCountdown': ['切换为倒计时', 'Switch to countdown', '残り時間に切り替え', '남은 시간으로 전환'],
   'usage.quota.paceMarker': ['节奏参考：此时预计剩余 {{percent}}%', 'Pace reference: {{percent}}% expected remaining now', 'ペース基準：現在の想定残量 {{percent}}%', '페이스 기준: 현재 예상 잔여 {{percent}}%'],
   'usage.quota.serviceDetails': ['服务状态与事件', 'Service status and incidents', 'サービス状態と障害', '서비스 상태 및 장애'],
   'usage.quota.officialStatus': ['官方状态页', 'Official status page', '公式ステータスページ', '공식 상태 페이지'],

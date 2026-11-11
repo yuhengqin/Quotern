@@ -51,11 +51,15 @@
 
 ## 信息呈现与默认界面
 
-本轮新增入口：共享 `AgentIntegrationSettings` 用于 Dashboard「应用」和 Desktop「Agent 集成」，默认关闭的功能与 Hook 安装状态分别呈现；`SessionHandoff` 在会话详情按需展开，先生成可编辑预览再复制/保存。共享 `PaletteControl` 承接配色选择，`PaletteRuntime` 在两端 ThemeProvider 中应用并监听跨窗口偏好；系统/浅色/深色规则保持。共享 `QuotaLayoutControl` 复用 FilterMenuPopover，提供键盘可操作的优先/上移/下移和紧凑开关。Desktop 直接引用这些组件并登记 CSS `@source`。
+本轮新增入口：共享 `AgentIntegrationSettings` 用于 Dashboard「应用」和 Desktop「Agent 集成」，默认关闭的功能与 Hook 安装状态分别呈现；`SessionHandoff` 在会话详情按需展开，先生成可编辑预览再复制/保存。共享 `PaletteControl` 承接配色选择，`PaletteRuntime` 在两端 ThemeProvider 中应用并监听跨窗口偏好；系统/浅色/深色规则保持。共享 `QuotaLayoutControl` 与 `QuotaLayoutCards` 提供订阅卡片原位排列，`useQuotaLayout` 管理草稿及统一保存；Desktop 直接引用这些组件并登记 CSS `@source`。
 
 交接预览的目录、日志、集成配置和本机访问失败在操作附近说明原因及下一步；重试和保存失败保留草稿，复制失败提供手动复制提示。两端使用同一 `SessionHandoff`。预览复用已采集会话的文件定位，不把用量索引按小型 Agent 配置的大小上限处理；只在显式预览时读取有限日志尾部。
 
 `UsageInsightsPanel` 从当前报表读取最多三项结论，并带范围进入会话页。`SessionDiagnosticsSection` 在会话详情区分工具记录、粗略输出体积和推断关联，具体证据按需展开。Desktop 托盘按需显示额度摘要。主窗口提供完整用量、筛选、额度排列和监控目录。额度排列的「紧凑卡片」只调整间距，额度信息和详情入口仍可访问。 [TrayPopoverView](../apps/desktop/src/renderer/components/TrayPopoverView.tsx)
+
+布局编辑从铅笔图标加「编辑布局」文字按钮进入，编辑时才显示抓手图标、「…」移动菜单及简短说明。按用户明确要求，编辑时整张卡片（包括紧凑状态行）均可用鼠标/触摸拖动，保留抓手提示；按钮、链接和输入区域不触发拖动，编辑卡片区域使用 `touch-action: none`，卡片外仍可滚动，拖到边缘时自动滚动。正常浏览仍保留卡片正文的滚动、选文与详情行为。拖动中的真实卡片跟随指针，原槽位保留，蓝色插入线显示落点，释放后改变真实 DOM 顺序。菜单复用 `FilterMenuPopover`，提供「移到最前 / 上移 / 下移」的非拖动替代；把手支持方向键、Home / End，移动后按订阅 ID 恢复焦点并播报位置。Escape 取消当前拖动；把手非拖动状态下 Escape 退出编辑。排序不使用收藏星标。
+
+顺序与紧凑模式先本地预览，点「完成」一起保存，点「取消」丢弃草稿。保存中显示状态并禁用重复提交，失败保留草稿、显示就地错误及「重试保存」。后台读数刷新保留编辑草稿；保存可见卡片顺序时保留暂不可见账号 ID。额度与纯状态订阅统一按 ID 排序，允许逐项跨类型移动；相邻纯状态项仍合并为紧凑组，组内按纵向落点排序，不再强制置后。编辑中的卡片不打开详情，浏览状态保留详情、重试及服务入口；Desktop 的通知精确定位和托盘摘要不改变。两端共用 `components/quota-layout.css`，验收入口为 `corepack pnpm test:island-ux-ui [全新输出目录] --quota-layout-only`，包含整卡鼠标/触摸、状态组内与跨类型移动、键盘移动、取消、失败重试、刷新保留与窄屏；仍需实际浏览器体验。
 
 1. **先确定用户要判断或执行什么。** 正文优先展示结果和动作，不按 DTO 字段顺序铺开页面。新增一行文字、标签或说明时，确认它是否改变用户当前判断；默认界面没有这种价值的内容进入按需入口。
 2. **默认配置不制造标签。** `standard`、`unknown` 等无区分价值的服务档位不显示，也不生成空白副行；非默认档位才补充标识。这条针对配置/身份标签，不适用于记录到的零值；未知测量值保持未知，不伪装成零。

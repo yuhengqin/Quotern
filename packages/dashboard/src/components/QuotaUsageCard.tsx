@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Card, Chip, Label, ListBox, Modal, ProgressBar, Select, Tabs, Tooltip } from '@heroui/react';
 import { Button as AriaButton } from 'react-aria-components';
 import { translate, type SupportedLocale } from 'quotern-i18n';
@@ -65,11 +65,12 @@ export interface QuotaUsageCardProps {
   summaryOnly?: boolean;
   navigation?: { requestId: string; windowId?: string; handled: boolean };
   onNavigationHandled?: (requestId: string) => void;
+  layoutControls?: { handle: ReactNode; menu: ReactNode };
 }
 
 function openExternal(url: string) { window.open(url, '_blank', 'noopener,noreferrer'); }
 
-export function QuotaUsageCard({ provider, preferences, statusRow = false, summaryOnly = false, navigation, onNavigationHandled, onRefresh, onSave, onOpenExternal = openExternal }: QuotaUsageCardProps) {
+export function QuotaUsageCard({ provider, preferences, statusRow = false, summaryOnly = false, navigation, onNavigationHandled, onRefresh, onSave, layoutControls, onOpenExternal = openExternal }: QuotaUsageCardProps) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const providerType = provider.providerId ?? provider.id;
@@ -216,6 +217,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
     setHintVisible(false);
   };
   const openDetails = () => {
+    if (layoutControls) return;
     triggerRef.current?.focus({ preventScroll: true });
     hideHint();
     setDetailsTab('current');
@@ -229,7 +231,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   return <>
     <Card data-quota-card={provider.id} data-quota-compact={compact} data-quota-status-row={grouped} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] data-[quota-compact=true]:self-start data-[quota-status-row=true]:rounded-xl data-[quota-status-row=true]:shadow-none hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant={grouped ? 'transparent' : 'secondary'}
       onPointerEnter={event => {
-        if (event.pointerType === 'touch' || detailsOpen) return;
+        if (event.pointerType === 'touch' || detailsOpen || layoutControls) return;
         hideHint();
         setHintSource('pointer');
         pointerPosition.current = { x: event.clientX, y: event.clientY };
@@ -238,24 +240,26 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       onPointerMove={event => { if (!hintVisible) pointerPosition.current = { x: event.clientX, y: event.clientY }; }}
       onPointerLeave={hideHint}
       onClick={event => {
+        if (layoutControls) return;
         const target = event.target as Element;
         if (target.closest('button, a, input, select, textarea, [role="button"], [role="link"]') || hasSelectedText(event.currentTarget)) return;
         openDetails();
       }}>
-    <AriaButton ref={triggerRef} type="button" aria-label={t('usage.quota.detailsAria', { provider: provider.label })} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
+    {!layoutControls && <AriaButton ref={triggerRef} type="button" aria-label={t('usage.quota.detailsAria', { provider: provider.label })} aria-haspopup="dialog" aria-expanded={detailsOpen} aria-describedby={hintId}
       className="peer absolute inset-0 cursor-pointer rounded-[inherit] outline-none"
       onFocus={event => { if (event.target.matches(':focus-visible')) { hideHint(); setHintSource('focus'); setHintVisible(true); } }} onBlur={hideHint}
-      onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />
+      onPress={event => { if (event.pointerType === 'keyboard' || event.pointerType === 'virtual' || !hasSelectedText(triggerRef.current!.parentElement!)) openDetails(); }} />}
     <Card.Content className={`relative ${grouped ? 'flex-row flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2' : compact || preferences.compact || summaryOnly ? 'gap-1.5 px-3 py-2' : 'gap-3 p-4'}`}>
-      <div className={`grid min-w-0 items-start gap-x-2 ${headerService ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'} ${grouped ? 'shrink-0' : ''}`}>
+      <div className={`grid min-w-0 items-start gap-x-2 ${headerService || layoutControls ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-1'} ${grouped ? 'shrink-0' : ''}`}>
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
           <div className="flex min-w-0 max-w-full items-center gap-2">
+            {layoutControls?.handle}
             <SubscriptionBrandIcon brand={providerType as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
             <span className={`min-w-0 truncate text-sm font-medium ${grouped ? 'max-w-24' : ''}`}>{provider.label}</span>
           </div>
           {planSummary && !summaryOnly && <Chip size="sm" variant="soft" className="min-w-0 max-w-full bg-foreground/8 text-foreground" title={planSummary}><Chip.Label className="truncate">{planSummary}</Chip.Label></Chip>}
         </div>
-        {status && headerService && <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpen={openDetails} iconOnly />}
+        {(headerService || layoutControls) && <div className="flex items-center gap-1">{status && headerService && (layoutControls ? <span role="img" aria-label={headerService.label} className={`size-2 shrink-0 rounded-full ${headerService.dotClassName}`} /> : <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpen={openDetails} iconOnly />)}{layoutControls?.menu}</div>}
       </div>
       {proof?.identityVerified && proof.accountRef && <p className="text-xs text-muted">{t('usage.profiles.accountId', { id: proof.accountRef.slice(0, 8) })}</p>}
       {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">{t('usage.quota.ompRecord', { date: provider.provenance.observedAt ? queryDate(provider.provenance.observedAt, locale) : t('usage.quota.timeUnknown') })}{provider.provenance.identityVerified ? '' : ` · ${t('usage.quota.identityUnverified')}`}</p>}
@@ -278,7 +282,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       </p>}
       {provider.windows.length > (summaryOnly ? 1 : 3) && <span className="text-[10px] text-muted">{t('usage.quota.moreWindows', { count: provider.windows.length - (summaryOnly ? 1 : 3) })}</span>}
     </Card.Content>
-    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}>{t('usage.quota.openDetails')}</span>
+    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen && !layoutControls ? 'visible opacity-100' : 'invisible opacity-0'}`}>{t('usage.quota.openDetails')}</span>
     </Card>
           <Modal.Backdrop isOpen={detailsOpen && (!activeTarget || Boolean(navigation))} onOpenChange={setDetailsOpen}>
             <Modal.Container placement="center" scroll="inside">

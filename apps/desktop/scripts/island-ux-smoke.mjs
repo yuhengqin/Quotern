@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { app, BrowserWindow, clipboard, ipcMain, nativeImage } from 'electron';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
+import { exerciseQuotaLayout } from './quota-layout-checks.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), workspace = path.resolve(desktop, '../..');
 const outputArg = process.argv.slice(2).find(argument => !argument.startsWith('--'));
@@ -217,10 +218,18 @@ async function main() {
   const browser = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
   browser.webContents.session.on('will-download', (_event, item) => { item.setSavePath(downloadPath); item.once('done', (_event, state) => { if (state === 'completed') downloaded++; }); });
   await browser.loadURL(`http://127.0.0.1:${server.address().port}/dashboard`);
-  if (!process.argv.includes('--tray-only')) await exercise(browser, await connect(browser), 'browser'); browser.destroy();
+  const layoutOnly = process.argv.includes('--quota-layout-only');
+  const runLayout = async (window, mode) => { await exerciseQuotaLayout({ client: await connect(window), window, mode, quota, publish, failNextSave: () => { failPreference = true; }, until, shot }); checks.push(mode + '-quota-layout-draft-cancel-failure-retry-pointer-touch-keyboard-and-details'); };
+  if (layoutOnly) await runLayout(browser, 'browser');
+  else if (!process.argv.includes('--tray-only')) await exercise(browser, await connect(browser), 'browser'); browser.destroy();
   quota.preferences.preferredWindows = {};
   mainWindow = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(mainWindow);
   await mainWindow.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/dashboard' });
+  if (layoutOnly) {
+    await runLayout(mainWindow, 'desktop');
+    await writeFile(path.join(output, 'results.json'), JSON.stringify({ ok: true, checks, output }, null, 2));
+    console.log(JSON.stringify({ ok: true, checks, output })); return;
+  }
   if (!process.argv.includes('--tray-only')) await exercise(mainWindow, await connect(mainWindow), 'desktop');
 
   const target = { providerId: provider.id, providerType: 'codex', accountRef: provider.provenance.accountRef, windowId: 'weekly' };

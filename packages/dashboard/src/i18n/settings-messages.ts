@@ -3,6 +3,8 @@ import type { SupportedLocale } from 'quotern-i18n';
 export const settingsMessages: Record<SupportedLocale, Record<string, string>> = {
   'zh-CN': {
     'settings.tabs.category': '设置分类',
+    'settings.tabs.general': '常规设置',
+    'settings.tabs.data': '数据与备份',
     'settings.tabs.subscription': '订阅',
     'settings.tabs.app': '应用',
     'settings.tabs.about': '关于',
@@ -66,6 +68,8 @@ export const settingsMessages: Record<SupportedLocale, Record<string, string>> =
   },
   en: {
     'settings.tabs.category': 'Settings categories',
+    'settings.tabs.general': 'General',
+    'settings.tabs.data': 'Data & backup',
     'settings.tabs.subscription': 'Subscriptions',
     'settings.tabs.app': 'App',
     'settings.tabs.about': 'About',
@@ -129,6 +133,8 @@ export const settingsMessages: Record<SupportedLocale, Record<string, string>> =
   },
   ja: {
     'settings.tabs.category': '設定カテゴリ',
+    'settings.tabs.general': '一般設定',
+    'settings.tabs.data': 'データとバックアップ',
     'settings.tabs.subscription': 'サブスクリプション',
     'settings.tabs.app': 'アプリ',
     'settings.tabs.about': '概要',
@@ -192,6 +198,8 @@ export const settingsMessages: Record<SupportedLocale, Record<string, string>> =
   },
   ko: {
     'settings.tabs.category': '설정 분류',
+    'settings.tabs.general': '일반 설정',
+    'settings.tabs.data': '데이터 및 백업',
     'settings.tabs.subscription': '구독',
     'settings.tabs.app': '앱',
     'settings.tabs.about': '정보',

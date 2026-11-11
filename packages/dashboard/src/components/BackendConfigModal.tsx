@@ -42,7 +42,7 @@ export function BackendConfigModal({
 }: BackendConfigModalProps = {}) {
   const { t } = useTranslation();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>("app");
+  const [uncontrolledTab, setUncontrolledTab] = useState<SettingsTabId>("appearance");
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
   const activeTab = controlledTab ?? uncontrolledTab;
@@ -94,19 +94,18 @@ export function BackendConfigModal({
         variant="opaque"
       >
         <Modal.Container
-          className="w-full max-w-[720px] sm:w-[720px]"
+          className="sm:p-4"
           scroll="inside"
-          size="lg"
         >
           <Modal.Dialog
             aria-label={t('shell.settings')}
-            className="flex max-h-[90vh] w-full flex-col overflow-hidden sm:w-[640px] sm:max-w-[640px]"
+            className="h-[min(42rem,90vh)] max-w-[46rem] overflow-hidden p-0"
           >
             <Modal.CloseTrigger aria-label={t('shell.closeSettings')} />
-            <Modal.Header>
+            <Modal.Header className="shrink-0 border-b border-separator py-4 ps-5 pe-14">
               <Modal.Heading>{t('shell.settings')}</Modal.Heading>
             </Modal.Header>
-            <Modal.Body className="min-h-0 flex-1 overflow-hidden p-0">
+            <Modal.Body className="m-0 flex min-h-0 flex-1 overflow-hidden p-0">
               {isOpen && <DeferredContent load={loadSettings} componentProps={{ activeTab, onTabChange: setTab }} />}
             </Modal.Body>
           </Modal.Dialog>

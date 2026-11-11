@@ -5,7 +5,7 @@ export const OPEN_SETTINGS_EVENT = 'tud:open-settings';
 export const OPEN_ABOUT_EVENT = 'tud:open-about';
 export const OPEN_SHARE_EVENT = 'tud:open-share';
 
-export type SettingsTabId = 'sync' | 'app' | 'about';
+export type SettingsTabId = 'sync' | 'app' | 'appearance' | 'integrations' | 'data' | 'about';
 
 export type OpenSettingsDetail = {
   tab?: SettingsTabId;

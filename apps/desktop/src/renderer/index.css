@@ -43,7 +43,6 @@
 @source "../../../../packages/dashboard/src/components/QuotaUsageCard.tsx";
 @source "../../../../packages/dashboard/src/components/QuotaServiceDetails.tsx";
 @source "../../../../packages/dashboard/src/components/QuotaRecoveryActions.tsx";
-@source "../../../../packages/dashboard/src/components/DashboardViewControl.tsx";
 @source "../../../../packages/dashboard/src/components/ShareActivityModalContent.tsx";
 @source "../../../../packages/dashboard/src/components/SubscriptionBrandIcon.tsx";
 @source "../../../../packages/dashboard/src/achievements";

@@ -10,7 +10,6 @@ import {
 } from '@/components/DashboardFilter';
 import { DashboardLoadingSkeleton } from '@/components/DashboardLoadingSkeleton';
 import { DashboardOverviewCard } from '@/components/DashboardOverviewCard';
-import { DashboardViewControl } from '@/components/DashboardViewControl';
 import { DashboardRangeSyncOverlay } from '@/components/DashboardRangeSyncOverlay';
 import { UsageTrendExplorer } from '@/components/UsageTrendExplorer';
 // 分时热力图：暂时注释，保留组件便于以后恢复
@@ -68,7 +67,6 @@ function useDeferredDashboardRange(range: DashboardRange): DashboardRange {
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  const [quickView, setQuickView] = useLocalStorage('tud.dashboardQuickView', false, (value): value is boolean => typeof value === 'boolean');
   const [range, setRange] = useLocalStorage<DashboardRange>(
     'tud.dashboardRange',
     'last-7-days',
@@ -311,7 +309,6 @@ export function DashboardPage() {
         sessionScope={{ days: rangeDays, selectedDate, dateRange: queryRange, sources: selectedTools }}
       />
 
-      <DashboardViewControl quick={quickView} onChange={setQuickView} />
       {selectedDate && (
         <div className="mb-4">
           <Chip className="gap-1.5" size="sm" variant="soft">
@@ -345,7 +342,6 @@ export function DashboardPage() {
         <div className="relative min-h-48">
           <DashboardRangeSyncOverlay visible={refreshing} />
           <DashboardOverviewCard
-            quickView={quickView}
             belowMetrics={isDemoMode() ? undefined : <SubscriptionUsageGrid className="mt-4 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" />}
             costReport={costExplanation.report}
             costExplanationLoading={costExplanation.loading}
@@ -364,9 +360,9 @@ export function DashboardPage() {
             sessionMetricsError={sessionMetricsError}
           />
           {!refreshing && range === dataRange && !costExplanation.loading && <UsageInsightsPanel report={costExplanation.report} />}
-          {!quickView && <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} />}
+          <SessionActivityPanel days={rangeDays} selectedDate={selectedDate} dateRange={queryRange} sources={selectedTools} enabled={!loading && !refreshing} />
 
-          {!quickView && <section
+          <section
             aria-label={t('usage.page.charts')}
             className="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2"
           >
@@ -395,7 +391,7 @@ export function DashboardPage() {
               rows={visibleDistributions.models}
               title={t('usage.page.modelDistribution')}
             />
-          </section>}
+          </section>
         </div>
       )}
     </div>

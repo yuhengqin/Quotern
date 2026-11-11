@@ -101,7 +101,15 @@ async function main() {
   assert.equal(BrowserWindow.getAllWindows().length, 0, 'legacy pin settings do not automatically open a tray window');
 
   async function exercise(window, client, mode) {
+    await client.evaluate('localStorage.setItem("tud.dashboardQuickView", "true"); true');
+    await window.loadURL(window.webContents.getURL());
+    await window.webContents.insertCSS('*, *::before, *::after { animation-duration: 0s !important; transition: none !important; }');
     await until(() => client.evaluate('Boolean(document.querySelector("[data-quota-card]"))'), mode + ' quota loaded');
+    assert.equal(await client.evaluate(`Boolean(${button('快速查看')} || ${button('完整分析')})`), false, mode + ' dashboard has no display mode switch');
+    await until(() => client.evaluate('Boolean(document.querySelector("section[aria-label=用量图表] .recharts-wrapper"))'), mode + ' complete charts ignore the legacy quick preference');
+    assert.match(await body(client), /输入 Token/);
+    assert.match(await body(client), /输出 Token/);
+    assert.match(await body(client), /总消息数/);
     const cardButton = 'document.querySelector("[data-quota-card]")';
     await client.click(cardButton);
     await until(async () => (await body(client)).includes('查看 25 项正常服务'), mode + ' healthy collapsed');
@@ -116,12 +124,8 @@ async function main() {
     await client.click(select('重点关注窗口')); await client.click(option('5 小时限额'));
     await until(() => quota.preferences.preferredWindows?.[provider.id] === 'five-hour', mode + ' focused window saved');
     await shot(client, mode + '-quota-focus'); await closeDetails(client);
-    await client.click(button('快速查看'));
-    await until(() => client.evaluate('!document.querySelector("section[aria-label=用量图表]") && localStorage.getItem("tud.dashboardQuickView") === "true"'), mode + ' quick mode');
     assert.equal(await client.evaluate('document.querySelectorAll("[data-quota-card]").length'), 1);
-    await shot(client, mode + '-quick');
-    await client.click(button('完整分析'));
-    await until(() => client.evaluate('Boolean(document.querySelector(".recharts-wrapper"))'), mode + ' complete charts retained');
+    await shot(client, mode + '-full-analysis');
     failShareReport = true;
     await client.click('document.querySelector("button[aria-label=分享]")');
     await until(() => client.evaluate(`Boolean(${select('主指标')})`), mode + ' share editor');
@@ -185,7 +189,7 @@ async function main() {
       }
     }
     await client.call('Emulation.clearDeviceMetricsOverride'); await closeDetails(client);
-    checks.push(mode + '-focus-save-failure-healthy-details-quick-view-and-four-PNG-formats');
+    checks.push(mode + '-focus-save-failure-healthy-details-full-analysis-legacy-preference-and-four-PNG-formats');
   }
   const browser = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
   browser.webContents.session.on('will-download', (_event, item) => { item.setSavePath(downloadPath); item.once('done', (_event, state) => { if (state === 'completed') downloaded++; }); });

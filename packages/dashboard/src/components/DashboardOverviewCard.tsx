@@ -27,7 +27,6 @@ import { cn } from '@/lib/utils';
 import { AchievementActivityLink } from '../achievements/AchievementEntry';
 
 interface DashboardOverviewCardProps {
-  quickView?: boolean;
   belowMetrics?: ReactNode;
   /** Ordered hourly or daily buckets for the selected dashboard range. */
   metricTrendRows: readonly UsageMetricTrendPoint[];
@@ -50,7 +49,6 @@ interface DashboardOverviewCardProps {
 
 /** Four inline metrics and the daily heatmap, styled to match the tray overview. */
 export function DashboardOverviewCard({
-  quickView = false,
   belowMetrics,
   metricTrendRows,
   metricTrendPeriodLabel,
@@ -147,8 +145,8 @@ export function DashboardOverviewCard({
 
   return (
     <section aria-label={t('usage.page.overview')} className="w-full">
-      <div className={`grid grid-cols-2 gap-2.5 ${quickView ? '' : 'lg:grid-cols-4'}`}>
-        {(quickView ? metrics.slice(0, 2) : metrics).map((metric) => (
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+        {metrics.map((metric) => (
           <Card
             className={cn(
               'min-w-0 overflow-hidden rounded-2xl p-3',
@@ -225,11 +223,11 @@ export function DashboardOverviewCard({
         ))}
       </div>
 
-      {!quickView && <DashboardSessionCards metrics={sessionMetrics} loading={sessionMetricsLoading} error={sessionMetricsError} />}
+      <DashboardSessionCards metrics={sessionMetrics} loading={sessionMetricsLoading} error={sessionMetricsError} />
 
       {belowMetrics}
 
-      {!quickView && <Card className="mt-4">
+      <Card className="mt-4">
         <Card.Content>
           <HeatmapSection
             days={heatmapDays}
@@ -239,7 +237,7 @@ export function DashboardOverviewCard({
           />
           <AchievementActivityLink />
         </Card.Content>
-      </Card>}
+      </Card>
     </section>
   );
 }

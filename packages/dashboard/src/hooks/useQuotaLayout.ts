@@ -12,6 +12,11 @@ export function useQuotaLayout(providers: QuotaProviderState[], preferences: Quo
   const rootRef = useRef<HTMLElement>(null), triggerRef = useRef<HTMLButtonElement>(null);
   const ordered = orderQuotaProviders(providers, draft?.order ?? preferences?.providerOrder);
   const restoreFocus = () => requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+  const focusItem = (id: string) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const item = [...(rootRef.current?.querySelectorAll<HTMLElement>('[data-quota-layout-item]') ?? [])].find(element => element.dataset.quotaLayoutItem === id);
+    item?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    item?.querySelector<HTMLButtonElement>('[data-quota-drag-handle]')?.focus({ preventScroll: true });
+  }));
   const cancel = () => { if (busyRef.current || dragOwner.current) return; setDraft(null); setError(false); restoreFocus(); };
   const move = (id: string, target: string, placement: 'before' | 'after') => {
     if (!draft || busyRef.current) return;
@@ -38,7 +43,7 @@ export function useQuotaLayout(providers: QuotaProviderState[], preferences: Quo
       requestAnimationFrame(() => rootRef.current?.querySelector<HTMLButtonElement>('[data-quota-drag-handle]')?.focus({ preventScroll: true }));
     },
     setCompact: (compact: boolean) => { if (!busyRef.current) setDraft(current => current && ({ ...current, compact })); },
-    cancel, finish, move,
+    cancel, finish, move, focusItem,
   };
 }
 

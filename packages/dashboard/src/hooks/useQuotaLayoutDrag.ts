@@ -10,8 +10,12 @@ export function useQuotaLayoutDrag(id: string, editor: QuotaLayoutEditor) {
   useEffect(() => () => stopRef.current?.(), []);
   useEffect(() => { if (!editor.editing) stopRef.current?.(); }, [editor.editing]);
 
-  const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || !event.isPrimary || !editor.editing || editor.busy || editor.dragOwner.current || !itemRef.current) return;
+    const targetElement = event.target instanceof Element ? event.target : null;
+    const interactive = targetElement?.closest('button, a, input, select, textarea, label, [role="button"], [role="link"], [contenteditable="true"], [data-quota-action]');
+    if (interactive && !interactive.hasAttribute('data-quota-drag-handle')) return;
+    if (!interactive) event.preventDefault();
     const item = itemRef.current, handle = event.currentTarget, pointer = event.pointerId;
     const start = { x: event.clientX, y: event.clientY }, rect = item.getBoundingClientRect();
     const grab = { x: start.x - rect.left, y: start.y - rect.top };
@@ -19,14 +23,13 @@ export function useQuotaLayoutDrag(id: string, editor: QuotaLayoutEditor) {
     let scroller: HTMLElement = item.parentElement!;
     while (scroller.parentElement && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
     editor.dragOwner.current = id;
-    handle.setPointerCapture(pointer);
 
     const update = () => {
       if (!item.isConnected) { cleanup(); return; }
       const bounds = item.getBoundingClientRect();
       setOffset({ x: point.x - bounds.left - grab.x, y: point.y - bounds.top - grab.y });
       const cards = [...(latest.current.rootRef.current?.querySelectorAll<HTMLElement>('[data-quota-layout-item]') ?? [])];
-      target = quotaDropTarget(cards.map(card => ({ id: card.dataset.quotaLayoutItem!, ...rectData(card.getBoundingClientRect()) })), point.x, point.y);
+      target = quotaDropTarget(cards.map(card => ({ id: card.dataset.quotaLayoutItem!, group: card.closest<HTMLElement>('[data-quota-status-group]')?.dataset.quotaStatusGroup, ...rectData(card.getBoundingClientRect()) })), point.x, point.y);
       const ids = latest.current.ordered.map(provider => provider.id);
       if (target && moveQuotaProvider(ids, id, target.id, target.placement).every((value, index) => value === ids[index])) target = null;
       latest.current.setDropTarget(previous => previous?.id === target?.id && previous?.placement === target?.placement && previous?.axis === target?.axis ? previous : target);
@@ -44,13 +47,16 @@ export function useQuotaLayoutDrag(id: string, editor: QuotaLayoutEditor) {
       point = { x: next.clientX, y: next.clientY };
       if (!active && Math.hypot(point.x - start.x, point.y - start.y) < 6) return;
       if (next.cancelable) next.preventDefault();
-      if (!active) { active = true; document.documentElement.setAttribute('data-quota-dragging', ''); frame = requestAnimationFrame(scroll); }
+      if (!active) {
+        active = true; handle.setPointerCapture(pointer); handleRef.current?.focus({ preventScroll: true });
+        document.documentElement.setAttribute('data-quota-dragging', ''); frame = requestAnimationFrame(scroll);
+      }
       update();
     };
     const cleanup = () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel);
-      window.removeEventListener('keydown', key); window.removeEventListener('blur', cleanup); handle.removeEventListener('lostpointercapture', cleanup);
+      window.removeEventListener('keydown', key); window.removeEventListener('blur', cleanup); handle.removeEventListener('lostpointercapture', lost);
       if (handle.hasPointerCapture(pointer)) handle.releasePointerCapture(pointer);
       document.documentElement.removeAttribute('data-quota-dragging');
       latest.current.dragOwner.current = null; latest.current.setDropTarget(null); setOffset(null); stopRef.current = null;
@@ -61,12 +67,14 @@ export function useQuotaLayoutDrag(id: string, editor: QuotaLayoutEditor) {
       const destination = target;
       cleanup();
       if (active && destination) latest.current.move(id, destination.id, destination.placement);
-      if (active) requestAnimationFrame(() => { item.scrollIntoView({ block: 'nearest', inline: 'nearest' }); handleRef.current?.focus({ preventScroll: true }); });
+      if (active) latest.current.focusItem(id);
     };
     const cancel = (next: PointerEvent) => { if (next.pointerId === pointer) cleanup(); };
+    // Touch starts with implicit capture on a descendant; its transfer to the card is not cancellation.
+    const lost = (next: PointerEvent) => { if (next.pointerId === pointer && next.target === handle) cleanup(); };
     const key = (next: KeyboardEvent) => { if (next.key === 'Escape') { next.preventDefault(); next.stopPropagation(); cleanup(); } };
     window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
-    window.addEventListener('keydown', key); window.addEventListener('blur', cleanup); handle.addEventListener('lostpointercapture', cleanup);
+    window.addEventListener('keydown', key); window.addEventListener('blur', cleanup); handle.addEventListener('lostpointercapture', lost);
     stopRef.current = cleanup;
   };
   return { itemRef, handleRef, onPointerDown, offset, suppressClick };

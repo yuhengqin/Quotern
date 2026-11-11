@@ -1,9 +1,11 @@
 .quota-layout-item { position: relative; min-width: 0; scroll-margin: 1rem; }
 .quota-layout-item[data-compact] { align-self: start; }
 .quota-layout-preview, .quota-layout-preview > [data-quota-card] { height: 100%; }
-.quota-layout-item[data-editing] > .quota-layout-preview > [data-quota-card] { cursor: default; outline: 1px dashed color-mix(in oklab, var(--color-accent) 40%, transparent); outline-offset: 2px; }
+.quota-layout-item[data-editing] { cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+.quota-layout-item[data-editing] > .quota-layout-preview > [data-quota-card] { cursor: inherit; outline: 1px dashed color-mix(in oklab, var(--color-accent) 40%, transparent); outline-offset: 2px; }
 .quota-layout-item[data-dragging] { border-radius: var(--radius-3xl, 1.5rem); outline: 2px dashed var(--color-accent); background: color-mix(in oklab, var(--color-accent) 8%, transparent); }
 .quota-layout-item[data-dragging] > .quota-layout-preview { position: relative; z-index: 30; background: var(--color-surface); box-shadow: var(--shadow-lg, 0 12px 28px #0003); border-radius: inherit; }
+.quota-layout-item[data-status-row] { border-radius: .75rem; }
 .quota-drag-handle { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 28px; height: 32px; margin-inline-start: -4px; border-radius: .5rem; color: var(--color-muted); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
 .quota-drag-handle:hover, .quota-drag-handle:focus-visible { color: var(--color-accent); background: color-mix(in oklab, var(--color-accent) 10%, transparent); }
 .quota-drag-handle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }

@@ -31,6 +31,10 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 共享存储中的库无法依赖项目祖先目录中的隐式依赖。当前通过版本限定的 `packageExtensions` 补齐 HeroUI 3.2.4 遗漏的 `@internationalized/date` 声明；Dashboard / Desktop 的 TypeScript `paths` 将 `react`、`react-dom` 及其子路径的类型解析固定到各项目自己的 `@types` 包，避免库声明仅解析到共享目录中的 JavaScript 文件。升级相关依赖时核对这些兼容配置，不能通过修改共享存储内的文件或放宽类型检查规避问题。
 
+Dashboard 和 Desktop renderer 的 Vite 开发服务在工作区允许范围之外，仅额外放行已安装 `@fontsource-variable/jetbrains-mono/files` 的真实目录，避免共享存储中的 CSS 字体请求被拦截；保留默认 `fs.strict` 和 `fs.deny`。不提交机器专属的 store 路径，也不放行整个共享 store。`pnpm test:vite-core-source` 同时检查字体响应、包元数据及 `.env` 拒绝访问、Core 热更新与生产构建入口。
+
+Windows 下 Vite 6 的 `/@fs/` 静态服务使用进程所在驱动器；开发工作区与共享字体 store 跨盘时可能返回 404，这与允许范围导致的 403 不同。需要验收开发态资源时，使用与字体 store 同盘的工作区；测试的临时应用也放在当前工作区的 `.quotern-dev/`，只清理各次测试创建的唯一目录。
+
 配置语义及 ESM 隐式依赖限制见 [pnpm 全局虚拟存储文档](https://pnpm.io/settings/node-modules#enableglobalvirtualstore)；CI 的显式配置行为以 [pnpm 11.1.2 配置实现](https://github.com/pnpm/pnpm/blob/v11.1.2/config/reader/src/index.ts#L635-L641) 为准。
 
 ## 开发入口与端口

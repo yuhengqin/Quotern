@@ -1,15 +1,19 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import { searchForWorkspaceRoot } from 'vite';
 import react from '@vitejs/plugin-react';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import tailwindcss from '@tailwindcss/vite';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { coreSourcePlugin } from '../../scripts/vite-core-source.mjs';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ) as { version: string };
+const fontCss = createRequire(import.meta.url).resolve('@fontsource-variable/jetbrains-mono/index.css');
+const fontFiles = realpathSync(resolve(dirname(fontCss), 'files'));
 
 const quotaPreview = process.env.QUOTERN_DEV_QUOTA_PREVIEW === '1';
 if (quotaPreview && process.env.QUOTERN_DEV_ISOLATED !== '1') {
@@ -97,6 +101,8 @@ export default defineConfig({
       host: process.env.QUOTERN_DEV_HOST?.trim() || '127.0.0.1',
       port: Number(process.env.QUOTERN_DEV_DESKTOP_PORT || 5195),
       strictPort: true,
+      // CSS url() assets in pnpm's shared store are outside the workspace.
+      fs: { allow: [searchForWorkspaceRoot(__dirname), fontFiles] },
     },
   },
 });

@@ -1,8 +1,9 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, searchForWorkspaceRoot } from 'vite';
 import react from '@vitejs/plugin-react';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import tailwindcss from '@tailwindcss/vite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { coreSourcePlugin } from '../../scripts/vite-core-source.mjs';
@@ -13,6 +14,8 @@ const pkg = JSON.parse(
 ) as { version: string };
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
+const fontCss = createRequire(import.meta.url).resolve('@fontsource-variable/jetbrains-mono/index.css');
+const fontFiles = realpathSync(path.join(path.dirname(fontCss), 'files'));
 
 /**
  * Vite `base` — asset URLs in built HTML/JS only.
@@ -61,6 +64,8 @@ export default defineConfig(({ mode }) => {
       host: env.QUOTERN_DEV_HOST?.trim() || '127.0.0.1',
       port: Number(env.QUOTERN_DEV_UI_PORT || 5194),
       strictPort: true,
+      // CSS url() assets in pnpm's shared store are outside the workspace.
+      fs: { allow: [searchForWorkspaceRoot(rootDir), fontFiles] },
       proxy: {
         '/functions': {
           target: env.VITE_CLI_API_ORIGIN || 'http://127.0.0.1:8252',

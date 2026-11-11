@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer as createPortProbe } from 'node:net';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
@@ -19,8 +18,11 @@ const entry = imports.map(name => `export * from 'quotern-core/${name}';`).join(
   + "\nexport { default as pricing } from 'quotern-core/pricing-data';\n";
 
 async function fixture(t, desktop) {
-  // Expand Windows 8.3 temp paths and macOS /var symlinks before Vite uses them.
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'quotern-vite-core-')));
+  // Vite 6's Windows raw-file middleware serves from the working drive.
+  // Keep fixtures on the checkout's drive and expand any path symlinks.
+  const temporary = join(source, '.quotern-dev');
+  await mkdir(temporary, { recursive: true });
+  const root = await realpath(await mkdtemp(join(temporary, 'vite-core-')));
   let server;
   t.after(async () => {
     await server?.close();
@@ -45,7 +47,7 @@ async function fixture(t, desktop) {
   await cp(join(source, relative, 'package.json'), join(frontend, 'package.json'));
   const configName = desktop ? 'electron.vite.config.ts' : 'vite.config.ts';
   await cp(join(source, relative, configName), join(frontend, configName));
-  for (const dependency of ['vite', '@vitejs/plugin-react', '@tanstack/router-plugin', '@tailwindcss/vite', ...(desktop ? ['electron-vite'] : [])]) {
+  for (const dependency of ['vite', '@vitejs/plugin-react', '@tanstack/router-plugin', '@tailwindcss/vite', '@fontsource-variable/jetbrains-mono', ...(desktop ? ['electron-vite'] : [])]) {
     const target = join(frontend, 'node_modules', dependency);
     await mkdir(dirname(target), { recursive: true });
     await symlink(await realpath(join(source, relative, 'node_modules', dependency)), target, process.platform === 'win32' ? 'junction' : 'dir');
@@ -72,10 +74,11 @@ async function fixture(t, desktop) {
       await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
       const port = probe.address().port;
       await new Promise(resolve => probe.close(resolve));
+      const frontendConfig = await config('serve');
       server = await createServer({
-        ...await config('serve'),
+        ...frontendConfig,
         optimizeDeps: { noDiscovery: true, include: [] },
-        server: { host: '127.0.0.1', port, strictPort: true, fs: { allow: [root] } },
+        server: { ...frontendConfig.server, host: '127.0.0.1', port, strictPort: true },
       });
       await server.listen();
       return server;
@@ -107,6 +110,30 @@ async function loadGraph(server) {
 }
 
 for (const [name, desktop] of [['Dashboard', false], ['Desktop renderer', true]]) {
+  test(`${name} serves external font assets without exposing their package or env files`, { timeout: 30000 }, async t => {
+    const app = await fixture(t, desktop);
+    await writeFile(join(app.page, 'font.css'), '@import "@fontsource-variable/jetbrains-mono";\n');
+    await writeFile(join(app.root, '.env.font-access-check'), 'PRIVATE_FONT_TEST_VALUE=do-not-serve\n');
+    const server = await app.serve();
+    const origin = server.resolvedUrls.local[0];
+    const response = await fetch(new URL('/font.css?direct', origin));
+    assert.equal(response.status, 200);
+    const css = await response.text();
+    const fonts = [...css.matchAll(/url\(["']?([^\s)"']+\.woff2)["']?\)/g)].map(match => match[1]);
+    assert.ok(fonts.length > 0, 'the package CSS references real font files');
+    for (const url of new Set(fonts)) {
+      const font = await fetch(new URL(url, origin));
+      assert.equal(font.status, 200, `font request must succeed: ${url}`);
+      assert.equal(Buffer.from(await font.arrayBuffer()).subarray(0, 4).toString(), 'wOF2');
+    }
+    const relative = desktop ? 'apps/desktop' : 'packages/dashboard';
+    const metadata = await realpath(join(source, relative, 'node_modules/@fontsource-variable/jetbrains-mono/package.json'));
+    for (const file of [metadata, join(app.root, '.env.font-access-check')]) {
+      const denied = await fetch(new URL(`/@fs/${file.replaceAll('\\', '/')}`, origin));
+      assert.equal(denied.status, 403, `unrelated files remain blocked: ${file}`);
+    }
+  });
+
   test(`${name} keeps serving Core modules while a clean build removes dist`, { timeout: 30000 }, async t => {
     const app = await fixture(t, desktop);
     const server = await app.serve();

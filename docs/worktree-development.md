@@ -33,7 +33,7 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 Dashboard 和 Desktop renderer 的 Vite 开发服务在工作区允许范围之外，仅额外放行已安装 `@fontsource-variable/jetbrains-mono/files` 的真实目录，避免共享存储中的 CSS 字体请求被拦截；保留默认 `fs.strict` 和 `fs.deny`。不提交机器专属的 store 路径，也不放行整个共享 store。`pnpm test:vite-core-source` 同时检查字体响应、包元数据及 `.env` 拒绝访问、Core 热更新与生产构建入口。
 
-Windows 下 Vite 6 的 `/@fs/` 静态服务使用进程所在驱动器；开发工作区与共享字体 store 跨盘时可能返回 404，这与允许范围导致的 403 不同。需要验收开发态资源时，使用与字体 store 同盘的工作区；测试的临时应用也放在当前工作区的 `.quotern-dev/`，只清理各次测试创建的唯一目录。
+Windows 下 Vite 6 的 `/@fs/` 静态服务跨盘查找由 [vite@6.4.3.patch](../patches/vite@6.4.3.patch) 修正：按请求中的盘符缓存静态文件服务实例，保留原有访问限制、响应头、缓存和 Range/HEAD 行为。`pnpm install` 通过 `patchedDependencies` 自动应用补丁，不修改其他 worktree 使用的原依赖；更新 Vite 时须核对上游修复及补丁兼容性，再运行 `pnpm test:vite-core-source`。该检查在 Windows 上启动另一驱动器的进程，验证两端字体、编码路径和访问限制；没有第二个可写盘时明确跳过跨盘项。测试的临时应用放在当前工作区的 `.quotern-dev/`，只清理各次测试创建的唯一目录。
 
 配置语义及 ESM 隐式依赖限制见 [pnpm 全局虚拟存储文档](https://pnpm.io/settings/node-modules#enableglobalvirtualstore)；CI 的显式配置行为以 [pnpm 11.1.2 配置实现](https://github.com/pnpm/pnpm/blob/v11.1.2/config/reader/src/index.ts#L635-L641) 为准。
 

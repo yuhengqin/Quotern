@@ -1,0 +1,46 @@
+diff --git a/dist/node/chunks/dep-Dm0c1Wj2.js b/dist/node/chunks/dep-Dm0c1Wj2.js
+index 25b83f9c04007b5a24a0624b9df60bdb9629c5f1..4e294342703eb720d3f7520379f63cbf4161d0d5 100644
+--- a/dist/node/chunks/dep-Dm0c1Wj2.js
++++ b/dist/node/chunks/dep-Dm0c1Wj2.js
+@@ -35563,23 +35563,32 @@ function serveStaticMiddleware(server) {
+   };
+ }
+ function serveRawFsMiddleware(server) {
+-  const serveFromRoot = sirv(
+-    "/",
+-    sirvOptions({
+-      config: server.config,
+-      getHeaders: () => server.config.server.headers
+-    })
+-  );
++  const options = sirvOptions({
++    config: server.config,
++    getHeaders: () => server.config.server.headers
++  });
++  const serveFromRoot = sirv("/", options);
++  const serveFromDrives = new Map();
+   return function viteServeRawFsMiddleware(req, res, next) {
+     if (req.url.startsWith(FS_PREFIX)) {
+       const url = new URL(req.url, "http://example.com");
+       const pathname = decodeURI(url.pathname);
+       let newPathname = pathname.slice(FS_PREFIX.length);
+-      if (isWindows$3) newPathname = newPathname.replace(/^[A-Z]:/i, "");
++      let serve = serveFromRoot;
++      if (isWindows$3) {
++        const drive = newPathname.match(/^[A-Z]:/i)?.[0].toUpperCase();
++        if (drive) {
++          if (!serveFromDrives.has(drive)) {
++            serveFromDrives.set(drive, sirv(`${drive}/`, options));
++          }
++          serve = serveFromDrives.get(drive);
++          newPathname = newPathname.slice(2);
++        }
++      }
+       url.pathname = encodeURI(newPathname);
+       req.url = url.href.slice(url.origin.length);
+       try {
+-        serveFromRoot(req, res, next);
++        serve(req, res, next);
+       } catch (e) {
+         if (e && "code" in e && e.code === ERR_DENIED_FILE) {
+           respondWithAccessDenied(e.path, server, res);

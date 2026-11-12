@@ -27,3 +27,5 @@ allowBuilds:
   electron-winstaller: false
   esbuild: true
   protobufjs: false
+patchedDependencies:
+  vite@6.4.3: patches/vite@6.4.3.patch

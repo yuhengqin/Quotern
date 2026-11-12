@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer as createPortProbe } from 'node:net';
-import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, parse } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
@@ -18,8 +21,7 @@ const entry = imports.map(name => `export * from 'quotern-core/${name}';`).join(
   + "\nexport { default as pricing } from 'quotern-core/pricing-data';\n";
 
 async function fixture(t, desktop) {
-  // Vite 6's Windows raw-file middleware serves from the working drive.
-  // Keep fixtures on the checkout's drive and expand any path symlinks.
+  // Keep fixtures private to this checkout and expand any path symlinks.
   const temporary = join(source, '.quotern-dev');
   await mkdir(temporary, { recursive: true });
   const root = await realpath(await mkdtemp(join(temporary, 'vite-core-')));
@@ -78,7 +80,7 @@ async function fixture(t, desktop) {
       server = await createServer({
         ...frontendConfig,
         optimizeDeps: { noDiscovery: true, include: [] },
-        server: { ...frontendConfig.server, host: '127.0.0.1', port, strictPort: true },
+        server: { ...frontendConfig.server, host: '127.0.0.1', port, strictPort: true, headers: { 'X-Quotern-Font-Test': 'enabled' } },
       });
       await server.listen();
       return server;
@@ -121,13 +123,47 @@ for (const [name, desktop] of [['Dashboard', false], ['Desktop renderer', true]]
     const css = await response.text();
     const fonts = [...css.matchAll(/url\(["']?([^\s)"']+\.woff2)["']?\)/g)].map(match => match[1]);
     assert.ok(fonts.length > 0, 'the package CSS references real font files');
+    const relative = desktop ? 'apps/desktop' : 'packages/dashboard';
+    const fontPackage = await realpath(join(source, relative, 'node_modules/@fontsource-variable/jetbrains-mono'));
     for (const url of new Set(fonts)) {
       const font = await fetch(new URL(url, origin));
       assert.equal(font.status, 200, `font request must succeed: ${url}`);
-      assert.equal(Buffer.from(await font.arrayBuffer()).subarray(0, 4).toString(), 'wOF2');
+      assert.match(font.headers.get('content-type') ?? '', /font\/woff2/);
+      assert.equal(font.headers.get('x-quotern-font-test'), 'enabled');
+      const expected = await readFile(join(fontPackage, 'files', basename(decodeURI(new URL(url, origin).pathname))));
+      assert.deepEqual(Buffer.from(await font.arrayBuffer()), expected, 'the URL resolves to the intended drive and file');
     }
-    const relative = desktop ? 'apps/desktop' : 'packages/dashboard';
-    const metadata = await realpath(join(source, relative, 'node_modules/@fontsource-variable/jetbrains-mono/package.json'));
+    const fontUrl = new URL(fonts[0], origin);
+    fontUrl.search = '?font-check=1';
+    const head = await fetch(fontUrl, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal((await head.arrayBuffer()).byteLength, 0);
+    const range = await fetch(fontUrl, { headers: { Range: 'bytes=0-3' } });
+    assert.equal(range.status, 206);
+    assert.equal(await range.text(), 'wOF2');
+    const cached = await fetch(fontUrl, { headers: { 'If-None-Match': head.headers.get('etag') } });
+    assert.equal(cached.status, 304);
+    if (process.platform === 'win32') {
+      const lowercase = new URL(fontUrl);
+      lowercase.pathname = lowercase.pathname.replace(/^\/@fs\/([A-Z]):/, (_, drive) => `/@fs/${drive.toLowerCase()}:`);
+      const font = await fetch(lowercase);
+      assert.equal(font.status, 200);
+      await font.body.cancel();
+    }
+    const missing = await fetch(new URL(`${fonts[0]}.missing`, origin));
+    assert.equal(missing.status, 404);
+    const textAsset = join(app.root, '跨盘 资源.txt');
+    await writeFile(textAsset, 'cross-drive asset contents\n');
+    const textUrl = new URL(`/@fs/${textAsset.replaceAll('\\', '/')}`, origin);
+    textUrl.search = '?asset-check=1';
+    const text = await fetch(textUrl);
+    assert.equal(text.status, 200);
+    assert.equal(await text.text(), 'cross-drive asset contents\n');
+    const traversalUrl = new URL(fonts[0], origin);
+    traversalUrl.pathname = traversalUrl.pathname.slice(0, traversalUrl.pathname.lastIndexOf('/') + 1) + '%2e%2e%2fpackage.json';
+    const traversal = await fetch(traversalUrl);
+    assert.ok([400, 403, 404].includes(traversal.status), 'encoded traversal cannot expose package metadata');
+    const metadata = join(fontPackage, 'package.json');
     for (const file of [metadata, join(app.root, '.env.font-access-check')]) {
       const denied = await fetch(new URL(`/@fs/${file.replaceAll('\\', '/')}`, origin));
       assert.equal(denied.status, 403, `unrelated files remain blocked: ${file}`);
@@ -159,3 +195,40 @@ for (const [name, desktop] of [['Dashboard', false], ['Desktop renderer', true]]
     assert.equal(compiled.LEADERBOARD_DEFAULT_LIMIT, 123456);
   });
 }
+
+test('Windows preserves file access rules when the font store is on another drive', { skip: process.platform !== 'win32', timeout: 30000 }, async t => {
+  const fontDrive = parse(await realpath(require.resolve('@fontsource-variable/jetbrains-mono/index.css'))).root.toLowerCase();
+  const candidates = [tmpdir(), ...(process.env.LOCALAPPDATA ? [join(process.env.LOCALAPPDATA, 'Temp')] : [])];
+  let workingDirectory;
+  for (const candidate of new Set(candidates)) {
+    try {
+      const temporary = await realpath(candidate);
+      if (parse(temporary).root.toLowerCase() === fontDrive) continue;
+      workingDirectory = await realpath(await mkdtemp(join(temporary, 'quotern-vite-cross-drive-')));
+      break;
+    } catch (error) {
+      if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes(error.code)) throw error;
+    }
+  }
+  if (!workingDirectory) return t.skip('a writable temporary directory on a second drive is required');
+  let child;
+  let closed;
+  t.after(async () => {
+    if (child && child.exitCode == null && child.signalCode == null) child.kill();
+    await closed?.catch(() => {});
+    await rm(workingDirectory, { recursive: true, force: true });
+  });
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  child = spawn(process.execPath, ['--test', '--test-name-pattern', 'serves external font assets', fileURLToPath(import.meta.url)], {
+    cwd: workingDirectory, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.on('data', chunk => { output += chunk; });
+  child.stderr.on('data', chunk => { output += chunk; });
+  closed = once(child, 'close');
+  const [code] = await closed;
+  assert.match(output, /Dashboard serves external font assets/);
+  assert.match(output, /Desktop renderer serves external font assets/);
+  assert.equal(code, 0, `cross-drive font requests and access checks must pass\n${output}`);
+});

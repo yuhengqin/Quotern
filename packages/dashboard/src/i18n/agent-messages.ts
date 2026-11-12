@@ -5,7 +5,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'agent.tokenSaver': ['Token Saver · 简洁回答', 'Token Saver · concise answers', 'Token Saver · 簡潔な回答', 'Token Saver · 간결한 답변'],
   'agent.beginner': ['新手解释', 'Beginner explanations', '初心者向けの説明', '초보자 설명'],
   'agent.handoff': ['新会话读取已保存的项目交接', 'Use saved project handoffs in new sessions', '新しいセッションで保存済みの引き継ぎを使用', '새 세션에서 저장한 프로젝트 인수인계 사용'],
-  'agent.claudePane': ['Claude 额度与会话侧栏', 'Claude quota and session pane', 'Claude の使用量・セッションパネル', 'Claude 할당량 및 세션 패널'],
+  'agent.claudePane': ['会话活动与 Claude 侧栏', 'Session activity and Claude pane', 'セッション活動とClaudeパネル', '세션 활동 및 Claude 패널'],
   'agent.glossary': ['术语学习 · 可选 Haiku 请求', 'Glossary · optional Haiku requests', '用語学習 · 任意の Haiku リクエスト', '용어 학습 · 선택적 Haiku 요청'],
   'agent.claudeWindowStart': ['自动启动 Claude 额度窗口', 'Start Claude quota windows automatically', 'Claude 使用枠の自動開始', 'Claude 할당량 기간 자동 시작'],
   'agent.codexWindowStart': ['自动启动 Codex 额度窗口', 'Start Codex quota windows automatically', 'Codex 使用枠の自動開始', 'Codex 할당량 기간 자동 시작'],

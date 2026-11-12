@@ -245,15 +245,17 @@ export class QuotaManager {
         const key = `${slot.reader.id}:${identity}:${window.id}`;
         const history = this.deps.store.history[key] ??= [];
         if (!history.length || sample.at > history.at(-1)!.at) history.push(sample);
+        const rule = proof?.identityVerified && proof.accountRef ? this.preferences.accountAlerts?.[`${slot.reader.id}:${proof.accountRef}`] : undefined;
         const result = evaluateQuotaAlerts(slot.observations.get(window.id) ?? null, sample,
-          window.durationSeconds && window.durationSeconds <= 21600 ? 'five-hour' : window.id);
+          window.durationSeconds && window.durationSeconds <= 21600 ? 'five-hour' : window.id, rule?.level === 'critical' ? [] : rule?.level === 'custom' ? rule.thresholds : undefined);
         slot.observations.set(window.id, result.observation);
         // A jump across both thresholds produces one useful message at the higher level.
-        const alerts = result.alerts.includes('depleted') ? result.alerts.filter(kind => !kind.startsWith('threshold-'))
-          : result.alerts.includes('threshold-90') ? result.alerts.filter(kind => kind !== 'threshold-70') : result.alerts;
+        const maximum = Math.max(0, ...result.alerts.filter(kind => kind.startsWith('threshold-')).map(kind => Number(kind.slice(10))));
+        const alerts = result.alerts.filter(kind => !kind.startsWith('threshold-') || !result.alerts.includes('depleted') && Number(kind.slice(10)) === maximum);
         for (const kind of alerts) if (kind === 'reset' ? this.preferences.resetAlerts : this.preferences.thresholdAlerts) {
+          if (rule?.level === 'off') continue;
           if (slot.reader.profileId && this.preferences.profiles?.find(profile => profile.id === slot.reader.profileId)?.alerts === false) continue;
-          const alertKey = JSON.stringify([slot.reader.id, identity, window.id, kind, sample.resetsAt]);
+          const alertKey = JSON.stringify([slot.reader.id, proof?.identityVerified ? proof.accountRef ?? identity : identity, window.id, kind, sample.resetsAt]);
           if (this.sentAlerts.has(alertKey)) continue;
           this.sentAlerts.add(alertKey);
           if (this.sentAlerts.size > 5000) this.sentAlerts.delete(this.sentAlerts.values().next().value!);
@@ -276,12 +278,12 @@ export class QuotaManager {
     if (!validQuotaPatch(patch)) return Promise.reject(new Error('无效的额度设置'));
     const pending = this.settingsQueue.then(async () => {
       if (this.disposed) throw new Error('额度服务已退出');
-      const next = { ...this.preferences, ...patch, channels: { ...this.preferences.channels, ...patch.channels }, serviceComponents: { ...this.preferences.serviceComponents, ...patch.serviceComponents }, preferredWindows: { ...this.preferences.preferredWindows, ...patch.preferredWindows } };
+      const next = { ...this.preferences, ...patch, accountAlerts: { ...this.preferences.accountAlerts, ...patch.accountAlerts }, channels: { ...this.preferences.channels, ...patch.channels }, serviceComponents: { ...this.preferences.serviceComponents, ...patch.serviceComponents }, preferredWindows: { ...this.preferences.preferredWindows, ...patch.preferredWindows } };
       if (!validQuotaPatch(next)) throw new Error('无效的额度设置');
       if (patch.profiles) assertQuotaProfileDirectories(patch.profiles, this.preferences.profiles ?? []);
       try { await this.deps.store.savePreferences(next); }
       catch { this.notice = '额度设置保存失败，已保留原设置。'; this.emit(); throw new Error(this.notice); }
-      const changedAlerts = next.thresholdAlerts !== this.preferences.thresholdAlerts || next.resetAlerts !== this.preferences.resetAlerts;
+      const changedAlerts = next.thresholdAlerts !== this.preferences.thresholdAlerts || next.resetAlerts !== this.preferences.resetAlerts || JSON.stringify(next.accountAlerts) !== JSON.stringify(this.preferences.accountAlerts);
       const previous = this.preferences; this.preferences = next;
       if (next.serviceAlerts !== previous.serviceAlerts) this.serviceBaselines.clear();
       else for (const id of this.serviceBaselines.keys()) {

@@ -100,6 +100,8 @@ export interface QuotaProviderState {
   service: QuotaServiceStatus | null;
 }
 export interface QuotaPreferences {
+  /** Provider + verified anonymous account reference; shared by duplicate directories. */
+  accountAlerts?: Record<string, { level: 'standard' | 'critical' | 'custom' | 'off'; thresholds?: number[] }>;
   providerOrder?: string[];
   /** Specific card ID -> preferred window ID; empty means automatic risk selection. */
   preferredWindows?: Record<string, string>;

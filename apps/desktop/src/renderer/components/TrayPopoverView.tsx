@@ -15,6 +15,7 @@ import { fetchSyncStatus } from '@/lib/api';
 import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { ThemeToggle } from './ThemeToggle';
 import { SubscriptionUsageGrid } from './SubscriptionUsageGrid';
+import { AgentActivityList } from '../../../../../packages/dashboard/src/components/AgentActivityPanel';
 import {
   TRAY_PANEL_WIDTH,
   TRAY_PANEL_MIN_HEIGHT,
@@ -40,6 +41,7 @@ export function TrayPopoverView() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   useEffect(() => {
     const openDialogs = new Set<string>();
@@ -143,6 +145,7 @@ export function TrayPopoverView() {
       <div className="tray-popover__body">
         <div ref={contentRef} className="px-4 pb-4">
           <SubscriptionUsageGrid className="mb-3 grid-cols-1 gap-2.5" summaryOnly />
+          <details onToggle={event => setActivityOpen(event.currentTarget.open)}><summary className="cursor-pointer text-xs text-muted focus-visible:outline-2 focus-visible:outline-accent">{t('experience.activity')}</summary>{activityOpen && <div className="pt-3"><AgentActivityList /></div>}</details>
         </div>
       </div>
 

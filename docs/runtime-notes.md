@@ -26,6 +26,8 @@ Desktop 已运行时，另开 `quotern start` 会作为 observer 提供浏览器
 
 可选 Agent 行为 Hook 与现有采集 Hook 分开管理；配置、交接、Claude 插件和真实请求的边界见 [Agent 集成](agent-integrations.md)。`/functions/tud-agent` 要求本机请求，写操作还需要运行实例的动作 token；演示模式不注册此路由。自动开窗复用成功额度观测，但必须由当前 runtime owner 执行，开发隔离时禁用。
 
+`/functions/tud-agent/activity` 只读返回有界的会话元数据观测；自动开窗等待原因与最近请求结果由 Agent 状态一起返回。账号提醒、历史范围、离线 statusline 与活动入口的语义和验收见 [额度体验](quota-experience.md)。请求完成不等于额度窗口已确认开启，工具结果不等于任务成功。
+
 Claude / Codex Hook 写入 `notify.signal`，常驻进程监听后调度同步。当前脚本为 POSIX 的 `notify.sh` 和 Windows 的 `notify.cmd` / `notify.ps1`，不需要在每次通知时启动 CLI。
 
 后台轮询以 1 分钟为起点，同一档位连续 3 个空轮次后逐步退避到 2、5 分钟；下一轮在上一轮完成后安排。Cursor 后台拉取还有 5 分钟最小间隔，手动或 Hook 触发不按该后台间隔限制。数值见 [paths.ts](../packages/core/src/paths.ts)。

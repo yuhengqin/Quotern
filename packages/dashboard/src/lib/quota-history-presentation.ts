@@ -15,3 +15,17 @@ export function quotaHistoryWindowLabel(window: QuotaHistoryReport['windows'][nu
     ? period % 86400 === 0 ? `${period / 86400}d` : `${period / 3600}h` : window.label;
   return localizeQuotaWindowLabel(locale, provider, { ...window, label, periodSeconds: period });
 }
+
+/** Each observed cycle is a separate series, so resets and rollbacks stay disconnected. */
+export function quotaHistorySegments(windows: QuotaHistoryReport['windows'], from: number, to: number) {
+  return windows.flatMap((window, windowIndex) => window.cycles.flatMap(cycle => {
+    const samples = cycle.samples.filter(sample => sample.at >= from && sample.at <= to);
+    return samples.length ? [{ key: JSON.stringify([window.id, cycle.id]), windowId: window.id, windowIndex, samples }] : [];
+  }));
+}
+
+export function quotaHistoryBounds(report: QuotaHistoryReport, seconds: number, end: number) {
+  const earliest = Math.min(report.observedAt, ...report.windows.flatMap(window => window.cycles.map(cycle => cycle.firstObservedAt)));
+  const to = Math.min(report.observedAt, Math.max(earliest + seconds, end));
+  return { from: to - seconds, to, canPrevious: to - seconds > earliest, canNext: to < report.observedAt };
+}

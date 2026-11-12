@@ -3,6 +3,9 @@ import { Button, Input, Label, Modal, TextField } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { QuotaPreferencePatch, QuotaPreferences, QuotaProfile, QuotaProviderState } from 'quotern-core/quota/shared/quota';
 import { AccountLaunchControls, AccountLaunchSettings, useAccountLaunch } from './AccountLaunchControls';
+import { localizeQuotaWindowLabel } from 'quotern-i18n/quota';
+import type { SupportedLocale } from 'quotern-i18n';
+import '../i18n/quota-experience-messages';
 
 export function QuotaProfilesManager({ preferences, providers, onSave }: { preferences: QuotaPreferences; providers: QuotaProviderState[]; onSave(patch: QuotaPreferencePatch): Promise<unknown> }) {
   const { t } = useTranslation();
@@ -37,7 +40,7 @@ export function QuotaProfilesManager({ preferences, providers, onSave }: { prefe
         <div className="flex flex-col gap-3">
           {profiles.map(profile => <div key={profile.id} className="rounded-xl bg-surface-secondary p-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{profile.provider === 'codex' ? 'Codex' : 'Claude'} · {profile.label}</p><div className="flex gap-1"><Button size="sm" variant="ghost" className="h-7 text-xs" isDisabled={busy} onPress={() => { setEditing(profile.id); setProvider(profile.provider); setLabel(profile.label); setDirectory(profile.directory); setError(null); }}>{t('usage.profiles.edit')}<span className="sr-only"> {profile.label}</span></Button><Button size="sm" variant="ghost" className="h-7 text-xs" isDisabled={busy} onPress={() => void save(profiles.filter(item => item.id !== profile.id)).then(ok => { if (ok && editing === profile.id) clear(); })}>{t('usage.profiles.remove')}<span className="sr-only"> {profile.label}</span></Button></div></div>
-            <p className="mt-1 break-all text-[11px] text-muted">{profile.directory}</p>
+            <details className="mt-2 text-xs text-muted"><summary className="w-fit cursor-pointer focus-visible:outline-2 focus-visible:outline-accent">{t('experience.directory')}</summary><p className="mt-1 break-all">{profile.directory}</p></details>
             <ProfileIdentity profile={profile} providers={providers} />
             <div className="mt-2 flex gap-5 text-xs"><label className="flex items-center gap-2"><input type="checkbox" className="accent-accent" checked={profile.enabled} disabled={busy} onChange={event => void save(profiles.map(item => item.id === profile.id ? { ...item, enabled: event.target.checked } : item))} />{t('usage.profiles.monitor')}<span className="sr-only"> {profile.label}</span></label><label className="flex items-center gap-2"><input type="checkbox" className="accent-accent" checked={profile.alerts !== false} disabled={busy} onChange={event => void save(profiles.map(item => item.id === profile.id ? { ...item, alerts: event.target.checked } : item))} />{t('usage.profiles.alerts')}<span className="sr-only"> {profile.label}</span></label></div>
             <AccountLaunchControls profile={profile} controller={launch} disabled={busy} />
@@ -58,10 +61,11 @@ export function QuotaProfilesManager({ preferences, providers, onSave }: { prefe
 }
 
 function ProfileIdentity({ profile, providers }: { profile: QuotaProfile; providers: QuotaProviderState[] }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const state = providers.find(row => row.id === `${profile.provider}@${profile.id}`);
   const reference = state?.provenance?.identityVerified ? state.provenance.accountRef : undefined;
   const duplicates = reference ? providers.filter(row => row.id !== state?.id && (row.providerId ?? row.id) === profile.provider && row.provenance?.identityVerified && row.provenance.accountRef === reference) : [];
   const status = !profile.enabled ? 'usage.profiles.paused' : !state ? 'usage.profiles.waiting' : state.status === 'ready' ? state.stale ? 'usage.profiles.old' : 'usage.profiles.ready' : state.status === 'expired' ? 'usage.profiles.expired' : state.status === 'not-configured' ? 'usage.profiles.notConfigured' : 'usage.profiles.unavailable';
-  return <div className="mt-2 text-[11px] text-muted"><p>{t(status)} · {reference ? t('usage.profiles.accountId', { id: reference.slice(0, 8) }) : t('usage.profiles.identityUnknown')}</p>{duplicates.length > 0 && <p className="mt-1 text-warning">{t('usage.profiles.sameAccount', { folders: duplicates.map(row => row.profileLabel ?? t(row.provenance?.source === 'omp' ? 'usage.profiles.ompSource' : 'usage.profiles.defaultFolder')).join('、') })}</p>}</div>;
+  const windows = state?.status === 'ready' && !state.stale ? state.windows.filter(window => !window.balance && window.analysisEligible !== false && (window.resetsAt === null || window.resetsAt > Date.now() / 1000)) : [];
+  return <div className="mt-2 space-y-1 text-xs text-muted"><p>{t(status)} · {reference ? t('usage.profiles.accountId', { id: reference.slice(0, 8) }) : t('usage.profiles.identityUnknown')}</p><p>{windows?.length ? windows.slice(0, 2).map(window => `${localizeQuotaWindowLabel((i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale, profile.provider, window)} · ${t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}`).join(' / ') : t('experience.quotaUnknown')}</p>{duplicates.length > 0 && <p className="mt-1 text-warning">{t('usage.profiles.sameAccount', { folders: duplicates.map(row => row.profileLabel ?? t(row.provenance?.source === 'omp' ? 'usage.profiles.ompSource' : 'usage.profiles.defaultFolder')).join('、') })}</p>}</div>;
 }

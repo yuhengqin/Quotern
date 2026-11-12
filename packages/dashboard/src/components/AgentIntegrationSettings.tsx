@@ -6,14 +6,15 @@ import { registerMessages } from 'quotern-i18n';
 import { request } from '@/lib/api';
 import { isDemoMode } from '@/lib/demo-runtime';
 import { agentMessages } from '../i18n/agent-messages';
+import '../i18n/quota-experience-messages';
 registerMessages(agentMessages);
 
-export interface AgentSettingsState { token: string; preferences: AgentPreferences; agents: Record<'claude' | 'codex', { installed: boolean; target: string }>; isolated: boolean }
+export interface AgentSettingsState { token: string; preferences: AgentPreferences; agents: Record<'claude' | 'codex', { installed: boolean; target: string }>; isolated: boolean; windowStart?: { provider: string; reason: string; last: { at: number; outcome: string } | null }[] }
 export function agentAction<T>(token: string, body: Record<string, unknown>): Promise<T> {
   return request<T>('/functions/tud-agent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Quotern-Agent-Action': token }, body: JSON.stringify(body) });
 }
 export function AgentIntegrationSettings() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState<AgentSettingsState | null>(null), [pending, setPending] = useState(false), [error, setError] = useState(false), [feedback, setFeedback] = useState('');
   const [plugin, setPlugin] = useState<{ command: string } | null>(null);
   const load = async () => { setError(false); try { setState(await request<AgentSettingsState>('/functions/tud-agent')); } catch { setError(true); } };
@@ -35,12 +36,12 @@ export function AgentIntegrationSettings() {
     <div className="flex flex-col gap-3">{(['quotaHints', 'tokenSaver', 'beginner', 'handoff', 'claudePane', 'glossary'] as const).map(check)}</div>
     <details className="text-sm text-muted"><summary className="cursor-pointer">{t('agent.details')}</summary><div className="space-y-2 pt-2"><p>{t('agent.optional')}</p><p>{t('agent.pluginHelp')}</p></div></details>
     <div className="space-y-3 border-t border-separator pt-3"><h4 className="text-sm font-medium">{t('agent.hooks')}</h4>
-      {state && (['claude', 'codex'] as const).map(agent => <div key={agent} className="flex flex-wrap items-center gap-2 text-sm"><span className="min-w-20">{agent === 'claude' ? 'Claude Code' : 'Codex'}</span><span className="min-w-12 flex-1 text-muted">{t(state.agents[agent].installed ? 'agent.installed' : 'agent.notInstalled')}</span><Button size="sm" variant="secondary" isPending={pending} onPress={() => { void change({ action: 'installation', agent, installed: !state.agents[agent].installed }); }}>{t(state.agents[agent].installed ? 'agent.remove' : 'agent.install')}</Button></div>)}
+      {state && (['claude', 'codex'] as const).map(agent => <div key={agent} className="flex flex-wrap items-center gap-2 text-sm"><span className="min-w-20">{agent === 'claude' ? 'Claude Code' : 'Codex'}</span><span className="min-w-12 flex-1 text-muted">{t(state.agents[agent].installed ? 'agent.installed' : 'agent.notInstalled')}</span>{state.agents[agent].installed && <Button size="sm" variant="ghost" isDisabled={pending} onPress={() => void change({ action: 'installation', agent, installed: true })}>{t('experience.updateHooks')}<span className="sr-only"> {agent}</span></Button>}<Button size="sm" variant="secondary" isPending={pending} onPress={() => { void change({ action: 'installation', agent, installed: !state.agents[agent].installed }); }}>{t(state.agents[agent].installed ? 'agent.remove' : 'agent.install')}</Button></div>)}
       <p className="text-xs text-muted">{t('agent.trust')}</p>{state?.isolated && <p className="text-xs text-muted">{t('agent.isolated')}</p>}
       <Button size="sm" variant="secondary" isDisabled={!state} isPending={pending} onPress={() => { void prepare(); }}>{t('agent.preparePlugin')}</Button>
       {plugin && <div className="space-y-2 text-sm"><p>{t('agent.pluginReady')}</p><pre className="whitespace-pre-wrap break-all rounded-lg bg-default p-2 text-xs">{plugin.command}</pre><Button size="sm" variant="tertiary" onPress={() => { void navigator.clipboard.writeText(plugin.command).then(() => setFeedback(t('agent.copied'))).catch(() => setError(true)); }}>{t('agent.copy')}</Button></div>}
     </div>
-    <details className="space-y-3 border-t border-separator pt-3 text-sm"><summary className="cursor-pointer">{t('agent.claudeWindowStart')} / Codex</summary><p className="mt-3 text-muted">{t('agent.windowHelp')}</p><div className="mt-3 flex flex-col gap-3">{check('claudeWindowStart')}{check('codexWindowStart')}</div></details>
+    <details className="space-y-3 border-t border-separator pt-3 text-sm"><summary className="cursor-pointer">{t('agent.claudeWindowStart')} / Codex</summary><p className="mt-3 text-muted">{t('agent.windowHelp')}</p><div className="mt-3 flex flex-col gap-3">{check('claudeWindowStart')}{check('codexWindowStart')}</div>{state?.windowStart?.map(row => <div key={row.provider} className="space-y-1 text-xs"><p>{row.provider === 'claude' ? 'Claude Code' : 'Codex'} · {t(`experience.${row.reason}`)}</p>{row.last && <p className="text-muted">{new Date(row.last.at * 1000).toLocaleString(i18n.resolvedLanguage)} · {t(`experience.${row.last.outcome}`)}</p>}</div>)}<Button size="sm" variant="ghost" isDisabled={pending} onPress={() => void load()}>{t('usage.quota.refresh')}</Button></details>
     {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
     {error && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><span>{t('agent.failed')}</span><Button size="sm" variant="tertiary" onPress={() => { void load(); }}>{t('agent.retry')}</Button></div>}
   </Surface>;

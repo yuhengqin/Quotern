@@ -7,8 +7,11 @@ import { integrationStatus, setIntegrationInstalled } from '../agent/install.js'
 import { prepareHandoff, saveHandoff } from '../agent/handoff.js';
 import { prepareClaudePlugin } from '../agent/plugin.js';
 import { validSessionActionTarget } from '../session-resume.js';
+import { readWindowStartStatus } from '../agent/window-start.js';
+import type { QuotaState } from '../quota/shared/quota.js';
+import { readAgentActivities } from '../agent/activity.js';
 
-export function registerAgentApi(parent: Hono, dataDir: string, ipc = false) {
+export function registerAgentApi(parent: Hono, dataDir: string, ipc = false, getQuotaState: () => QuotaState | null = () => null) {
   const app = new Hono<{ Bindings: { quoternRemoteAddress?: string } }>(), token = randomBytes(32).toString('hex');
   const ok = <T>(data: T) => ({ success: true, message: 'ok', data });
   const fail = (message: string) => ({ success: false, message, data: null });
@@ -17,13 +20,14 @@ export function registerAgentApi(parent: Hono, dataDir: string, ipc = false) {
     const peer = c.env?.quoternRemoteAddress, host = new URL(c.req.url).hostname;
     const loopback = ['localhost', '127.0.0.1', '[::1]'];
     let localOrigin = true;
-    try { const origin = c.req.header('Origin'); if (origin) { const url = new URL(origin); localOrigin = ['http:', 'https:'].includes(url.protocol) && loopback.includes(url.hostname); } } catch { localOrigin = false; }
+    try { const origin = c.req.header('Origin'); if (origin) { const url = new URL(origin); localOrigin = ['http:', 'https:'].includes(url.protocol) && loopback.includes(url.hostname); } const rawHost = c.req.header('Host'); if (rawHost && ![...loopback, ...(ipc ? ['tud.local'] : [])].includes(new URL(`http://${rawHost}`).hostname)) localOrigin = false; } catch { localOrigin = false; }
     if (!localOrigin || !loopback.includes(host) && !(ipc && host === 'tud.local') || peer && !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(peer)) return c.json(fail('AGENT_LOCAL_ONLY'), 403);
     await next();
   });
   app.use('*', bodyLimit({ maxSize: 40000, onError: c => c.json(fail('AGENT_INVALID_REQUEST'), 413) }));
-  const status = async () => ({ preferences: await readAgentPreferences(dataDir), agents: await integrationStatus(dataDir), token, isolated: process.env.QUOTERN_DEV_ISOLATED === '1' });
+  const status = async () => ({ preferences: await readAgentPreferences(dataDir), agents: await integrationStatus(dataDir), windowStart: await readWindowStartStatus(dataDir, getQuotaState()), token, isolated: process.env.QUOTERN_DEV_ISOLATED === '1' });
   app.get('/', async c => { try { return c.json(ok(await status())); } catch { return c.json(fail('AGENT_INVALID_CONFIG'), 400); } });
+  app.get('/activity', async c => { try { return c.json(ok(await readAgentActivities(dataDir))); } catch { return c.json(fail('AGENT_ACTIVITY_UNAVAILABLE'), 400); } });
   app.post('/', async c => {
     const supplied = Buffer.from(c.req.header('X-Quotern-Agent-Action') ?? ''), expected = Buffer.from(token);
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return c.json(fail('AGENT_FORBIDDEN'), 403);

@@ -65,3 +65,22 @@ test('piped statusline tolerates malformed stdin without creating runtime state'
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('optional cached quota distinguishes stale readings, account selection and expiry', () => {
+  const quota = { stale: false, providers: [{ id: 'claude@work', status: 'ready', stale: false, windows: [{ id: 'five-hour', kind: 'percentage', usedPercent: 72, periodSeconds: 18000, resetsAt: 5800, timeKind: 'reset', stale: false }] }] };
+  const options = { quota, showQuota: true, showReset: true, account: 'claude@work', preset: 'compact' };
+  const value = api.formatStatusline({}, null, 'en', null, 1000000, options);
+  assert.match(value, /monitored account claude@work/); assert.match(value, /28% left/); assert.match(value, /reset 80m/);
+  quota.providers[0].windows[0].stale = true;
+  assert.match(api.formatStatusline({}, null, 'en', null, 1000000, options), /stale/);
+  assert.match(api.formatStatusline({}, null, 'en', null, 1000000, { ...options, account: 'claude@missing' }), /quota unknown/);
+});
+
+test('preview is deterministic in shape, does not wait for stdin or write state', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-statusline-preview-'));
+  try {
+    const args = [fileURLToPath(new URL('../bin/quotern.js', import.meta.url)), 'statusline', '--preview', '--quota', '--reset', '--preset', 'compact', '--track-context', '--data-dir', dir, '--lang', 'en'];
+    const result = spawnSync(process.execPath, args, { encoding: 'utf8', windowsHide: true, timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr); assert.match(result.stdout, /28% left/); assert.match(result.stdout, /context 62%/); assert.deepEqual(await readdir(dir), []);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

@@ -10,6 +10,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { createLocalApiApp, createHttpServer, listenServer, BucketStore } from '../../../packages/core/dist/index.js';
 import { registerAccountLaunchApi } from '../../../packages/core/dist/server/account-launch-api.js';
 import { registerBillingApi } from '../../../packages/core/dist/server/billing-api.js';
+import { registerAgentApi } from '../../../packages/core/dist/server/agent-api.js';
 import { BillingService } from '../../../packages/core/dist/quota/billing-store.js';
 import { normalizeQuotaSnapshot } from '../../../packages/core/dist/quota/shared/quota-analysis.js';
 import { DEFAULT_QUOTA_PREFERENCES } from '../../../packages/core/dist/quota/shared/quota.js';
@@ -35,6 +36,8 @@ async function fixture(mode) {
     p.id = `claude@${profile.id}`; p.providerId = 'claude'; p.profileLabel = profile.label; p.provenance = { source: 'native', observer: 'fixture', observedAt: now, identityVerified: true, accountRef: String(index + 1).repeat(64) }; return p;
   });
   const quota = { providers, preferences: { ...DEFAULT_QUOTA_PREFERENCES, profiles }, notice: null };
+  let failPreferences = false, failActivity = false, activityAt = now;
+  const saveQuota = patch => { if (failPreferences) { failPreferences = false; throw Error('Synthetic preference failure'); } quota.preferences = { ...quota.preferences, ...patch, accountAlerts: { ...quota.preferences.accountAlerts, ...patch.accountAlerts } }; return quota; };
   let failSpend = false;
   const billing = new BillingService(root, { fetch: async (input, init) => {
     const url = new URL(input); assert.ok(['claude.ai', 'console.anthropic.com'].includes(url.hostname));
@@ -50,12 +53,19 @@ async function fixture(mode) {
   } });
   const api = new Hono(); registerAccountLaunchApi(api, { dataDir: root, quotaDirectory: path.join(root, 'quota'), getState: () => quota, ipc: true, launch: async (provider, profile) => { launched.push({ mode, provider, directory: profile.directory }); } }); registerBillingApi(api, { service: billing, ipc: true });
   api.get('/functions/tud-quota', c => c.json(ok(quota)));
+  api.post('/functions/tud-quota/preferences', async c => { try { return c.json(ok(saveQuota(await c.req.json()))); } catch { return c.json({ success: false, message: 'QUOTA_SAVE_FAILED', data: null }, 500); } });
+  api.get('/functions/tud-agent/activity', c => failActivity ? c.json({ success: false, message: 'AGENT_ACTIVITY_UNAVAILABLE', data: null }, 500) : c.json(ok([
+    { source: 'claude', sessionId: 'activity-one', project: 'Quotern', tool: 'Bash', state: 'tool-running', startedAt: now - 300, observedAt: activityAt, stale: false },
+    { source: 'codex', sessionId: 'activity-two', project: 'Research', tool: null, state: 'turn-ended', startedAt: now - 600, observedAt: activityAt - 30, stale: false },
+  ])));
+  api.get('/functions/tud-quota-history', c => c.json(ok({ providerId: providers[0].id, label: '工作账号', observedAt: now, windows: ['five-hour','weekly'].map((id, index) => ({ id, label: index ? '7d' : '5h', cycles: [0,1].map(segment => ({ id: `${id}:${segment}`, startedAt: null, resetsAt: segment ? now - 86400 : now + 3600, firstObservedAt: now - (segment ? 36 : 4) * 3600, lastObservedAt: now - (segment ? 30 : 1) * 3600, lastUsedPercent: index ? 30 : 80, observedUsedPercent: null, discontinuous: false, sampleCount: 3, usage: null, samples: [4,2,1].map(hours => ({ at: now - (hours + (segment ? 32 : 0)) * 3600, usedPercent: index ? 30 : 80 })) })) })) })));
+  registerAgentApi(api, root, true, () => quota);
   api.post('/functions/tud-ensure-local-range', c => c.json(ok({ expanded: false, localCollectSince: '2026-01-01', statsSince: '2026-01-01', sync: null })));
   const referenceTime = new Date().toISOString(), facts = buildAchievementFacts([], [], [], new Date());
   const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-01-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: {} }, overlay: null }, history: { messages: [], observations: [], timingEvents: [], evidence: [], titles: [], codexParents: [], missingSources: [] }, achievements: { ...evaluateAchievements(facts), earned: [], preferences: { showcaseIds: [], celebrationsEnabled: false }, unreadIds: [], coverage: { fromDate: '2026-01-01', asOfDate: referenceTime.slice(0, 10), timeZone: 'Asia/Shanghai', missingSessionSources: [], projectSources: [] } } };
   const base = createLocalApiApp({ dataDir: path.join(root, 'unused'), bucketStore: new BucketStore(), demo, getConfig: () => ({ deviceId: 'fixture', statsSince: demo.collectSince, localCollectSince: demo.collectSince }) });
   api.all('*', c => base.fetch(c.req.raw));
-  return { root, api, quota, fail: () => { failSpend = true; } };
+  return { root, api, quota, saveQuota, fail: () => { failSpend = true; }, failSave: () => { failPreferences = true; }, touchActivity: () => { activityAt = Date.now() / 1000; }, failActivity: value => { failActivity = value; } };
 }
 const until = async (predicate, label) => { for (let i = 0; i < 100; i++) { if (await predicate()) return; await wait(75); } throw Error('Timed out: ' + label); };
 async function connect(window) {
@@ -131,8 +141,55 @@ async function exercise(window, client, mode, data) {
   await client.click(button('取消'));
   await until(() => client.evaluate(`Boolean(${button('实际消费')}) && Boolean(${button('监控目录')})`), 'management actions restored after layout editing');
   await shot(window, mode + '-overview-after-layout');
+  data.touchActivity(); await client.click(button('会话活动'));
+  await until(() => client.evaluate('document.querySelector("[data-agent-activity]")?.innerText.includes("正在执行工具")'), 'observed activity');
+  assert.equal(await client.evaluate('document.querySelector("[data-agent-activity]").innerText.includes("本轮已结束")'), true);
+  await shot(window, mode + '-activity');
+  data.failActivity(true);
+  await until(() => client.evaluate('document.querySelector("[data-agent-activity]")?.innerText.includes("旧状态")'), 'failed refresh downgrades cached activity');
+  data.failActivity(false); await client.click(button('重试'));
+  await until(() => client.evaluate('document.querySelector("[data-agent-activity]")?.innerText.includes("正在执行工具")'), 'activity retry');
+  await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'activity closed');
+  await client.evaluate(`document.querySelector('[data-quota-card] button[aria-haspopup="dialog"]').focus();true`); await client.key('Enter');
+  await until(() => client.evaluate(`Boolean([...document.querySelectorAll('[role=dialog] [aria-haspopup=listbox]')].find(el=>el.textContent.includes('标准')))`), 'account alerts');
+  await client.click(`[...document.querySelectorAll('[role=dialog] [aria-haspopup=listbox]')].find(el=>el.textContent.includes('标准'))`);
+  await client.key('Home'); await client.key('ArrowDown'); await client.key('ArrowDown'); await client.key('Enter');
+  await until(() => client.evaluate(`Boolean(document.querySelector('[role=dialog] form input'))`), 'custom thresholds');
+  await client.fill(`document.querySelector('[role=dialog] form input')`, '0'); await client.click(button('保存'));
+  await until(() => client.evaluate('document.querySelector("[role=dialog]").innerText.includes("1–99")'), 'invalid threshold');
+  await client.fill(`document.querySelector('[role=dialog] form input')`, '85, 95'); data.failSave(); await client.click(button('保存'));
+  await until(() => client.evaluate('document.querySelector("[role=dialog]").innerText.includes("设置保存失败")'), 'failed threshold save');
+  assert.equal(await client.evaluate(`document.querySelector('[role=dialog] form input').value`), '85, 95');
+  await client.click(button('保存')); await until(() => Promise.resolve(data.quota.preferences.accountAlerts?.[`claude:${'1'.repeat(64)}`]?.thresholds?.[0] === 85), 'threshold save');
+  await client.click(`[...document.querySelectorAll('[role=tab]')].find(el=>el.textContent.includes('额度历史'))`);
+  await until(() => client.evaluate(`Boolean(${button('24h')})`), 'history ranges'); await client.click(button('24h'));
+  await client.click(`[...document.querySelectorAll('[role=dialog] [aria-haspopup=listbox]')].find(el=>el.textContent.includes('不对比'))`);
+  await client.key('End'); await client.key('Enter');
+  await until(() => client.evaluate('document.querySelectorAll(".recharts-line").length>=2'), 'history comparison lines');
+  await shot(window, mode + '-history');
+  await client.click(button('更早')); await until(() => client.evaluate(`(${button('回到现在')}).getAttribute('aria-disabled')==='false'`), 'history earlier');
+  await client.click(button('回到现在'));
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 850, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await client.evaluate(`(()=>{const d=document.querySelector('[role=dialog]');return d.scrollWidth<=d.clientWidth+1})()`), true, 'history fits narrow screen');
+  await shot(window, mode + '-history-375');
+  await client.evaluate(`document.querySelector('[role=dialog] .recharts-wrapper').scrollIntoView({block:'center'});true`);
+  assert.equal(await client.evaluate(`(()=>{const r=document.querySelector('[role=dialog] .recharts-wrapper').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight})()`), true, 'full narrow history chart is reachable by scrolling');
+  await shot(window, mode + '-history-375-chart'); await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'quota details closed');
+  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", {detail:{tab:"integrations"}})); true');
+  await until(() => client.evaluate('Boolean(document.querySelector("[data-agent-settings]"))'), 'Agent settings');
+  await client.click(`[...document.querySelectorAll('[data-agent-settings] summary')].find(el=>el.textContent.includes('Codex'))`);
+  await until(() => client.evaluate('document.querySelector("[data-agent-settings]").innerText.includes("尚未启用")'), 'window start diagnostics');
+  await client.evaluate(`[...document.querySelectorAll('[data-agent-settings] details')].find(el=>el.textContent.includes('尚未启用')).scrollIntoView({block:'center'});true`);
+  await shot(window, mode + '-window-diagnostics');
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 850, deviceScaleFactor: 1, mobile: false });
+  await client.evaluate(`[...document.querySelectorAll('[data-agent-settings] p')].find(el=>el.textContent.includes('Codex · 尚未启用')).scrollIntoView({block:'center'});true`);
+  assert.equal(await client.evaluate(`(()=>{const d=document.querySelector('[role=dialog]'),p=[...document.querySelectorAll('[data-agent-settings] p')].find(el=>el.textContent.includes('Codex · 尚未启用')),r=p.getBoundingClientRect();return d.scrollWidth<=d.clientWidth+1 && r.top>=0 && r.bottom<=innerHeight})()`), true, 'window diagnostics fit and are reachable on narrow screen');
+  await shot(window, mode + '-window-diagnostics-375'); await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.key('Escape');
+  await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'settings closed');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
-  checks.push(mode + ': launch/default/keyboard-auto, draft-preserving-error, organization-picker, zero/unknown/subcent, partial-stale, model/key-breakdown, 375px/1280px, disconnect-isolation, Escape/focus, layout-mode-restore');
+  checks.push(mode + ': launch/default/keyboard-auto, billing, layout-mode-restore, activity-failure-retry, custom-threshold-validation-save-retry, history-range-comparison-navigation, 375px/1280px, Escape/focus');
 }
 async function main() {
   const browserData = await fixture('browser'), server = createHttpServer({ honoApp: browserData.api, staticDir: path.join(workspace, 'packages/dashboard/dist'), host: '127.0.0.1', port: 0 }); servers.push(server);
@@ -147,11 +204,12 @@ async function main() {
   ipcMain.handle('quota:navigation:get', () => null); ipcMain.handle('quota:navigation:ack', () => {});
   ipcMain.handle('tud:api-request', async (_event, route, init) => { const response = await desktopData.api.request(new URL(route, 'http://tud.local').href, init); return { status: response.status, body: await response.json() }; });
   ipcMain.handle('quota:get', () => desktopData.quota); ipcMain.handle('share-backgrounds:request', () => []);
+  ipcMain.handle('quota:set', (_event, patch) => desktopData.saveQuota(patch));
   const window = new BrowserWindow({ width: 1280, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
   await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/dashboard' }); await exercise(window, await connect(window), 'desktop', desktopData);
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2)); console.log(JSON.stringify({ ok: true, checks, output }));
 }
-const deadline = setTimeout(() => { console.error('Account/billing acceptance timed out'); app.exit(2); }, 150_000);
+const deadline = setTimeout(() => { console.error('Account/billing acceptance timed out'); app.exit(2); }, 180_000);
 void app.whenReady().then(main).catch(async error => {
   console.error(error); await writeFile(path.join(output, 'failure.txt'), String(error.stack ?? error));
   for (let i = 0; i < clients.length; i++) try { await writeFile(path.join(output, `failure-${i}.txt`), await clients[i].evaluate('document.body.innerText')); if (!windows[i]?.isDestroyed()) await shot(windows[i], `failure-${i}`); } catch {}

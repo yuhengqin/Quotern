@@ -14,6 +14,7 @@ import { QuotaServiceDetails } from './QuotaServiceDetails';
 import { QuotaHistoryPanel } from './QuotaHistoryPanel';
 import { FilterSelectPopover } from './FilterMenu';
 import { QuotaRecoveryActions } from './QuotaRecoveryActions';
+import { AccountAlertsControl } from './AccountAlertsControl';
 import '../i18n/usage-recovery-messages';
 
 const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string }> = {
@@ -52,7 +53,7 @@ function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecast
     ?? (showTrend ? rows.find(row => trendWindows.has(row.window.id) && row.analysis.trend.length >= 3) : undefined);
   if (!row) return null;
   const text = eta ? translate(locale, 'usage.quota.exhaustedIn', { duration: duration(row.analysis.etaAt!, locale) }) : localizeQuotaPaceLabel(locale, row.analysis) ?? translate(locale, 'usage.quota.trendSixHours');
-  return { text, label: localizeQuotaWindowLabel(locale, provider.providerId ?? provider.id, row.window), description: eta ? null : localizeQuotaPaceDescription(locale, row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
+  return { text: eta ? `${translate(locale, 'usage.quota.remaining', { percent: Math.round(100 - row.window.usedPercent) })} · ${text}` : text, label: localizeQuotaWindowLabel(locale, provider.providerId ?? provider.id, row.window), description: eta ? null : localizeQuotaPaceDescription(locale, row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
 }
 
 export interface QuotaUsageCardProps {
@@ -321,6 +322,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
                   {compact && provider.status === 'expired' && <p className="text-xs text-muted">{t('usage.quota.signIn', { provider: provider.label })}</p>}
                   {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">{t('usage.quota.customModelNote')}</p>}
                   <QuotaRecoveryActions provider={provider} preferences={preferences} />
+                  {onSave && <AccountAlertsControl provider={provider} preferences={preferences} onSave={onSave} />}
                   {providerType === 'claude' && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal('https://claude.ai/settings/usage')}>{t('usage.quota.claudeUsage')} ↗</Button>}
                   {status && <QuotaServiceDetails status={status} selected={preferences.serviceComponents?.[providerType as SubscriptionChannelId]} saving={saving} onSelect={onSave ? ids => void apply({ serviceComponents: { [providerType]: ids } }) : undefined} onOpenExternal={onOpenExternal} />}
                   <details className="border-t border-separator pt-4"><summary className="cursor-pointer text-xs text-muted focus-visible:outline-2 focus-visible:outline-accent">{t('island.quota.readingDetails')}</summary>

@@ -23,6 +23,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./agent/activity": { "types": "./dist/agent/activity.d.ts", "import": "./dist/agent/activity.js" },
     "./paths": { "types": "./dist/paths.d.ts", "import": "./dist/paths.js" },
     "./quota/*": {
       "types": "./dist/quota/*.d.ts",

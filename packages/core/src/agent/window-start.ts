@@ -41,7 +41,33 @@ async function prepareWindowStart(provider: 'claude' | 'codex', accountRef: stri
     }) };
   } catch { await dispose(); return null; }
 }
-interface WindowMemory { known: Record<string, { reset: number; at: number }>; attempted: Record<string, { at: number; outcome: 'attempted' | 'completed' | 'uncertain' }> }
+interface WindowMemory { known: Record<string, { reset: number; at: number }>; attempted: Record<string, { at: number; outcome: 'attempted' | 'completed' | 'uncertain' }>; blocked?: Partial<Record<'claude' | 'codex', number>> }
+export type WindowStartReason = 'disabled' | 'isolated' | 'owner' | 'reading' | 'identity' | 'window' | 'reset' | 'waiting-reset' | 'baseline' | 'in-use' | 'already-attempted' | 'eligible' | 'verification';
+function windowCandidate(state: QuotaState | null, provider: 'claude' | 'codex', memory: WindowMemory, stamp: number) {
+  const p = state?.providers.find(item => item.id === provider);
+  if (!p || p.status !== 'ready' || p.stale || p.refreshing || p.diagnostic?.code || p.fetchedAt === null || p.fetchedAt > stamp + 60 || p.fetchedAt < stamp - 900) return { reason: 'reading' as WindowStartReason };
+  if (p.provenance?.source !== 'native' || !p.provenance.identityVerified || !p.provenance.accountRef) return { reason: 'identity' as WindowStartReason };
+  const windows = p.windows.filter(w => quotaWindowPeriodSeconds(w) === 18000 && !w.id.startsWith('feature:') && w.timeKind !== 'expiry' && !w.balance);
+  if (windows.length !== 1) return { reason: 'window' as WindowStartReason };
+  const window = windows[0]!, reset = window.resetsAt;
+  if (reset === null || !Number.isFinite(reset)) return { reason: 'reset' as WindowStartReason };
+  const key = createHash('sha256').update(provider + ':' + p.provenance.accountRef).digest('hex'), attempt = `${key}:${reset}`;
+  const previous = memory.known[key];
+  const reason: WindowStartReason = reset > stamp && reset < stamp + 21600 ? 'waiting-reset'
+    : memory.attempted[attempt] ? 'already-attempted' : window.usedPercent !== 0 ? 'in-use'
+    : !previous || previous.reset !== reset || previous.at >= reset || reset > stamp || stamp - reset > 3600 || p.fetchedAt < reset ? 'baseline' : 'eligible';
+  return { reason, p, key, reset, attempt };
+}
+export async function readWindowStartStatus(dataDir: string, state: QuotaState | null, now = Date.now() / 1000) {
+  const prefs = await readAgentPreferences(dataDir), memory = await readAgentJson<WindowMemory>(join(agentDirectory(dataDir), 'window-start.json'), { known: {}, attempted: {} });
+  const owner = await readRuntimeOwner(dataDir);
+  return (['claude', 'codex'] as const).map(provider => {
+    const result = windowCandidate(state, provider, memory, now);
+    const last = result.key ? Object.entries(memory.attempted).filter(([key]) => key.startsWith(result.key! + ':')).map(([, value]) => value).sort((a, b) => b.at - a.at)[0] ?? null : null;
+    const reason: WindowStartReason = !prefs[`${provider}WindowStart`] ? 'disabled' : process.env.QUOTERN_DEV_ISOLATED === '1' ? 'isolated' : owner?.pid !== process.pid ? 'owner' : result.reason === 'eligible' && (memory.blocked?.[provider] ?? 0) > now - 900 ? 'verification' : result.reason;
+    return { provider, reason, last: last ? { at: last.at, outcome: last.outcome } : null };
+  });
+}
 export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop', dependencies: {
   now?: () => number; isOwner?: () => Promise<boolean>; execute?: (provider: 'claude' | 'codex') => Promise<void>; isolated?: boolean;
 } = {}) {
@@ -61,21 +87,14 @@ export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop',
         const stamp = now();
         for (const provider of ['claude', 'codex'] as const) {
           if (!prefs[`${provider}WindowStart`]) continue;
-          const p = state.providers.find(item => item.id === provider);
-          if (!p || p.status !== 'ready' || p.stale || p.refreshing || p.diagnostic?.code || p.provenance?.source !== 'native' || !p.provenance.identityVerified || !p.provenance.accountRef || p.fetchedAt === null || p.fetchedAt > stamp + 60 || p.fetchedAt < stamp - 900) continue;
-          const windows = p.windows.filter(w => quotaWindowPeriodSeconds(w) === 18000 && !w.id.startsWith('feature:') && w.timeKind !== 'expiry' && !w.balance);
-          if (windows.length !== 1) continue;
-          const window = windows[0]!, reset = window.resetsAt;
-          if (reset === null || !Number.isFinite(reset)) continue;
-          const key = createHash('sha256').update(provider + ':' + p.provenance.accountRef).digest('hex');
-          const previous = memory.known[key];
-          if (reset > stamp && reset < stamp + 21600) { memory.known[key] = { reset, at: p.fetchedAt }; continue; }
-          const attempt = `${key}:${reset}`;
-          // Missing reset dates and stale values are not evidence of a new window.
-          if (!previous || previous.reset !== reset || previous.at >= reset || reset > stamp || stamp - reset > 3600 || p.fetchedAt < reset || window.usedPercent !== 0 || memory.attempted[attempt]) continue;
+          const result = windowCandidate(state, provider, memory, stamp);
+          if (result.reason === 'waiting-reset' && result.key && result.reset !== undefined) memory.known[result.key] = { reset: result.reset, at: result.p!.fetchedAt! };
+          if (result.reason !== 'eligible' || !result.p || !result.attempt) continue;
+          const p = result.p, attempt = result.attempt;
           if (!await owner() || !(await readAgentPreferences(dataDir))[`${provider}WindowStart`]) continue;
-          const prepared = dependencies.execute ? { execute: () => dependencies.execute!(provider), dispose: async () => {} } : await prepareWindowStart(provider, p.provenance.accountRef);
-          if (!prepared) continue;
+          const prepared = dependencies.execute ? { execute: () => dependencies.execute!(provider), dispose: async () => {} } : await prepareWindowStart(provider, p.provenance!.accountRef!);
+          if (!prepared) { (memory.blocked ??= {})[provider] = stamp; continue; }
+          if (memory.blocked) delete memory.blocked[provider];
           try {
             if (!await owner() || !(await readAgentPreferences(dataDir))[`${provider}WindowStart`]) continue;
             memory.attempted[attempt] = { at: stamp, outcome: 'attempted' };

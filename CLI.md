@@ -1,5 +1,7 @@
 # Quotern CLI 使用说明
 
+终端额度片段、简洁/详细预设及离线预览见 [额度体验与 statusline](docs/quota-experience.md#statusline)。
+
 需要 Node.js >= 20。
 
 ## 安装

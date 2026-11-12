@@ -7,6 +7,7 @@ import type { QuotaProfile } from 'quotern-core/quota/shared/quota';
 import { request } from '@/lib/api';
 import { HelpPopover } from './HelpPopover';
 import { accountBillingMessages } from '../i18n/account-billing-messages';
+import '../i18n/quota-experience-messages';
 registerMessages(accountBillingMessages);
 
 function messageKey(error: unknown) {
@@ -63,6 +64,7 @@ export function AccountLaunchSettings({ controller }: { controller: Controller }
   return <div className="space-y-3 border-b border-separator pb-4">
     <div className="flex items-center gap-2"><h3 className="text-sm font-medium">{t('account.title')}</h3><HelpPopover title={t('account.title')}><p>{t('usage.profiles.defaultHint')}</p><p>{t('usage.profiles.duplicateHint')}</p><p>{t('account.help')}</p><p>{t('account.autoHelp')}</p></HelpPopover></div>
     {!state && !feedback?.error && <p role="status" className="text-xs text-muted">{t('billing.loading')}</p>}
+    <p className="text-xs text-muted">{t('experience.launchScope')}</p>
     {!!state?.unavailableDefaults.length && <p role="status" className="text-xs text-warning">{t('account.unavailable')}</p>}
     <Switch className="flex flex-row items-center gap-3" isSelected={state?.preferences.autoSwitchClaude ?? false} isDisabled={!state || pending || !state.preferences.defaults.claude || state.isolated} onChange={enabled => void controller.action({ action: 'auto-switch', enabled })}>
       <Switch.Control><Switch.Thumb /></Switch.Control><Switch.Content><Label className="text-xs">{t('account.auto')}</Label></Switch.Content>

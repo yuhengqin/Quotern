@@ -58,6 +58,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
     const sessionAction = path.replace(/\/$/, '') === SESSION_ACTIONS_ROUTE;
     const localAdmin = path.startsWith(`${LOCAL_ADMIN_ROUTE}/`);
     const localAction = isLocalActionRoute(url);
+    const agentAction = path === '/functions/tud-agent' || path === '/functions/tud-agent/' || path === '/functions/tud-agent/activity';
     const usageRecovery = path.replace(/\/$/, '') === `${LOCAL_ADMIN_ROUTE}${USAGE_RECOVERY_PATH}`;
     if (opts.demo && !['GET', 'HEAD'].includes(req.method ?? 'GET')) {
       res.statusCode = 403; res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -66,7 +67,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
 
     if (isApiPath(url)) {
       try {
-        const limit = usageRecovery ? RECOVERY_REQUEST_BYTES : localAdmin ? MAX_LOCAL_ADMIN_BYTES : sessionAction ? 4096 : localAction ? LOCAL_ACTION_BODY_LIMIT : path === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
+        const limit = usageRecovery ? RECOVERY_REQUEST_BYTES : localAdmin ? MAX_LOCAL_ADMIN_BYTES : sessionAction ? 4096 : agentAction ? 40000 : localAction ? LOCAL_ACTION_BODY_LIMIT : path === SHARE_BACKGROUNDS_ROUTE ? MAX_BACKGROUND_REQUEST_BYTES : Infinity;
         if (Number(req.headers['content-length']) > limit) throw new ShareBackgroundError('背景请求超过大小限制', 413);
         const body =
           req.method !== 'GET' && req.method !== 'HEAD'
@@ -79,7 +80,7 @@ export function createHttpServer(opts: HttpServerOptions): Server {
         }
 
         const response = await opts.honoApp.fetch(
-          new Request(sessionAction || localAdmin || localAction ? `http://${req.headers.host ?? 'invalid.local'}${url}` : `http://${host}:${port}${url}`, {
+          new Request(sessionAction || localAdmin || localAction || agentAction ? `http://${req.headers.host ?? 'invalid.local'}${url}` : `http://${host}:${port}${url}`, {
             method: req.method,
             headers,
             body: body as BodyInit | undefined,

@@ -193,7 +193,9 @@ async function main() {
   await until(async () => (await body()).includes('暂无可可靠关联的本机用量'), 'old cycle without attributed use');
   assert.ok((await body()).includes('已结束'));
   await client.click(select('额度窗口')); await client.key('End'); await client.key('Enter');
-  await until(async () => (await body()).includes('周限额') && (await body()).includes('起点未知'), 'localized weekly window keeps unknown cycle start');
+  await until(async () => (await body()).includes('周限额'), 'localized weekly window');
+  await client.click(`[...document.querySelectorAll('[role=dialog] summary')].find(el=>el.textContent.includes('实际观察区间'))`);
+  await until(async () => (await body()).includes('周期开始') && (await body()).includes('无法确认'), 'weekly window keeps unknown cycle start in observed interval details');
   await client.key('Escape');
   await until(() => client.evaluate(`${dialog}.length === 0`), 'one Escape closes quota details');
   assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-label")'), '查看 Codex 额度详情');

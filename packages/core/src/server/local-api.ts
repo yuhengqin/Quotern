@@ -111,7 +111,7 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     registerAchievementsApi(app, deps.dataDir);
     registerQuotaApi(app, deps.quota, deps.dataDir);
     registerSessionActionsApi(app, deps.dataDir, deps.sessionActions, deps.sessionActionsIpc);
-    registerAgentApi(app, deps.dataDir, deps.sessionActionsIpc);
+    registerAgentApi(app, deps.dataDir, deps.sessionActionsIpc, () => deps.getQuotaState?.() ?? deps.quota?.getState() ?? null);
     registerLocalAdminApi(app, deps);
     registerAccountLaunchApi(app, { dataDir: deps.dataDir, quotaDirectory: deps.desktopQuotaDirectory ?? join(deps.dataDir, 'quota'),
       getState: () => deps.getQuotaState?.() ?? deps.quota?.getState() ?? null, ipc: deps.sessionActionsIpc });

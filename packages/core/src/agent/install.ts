@@ -39,7 +39,7 @@ export function transformIntegrationHooks(document: unknown, remove: Record<stri
       return kept.length ? [{ ...group, hooks: kept }] : [];
     });
   }
-  if (add) for (const event of ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'Stop', 'SessionEnd']) {
+  if (add) for (const event of ['SessionStart', 'UserPromptSubmit', 'PermissionRequest', 'Stop', 'SessionEnd', ...(Array.isArray(add.args) && add.args.at(-1) === 'claude' ? ['PreToolUse', 'PostToolUse', 'PostToolUseFailure'] : [])]) {
     hooks[event] = [...(hooks[event] as unknown[] | undefined ?? []), { hooks: [add] }];
   }
   return { ...document, hooks };

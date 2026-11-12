@@ -12,6 +12,7 @@ import { desktopSubscriptionMessages } from '../apps/desktop/src/renderer/i18n/d
 import { NATIVE_MESSAGES } from '../apps/desktop/src/main/native-messages.ts';
 import { cliMessages } from '../packages/cli/src/i18n/messages.ts';
 import { accountBillingMessages } from '../packages/dashboard/src/i18n/account-billing-messages.ts';
+import { quotaExperienceMessages } from '../packages/dashboard/src/i18n/quota-experience-messages.ts';
 
 const locales = ['zh-CN', 'en', 'ja', 'ko'];
 const catalogs = {
@@ -27,6 +28,7 @@ const catalogs = {
   native: NATIVE_MESSAGES,
   cli: cliMessages,
   accountBilling: accountBillingMessages,
+  quotaExperience: quotaExperienceMessages,
 };
 
 function placeholders(message) {

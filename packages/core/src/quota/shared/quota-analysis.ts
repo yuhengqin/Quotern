@@ -148,9 +148,9 @@ export function analyzeQuota(window: QuotaWindow, history: QuotaSample[], now: n
 }
 
 export interface QuotaObservation extends QuotaSample { crossed: number[]; highest: number }
-export type QuotaAlertKind = 'threshold-70' | 'threshold-90' | 'depleted' | 'reset';
-export function evaluateQuotaAlerts(previous: QuotaObservation | null, current: QuotaSample, kind: string): { observation: QuotaObservation; alerts: QuotaAlertKind[] } {
-  const thresholds = kind === 'five-hour' || kind === '5h' ? [90, 100] : [70, 90, 100];
+export type QuotaAlertKind = `threshold-${number}` | 'depleted' | 'reset';
+export function evaluateQuotaAlerts(previous: QuotaObservation | null, current: QuotaSample, kind: string, custom?: readonly number[]): { observation: QuotaObservation; alerts: QuotaAlertKind[] } {
+  const thresholds = custom ? [...new Set([...custom.filter(value => Number.isInteger(value) && value > 0 && value < 100), 100])].sort((a, b) => a - b) : kind === 'five-hour' || kind === '5h' ? [90, 100] : [70, 90, 100];
   const baseline = () => ({ ...current, crossed: thresholds.filter(value => current.usedPercent >= value), highest: current.usedPercent });
   if (!previous) return { observation: baseline(), alerts: [] };
   if (current.at <= previous.at) return { observation: previous, alerts: [] };

@@ -3,6 +3,7 @@ import { useTranslation } from 'quotern-i18n/react';
 import { QuotaUsageCard } from './QuotaUsageCard';
 import { QuotaProfilesManager } from './QuotaProfilesManager';
 import { BillingPanel } from '../../../../../packages/dashboard/src/components/BillingPanel';
+import { AgentActivityButton } from '../../../../../packages/dashboard/src/components/AgentActivityPanel';
 import { useQuotaState } from '../hooks/useQuotaState';
 import { distinctQuotaAllowances, isQuotaStatusOnly, resolveQuotaNavigation } from '../lib/quota-presentation';
 import { useQuotaNavigation } from '../hooks/useQuotaNavigation';
@@ -41,7 +42,7 @@ export function SubscriptionUsageGrid({ className = '', summaryOnly = false }: S
       aria-label={t('usage.quota.gridAria')}
       className={`grid items-stretch empty:hidden ${className}`.trim()}
     >
-      {!summaryOnly && <div className="col-span-full -mb-1 flex flex-wrap items-center justify-end gap-2"><QuotaLayoutControl editor={editor} />{!editor.editing && <><BillingPanel /><QuotaProfilesManager preferences={state.preferences} providers={state.providers} onSave={save} /></>}</div>}
+      {!summaryOnly && <div className="col-span-full -mb-1 flex flex-wrap items-center justify-end gap-2"><QuotaLayoutControl editor={editor} />{!editor.editing && <><AgentActivityButton /><BillingPanel /><QuotaProfilesManager preferences={state.preferences} providers={state.providers} onSave={save} /></>}</div>}
       {missing && <p role="status" className="col-span-full text-xs text-warning">{t('island.quota.navigationUnavailable')}</p>}
       <QuotaLayoutCards editor={editor}>{(provider, controls, statusRow) => <QuotaUsageCard provider={provider} preferences={{ ...state.preferences, compact: editor.compact }} layoutControls={controls} statusRow={statusRow} onSave={save} summaryOnly={summaryOnly} navigation={target?.id === provider.id ? navigation : undefined} onNavigationHandled={handled} />}</QuotaLayoutCards>
       {((error && !editor.error) || state.notice) && <p role="status" className="col-span-full text-xs text-warning">{error ? t(error) : t('usage.quota.noticeGeneric')}</p>}

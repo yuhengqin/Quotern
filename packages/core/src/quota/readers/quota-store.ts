@@ -45,6 +45,12 @@ export function validQuotaPatch(value: unknown): value is Partial<QuotaPreferenc
   return Object.entries(raw).every(([key, value]) => ['thresholdAlerts', 'resetAlerts', 'showSparkline', 'serviceAlerts', 'quotaShortcut', 'compact'].includes(key) ? typeof value === 'boolean'
     : key === 'quotaShortcutAccelerator' ? normalizeQuotaShortcut(value) !== null
     : key === 'resetTimeMode' ? value === 'countdown' || value === 'date'
+    : key === 'accountAlerts' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).length <= 100 && Object.entries(value).every(([id, rule]) => {
+      if (!/^[a-z][a-z0-9-]{0,40}:[a-f0-9]{64}$/.test(id) || !rule || typeof rule !== 'object' || Array.isArray(rule)) return false;
+      const r = rule as Record<string, unknown>;
+      return Object.keys(r).every(key => ['level', 'thresholds'].includes(key)) && ['standard', 'critical', 'custom', 'off'].includes(r.level as string)
+        && (r.thresholds === undefined ? r.level !== 'custom' : Array.isArray(r.thresholds) && r.thresholds.length > 0 && r.thresholds.length <= 5 && new Set(r.thresholds).size === r.thresholds.length && r.thresholds.every(value => Number.isInteger(value) && value > 0 && value < 100));
+    }))
     : key === 'serviceComponents' ? Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.entries(value).every(([id, ids]) =>
       SUBSCRIPTION_CHANNELS.some(channel => channel.id === id) && Array.isArray(ids) && ids.length <= 200 && new Set(ids).size === ids.length && ids.every(item => typeof item === 'string' && /^[a-zA-Z0-9_-]{1,300}$/.test(item))))
     : key === 'providerOrder' ? Array.isArray(value) && value.length <= 100 && new Set(value).size === value.length && value.every(id => typeof id === 'string' && /^[a-z0-9][a-zA-Z0-9@_-]{0,100}$/.test(id))

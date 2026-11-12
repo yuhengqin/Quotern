@@ -556,6 +556,7 @@ async function main(): Promise<void> {
       return;
     }
     if (commandLine.args[0] === 'statusline') {
+      quotaQueryMode = true;
       await runStatusline(commandLine.args.slice(1), commandLine.lang ?? activeLocale);
       return;
     }

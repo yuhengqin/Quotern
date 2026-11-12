@@ -1,6 +1,8 @@
 import { useId, useState } from 'react';
 import { Button, Input, Label, ListBox, Pagination, Select } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
+import { useAppToastQueue } from '@/components/AppToastContext';
+import { isDemoMode } from '@/lib/demo-runtime';
 import { FilterSelectPopover } from './FilterMenu';
 import { paginationItems, parsePageJump } from '../lib/session-list-query';
 
@@ -11,6 +13,8 @@ interface Props {
 
 export function SessionPagination({ page, pages, pageSize, totalRoots, loading, onChange }: Props) {
   const { t } = useTranslation();
+  const demo = isDemoMode();
+  const toastQueue = useAppToastQueue();
   const id = useId();
   const [jump, setJump] = useState('');
   const target = parsePageJump(jump, pages);
@@ -19,12 +23,15 @@ export function SessionPagination({ page, pages, pageSize, totalRoots, loading, 
     <Pagination size="sm" aria-label={t('usage.activity.pagination')} className="min-w-0 flex-1 flex-wrap gap-3">
       <Pagination.Summary className="text-xs tabular-nums text-muted">{t('usage.activity.rootPageRange', { from: first, to: Math.min(page * pageSize, totalRoots), total: totalRoots })}</Pagination.Summary>
       <Pagination.Content className="flex-wrap gap-1">
-        <Pagination.Item><Pagination.Previous aria-label={t('usage.activity.previousPage')} isDisabled={page <= 1 || loading} onPress={() => onChange({ page: page - 1 })}><Pagination.PreviousIcon /><span className="sr-only sm:not-sr-only">{t('usage.activity.previousPage')}</span></Pagination.Previous></Pagination.Item>
-        {paginationItems(pages, page).map((item, index) => <Pagination.Item key={item === 'ellipsis' ? `gap-${index}` : item}>{item === 'ellipsis' ? <Pagination.Ellipsis /> : <Pagination.Link isActive={item === page} isDisabled={loading} aria-label={t('usage.activity.goToPage', { page: item })} onPress={() => onChange({ page: item })}>{item}</Pagination.Link>}</Pagination.Item>)}
-        <Pagination.Item><Pagination.Next aria-label={t('usage.activity.nextPage')} isDisabled={page >= pages || loading} onPress={() => onChange({ page: page + 1 })}><span className="sr-only sm:not-sr-only">{t('usage.activity.nextPage')}</span><Pagination.NextIcon /></Pagination.Next></Pagination.Item>
+        <Pagination.Item><Pagination.Previous aria-label={t('usage.activity.previousPage')} isDisabled={demo || page <= 1 || loading} onPress={() => onChange({ page: page - 1 })}><Pagination.PreviousIcon /><span className="sr-only sm:not-sr-only">{t('usage.activity.previousPage')}</span></Pagination.Previous></Pagination.Item>
+        {paginationItems(demo ? 1 : pages, page).map((item, index) => <Pagination.Item key={item === 'ellipsis' ? `gap-${index}` : item}>{item === 'ellipsis' ? <Pagination.Ellipsis /> : <Pagination.Link isActive={item === page} isDisabled={loading} aria-label={t('usage.activity.goToPage', { page: item })} onPress={() => onChange({ page: item })}>{item}</Pagination.Link>}</Pagination.Item>)}
+        <Pagination.Item><Pagination.Next aria-label={t('usage.activity.nextPage')} isDisabled={loading || (!demo && page >= pages)} onPress={() => {
+          if (demo) toastQueue.add({ title: t('usage.activity.demoFirstPageOnly') }, { timeout: 4000 });
+          else onChange({ page: page + 1 });
+        }}><span className="sr-only sm:not-sr-only">{t('usage.activity.nextPage')}</span><Pagination.NextIcon /></Pagination.Next></Pagination.Item>
       </Pagination.Content>
     </Pagination>
-    <div className="flex min-w-0 flex-wrap items-center gap-3">
+    {!demo && <div className="flex min-w-0 flex-wrap items-center gap-3">
       <Select aria-label={t('usage.activity.pageSize')} value={String(pageSize)} onChange={value => onChange({ pageSize: Number(value) })} variant="secondary" className="w-32" isDisabled={loading}>
         <Label className="sr-only">{t('usage.activity.pageSize')}</Label>
         <Select.Trigger className="!h-8 !min-h-8 !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4" /><Select.Indicator /></Select.Trigger>
@@ -35,6 +42,6 @@ export function SessionPagination({ page, pages, pageSize, totalRoots, loading, 
         <Input id={id} inputMode="numeric" value={jump} onChange={event => setJump(event.target.value)} className="!h-8 !min-h-8 w-14 !px-2 !text-xs tabular-nums" autoComplete="off" />
         <Button type="submit" size="sm" variant="secondary" className="!h-8 !min-h-8" isDisabled={target === null || loading}>{t('usage.activity.jump')}</Button>
       </form>
-    </div>
+    </div>}
   </footer>;
 }

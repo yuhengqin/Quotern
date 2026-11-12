@@ -44,7 +44,7 @@ const date = (value: unknown): value is string => typeof value === 'string' && /
 const strings = (value: unknown): string[] => Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && Boolean(item)))] : [];
 
 /** Validate direct links and browser history, including JSON-encoded multi-selects. */
-export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPageSearch {
+export function parseSessionPageSearch(raw: Record<string, unknown>, { firstPageOnly = false }: { firstPageOnly?: boolean } = {}): SessionPageSearch {
   const days = Number(raw.days), page = Number(raw.page);
   const preset = isDashboardRange(raw.range) ? raw.range : undefined;
   const calendar = !preset && date(raw.start) && date(raw.end) && raw.start <= raw.end;
@@ -65,8 +65,8 @@ export function parseSessionPageSearch(raw: Record<string, unknown>): SessionPag
     ...(['date','project'].includes(String(raw.groupBy)) ? {groupBy: raw.groupBy as 'date'|'project'} : {}),
     sort: ['recent', 'tokens', 'cost', 'duration'].includes(String(raw.sort)) ? raw.sort as SessionSort : 'recent',
     direction: raw.direction === 'ascending' ? 'ascending' : 'descending',
-    page: Number.isSafeInteger(page) && page > 0 ? page : 1,
-    pageSize: [12, 24, 48].includes(Number(raw.pageSize)) ? Number(raw.pageSize) : 12,
+    page: !firstPageOnly && Number.isSafeInteger(page) && page > 0 ? page : 1,
+    pageSize: !firstPageOnly && [12, 24, 48].includes(Number(raw.pageSize)) ? Number(raw.pageSize) : 12,
     ...(target ? { sessionSource: String(raw.sessionSource), sessionId: raw.sessionId as string, ...(typeof raw.sessionFocus === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.sessionFocus) ? { sessionFocus: raw.sessionFocus } : {}), ...(raw.sessionPeriod === 'selected' && calendar ? { sessionPeriod: 'selected' as const } : {}) } : {}),
     ...(raw.performanceReturn && typeof raw.performanceReturn === 'object' && !Array.isArray(raw.performanceReturn) ? { performanceReturn: parsePerformanceSearch(raw.performanceReturn as Record<string, unknown>) } : {}),
   };

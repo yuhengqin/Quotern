@@ -347,6 +347,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.activity.page': ['第 {{page}} / {{pages}} 页', 'Page {{page}} of {{pages}}', '{{pages}} ページ中 {{page}} ページ', '{{pages}}페이지 중 {{page}}페이지'],
   'usage.activity.previousPage': ['上一页', 'Previous', '前へ', '이전'],
   'usage.activity.nextPage': ['下一页', 'Next', '次へ', '다음'],
+  'usage.activity.demoFirstPageOnly': ['演示模式仅展示第一页会话', 'Demo mode only shows the first page of sessions', 'デモではセッションの最初のページのみ表示します', '데모에서는 세션의 첫 페이지만 표시됩니다'],
   'usage.activity.pagination': ['会话分页', 'Session pagination', 'セッションのページ切替', '세션 페이지 탐색'],
   'usage.activity.rootPageRange': ['主会话 {{from}}–{{to}} / {{total}}', 'Top-level sessions {{from}}–{{to}} of {{total}}', '親セッション {{from}}–{{to}} / {{total}}', '상위 세션 {{from}}–{{to}} / {{total}}'],
   'usage.activity.pageSize': ['每页主会话数', 'Top-level sessions per page', 'ページごとの親セッション数', '페이지당 상위 세션 수'],

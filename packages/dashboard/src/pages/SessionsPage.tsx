@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { Button } from '@heroui/react';
 import { ArrowLeft, History as RotateCcwClock } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useSessionList } from '@/hooks/useSessionList';
 import { useRollingDayRange } from '@/hooks/useRollingDayRange';
 import type { SessionListPage } from 'quotern-core';
 import { isCliBackend } from '@/lib/api';
+import { isDemoMode } from '@/lib/demo-runtime';
 import { sourceLabel } from '@/lib/tokens';
 import type { DashboardDateRange } from '../lib/dashboard-date-range';
 import { parseSessionPageSearch, selectSessionPageRange, sessionAttributionKey, sessionPageRows, sessionTimeRangeControl, updateSessionPageSearch, type SessionPageSearch } from '../lib/session-page';
@@ -21,7 +22,14 @@ export function SessionsPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const rawSearch = useSearch({ strict: false });
-  const search = useMemo(() => parseSessionPageSearch(rawSearch), [rawSearch]);
+  const demo = isDemoMode();
+  const search = useMemo(() => parseSessionPageSearch(rawSearch, { firstPageOnly: demo }), [rawSearch, demo]);
+  useEffect(() => {
+    if (!demo) return;
+    const requested = parseSessionPageSearch(rawSearch);
+    if (requested.page === search.page && requested.pageSize === search.pageSize) return;
+    void navigate({ to: '/sessions', search: previous => parseSessionPageSearch(previous, { firstPageOnly: true }), replace: true, resetScroll: false });
+  }, [demo, navigate, rawSearch, search]);
   const rollingRange = useRollingDayRange(search.range === 'last-24-hours');
   const dateRange = useMemo<DashboardDateRange | null>(() => rollingRange ?? (search.start && search.end ? {
     start: search.start, end: search.end, fromTime: search.fromTime, toTime: search.toTime,
@@ -36,7 +44,7 @@ export function SessionsPage() {
   const rows = useMemo(() => data ? pageData ? data.sessions : sessionPageRows(data, search.group) : [], [data, pageData, search.group]);
   const group = data?.billing.find(row => sessionAttributionKey(row) === search.group);
   const update = (patch: Partial<SessionPageSearch>) => {
-    void navigate({ to: '/sessions', search: previous => updateSessionPageSearch(parseSessionPageSearch(previous), patch), replace: !('page' in patch), resetScroll: false });
+    void navigate({ to: '/sessions', search: previous => parseSessionPageSearch({ ...updateSessionPageSearch(parseSessionPageSearch(previous), patch) }, { firstPageOnly: demo }), replace: !('page' in patch), resetScroll: false });
   };
   const changeTimeRange = (next: DashboardRange | DashboardDateRange) => {
     void navigate({ to: '/sessions', search: previous => selectSessionPageRange(parseSessionPageSearch(previous), next), resetScroll: false });

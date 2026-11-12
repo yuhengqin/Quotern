@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { registerAppearanceFixture } from './appearance-fixture.mjs';
 import { createLocalApiApp, BucketStore } from '../../../packages/core/dist/index.js';
 import { buildAchievementFacts } from '../../../packages/core/dist/achievements/facts.js';
 import { evaluateAchievements } from '../../../packages/core/dist/achievements/evaluate.js';
@@ -475,6 +476,7 @@ async function main() {
   calls.length = 0;
   ipcMain.handle('locale:get', () => ({ preference: 'zh-CN', resolved: 'zh-CN', systemLocale: 'zh-CN' }));
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' }));
+  registerAppearanceFixture();
   ipcMain.handle('auto-update:get-state', () => ({ status: 'unsupported', currentVersion: 'fixture' }));
   ipcMain.handle('autostart:get', () => false);
   ipcMain.handle('autostart:get-hidden', () => false);

@@ -12,7 +12,7 @@ import { useTheme as useHeroUITheme } from '@heroui/react';
 import { isThemeMode, type Theme, type ThemeMode } from '@/lib/theme';
 import { isDemoMode } from '../lib/demo-runtime';
 import { useLocalStorage } from './useLocalStorage';
-import { PaletteRuntime } from '../components/PaletteControl';
+import { AppearanceProvider } from '../components/AppearanceProvider';
 
 interface ThemeContextValue {
   /** Resolved theme actually rendered (follows the OS when mode is `system`). */
@@ -58,7 +58,7 @@ function DemoThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.classList.remove('light', 'dark'); document.documentElement.classList.add(theme);
     document.documentElement.setAttribute('data-theme', theme); document.documentElement.style.colorScheme = theme;
   }, [theme]);
-  return <ThemeContext.Provider value={{ theme, themeMode, setThemeMode, toggleTheme: () => setThemeMode(THEME_MODE_CYCLE[themeMode]) }}><PaletteRuntime theme={theme} />{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ theme, themeMode, setThemeMode, toggleTheme: () => setThemeMode(THEME_MODE_CYCLE[themeMode]) }}><AppearanceProvider theme={theme}>{children}</AppearanceProvider></ThemeContext.Provider>;
 }
 function LocalThemeProvider({ children }: { children: ReactNode }) {
   const {
@@ -90,7 +90,7 @@ function LocalThemeProvider({ children }: { children: ReactNode }) {
     [theme, themeMode, setThemeMode, toggleTheme],
   );
 
-  return <ThemeContext.Provider value={value}><PaletteRuntime theme={theme} />{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}><AppearanceProvider theme={theme}>{children}</AppearanceProvider></ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {

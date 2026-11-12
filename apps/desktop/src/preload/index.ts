@@ -28,6 +28,7 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import { APPEARANCE_GET_CHANNEL, APPEARANCE_SET_CHANNEL, APPEARANCE_INITIALIZE_CHANNEL, APPEARANCE_CHANGED_CHANNEL, isAppearancePreferences, type AppearancePreferences } from '../shared/appearance';
 import {
   LOCALE_CHANGED_CHANNEL,
   LOCALE_GET_CHANNEL,
@@ -290,6 +291,15 @@ const tudApi = {
 
   getTheme: (): Promise<{ mode: ThemeMode; resolved: Theme }> =>
     ipcRenderer.invoke(THEME_GET_CHANNEL),
+
+  getAppearance: (): Promise<AppearancePreferences | null> => ipcRenderer.invoke(APPEARANCE_GET_CHANNEL),
+  setAppearance: (value: AppearancePreferences): Promise<AppearancePreferences> => ipcRenderer.invoke(APPEARANCE_SET_CHANNEL, value),
+  initializeAppearance: (value: AppearancePreferences): Promise<AppearancePreferences> => ipcRenderer.invoke(APPEARANCE_INITIALIZE_CHANNEL, value),
+  onAppearanceChanged: (callback: (value: AppearancePreferences) => void) => {
+    const listener = (_event: unknown, value: unknown) => { if (isAppearancePreferences(value)) callback(value); };
+    ipcRenderer.on(APPEARANCE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(APPEARANCE_CHANGED_CHANNEL, listener);
+  },
 
   getLocalePreference: (): Promise<DesktopLocaleState> =>
     ipcRenderer.invoke(LOCALE_GET_CHANNEL),

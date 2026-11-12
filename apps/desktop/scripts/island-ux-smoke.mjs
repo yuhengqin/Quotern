@@ -8,6 +8,7 @@ import path from 'node:path';
 import { app, BrowserWindow, clipboard, ipcMain, nativeImage } from 'electron';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 import { exerciseQuotaLayout } from './quota-layout-checks.mjs';
+import { registerAppearanceFixture } from './appearance-fixture.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), workspace = path.resolve(desktop, '../..');
 const outputArg = process.argv.slice(2).find(argument => !argument.startsWith('--'));
@@ -85,6 +86,7 @@ async function main() {
   ipcMain.handle('locale:get', () => ({ preference: locale, resolved: locale, systemLocale: 'en' }));
   ipcMain.handle('locale:set', (_event, value) => { locale = value; for (const window of BrowserWindow.getAllWindows()) window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'en' }); });
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' }));
+  registerAppearanceFixture();
   ipcMain.handle('auto-update:get-state', () => ({ status: 'unsupported', currentVersion: 'fixture' }));
   for (const key of ['autostart:get', 'autostart:get-hidden', 'tray-usage:get']) ipcMain.handle(key, () => false);
   ipcMain.handle('tray-usage-mode:get', () => 'both');

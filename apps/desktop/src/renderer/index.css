@@ -19,6 +19,7 @@
 @source "../../../../packages/dashboard/src/components/UsageInsightsPanel.tsx";
 @source "../../../../packages/dashboard/src/components/QuotaLayoutControl.tsx";
 @source "../../../../packages/dashboard/src/components/PaletteControl.tsx";
+@source "../../../../packages/dashboard/src/components/AppearanceStyleControl.tsx";
 @source "../../../../packages/dashboard/src/components/AgentIntegrationSettings.tsx";
 @source "../../../../packages/dashboard/src/components/SessionHandoff.tsx";
 @source "../../../../packages/dashboard/src/components/SessionUsageBreakdown.tsx";

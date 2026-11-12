@@ -1,0 +1,32 @@
+/* Optional treatments: the default style has no matching rules. */
+html[data-appearance]:where(:not([data-appearance="default"])) :is(.card, .surface) { border: 1px solid var(--border); }
+html[data-appearance="catppuccin"] .card { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent); }
+html[data-appearance="win95"] :is(.card, .surface, .appearance-option, .button, .popover, .modal__dialog) {
+  border: 2px solid;
+  border-color: var(--appearance-bevel-light) var(--appearance-bevel-dark) var(--appearance-bevel-dark) var(--appearance-bevel-light);
+  border-radius: 0;
+  box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--surface) 70%, var(--appearance-bevel-light));
+}
+html[data-appearance="win95"] .button[data-pressed="true"] { border-color: var(--appearance-bevel-dark) var(--appearance-bevel-light) var(--appearance-bevel-light) var(--appearance-bevel-dark); }
+html[data-appearance="win95"] .card__header .card__title { background: var(--appearance-title-background); color: var(--appearance-title-foreground); padding: 0.125rem 0.375rem; }
+html[data-appearance="newspaper"] :is(.card, .surface) {
+  border-block-start: 3px double var(--border); border-radius: 0; box-shadow: none;
+  background-image: repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--foreground) 2%, transparent) 3px 4px);
+}
+html[data-appearance="newspaper"] :is(h1, h2, .card__title) { font-family: var(--font-dashboard-sans); letter-spacing: -0.015em; }
+html[data-appearance]:where(:not([data-appearance="default"])) .tray-popover { border: 1px solid var(--border); border-radius: calc(var(--radius) * 2); background: var(--surface); }
+html[data-appearance="win95"] .tray-popover { border-width: 2px; border-color: var(--appearance-bevel-light) var(--appearance-bevel-dark) var(--appearance-bevel-dark) var(--appearance-bevel-light); }
+html[data-appearance="newspaper"] .tray-popover { border-block-start: 3px double var(--border); }
+html[data-appearance]:not([data-appearance="default"]) :is(.tray-popover__header, .tray-popover__footer) { font-family: var(--font-dashboard-sans); }
+
+.appearance-options.appearance-options--styles { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+.appearance-option--style { flex-direction: column; align-items: stretch; padding: 0.375rem; }
+.appearance-style-caption { display: flex; align-items: center; justify-content: space-between; gap: 0.25rem; padding: 0.125rem 0.25rem; font-size: 0.8125rem; overflow-wrap: anywhere; }
+.appearance-style-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; block-size: 3.75rem; padding: 0.5rem; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 0.25rem; }
+.appearance-style-preview-heading { grid-column: 1 / -1; inline-size: 48%; block-size: 0.1875rem; background: currentColor; opacity: 0.6; }
+.appearance-style-preview-card { display: grid; align-content: center; gap: 0.375rem; padding: 0.375rem; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 0.2rem; background: var(--preview-surface); }
+.appearance-style-preview-card > span { block-size: 0.125rem; background: currentColor; opacity: 0.4; }
+.appearance-style-preview-card > span:last-child { inline-size: 65%; background: var(--preview-accent); opacity: 1; }
+.appearance-style-preview[data-style="win95"] .appearance-style-preview-card { border: 2px outset #d9d9d9; border-radius: 0; }
+.appearance-style-preview[data-style="win95"] .appearance-style-preview-heading { inline-size: 100%; background: #000080; opacity: 1; }
+.appearance-style-preview[data-style="newspaper"] :is(.appearance-style-preview-card, .appearance-style-preview-heading) { border-radius: 0; border-block-start: 3px double currentColor; }

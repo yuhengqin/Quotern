@@ -102,6 +102,10 @@ declare global {
         mode: import('../shared/theme').ThemeMode;
         resolved: import('../shared/theme').Theme;
       }>;
+      getAppearance: import('../preload/index').TudApi['getAppearance'];
+      setAppearance: import('../preload/index').TudApi['setAppearance'];
+      initializeAppearance: import('../preload/index').TudApi['initializeAppearance'];
+      onAppearanceChanged: import('../preload/index').TudApi['onAppearanceChanged'];
       getLocalePreference: () => Promise<import('../shared/locale').DesktopLocaleState>;
       setLocalePreference: (preference: import('quotern-i18n').LocalePreference) => Promise<void>;
       onLocaleChanged: (callback: (state: import('../shared/locale').DesktopLocaleState) => void) => () => void;

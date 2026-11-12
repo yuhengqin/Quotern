@@ -3,6 +3,7 @@ import { Check } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { isThemeMode, type Theme, type ThemeMode } from '../lib/theme';
 import { PaletteControl } from './PaletteControl';
+import { AppearanceStyleControl } from './AppearanceStyleControl';
 import './appearance-preferences.css';
 
 const OPTIONS: readonly ThemeMode[] = ['system', 'light', 'dark'];
@@ -59,6 +60,7 @@ export function ThemePreferenceControl({
           ))}
         </div>
       </RadioGroup>
+      <AppearanceStyleControl theme={theme} />
       <PaletteControl theme={theme} />
     </div>
   );

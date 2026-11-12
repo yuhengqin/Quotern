@@ -51,7 +51,7 @@
 
 ## 信息呈现与默认界面
 
-本轮新增入口：共享 `AgentIntegrationSettings` 用于两端的「Agent 集成」，默认关闭的功能与 Hook 安装状态分别呈现；`SessionHandoff` 在会话详情按需展开，先生成可编辑预览再复制/保存。共享 `PaletteControl` 承接配色选择，`PaletteRuntime` 在两端 ThemeProvider 中应用并监听跨窗口偏好；系统/浅色/深色规则保持。共享 `QuotaLayoutControl` 与 `QuotaLayoutCards` 提供订阅卡片原位排列，`useQuotaLayout` 管理草稿及统一保存；Desktop 直接引用这些组件并登记 CSS `@source`。
+本轮新增入口：共享 `AgentIntegrationSettings` 用于两端的「Agent 集成」，默认关闭的功能与 Hook 安装状态分别呈现；`SessionHandoff` 在会话详情按需展开，先生成可编辑预览再复制/保存。共享 `AppearanceStyleControl` 与 `PaletteControl` 承接风格和强调色选择，`AppearanceProvider` 在两端 ThemeProvider 内统一应用视觉变量并同步偏好；系统/浅色/深色规则保持。共享 `QuotaLayoutControl` 与 `QuotaLayoutCards` 提供订阅卡片原位排列，`useQuotaLayout` 管理草稿及统一保存；Desktop 直接引用这些组件并登记 CSS `@source`。
 
 交接预览的目录、日志、集成配置和本机访问失败在操作附近说明原因及下一步；重试和保存失败保留草稿，复制失败提供手动复制提示。两端使用同一 `SessionHandoff`。预览复用已采集会话的文件定位，不把用量索引按小型 Agent 配置的大小上限处理；只在显式预览时读取有限日志尾部。
 
@@ -102,7 +102,7 @@
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
 | 订阅品牌图标 | [SubscriptionBrandIcon](../packages/dashboard/src/components/SubscriptionBrandIcon.tsx)，QuotaUsageCard 使用 | 订阅品牌（含 Gemini CLI）；与 Agent/模型厂商有不同语义与资源集合。品牌文字已在卡片中显示，图标使用空 alt / aria-hidden | 独立实现，Desktop 支持的品牌/资源更多；新增通道时同时登记两端品牌资源 |
 | 订阅额度与服务详情 | [QuotaUsageCard](../packages/dashboard/src/components/QuotaUsageCard.tsx) 与 [QuotaServiceDetails](../packages/dashboard/src/components/QuotaServiceDetails.tsx)，SubscriptionUsageGrid 使用 | 主卡保留额度窗口、异常和紧凑状态；详情承载全部窗口、趋势、来源、服务组件与事件。重置时间默认倒计时；卡片与详情直接点击时间文字切换日期/倒计时，沿用全局 resetTimeMode 偏好，不再提供独立切换按钮。公共重置时间与窗口重置/到期时间使用相同入口，支持键盘 Enter/Space，保存期间保留焦点、防止重复提交，失败保持原显示并就近反馈；无保存能力时保持静态文字。经过截止时刻仅提示等待读数更新。节奏刻度按“剩余”方向换算，过期读数、已到期窗口和非额度余额不显示刻度。服务筛选复用 FilterSelectPopover：未配置表示全部，空数组表示尚未选择，未知与过期不得显示正常。保存失败保留原值并在详情反馈；Claude 金额和赠送权益保留官方用量页入口，平台实际读数从总览「实际消费」按需查看 | Desktop 的 QuotaUsageCard 适配 IPC 保存与原生外链，复用 Dashboard 实现；index.css 登记共享组件 `@source`。两端保存 resetTimeMode 与 serviceComponents，服务筛选按厂商共用 |
-| 外观偏好 | [ThemePreferenceControl](../packages/dashboard/src/components/ThemePreferenceControl.tsx) 与 [PaletteControl](../packages/dashboard/src/components/PaletteControl.tsx)，SettingsPanel 的「常规设置」中紧随语言设置 | 外观模式和强调色各自单选并立即保存。模式卡预览跟随系统、浅色和深色，强调色卡按实际明暗显示全部配色；卡片显示名称和勾号，键盘焦点单独呈现，窄窗口自动换行。位于运行配置之前，不依赖配置读取成功。FilterChromeActions 不再提供主题按钮；存量 ThemeToggle 仅供旧页面使用 | Desktop「常规设置」直接复用控件和样式。各端主题 hook 负责模式解析与保存，Desktop 保留主进程系统外观广播；切换明暗或跟随系统不重置强调色 |
+| 外观偏好 | [ThemePreferenceControl](../packages/dashboard/src/components/ThemePreferenceControl.tsx) 组合 [AppearanceStyleControl](../packages/dashboard/src/components/AppearanceStyleControl.tsx) 与 [PaletteControl](../packages/dashboard/src/components/PaletteControl.tsx)，SettingsPanel 的「常规设置」中紧随语言设置 | 明暗模式、界面风格和强调色独立单选并立即保存。保留默认外观，新增 Catppuccin、Windows 95、复古报纸；强调色可跟随主题推荐或保留原有自选配色。静态预览显示名称和勾号，键盘焦点单独呈现，窄窗口自动换行；保存失败保留当前预览并提供重试。不重载页面，不重置筛选、额度布局或详情。位于运行配置之前，不依赖配置读取成功 | Desktop 直接复用控件、[AppearanceProvider](../packages/dashboard/src/components/AppearanceProvider.tsx) 和 appearance-themes.css，并登记 CSS `@source`。两端沿用各自的明暗模式解析；样式/配色从 browser-safe [appearance](../apps/desktop/src/shared/appearance.ts) 统一解析。浏览器按 origin/demo 命名空间存储并同步标签页；Desktop 经主进程 appearance IPC 串行持久化、广播到主界面/托盘/价格窗口，并同步原生标题栏颜色 |
 | Desktop 设置导航 | Desktop 专用布局 | 左栏依次为「常规设置」、「宠物」（Windows）、「订阅」、「Agent 集成」、「数据与备份」、「应用」、「关于」。常规设置包含主题、配色、语言和 Token 数量格式；数据与备份包含本地备份、恢复及设备信息；应用包含启动、托盘选项及更新。当前栏目整行高亮，右栏独立滚动。检查最小窗口、长语言标签、方向键与栏目直达入口 | [BackendConfigModal](../apps/desktop/src/renderer/components/BackendConfigModal.tsx) 承载 [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx)，复用 HeroUI 垂直 Tabs |
 | 关于与仓库链接 | [AboutContent](../packages/dashboard/src/components/AboutContent.tsx)，设置「关于」与 AboutModal 使用 | GitHub 仓库链接位于版本信息下方，保留反馈和支持的 Agent 信息；仪表盘操作区不再单独展示仓库按钮 | 同名独立副本；仓库链接经原生 openExternal 打开 |
 | 应用更新 | 浏览器端不提供桌面更新操作 | Desktop 构建策略决定自动或手动更新，不由运行时环境变量控制 | [AutoUpdateAction](../apps/desktop/src/renderer/components/AutoUpdateAction.tsx) 与 [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx) 复用 shared/auto-update 的操作语义；macOS ad-hoc 显示「手动更新」/「前往下载页」及说明，不声称已发现新版本，不显示检查/下载/安装进度；signed 和 Windows 安装版保留自动更新，Windows portable 保留新版本提示与下载页入口 |
@@ -230,6 +230,8 @@ Desktop「订阅」设置中的服务故障/恢复提醒默认开启，已有明
 总览专项验收：两端构建后运行 `corepack pnpm test:dashboard-ui [全新输出目录]`。它复用 Electron 界面测试驱动，以合成数据经真实 Core API / IPC 验证费用原始精度、单位切换不刷新、整行明细键盘与焦点、长列表浮层边界和滚动、完整项目名、分母说明、宽窄屏主指标；生成两端截图，仍需查看实际画面。
 
 ## 验收与持续约束
+
+外观主题专项：两端构建后执行 `corepack pnpm test:appearance-ui [全新输出目录]`，使用合成 Core 数据、真实 preload/外观存储与托盘控制器，检查深浅主题、组件材质、窗口同步、保存失败/重试、重启恢复、默认外观恢复、键盘、窄屏与四语言。截图仍需查看；Windows 上的结果不代表已经完成 macOS/Linux 原生验收。新增主题仅覆盖视觉 token、组件样式和可选装饰，不另建数据渲染、数字格式化或原生窗口控制逻辑。
 
 ### 额度、总览与分享
 

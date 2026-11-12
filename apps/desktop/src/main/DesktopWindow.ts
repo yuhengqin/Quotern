@@ -3,16 +3,17 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { installReferencePricingLinks, isReferencePricingWindow, updateReferencePricingTheme } from './reference-pricing-window.js';
 import {
-  WINDOW_BACKGROUND_COLORS,
   titleBarOverlayFor,
   windowChromeFor,
 } from './window-chrome.js';
+import { appearanceChrome, type AppearanceStyle } from '../shared/appearance.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface DesktopWindowOptions {
   preloadPath: string;
   theme?: DesktopWindowTheme;
+  appearanceStyle?: AppearanceStyle;
   title?: string;
   /** When true (login openAsHidden), stay in tray — do not show on ready-to-show. */
   startHidden?: boolean;
@@ -91,7 +92,7 @@ export class DesktopWindow {
       // Platform chrome (frame style / Windows Window Controls Overlay /
       // macOS traffic-light position). On Windows this deliberately leaves the
       // frame enabled; only Linux is frameless with renderer-drawn controls.
-      ...windowChromeFor(process.platform, options.theme ?? 'light'),
+      ...windowChromeFor(process.platform, options.theme ?? 'light', options.appearanceStyle),
       // Keep the window resizable and maximizable so the maximize control is
       // functional instead of decorative.
       resizable: true,
@@ -99,7 +100,7 @@ export class DesktopWindow {
       fullscreenable: true,
       show: false,
       autoHideMenuBar: true,
-      backgroundColor: WINDOW_BACKGROUND_COLORS[options.theme ?? 'light'],
+      backgroundColor: appearanceChrome(options.theme ?? 'light', options.appearanceStyle ?? 'default').background,
       title: options.title ?? 'Quotern',
       // Win/Linux only in practice; macOS Dock ignores BrowserWindow.icon.
       icon: resolveAppIconPath(),
@@ -173,7 +174,7 @@ export class DesktopWindow {
       });
     }
 
-    installReferencePricingLinks(this.browserWindow, { preloadPath: options.preloadPath, theme: options.theme ?? 'light' });
+    installReferencePricingLinks(this.browserWindow, { preloadPath: options.preloadPath, theme: options.theme ?? 'light', appearanceStyle: options.appearanceStyle ?? 'default' });
 
     void this.loadRenderer();
   }
@@ -200,13 +201,13 @@ export class DesktopWindow {
     return this.browserWindow;
   }
 
-  setThemeBackground(theme: DesktopWindowTheme): void {
-    this.browserWindow.setBackgroundColor(WINDOW_BACKGROUND_COLORS[theme]);
-    updateReferencePricingTheme(this.browserWindow, theme);
+  setThemeBackground(theme: DesktopWindowTheme, style: AppearanceStyle = 'default'): void {
+    this.browserWindow.setBackgroundColor(appearanceChrome(theme, style).background);
+    updateReferencePricingTheme(this.browserWindow, theme, style);
     // Keep the native Window Controls Overlay strip in sync with the theme
     // while the window is alive (setTitleBarOverlay throws after destroy).
     if (process.platform === 'win32' && !this.browserWindow.isDestroyed()) {
-      this.browserWindow.setTitleBarOverlay(titleBarOverlayFor(theme));
+      this.browserWindow.setTitleBarOverlay(titleBarOverlayFor(theme, style));
     }
   }
 }

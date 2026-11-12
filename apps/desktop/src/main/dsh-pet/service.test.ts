@@ -93,14 +93,14 @@ test('chat, conversation history and model-generated whispers are unavailable', 
 });
 
 
-test('explicit notifications respect focus, the global switch and event deduplication', async () => {
+test('pet activity mirrors events without owning or duplicating system notification delivery', async () => {
   const f = await fixture();
   try {
     const event = { id: 'notice', source: 'dsh', sessionId: 's', timestamp: new Date(Date.now()).toISOString(), state: 'waiting' as const, evidence: 'approval/asked' };
-    f.service.onActivity(event); f.service.onActivity(event); assert.equal(f.notifications.length, 1);
-    assert.deepEqual(f.targets[0], { source: 'dsh', sessionId: 's' });
-    f.focus(true); f.service.onActivity({ ...event, id: 'focused' }); assert.equal(f.notifications.length, 1);
-    f.focus(false); await f.config.patchMain({ notificationsEnabled: false }); f.service.onActivity({ ...event, id: 'muted' }); assert.equal(f.notifications.length, 1);
+    f.service.onActivity(event); f.service.onActivity(event); assert.equal(f.notifications.length, 0);
+    assert.deepEqual(f.targets, []);
+    f.focus(true); f.service.onActivity({ ...event, id: 'focused' }); assert.equal(f.notifications.length, 0);
+    f.focus(false); await f.config.patchMain({ notificationsEnabled: false }); f.service.onActivity({ ...event, id: 'muted' }); assert.equal(f.notifications.length, 0);
   } finally { await f.close(); }
 });
 

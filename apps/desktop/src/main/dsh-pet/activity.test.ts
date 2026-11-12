@@ -5,14 +5,15 @@ import fsPromises from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { DshPetActivityMonitor, parseActivityRecord } from './activity.js';
+import { DshPetActivityMonitor, parseActivityRecord, type ActivityRoot } from './activity.js';
 import type { ActivityEvent } from '../../shared/dsh-pet.js';
 
 test('only observes new complete records, preserves real session IDs and stops on disposal', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-dsh-activity-'));
   const file = path.join(root, 'rollout.jsonl');
   const now = Date.parse('2026-10-19T10:00:00Z');
-  const header = { type: 'session_meta', payload: { id: 'real-session' } };
+  // Real session metadata may include project instructions longer than the first read chunk.
+  const header = { type: 'session_meta', payload: { id: 'real-session', base_instructions: { text: 'x'.repeat(32_000) } } };
   const record = { type: 'event_msg', timestamp: new Date(now).toISOString(), payload: { type: 'task_started', turn_id: 'turn' } };
   await writeFile(file, `${JSON.stringify(header)}\n${JSON.stringify(record)}\n`);
   const events: ActivityEvent[] = [];
@@ -41,6 +42,23 @@ test('does not interpret generic task completion, tool output or silence as veri
   const todo = parseActivityRecord({ type: 'todo/write', time: context.now, data: { todos: [{ status: 'in_progress', content: 'Old' }, { status: 'in_progress', content: 'Current' }] } }, { ...context, source: 'dsh' });
   assert.equal(todo?.taskOnly, true); assert.equal(todo?.task, 'Current');
   assert.equal(parseActivityRecord({ type: 'turn/start', time: context.now }, { ...context, source: 'dsh' })?.task, null);
+});
+
+test('a new short-lived session created after startup delivers its first completion without replaying copied history', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-new-session-'));
+  const roots: ActivityRoot[] = [], events: ActivityEvent[] = [], now = Date.now();
+  const monitor = new DshPetActivityMonitor({ roots, now: () => now + 1000, onEvent: event => events.push(event), intervalMs: 60_000 });
+  try {
+    await monitor.start();
+    const file = path.join(root, 'new.jsonl');
+    await writeFile(file, [
+      { type: 'session_meta', payload: { id: 'new-short-session' } },
+      { type: 'event_msg', timestamp: new Date(now - 1000).toISOString(), payload: { type: 'task_started' } },
+      { type: 'event_msg', timestamp: new Date(now + 1000).toISOString(), payload: { type: 'task_complete' } },
+    ].map(row => JSON.stringify(row)).join('\n') + '\n');
+    roots.push({ source: 'codex', path: file }); await monitor.poll();
+    assert.equal(events.length, 1); assert.equal(events[0]!.sessionId, 'new-short-session'); assert.equal(events[0]!.terminal, true);
+  } finally { monitor.dispose(); await rm(root, { recursive: true, force: true }); }
 });
 
 test('does not reopen unchanged files, including an incomplete trailing record', async t => {

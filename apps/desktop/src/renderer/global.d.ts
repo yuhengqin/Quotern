@@ -10,6 +10,7 @@ declare global {
   interface Window {
     tud: {
       dshPet: import('../preload/index').TudApi['dshPet'];
+      notifications: import('../preload/index').TudApi['notifications'];
       version: () => string;
       platform: NodeJS.Platform;
       quota: import('../preload/index').TudApi['quota'];

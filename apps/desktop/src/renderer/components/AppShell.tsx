@@ -79,7 +79,7 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    const api = window.tud?.dshPet;
+    const api = window.tud?.notifications ?? window.tud?.dshPet;
     if (typeof api?.getNavigation !== 'function') return;
     let disposed = false, running = false, again = false;
     const consume = () => {

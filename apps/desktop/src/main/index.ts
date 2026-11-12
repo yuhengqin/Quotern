@@ -83,6 +83,7 @@ import { initializeDshPet } from './dsh-pet';
 import { buildDshPetCompanion } from './dsh-pet/companion';
 import { DSH_PET_PREVIEW_PROTOCOL } from '../shared/dsh-pet-preview';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
+import { initializeNotifications } from './notifications/runtime';
 import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
 import { isLocalePreference, registerMessages, resolveLocale } from 'quotern-i18n';
@@ -137,6 +138,7 @@ let disposeOpenCodeSubscriptionIpc: (() => void) | null = null;
 let disposeTraeSubscriptionIpc: (() => void) | null = null;
 let disposeWorkBuddySubscriptionIpc: (() => void) | null = null;
 let quotaRuntime: Awaited<ReturnType<typeof initializeQuotaRuntime>> | null = null;
+let notificationRuntime: Awaited<ReturnType<typeof initializeNotifications>> | null = null;
 let currentThemeMode: ThemeMode = 'system';
 let currentTheme: Theme = 'light';
 let pendingConfigResetNotice = false;
@@ -521,7 +523,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeOpenCodeSubscriptionIpc = registerOpenCodeSubscriptionIpc();
     disposeTraeSubscriptionIpc = registerTraeSubscriptionIpc();
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
-    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, showQuota: showQuotaPopover, getLocale: getNativeLocale, onChanged: state => {
+    notificationRuntime = await initializeNotifications({ getMainWindow, showMainWindow, showQuota: showQuotaPopover, getLocale: getNativeLocale });
+    quotaRuntime = await initializeQuotaRuntime({ showMainWindow, showQuota: showQuotaPopover, getLocale: getNativeLocale, sendNotification: notificationRuntime.send, onChanged: state => {
       setTrayQuotaState(state);
       if (trayQuotaTitleEnabled) setTrayUsageTitle(quotaTrayTitle(state.providers, getNativeLocale()));
       petController?.updateQuotaState(state);
@@ -607,7 +610,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       }
       // Restore dsh-pet last: old configurations with both enabled converge to one pet.
       try {
-        dshPet = initializeDshPet({ getMainWindow, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow,
+        dshPet = initializeDshPet({ getMainWindow, activity: notificationRuntime.activity, getQuota: getQuotaRuntimeState, refreshQuota: async () => { await quotaRuntime?.manager.refresh('interaction'); }, showMainWindow,
           getCompanion: () => buildDshPetCompanion(petController?.getState(), getQuotaRuntimeState()),
           sync: async () => { const result = await localApiRequest('/functions/tud-trigger-sync', { method: 'POST', body: '{}' }); if (result.status !== 200) throw new Error('Sync unavailable'); },
           openSettings: () => void menuPorts.settings({ kind: 'dsh' }),
@@ -664,6 +667,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     });
     disposeAutostartMenuSync = onAutostartPrefChanged(refreshTrayLocale);
     quotaRuntime.start();
+    void notificationRuntime.start().catch(() => console.error('[quotern] notification activity startup failed'));
 
     try {
       await touchRuntimeHeartbeat({ kind: 'desktop', pid: process.pid });
@@ -701,6 +705,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     // and windows are ready, so startup cannot restart services during install.
     await initializeAutoUpdate({
       beforeInstall: async () => {
+        notificationRuntime?.pause();
         quotaRuntime?.pause();
         await dshPet?.controller.pause();
         hideTrayPopover();
@@ -710,6 +715,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
         await stopLocalRuntime();
       },
       onInstallFailed: async () => {
+        void notificationRuntime?.start().catch(() => console.error('[quotern] notification activity recovery failed'));
         quotaRuntime?.start();
         await dshPet?.controller.resume();
         resetAppQuitting();
@@ -733,6 +739,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     if (shutdownPromise) return;
     event.preventDefault();
     quotaRuntime?.pause();
+    notificationRuntime?.pause();
     markAppQuitting();
     markTrayPopoverQuitting();
     setLocalRuntimeQuitting(true);
@@ -746,6 +753,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
   app.on('will-quit', () => {
     void dshPet?.dispose(); dshPet = null;
     quotaRuntime?.dispose(); quotaRuntime = null;
+    notificationRuntime?.dispose(); notificationRuntime = null;
     ipcMain.removeHandler(THEME_GET_CHANNEL);
     ipcMain.removeHandler(LOCALE_GET_CHANNEL);
     ipcMain.removeHandler(LOCALE_SET_CHANNEL);

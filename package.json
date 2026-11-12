@@ -36,6 +36,7 @@
     "test:island-ux-ui": "node apps/desktop/scripts/run-island-ux-smoke.mjs",
     "test:session-pagination-ui": "node apps/desktop/scripts/run-session-pagination-smoke.mjs",
     "test:dashboard-ui": "node apps/desktop/scripts/run-session-pagination-smoke.mjs --dashboard-fixes-only",
+    "test:notifications-ui": "node apps/desktop/scripts/run-notifications-smoke.mjs",
     "test:dev-runtime": "node --test scripts/dev-runtime.test.mjs",
     "test:vite-core-source": "node --test scripts/vite-core-source.test.mjs",
     "start": "corepack pnpm start:cli",

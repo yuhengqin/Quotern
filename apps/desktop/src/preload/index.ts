@@ -119,7 +119,19 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
   }
 }
 
+import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type NotificationSettingsState, type NotificationPreferencePatch, type NotificationDelivery, type NotificationSound } from '../shared/notifications';
+
 const tudApi = {
+  notifications: {
+    getState: (): Promise<NotificationSettingsState> => ipcRenderer.invoke(NOTIFICATIONS_GET),
+    setPreferences: (patch: NotificationPreferencePatch): Promise<NotificationSettingsState> => ipcRenderer.invoke(NOTIFICATIONS_SET, patch),
+    test: (): Promise<NotificationDelivery> => ipcRenderer.invoke(NOTIFICATIONS_TEST),
+    previewSound: (sound: NotificationSound): Promise<void> => ipcRenderer.invoke(NOTIFICATIONS_PREVIEW_SOUND, sound),
+    onChanged: (callback: (state: NotificationSettingsState) => void) => { const listener = (_event: unknown, state: NotificationSettingsState) => callback(state); ipcRenderer.on(NOTIFICATIONS_CHANGED, listener); return () => ipcRenderer.removeListener(NOTIFICATIONS_CHANGED, listener); },
+    getNavigation: (): Promise<SessionNavigation | null> => ipcRenderer.invoke(NOTIFICATION_NAVIGATION_GET),
+    acknowledgeNavigation: (id: string): Promise<void> => ipcRenderer.invoke(NOTIFICATION_NAVIGATION_ACK, id),
+    onNavigation: (callback: () => void) => { const listener = () => callback(); ipcRenderer.on(NOTIFICATION_NAVIGATION, listener); return () => ipcRenderer.removeListener(NOTIFICATION_NAVIGATION, listener); },
+  },
   dshPet: {
     getNavigation: (): Promise<SessionNavigation | null> => ipcRenderer.invoke(DSH_PET_NAVIGATION_GET),
     acknowledgeNavigation: (id: string): Promise<void> => ipcRenderer.invoke(DSH_PET_NAVIGATION_ACK, id),

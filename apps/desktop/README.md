@@ -12,7 +12,7 @@ Electron 桌面客户端：与 CLI 共用 `~/.quotern` 数据。主进程管理�
 - 通过 **内存 Hono local-api**（不占 :8252）经 IPC 向渲染层提供与 CLI 相同的 `/functions/tud-*` 契约
 - Dashboard / 设置读同一本地 queue
 - 订阅额度卡提供分钟级重置倒计时、日期切换、剩余额度节奏刻度，以及可按服务组件筛选的故障详情；与 Dashboard 共用展示实现。
-- 「订阅」设置中的服务故障/恢复通知默认开启，已有明确关闭的偏好保持关闭；首次服务观察仅建立基线。「打开额度面板」快捷键默认关闭，初始组合为 `Ctrl+Shift+U`（macOS 为 `Cmd+Shift+U`），支持输入自定义组合并保存。保存时检测格式与系统注册冲突，失败保留原设置及原快捷键；关闭后保留组合，重启恢复已开启的组合。测试通知入口只在 Vite 开发模式显示，生产 preview 与安装包均隐藏且不注册该测试 IPC。
+- 「订阅」设置中的服务故障/恢复通知默认开启，已有明确关闭的偏好保持关闭；首次服务观察仅建立基线。「打开额度面板」快捷键默认关闭，初始组合为 `Ctrl+Shift+U`（macOS 为 `Cmd+Shift+U`），支持输入自定义组合并保存。保存时检测格式与系统注册冲突，失败保留原设置及原快捷键；关闭后保留组合，重启恢复已开启的组合。旧订阅页的测试入口只在 Vite 开发模式显示；独立「通知」页提供正式可用的测试通知。
 - macOS 菜单栏用量模式支持「订阅剩余额度」，显示最新有效读数中最紧张的额度；保留 Token、费用和两者模式。没有有效额度时显示 `—`。
 - Claude 金额、赠送余额与免费重置到期权益尚无已验证的 CLI 自动来源；额度详情提供官方用量页入口，不读取浏览器 Cookie 或显示推测金额。
 
@@ -169,6 +169,20 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 - 标题条高度由 `shared/window-chrome.ts` 的 `TITLEBAR_HEIGHT` 统一驱动：主进程 overlay 高度与渲染层 CSS 变量同源
 - `window.tud`：最小化 / 最大化 / 关闭 + `api.request` / `onDataSynced`
 
+## 系统通知
+
+`src/main/notifications/` 统一管理原生通知、提示音、偏好和会话定位。Agent 活动运行时随 Desktop 启动，不依赖桌宠角色或开关；运行中的宠物仅订阅同一活动流。系统通知使用 Electron `Notification` 并静音，原生 `show` 确认后才独立播放提示音。内置柔和、清脆两段原创 PCM 音效，支持关闭与试听；Windows 使用隐藏 PowerShell `SoundPlayer`，macOS 使用 `afplay`，Linux 使用系统 `paplay`。播放失败保留通知并在设置中显示问题。
+
+「通知」页分别设置本轮完成、需要确认或回答、Agent 错误、额度提醒和服务状态变化的「从不 / 仅后台 / 始终」策略。Agent 默认仅后台，额度/服务默认始终以保留原有行为；提示音默认柔和。订阅页原有阈值、重置、服务和账号规则继续生效。旧大肥鱼配置中明确关闭通知时，新设置继承该 Agent 静音偏好。偏好保存在 Electron userData 的 `notifications/preferences.json`，写入失败保留旧值；损坏时暂停提醒并提供恢复默认入口。
+
+Codex 日志 `task_complete` / `turn_complete` 与 Claude 明确 `end_turn` 表示本轮响应结束，不宣称目标成功。Codex 终态携带结构化 `error` 时改发错误通知，支持当前协议的新旧事件别名；独立 Error 事件属于瞬时事件，不能假设每个版本都会写入日志，旧版本未持久化的 API 错误无法由日志补足（[协议](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs)、[持久化规则](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/policy.rs)）。
+
+「Agent 连接」显式安装/更新现有可选集成 Hook：Codex 使用官方支持的 Stop、PermissionRequest、PreToolUse、PostToolUse、Interrupt 等事件；Claude 补充 Notification、StopFailure 和 PostToolUseFailure。只根据明确请求/失败证据提醒，不从输出中的错误文字推断失败。Hook 队列最多 512 条，仅保存类型、时间和会话/调用标识，不保存消息或工具输入输出；其他 Hook 保留，开发实例禁止修改真实 Agent 配置。
+
+已有日志启动时建立 EOF 基线，新会话只处理启动后的事件。过期、重复和乱序请求不回放；Hook 与日志的重复完成会合并。新一轮开始、对应工具返回或明确终态撤销已处理请求。通知点击保留 `source + sessionId`，主窗口重建后挂载读取并按导航编号确认消费，再进入共享 `/sessions` 精确记录；点击不批准或回答 Agent 请求。查询读取 `localCollectSince` 范围内的已采集历史，不补采集、不做标题或子串匹配；缺记录时保留目标等待常规同步。额度/服务通知继续定位对应额度窗口。
+
+「通知」页提供正式可用的测试通知；旧订阅页测试入口仍仅限 Vite 开发模式。`corepack pnpm test:notifications-ui [全新输出目录]` 使用隔离 profile、数据和受控事件，检查宠物关闭时的通知、真实 preload/设置、键盘操作、保存失败和窗口重建导航，生成宽/窄屏截图及结果 JSON。检查捕获系统 Toast 的 `show()`，不代表验证系统权限或实际送达；会调用一次生产提示音试听路径。
+
 ## Windows 桌面宠物
 
 ### 独立 dsh-pet
@@ -199,9 +213,9 @@ Windows 设置 → 宠物 → **大肥鱼**。默认关闭，仅运行单实例�
 
 未占用时无需 `lock` 参数，原有手动操作保留。占用期间随机动画、漫游、自动余额展示与工作气泡让路，工作状态仍持续记录；到期自动解冻，旧编号明确返回 `lock-lost`，用户操作可提前接管。回执最多保留 512 条，终态保留 60 秒；120 秒没有后续播放报告的活跃记录转为 `failed/renderer-timeout`。运行时适配与生成代码测试位于 `scripts/dsh-pet-controls-*`，原生检查使用全新私有目录，避免正式采集。
 
-Agent 通知点击会保留 `source + sessionId`，主窗口重建后经挂载读取与按编号确认消费，再进入共享 `/sessions` 页自动展开精确记录。定向查询读取现有采集缓存，在 `localCollectSince` 范围内查历史，不触发补采集，也不依靠标题/子串匹配。未采集、来源身份无法对应或超出采集起点时明确提示未找到，并保留目标等待常规同步重读。
+Agent 系统通知及其会话定位由独立通知运行时负责，见上文「系统通知」。
 
-额度来源需要明确选择，直接使用 Quotern 新鲜读数；真实余额和窗口已用百分比分别显示，缺失或陈旧不补零。工作状态只读现有 Codex、Claude、DSH 的新日志，不写 hooks 或统计数据；首次读取只记基线。各来源实际观测状态与缺失原因见设置；Codex 普通完成仅表示“有结果”，不会据此庆祝目标成功。没有明确审批/错误事件时不声称已接入对应档位。过期状态会解除工作循环。
+额度来源需要明确选择，直接使用 Quotern 新鲜读数；真实余额和窗口已用百分比分别显示，缺失或陈旧不补零。工作状态订阅独立 Agent 活动流，本身不安装 Hook 或修改统计数据。各来源实际观测状态与缺失原因见设置；Codex 普通完成仅表示“有结果”，不会据此庆祝目标成功。过期状态会解除工作循环。
 
 辅助模式在正常应用初始化前分流，使用安装的 Electron、独立 userData 和带启动令牌的随机 Windows 命名管道，无 HTTP 回调端口。关闭开关、退出和更新均回收辅助进程；崩溃显示错误，需手动重试。硬件加速和 DPI 修正仅用于辅助进程。正式资源位于 `resources/dsh-pet/`，构建仅读取固定 vendor 快照，不依赖 `reference/`。
 

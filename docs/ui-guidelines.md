@@ -103,7 +103,7 @@
 | 订阅品牌图标 | [SubscriptionBrandIcon](../packages/dashboard/src/components/SubscriptionBrandIcon.tsx)，QuotaUsageCard 使用 | 订阅品牌（含 Gemini CLI）；与 Agent/模型厂商有不同语义与资源集合。品牌文字已在卡片中显示，图标使用空 alt / aria-hidden | 独立实现，Desktop 支持的品牌/资源更多；新增通道时同时登记两端品牌资源 |
 | 订阅额度与服务详情 | [QuotaUsageCard](../packages/dashboard/src/components/QuotaUsageCard.tsx) 与 [QuotaServiceDetails](../packages/dashboard/src/components/QuotaServiceDetails.tsx)，SubscriptionUsageGrid 使用 | 主卡保留额度窗口、异常和紧凑状态；详情承载全部窗口、趋势、来源、服务组件与事件。重置时间默认倒计时；卡片与详情直接点击时间文字切换日期/倒计时，沿用全局 resetTimeMode 偏好，不再提供独立切换按钮。公共重置时间与窗口重置/到期时间使用相同入口，支持键盘 Enter/Space，保存期间保留焦点、防止重复提交，失败保持原显示并就近反馈；无保存能力时保持静态文字。经过截止时刻仅提示等待读数更新。节奏刻度按“剩余”方向换算，过期读数、已到期窗口和非额度余额不显示刻度。服务筛选复用 FilterSelectPopover：未配置表示全部，空数组表示尚未选择，未知与过期不得显示正常。保存失败保留原值并在详情反馈；Claude 金额和赠送权益保留官方用量页入口，平台实际读数从总览「实际消费」按需查看 | Desktop 的 QuotaUsageCard 适配 IPC 保存与原生外链，复用 Dashboard 实现；index.css 登记共享组件 `@source`。两端保存 resetTimeMode 与 serviceComponents，服务筛选按厂商共用 |
 | 外观偏好 | [ThemePreferenceControl](../packages/dashboard/src/components/ThemePreferenceControl.tsx) 与 [PaletteControl](../packages/dashboard/src/components/PaletteControl.tsx)，SettingsPanel 的「常规设置」中紧随语言设置 | 外观模式和强调色各自单选并立即保存。模式卡预览跟随系统、浅色和深色，强调色卡按实际明暗显示全部配色；卡片显示名称和勾号，键盘焦点单独呈现，窄窗口自动换行。位于运行配置之前，不依赖配置读取成功。FilterChromeActions 不再提供主题按钮；存量 ThemeToggle 仅供旧页面使用 | Desktop「常规设置」直接复用控件和样式。各端主题 hook 负责模式解析与保存，Desktop 保留主进程系统外观广播；切换明暗或跟随系统不重置强调色 |
-| Desktop 设置导航 | Desktop 专用布局 | 左栏依次为「常规设置」、「宠物」（Windows）、「订阅」、「Agent 集成」、「数据与备份」、「应用」、「关于」。常规设置包含主题、配色、语言和 Token 数量格式；数据与备份包含本地备份、恢复及设备信息；应用包含启动、托盘选项及更新。当前栏目整行高亮，右栏独立滚动。检查最小窗口、长语言标签、方向键与栏目直达入口 | [BackendConfigModal](../apps/desktop/src/renderer/components/BackendConfigModal.tsx) 承载 [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx)，复用 HeroUI 垂直 Tabs |
+| Desktop 设置导航 | Desktop 专用布局 | 左栏依次为「常规设置」、「宠物」（Windows）、「订阅」、「通知」、「Agent 集成」、「数据与备份」、「应用」、「关于」。常规设置包含主题、配色、语言和 Token 数量格式；数据与备份包含本地备份、恢复及设备信息；应用包含启动、托盘选项及更新。当前栏目整行高亮，右栏独立滚动。检查最小窗口、长语言标签、方向键与栏目直达入口 | [BackendConfigModal](../apps/desktop/src/renderer/components/BackendConfigModal.tsx) 承载 [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx)，复用 HeroUI 垂直 Tabs |
 | 关于与仓库链接 | [AboutContent](../packages/dashboard/src/components/AboutContent.tsx)，设置「关于」与 AboutModal 使用 | GitHub 仓库链接位于版本信息下方，保留反馈和支持的 Agent 信息；仪表盘操作区不再单独展示仓库按钮 | 同名独立副本；仓库链接经原生 openExternal 打开 |
 | 应用更新 | 浏览器端不提供桌面更新操作 | Desktop 构建策略决定自动或手动更新，不由运行时环境变量控制 | [AutoUpdateAction](../apps/desktop/src/renderer/components/AutoUpdateAction.tsx) 与 [SettingsPanel](../apps/desktop/src/renderer/components/SettingsPanel.tsx) 复用 shared/auto-update 的操作语义；macOS ad-hoc 显示「手动更新」/「前往下载页」及说明，不声称已发现新版本，不显示检查/下载/安装进度；signed 和 Windows 安装版保留自动更新，Windows portable 保留新版本提示与下载页入口 |
 | 网页设置导航 | [BackendConfigModal](../packages/dashboard/src/components/BackendConfigModal.tsx) 承载延迟加载的 [SettingsPanel](../packages/dashboard/src/components/SettingsPanel.tsx) | 左侧依次为「常规设置」、「Agent 集成」、「数据与备份」、「关于」，常规设置首次默认选中，普通重开保留当前栏目。复用 HeroUI 垂直 Tabs，右栏独立滚动；窄屏缩窄侧栏并显示文字标签。旧 `app` 事件进入常规，旧 `sync` 进入数据。演示隐藏 Agent 集成入口，数据栏目保留可读设备信息；备份、恢复及用量恢复沿用共享组件的能力检查 | Desktop 保留独立栏目和原生能力，同类侧栏的行高、间距与高亮方式一致 |
@@ -117,6 +117,12 @@
 两套桌宠右键共用 `apps/desktop/src/main/pet-context-menu.ts` 的菜单模型和原生 Electron Menu：依次为「打开 Quotern、同步数据、大小、角色、宠物设置、隐藏宠物」，按任务分组；打开动作始终显示主窗口，不切换成含义不清的「关闭 Quotern」。角色菜单包含大肥鱼、内置与导入角色，当前项和大小使用单选标记，大小修改右键所在宠物系统。隐藏保留当前宠物选择与独立尺寸，统一启用入口恢复它。大肥鱼额外保留「查看额度与余额」「动作」；右键不提供回到初始位置、重新加载配置及更多操作入口。固定入口及动作分类跟随应用四语言，用户角色名和素材动作原名保持原文。当前集成不提供网页宠物，右键不显示「仅网页／两者／都不」选项，历史 display 配置仍保留兼容。
 
 大肥鱼原生菜单由 `dsh-pet/helper-adapter.ts` 在拥有宠物窗口的 helper 进程弹出，经认证 RPC 读取最新菜单模型；普通宠物由 PetController 弹出。选择、取消和失败均清除菜单输入占用，恢复身体命中与穿透，保留原手动动画与移动接管。设置入口通过 `shared/settings-navigation.ts` 携带具体宠物和独立请求标识，既定位「宠物」页签，也选择被右键的编辑对象；重复请求仍生效，普通打开设置不重置预览草稿。跨端共享不适用：此菜单只在 Windows Desktop 提供，Dashboard 不增加副本。
+
+### Desktop 系统通知
+
+[NotificationSettings](../apps/desktop/src/renderer/components/NotificationSettings.tsx) 是 Desktop 专用「通知」页，复用 HeroUI Select、FilterSelectPopover 和 SettingsHelpPopover，浏览器 Dashboard 不增加系统通知设置副本。按事件设置从不/仅后台/始终，提示音支持关闭、试听和测试通知；保存失败保留有效旧值并就近反馈。只有系统 `show` 回调确认后显示“已显示”，超时仅说明请求已发出。原有订阅类型/账号开关继续生效。Agent 连接独立展示安装状态、显式连接/更新与失败重试，开发实例不修改真实配置。
+
+通知与活动监听由 `apps/desktop/src/main/notifications`、`main/agent-activity` 承担，不依赖宠物启停。旧宠物通知开关迁移到通知页；宠物仅展示活动，不重复发系统通知。会话点击沿用下面的精确查询、重复定位与渲染层重建确认契约，确认请求的点击仅查看会话，不代替 Agent 的审批/回答。
 
 ### 业务内复用入口
 

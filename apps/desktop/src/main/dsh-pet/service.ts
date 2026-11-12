@@ -134,7 +134,6 @@ export class DshPetService {
     for (const [name, desc] of Object.entries(object(instance.conf.memes))) if (typeof desc === 'string' && desc.trim() && await this.options.assets.resolve(`/pic/memes/${encodeURIComponent(instance.entry)}/${encodeURIComponent(name)}.png`)) pool.push({ name, desc });
     return pool;
   }
-  private notification(title: string, body: string, target?: SessionNavigationTarget): void { if (this.options.config.read().main?.notificationsEnabled && !this.options.isMainWindowVisible?.()) this.options.notify?.(title, body, target); }
   onActivity(event: ActivityEvent): void {
     if (this.lifetime.signal.aborted || this.events.has(event.id)) return;
     const at = Date.parse(event.timestamp), now = this.now(), key = `${event.source}:${event.sessionId}`;
@@ -144,7 +143,6 @@ export class DshPetService {
     else if (event.state) { this.work.setState(key, event.state, ++this.seq); if (event.task !== undefined) this.work.setTask(key, event.task); this.activity.set(key, { at, expires: now + (event.terminal ? (event.state === 'result' ? 10_000 : 60_000) : 120_000) }); }
     else { this.work.clear(key); this.activity.delete(key); }
     this.publishWork();
-    if (event.source !== 'pet' && (event.state === 'waiting' || event.terminal && ['success', 'error'].includes(event.state ?? ''))) this.notification(event.state === 'waiting' ? 'Agent 需要确认' : event.state === 'success' ? 'Agent 本轮完成' : 'Agent 发生错误', `${event.source} · ${event.evidence}`, ['codex', 'claude', 'dsh'].includes(event.source) ? { source: event.source as SessionNavigationTarget['source'], sessionId: event.sessionId } : undefined);
     this.options.onChanged?.();
   }
   private publishWork(): void { const { state, task } = this.work.snapshot(); const data = { state, task }, signature = JSON.stringify(data); if (signature !== this.workSignature) { this.workSignature = signature; this.poll.writeSection('workStatus', data); } }

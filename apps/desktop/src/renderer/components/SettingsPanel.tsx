@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Database, Info, Palette, PawPrint, Plug, Settings } from 'lucide-react';
+import { Bell, CreditCard, Database, Info, Palette, PawPrint, Plug, Settings } from 'lucide-react';
+import { NotificationSettings } from './NotificationSettings';
 import { LocalBackupPanel } from '../../../../../packages/dashboard/src/components/LocalBackupPanel';
 import { UsageRecoveryPanel } from '../../../../../packages/dashboard/src/components/UsageRecoveryPanel';
 import {
@@ -55,6 +56,7 @@ const TAB_ITEMS = [
   { id: 'appearance', labelKey: 'desktop.settings.tabs.appearance', Icon: Palette },
   { id: 'pet', labelKey: 'desktop.pet.tab', Icon: PawPrint },
   { id: 'subscription', labelKey: 'settings.tabs.subscription', Icon: CreditCard },
+  { id: 'notifications', labelKey: 'notifications.title', Icon: Bell },
   { id: 'integrations', labelKey: 'agent.title', Icon: Plug },
   { id: 'data', labelKey: 'desktop.settings.tabs.data', Icon: Database },
   { id: 'app', labelKey: 'settings.tabs.app', Icon: Settings },
@@ -83,6 +85,7 @@ export function SettingsPanel({
   const panels = {
     pet: <PetSettingsCard request={petRequest} />,
     subscription: <QuotaSettings />,
+    notifications: <NotificationSettings />,
     appearance: <AppearanceSettingsPanel />,
     integrations: <AgentIntegrationSettings />,
     data: <DataSettingsPanel />,

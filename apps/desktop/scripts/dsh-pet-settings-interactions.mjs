@@ -141,7 +141,7 @@ try {
     await ev(`(${field(key)}).focus(); true;`); await page.key(' '); await wait(60); await idle();
     assert.equal((await state()).config.main.pets[0][key], before);
   });
-  for (const [key,owner,property] of [['confine',null,'confineToScreen'],['notifications',null,'notificationsEnabled'],['ceiling','physics','ceilingBounce'],['followPet','font','followPet']]) await check(`behavior-toggle:${key}`, async () => {
+  for (const [key,owner,property] of [['confine',null,'confineToScreen'],['ceiling','physics','ceilingBounce'],['followPet','font','followPet']]) await check(`behavior-toggle:${key}`, async () => {
     const main=(await state()).config.main, before=owner?main[owner][property]:main[property]; await click(field(key));
     const after=(await state()).config.main; assert.equal(owner?after[owner][property]:after[property],!before);
   });

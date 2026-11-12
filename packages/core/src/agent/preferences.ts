@@ -3,10 +3,10 @@ import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { lock } from 'proper-lockfile';
 
-export const AGENT_FEATURES = ['quotaHints', 'tokenSaver', 'beginner', 'handoff', 'claudePane', 'glossary', 'claudeWindowStart', 'codexWindowStart'] as const;
+export const AGENT_FEATURES = ['quotaHints', 'tokenSaver', 'beginner', 'handoff', 'claudePane', 'glossary', 'claudeWindowStart', 'codexWindowStart', 'desktopNotifications'] as const;
 export type AgentFeature = typeof AGENT_FEATURES[number];
 export type AgentPreferences = Record<AgentFeature, boolean>;
-export const DEFAULT_AGENT_PREFERENCES: AgentPreferences = { quotaHints: false, tokenSaver: false, beginner: false, handoff: false, claudePane: false, glossary: false, claudeWindowStart: false, codexWindowStart: false };
+export const DEFAULT_AGENT_PREFERENCES: AgentPreferences = { quotaHints: false, tokenSaver: false, beginner: false, handoff: false, claudePane: false, glossary: false, claudeWindowStart: false, codexWindowStart: false, desktopNotifications: false };
 export const agentDirectory = (dataDir: string) => join(dataDir, 'integrations');
 export async function readAgentJson<T>(path: string, fallback: T, maxBytes = 1024 * 1024): Promise<T> {
   try {

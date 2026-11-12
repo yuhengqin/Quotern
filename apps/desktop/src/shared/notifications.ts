@@ -1,0 +1,27 @@
+import type { SessionNavigationTarget } from './agent-activity.js';
+import type { QuotaNavigationTarget } from './quota-navigation.js';
+
+export const NOTIFICATION_CATEGORIES = ['agentComplete', 'agentConfirmation', 'agentError', 'quota', 'service'] as const;
+export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
+export type NotificationMode = 'off' | 'background' | 'always';
+export type NotificationSound = 'none' | 'soft' | 'bell';
+export interface NotificationPreferences { modes: Record<NotificationCategory, NotificationMode>; sound: NotificationSound }
+export interface NotificationPreferencePatch { modes?: Partial<NotificationPreferences['modes']>; sound?: NotificationSound }
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  modes: { agentComplete: 'background', agentConfirmation: 'background', agentError: 'background', quota: 'always', service: 'always' }, sound: 'soft',
+};
+export type NotificationTarget = { kind: 'session'; value: SessionNavigationTarget } | { kind: 'quota'; value?: QuotaNavigationTarget };
+export interface DesktopNotice {
+  id: string; category: NotificationCategory; title: string; body: string; target?: NotificationTarget;
+  sessionKey?: string; requestId?: string; replaceKey?: string; occurredAt?: number;
+}
+export type NotificationDelivery = 'shown' | 'requested' | 'suppressed';
+export interface NotificationSettingsState { preferences: NotificationPreferences; supported: boolean; issue: 'load' | 'delivery' | 'sound' | null }
+export const NOTIFICATIONS_GET = 'notifications:get';
+export const NOTIFICATIONS_SET = 'notifications:set';
+export const NOTIFICATIONS_CHANGED = 'notifications:changed';
+export const NOTIFICATIONS_TEST = 'notifications:test';
+export const NOTIFICATIONS_PREVIEW_SOUND = 'notifications:preview-sound';
+export const NOTIFICATION_NAVIGATION = 'notifications:navigation';
+export const NOTIFICATION_NAVIGATION_GET = 'notifications:navigation-get';
+export const NOTIFICATION_NAVIGATION_ACK = 'notifications:navigation-ack';

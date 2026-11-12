@@ -11,6 +11,7 @@ import { DshPetActivityMonitor, type ActivityRoot } from './activity.js';
 import { atomicPrivateFile } from './storage.js';
 import type { DshPetCompanion } from './companion.js';
 import type { PetContextMenu } from '../pet-context-menu.js';
+import type { ActivitySubscription } from '../../shared/agent-activity.js';
 
 interface Options {
   root: string; runtimeRoot: string; executable: string; appPath: string; packaged: boolean;
@@ -19,11 +20,13 @@ interface Options {
   getContextMenu?(): PetContextMenu; onMenuCommand?(id: string): void;
   coordinateVisibility?<T>(visible: boolean, operation: () => Promise<T>): Promise<T>; isMainWindowVisible?(): boolean; notify?(title: string, body: string, target?: SessionNavigationTarget): void;
   onChanged?(state: DshPetState): void; roots?: ActivityRoot[] | (() => Promise<ActivityRoot[]>); spawn?: (exe: string, args: string[], options: SpawnOptions) => ChildProcess;
+  activity?: ActivitySubscription;
 }
 export class DshPetController {
   readonly config: DshPetConfigStore;
   private service: DshPetService | null = null;
   private monitor: DshPetActivityMonitor | null = null;
+  private unsubscribeActivity: (() => void) | null = null;
   private pipe: DshPetRpcServer | null = null;
   private child: ChildProcess | null = null;
   private enabled = false;
@@ -45,7 +48,7 @@ export class DshPetController {
       if (this.options.coordinateVisibility) await this.options.coordinateVisibility(true, start); else await start();
     }
   }
-  getState(): DshPetState { return { enabled: this.enabled, status: this.status, error: this.error, config: this.config.read(), quotaSource: this.quotaSource, sources: this.monitor?.capabilities() ?? ['codex', 'claude', 'dsh'].map(source => ({ source, states: [], reason: '宠物未运行；尚未监听', lastEventAt: null })) }; }
+  getState(): DshPetState { return { enabled: this.enabled, status: this.status, error: this.error, config: this.config.read(), quotaSource: this.quotaSource, sources: this.options.activity?.capabilities() ?? this.monitor?.capabilities() ?? ['codex', 'claude', 'dsh'].map(source => ({ source, states: [], reason: '宠物未运行；尚未监听', lastEventAt: null })) }; }
   isEnabled(): boolean { return this.enabled; }
   private changed(): void { if (!this.disposed) this.options.onChanged?.(this.getState()); }
   private enqueue<T>(operation: () => Promise<T>): Promise<T> { const run = this.queue.then(operation); this.queue = run.catch(() => {}); return run; }
@@ -126,8 +129,8 @@ export class DshPetController {
       const service = new DshPetService({ config: this.config, assets: new DshPetAssetStore(this.options.root, this.options.runtimeRoot), getQuota: this.options.getQuota, quotaSource: () => this.quotaSource, refreshQuota: this.options.refreshQuota, reload: () => this.enqueue(async () => { await this.stop(); if (this.enabled && !this.paused) await this.start(); this.changed(); }), showMainWindow: this.options.showMainWindow, isMainWindowVisible: this.options.isMainWindowVisible, notify: this.options.notify, onChanged: () => this.changed(), getCompanion: this.options.getCompanion, sync: this.options.sync, openSettings: this.options.openSettings, getContextMenu: this.options.getContextMenu, onMenuCommand: this.options.onMenuCommand });
       this.service = service;
       const pipe = new DshPetRpcServer(); this.pipe = pipe; const address = await pipe.start((request, signal) => service.handle(request, signal));
-      this.monitor = new DshPetActivityMonitor({ roots: this.options.roots ?? [], onEvent: event => service.onActivity(event) });
-      await this.monitor.start();
+      if (this.options.activity) this.unsubscribeActivity = this.options.activity.subscribe(event => service.onActivity(event));
+      else { this.monitor = new DshPetActivityMonitor({ roots: this.options.roots ?? [], onEvent: event => service.onActivity(event) }); await this.monitor.start(); }
       if (pets.length) {
         const env = { ...process.env };
         for (const key of Object.keys(env)) if (key.startsWith('DSH_PET_')) delete env[key];
@@ -144,6 +147,7 @@ export class DshPetController {
     } catch { await this.stop(); this.status = 'error'; this.error = '宠物启动失败，请检查配置后重试'; this.changed(); }
   }
   private async stop(): Promise<void> {
+    this.unsubscribeActivity?.(); this.unsubscribeActivity = null;
     this.monitor?.dispose(); this.monitor = null; const service = this.service; this.service = null; service?.dispose();
     const pipe = this.pipe; this.pipe = null; await pipe?.close();
     const child = this.child; this.child = null;

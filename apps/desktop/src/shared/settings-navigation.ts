@@ -1,6 +1,6 @@
 import type { PetSelection } from './pet.js';
 
-const SETTINGS_TAB_IDS = ['sync', 'pet', 'app', 'subscription', 'appearance', 'integrations', 'data', 'about'] as const;
+const SETTINGS_TAB_IDS = ['sync', 'pet', 'app', 'subscription', 'notifications', 'appearance', 'integrations', 'data', 'about'] as const;
 export type SettingsTabId = (typeof SETTINGS_TAB_IDS)[number];
 export interface PetSettingsRequest { target: PetSelection; requestId: string }
 export interface OpenSettingsDetail { tab?: SettingsTabId; pet?: PetSettingsRequest }

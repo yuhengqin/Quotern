@@ -2,10 +2,13 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, nativeThem
 import { randomUUID } from 'node:crypto';
 import {
   initAutostartOnLaunch,
+  applyAutostart,
+  loadAutostartPref,
   loadShowTrayUsage,
   loadTrayUsageMode,
   loadThemeMode,
   loadLocalePreference,
+  onAutostartPrefChanged,
   onTrayUsagePrefChanged,
   registerAutostartIpc,
   saveThemeMode,
@@ -79,7 +82,6 @@ import { PET_SELECT_CHANNEL, PET_ENABLE_CHANNEL, PET_SELECTION_GET_CHANNEL, PET_
 import { initializeDshPet } from './dsh-pet';
 import { buildDshPetCompanion } from './dsh-pet/companion';
 import { DSH_PET_PREVIEW_PROTOCOL } from '../shared/dsh-pet-preview';
-import { buildDshPetTrayMenu } from './dsh-pet/tray-menu';
 import { initializeQuotaRuntime, getQuotaRuntimeState } from './quota-runtime';
 import { registerPetAssetScheme } from './pet-catalog';
 import { isThemeMode, resolveTheme, type ThemeMode } from '../shared/theme';
@@ -252,9 +254,10 @@ function registerShareCardIpc(): void {
 }
 
 let disposeTrayUsageSync: (() => void) | null = null;
+let disposeAutostartMenuSync: (() => void) | null = null;
 let onPowerResumeListener: (() => void) | null = null;
 let petController: PetController | null = null;
-let toggleCurrentPet: (() => void) | null = null;
+let trayPet: { isEnabled(): boolean; setEnabled(enabled: boolean): Promise<void> } | undefined;
 let dshPet: Awaited<ReturnType<typeof initializeDshPet>> | null = null;
 let trayUsageRefreshGeneration = 0;
 
@@ -379,19 +382,6 @@ function showMainWindowAsync(): Promise<void> {
 function showMainWindow(): void {
   void showMainWindowAsync().catch((err) => {
     console.error('[tud-desktop] failed to show main window:', err);
-  });
-}
-
-/** Same as in-app / tray「同步数据」→ POST tud-trigger-sync. */
-function triggerSync(): void {
-  void localApiRequest('/functions/tud-trigger-sync', {
-    method: 'POST',
-    body: '{}',
-  }).catch((err) => {
-    console.error(
-      '[tud-desktop] sync failed:',
-      err instanceof Error ? err.message : err,
-    );
   });
 }
 
@@ -646,7 +636,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       });
       ipcMain.handle(PET_SELECTION_GET_CHANNEL, event => { trustedPetSettings(event); return activation.getState(); });
       // The generic tray action resumes the applied pet, independent of preview.
-      toggleCurrentPet = () => { void activation.setEnabled(!activation.getState().enabled).catch(error => console.error('[tud-desktop] pet toggle failed:', error)); };
+      trayPet = { isEnabled: () => activation.getState().enabled, setEnabled: enabled => activation.setEnabled(enabled) };
     }
     try {
       await initAutostartOnLaunch();
@@ -667,11 +657,12 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       showMainWindow,
       getMainWindow,
       openSettings: () => openSettings(),
-      triggerSync,
-      togglePet: () => toggleCurrentPet?.(),
-      getDshPetMenu: () => buildDshPetTrayMenu(dshPet?.controller ?? null, getNativeLocale()),
+      getAutostart: async () => (await loadAutostartPref()).openAtLogin,
+      setAutostart: applyAutostart,
+      pet: trayPet,
       onOpen: () => { void quotaRuntime?.manager.refresh('interaction'); },
     });
+    disposeAutostartMenuSync = onAutostartPrefChanged(refreshTrayLocale);
     quotaRuntime.start();
 
     try {
@@ -763,10 +754,12 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     nativeTheme.removeListener('updated', onNativeThemeUpdated);
     unregisterOpenExternalIpc();
     unregisterAutostartIpc();
+    disposeAutostartMenuSync?.();
+    disposeAutostartMenuSync = null;
     disposeTrayPopover();
     petController?.dispose();
     petController = null;
-    toggleCurrentPet = null;
+    trayPet = undefined;
     ipcMain.removeHandler(PET_SELECT_CHANNEL);
     ipcMain.removeHandler(PET_ENABLE_CHANNEL);
     ipcMain.removeHandler(PET_SELECTION_GET_CHANNEL);

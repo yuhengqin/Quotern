@@ -114,6 +114,7 @@ declare global {
       ) => () => void;
       getOpenAtLogin: () => Promise<boolean>;
       setOpenAtLogin: (enabled: boolean) => Promise<boolean>;
+      onOpenAtLoginChanged: (callback: (enabled: boolean) => void) => () => void;
       getLaunchHidden: () => Promise<boolean>;
       setLaunchHidden: (hidden: boolean) => Promise<boolean>;
       getShowTrayUsage: () => Promise<boolean>;

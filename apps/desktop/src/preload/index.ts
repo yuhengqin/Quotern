@@ -89,6 +89,7 @@ const THEME_SET_CHANNEL = 'theme:set';
 const THEME_CHANGED_CHANNEL = 'theme:changed';
 const AUTOSTART_GET_CHANNEL = 'autostart:get';
 const AUTOSTART_SET_CHANNEL = 'autostart:set';
+const AUTOSTART_CHANGED_CHANNEL = 'autostart:changed';
 const AUTOSTART_GET_HIDDEN_CHANNEL = 'autostart:get-hidden';
 const AUTOSTART_SET_HIDDEN_CHANNEL = 'autostart:set-hidden';
 const SHARE_CARD_COPY_IMAGE_CHANNEL = 'share-card:copy-image';
@@ -326,6 +327,12 @@ const tudApi = {
 
   setOpenAtLogin: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke(AUTOSTART_SET_CHANNEL, enabled),
+
+  onOpenAtLoginChanged: (callback: (enabled: boolean) => void) => {
+    const listener = (_event: unknown, enabled: boolean) => callback(enabled);
+    ipcRenderer.on(AUTOSTART_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(AUTOSTART_CHANGED_CHANNEL, listener);
+  },
 
   getLaunchHidden: (): Promise<boolean> =>
     ipcRenderer.invoke(AUTOSTART_GET_HIDDEN_CHANNEL),

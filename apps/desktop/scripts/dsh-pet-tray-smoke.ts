@@ -8,7 +8,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app, Menu, Tray, nativeImage } from 'electron';
 import { DshPetController } from '../src/main/dsh-pet/controller';
-import { buildDshPetTrayMenu } from '../src/main/dsh-pet/tray-menu';
+import { buildTrayMenuTemplate } from '../src/main/tray-menu';
+import { applyAutostart, loadAutostartPref } from '../src/main/autostart';
 // @ts-ignore optional acceptance driver
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
@@ -37,8 +38,16 @@ async function main() {
     },
   });
   const tray = new Tray(nativeImage.createFromPath(path.join(desktop!, 'resources/icon.png')));
-  const menu = () => {
-    const result = Menu.buildFromTemplate(buildDshPetTrayMenu(controller, 'zh-CN'));
+  const menu = async () => {
+    const result = Menu.buildFromTemplate(await buildTrayMenuTemplate({
+      getLocale: () => 'zh-CN', showMainWindow: () => {}, openSettings: () => {}, quit: () => {},
+      getAutostart: async () => (await loadAutostartPref()).openAtLogin,
+      setAutostart: applyAutostart,
+      pet: { isEnabled: () => controller.getState().enabled, setEnabled: enabled => controller.dispatch({ type: 'set-enabled', enabled }) },
+      onError: error => { throw error; },
+    }));
+    assert.deepEqual(result.items.filter(item => item.type !== 'separator').map(item => item.label),
+      ['显示主窗口', '自启动', '桌面宠物', '设置', '退出']);
     tray.setContextMenu(result);
     return result;
   };
@@ -61,6 +70,13 @@ async function main() {
     assert.equal(await page.evaluate('window.__dshPetDebug.errors.length'), 0);
   };
   try {
+    await applyAutostart(false);
+    const loginItem = (await menu()).getMenuItemById('autostart')!;
+    assert.equal(loginItem.checked, false);
+    loginItem.click(loginItem, undefined, {} as KeyboardEvent);
+    await until(async () => (await loadAutostartPref()).openAtLogin, 'save autostart preference');
+    assert.equal((await menu()).getMenuItemById('autostart')!.checked, true);
+    checks.push('autostart-checkbox-persists-in-isolated-profile');
     const pet = (controller.getState().config.main!.pets as object[])[0]!;
     await controller.dispatch({ type: 'patch-config', patch: { notificationsEnabled: false, pets: [
       { ...pet, size: 180, display: 'both', balanceEnabled: false, fixedEnabled: true },
@@ -73,21 +89,21 @@ async function main() {
         await controller.dispatch({ type: 'patch-config', patch: { pets: [{ ...pet, size: 180, display: visibleDisplay, balanceEnabled: false, fixedEnabled: true }] } });
         await helperReady();
       }
-      const item = menu().getMenuItemById('dsh-pets')!;
+      const item = (await menu()).getMenuItemById('pet')!;
       assert.ok(!item.submenu, 'the single companion needs no submenu');
       assert.ok(item.checked); item.click(item, undefined, {} as KeyboardEvent);
       await until(() => !controller.getState().enabled && controller.getState().status === 'disabled', 'stop companion and background tasks');
       assert.equal(display(), visibleDisplay, 'disabling preserves the configured display bits');
       assert.equal(tray.isDestroyed(), false);
       checks.push(`single-checkbox-stops:${visibleDisplay}`);
-      const restore = menu().getMenuItemById('dsh-pets')!;
+      const restore = (await menu()).getMenuItemById('pet')!;
       assert.equal(restore.checked, false); assert.equal(restore.enabled, true);
       restore.click(restore, undefined, {} as KeyboardEvent);
       await until(() => display() === visibleDisplay && controller.getState().status === 'running', 'restore last helper');
       await helperReady(); checks.push(`single-checkbox-restores:${visibleDisplay}`);
       await controller.dispatch({ type: 'request', method: 'POST', path: '/pet-display', body: JSON.stringify({ id: 'main', display: hiddenDisplay }) });
       await until(() => !controller.getState().enabled && controller.getState().status === 'disabled', 'helper menu hiding stops the subsystem');
-      const hidden = menu().getMenuItemById('dsh-pets')!;
+      const hidden = (await menu()).getMenuItemById('pet')!;
       assert.equal(hidden.checked, false); hidden.click(hidden, undefined, {} as KeyboardEvent);
       await until(() => display() === visibleDisplay && controller.getState().status === 'running', 'restore from legacy hidden state');
       await helperReady(); checks.push(`restore-hidden:${hiddenDisplay}->${visibleDisplay}`);

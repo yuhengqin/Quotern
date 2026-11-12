@@ -3,10 +3,10 @@ import {
   Menu,
   Tray,
   app,
+  dialog,
   ipcMain,
   nativeImage,
   screen,
-  type MenuItemConstructorOptions,
 } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -14,9 +14,9 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { QUOTA_NAVIGATION, QUOTA_NAVIGATION_GET, QUOTA_NAVIGATION_ACK, QUOTA_DIALOG_STATE, type QuotaNavigationRequest, type QuotaNavigationTarget } from '../shared/quota-navigation';
 import type { QuotaState } from '../shared/quota';
-import type { SupportedLocale } from 'quotern-i18n';
 import { quotaPopoverBounds, quotaTraySummary } from './tray-quota';
 import { nativeText } from './native-messages';
+import { buildTrayMenuTemplate, type TrayMenuOptions } from './tray-menu';
 import { defaultPreloadPath, resolveAppIconPath } from './DesktopWindow';
 import {
   TRAY_WINDOW_WIDTH as POPOVER_WIDTH,
@@ -37,7 +37,7 @@ export { markTrayPopoverQuitting, resetTrayPopoverQuitting } from './tray-popove
  * Cross-platform system tray / menu-bar icon.
  *
  * 设计要点：
- *  - 全平台创建 Tray；关窗后进程靠托盘保活，右键菜单提供「显示主窗口」「同步数据」「退出」。
+ *  - 全平台创建 Tray；关窗后进程靠托盘保活，右键提供主窗口、自启动、设置和退出，Windows 另有当前桌宠开关。
  *  - macOS：左键切换 Popover；右键手动 popUpContextMenu（不可 setContextMenu，
  *    否则 Electron 会让左键也弹菜单）。图标用 Template Image（`quoternTemplate.png`）。
  *  - Windows：左键切换额度面板；Linux 左键显示主窗口。右键保留主窗口菜单。
@@ -55,21 +55,14 @@ const TRAY_POPOVER_RESIZE_CHANNEL = 'tray-popover:resize';
 /** Initial height; the renderer reports its real content height on first paint. */
 const POPOVER_INITIAL_HEIGHT = POPOVER_MIN_HEIGHT;
 
-export interface TrayPopoverOptions {
-  getLocale: () => SupportedLocale;
-  showMainWindow: () => void;
+export interface TrayPopoverOptions extends Omit<TrayMenuOptions, 'quit' | 'onError'> {
   getMainWindow?: () => BrowserWindow | null;
-  openSettings: () => void;
-  /** Same as in-app「同步数据」→ POST tud-trigger-sync. */
-  triggerSync: () => void;
-  /** Windows desktop pet toggle. */
-  togglePet?: () => void;
-  getDshPetMenu?: () => MenuItemConstructorOptions[];
   onOpen?: () => void;
 }
 
 let tray: Tray | null = null;
 let trayMenu: Menu | null = null;
+let trayMenuGeneration = 0;
 let currentOptions: TrayPopoverOptions | null = null;
 let lastQuotaState: QuotaState | null = null;
 let popover: BrowserWindow | null = null;
@@ -106,32 +99,21 @@ function loadTrayIcon(): Electron.NativeImage {
   return img;
 }
 
-function buildTrayMenu(options: TrayPopoverOptions): Menu {
-  const locale = options.getLocale();
-  return Menu.buildFromTemplate([
-    {
-      label: nativeText(locale, 'native.tray.showMain'),
-      click: () => options.showMainWindow(),
-    },
-    {
-      label: nativeText(locale, 'native.tray.sync'),
-      click: () => options.triggerSync(),
-    },
-    ...(!isMac && options.togglePet ? [{
-      label: nativeText(locale, 'native.tray.togglePet'),
-      click: () => options.togglePet?.(),
-    }] : []),
-    ...(options.getDshPetMenu?.() ?? []),
-    {
-      label: nativeText(locale, 'native.tray.settings'),
-      click: () => options.openSettings(),
-    },
-    { type: 'separator' },
-    {
-      label: nativeText(locale, 'native.tray.quit'),
-      click: () => app.quit(),
-    },
-  ]);
+async function refreshTrayMenu(options: TrayPopoverOptions, popup = false): Promise<void> {
+  const generation = ++trayMenuGeneration;
+  const onError = (error: unknown) => {
+    console.error('[tud-desktop] tray menu action failed:', error);
+    dialog.showErrorBox('Quotern', nativeText(options.getLocale(), 'native.tray.updateFailed'));
+  };
+  try {
+    const template = await buildTrayMenuTemplate({ ...options, quit: () => app.quit(), onError });
+    if (generation !== trayMenuGeneration || !tray || tray.isDestroyed()) return;
+    trayMenu = Menu.buildFromTemplate(template);
+    if (!supportsPopover) tray.setContextMenu(trayMenu);
+    if (popup) tray.popUpContextMenu(trayMenu);
+  } catch (error) {
+    if (generation === trayMenuGeneration && tray && !tray.isDestroyed()) onError(error);
+  }
 }
 
 function ensurePopover(): BrowserWindow {
@@ -313,18 +295,16 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
   ipcMain.handle(QUOTA_DIALOG_STATE, (event, open: unknown) => { if (event.sender === popover?.webContents && typeof open === 'boolean') popoverDialogOpen = open; });
   tray = new Tray(loadTrayIcon());
   tray.setToolTip('Quotern');
-  trayMenu = buildTrayMenu(options);
+  void refreshTrayMenu(options);
 
   if (isMac || process.platform === 'win32') {
     tray.on('click', () => { options.onOpen?.(); togglePopover(); });
     tray.on('right-click', () => {
-      trayMenu = buildTrayMenu(options);
-      tray?.popUpContextMenu(trayMenu);
+      void refreshTrayMenu(options, true);
     });
     ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);
     ipcMain.on(TRAY_POPOVER_RESIZE_CHANNEL, handlePopoverResize);
   } else {
-    tray.setContextMenu(trayMenu);
     tray.on('click', () => options.showMainWindow());
   }
   if (lastQuotaState) setTrayQuotaState(lastQuotaState);
@@ -333,12 +313,12 @@ export function createTrayPopover(options: TrayPopoverOptions): void {
 /** Rebuild native menu and tooltip when the Desktop language changes. */
 export function refreshTrayLocale(): void {
   if (!tray || tray.isDestroyed() || !currentOptions) return;
-  trayMenu = buildTrayMenu(currentOptions);
-  if (!isMac && process.platform !== 'win32') tray.setContextMenu(trayMenu);
+  void refreshTrayMenu(currentOptions);
   if (lastQuotaState) setTrayQuotaState(lastQuotaState);
 }
 
 export function disposeTrayPopover(): void {
+  trayMenuGeneration++;
   iconGeneration++; quotaLevel = -1;
   markTrayPopoverQuitting();
   ipcMain.removeAllListeners(TRAY_POPOVER_RESIZE_CHANNEL);

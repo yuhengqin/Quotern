@@ -218,6 +218,10 @@ function AppSettingsPanel() {
   const [trayUsageMode, setTrayUsageMode] = useState<TrayUsageMode>('both');
   const [trayUsageLoading, setTrayUsageLoading] = useState(true);
   const [trayUsageError, setTrayUsageError] = useState<string | null>(null);
+  useEffect(() => window.tud.onOpenAtLoginChanged?.((enabled) => {
+    setOpenAtLogin(enabled);
+    setAutostartError(null);
+  }), []);
   useEffect(() => {
     let cancelled = false;
     setAutostartLoading(true);

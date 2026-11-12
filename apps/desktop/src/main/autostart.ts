@@ -33,6 +33,7 @@ import {
 
 const AUTOSTART_GET_CHANNEL = 'autostart:get';
 const AUTOSTART_SET_CHANNEL = 'autostart:set';
+const AUTOSTART_CHANGED_CHANNEL = 'autostart:changed';
 const AUTOSTART_GET_HIDDEN_CHANNEL = 'autostart:get-hidden';
 const AUTOSTART_SET_HIDDEN_CHANNEL = 'autostart:set-hidden';
 
@@ -56,6 +57,14 @@ export interface AutostartPref {
   openAtLogin: boolean;
   isFirstRun: boolean;
   launchHidden: boolean;
+}
+
+const autostartListeners = new Set<() => void>();
+
+/** Native menus on Linux remain bound between openings. */
+export function onAutostartPrefChanged(listener: () => void): () => void {
+  autostartListeners.add(listener);
+  return () => { autostartListeners.delete(listener); };
 }
 
 function prefsPath(): string {
@@ -233,28 +242,34 @@ function setOsLoginItem(enabled: boolean, launchHidden: boolean): void {
 }
 
 export async function loadAutostartPref(): Promise<AutostartPref> {
-  const existing = await readPrefsFile();
-  if (!existing) {
-    return { openAtLogin: true, isFirstRun: true, launchHidden: true };
-  }
-  return {
-    openAtLogin: existing.openAtLogin,
-    isFirstRun: false,
-    launchHidden: existing.launchHidden,
-  };
+  return withPrefsLock(async () => {
+    const existing = await readPrefsFile();
+    return {
+      openAtLogin: existing?.openAtLogin ?? true,
+      isFirstRun: !existing,
+      launchHidden: existing?.launchHidden ?? true,
+    };
+  });
 }
 
 export async function applyAutostart(
   enabled: boolean,
   launchHidden?: boolean,
 ): Promise<boolean> {
-  const existing = await readPrefsFile();
-  const hidden = launchHidden ?? existing?.launchHidden ?? true;
-  await patchPrefs({
-    openAtLogin: enabled,
-    launchHidden: hidden,
-  });
+  const existing = await loadAutostartPref();
+  const hidden = launchHidden ?? existing.launchHidden;
   setOsLoginItem(enabled, hidden);
+  try {
+    await patchPrefs({ openAtLogin: enabled, launchHidden: hidden });
+  } catch (error) {
+    try { setOsLoginItem(existing.openAtLogin, existing.launchHidden); }
+    catch (rollbackError) { console.error('[tud-desktop] failed to restore login item:', rollbackError); }
+    throw error;
+  }
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(AUTOSTART_CHANGED_CHANNEL, enabled);
+  }
+  for (const listener of autostartListeners) listener();
   return enabled;
 }
 

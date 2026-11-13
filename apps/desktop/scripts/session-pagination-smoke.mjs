@@ -462,6 +462,78 @@ async function exerciseDashboardFixes(window, client, mode) {
   checks.push(mode + '-units-without-reload', mode + '-raw-subcent-and-chart-precision', mode + '-model-details-keyboard-focus', mode + '-project-help-and-long-name', mode + '-visible-denominator-restore', mode + '-complete-values-wide-narrow');
 }
 
+async function exerciseHeatmapHelpScrolling(window, client, mode, help, dialog) {
+  const page = mode === 'browser' ? 'document.querySelector("[data-dashboard-scroll-container]")' : 'document.scrollingElement';
+  const open = async () => {
+    await client.evaluate(`(${help}).scrollIntoView({block:'center'}); (${help}).focus(); true`);
+    await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-open.png`));
+    await client.key('Enter');
+    await until(() => client.evaluate(`Boolean(${dialog}) && !document.querySelector('[data-entering]')`), mode + ' settled help for scrolling');
+    await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-scroll.png`));
+  };
+  const wheel = async (point, deltaY) => {
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+    return client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY });
+  };
+  const closedAfterPaint = () => client.evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(!${dialog}))))`);
+
+  // Native document scrollbars use the real content bounds, not an emulated viewport.
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  window.setContentSize(1120, 900);
+  await open();
+  const wheelBefore = await client.evaluate(`${page}.scrollTop`);
+  await wheel({ x: 80, y: 300 }, 160);
+  await wait(250);
+  const wheelAfter = await client.evaluate(`${page}.scrollTop`);
+  const wheelState = await client.evaluate(`({rootOverflow:document.documentElement.style.overflow,pageHeight:${page}.clientHeight,scrollHeight:${page}.scrollHeight,help:!!${dialog}})`);
+  await captureSettled(window, path.join(output, `${mode}-heatmap-help-wheel.png`));
+  assert.ok(wheelAfter > wheelBefore + 20, mode + ' background wheel scrolls with help open: ' + JSON.stringify({ wheelBefore, wheelAfter, wheelState }));
+  assert.equal(await closedAfterPaint(), true, mode + ' page wheel closes help without a lingering overlay');
+
+  await open();
+  const scrollBefore = await client.evaluate(`${page}.scrollTop`);
+  if (mode === 'browser') {
+    const thumb = await client.evaluate(`(()=>{const el=${page},r=el.getBoundingClientRect(),height=Math.max(20,el.clientHeight**2/el.scrollHeight);return {x:r.right-4,y:r.top+el.scrollTop/(el.scrollHeight-el.clientHeight)*(el.clientHeight-height)+height/2}})()`);
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: thumb.x, y: thumb.y });
+    await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: thumb.x, y: thumb.y, button: 'left', clickCount: 1 });
+    for (const distance of [25, 50, 75, 100]) {
+      await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: thumb.x, y: thumb.y + distance, button: 'left', buttons: 1 });
+      await wait(25);
+    }
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: thumb.x, y: thumb.y + 100, button: 'left', clickCount: 1 });
+  } else {
+    // The desktop shell scrolls the document. Exercise its native scroll event
+    // directly; the browser shell above additionally verifies a pointer drag.
+    await client.evaluate(`${page}.scrollTop += 160; true`);
+  }
+  await until(() => client.evaluate(`${page}.scrollTop > ${scrollBefore + 20}`), mode + ' page scroll moves the actual scroll container');
+  assert.equal(await closedAfterPaint(), true, mode + ' scrollbar drag leaves no detached help');
+
+  await open();
+  await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: 80, y: 300, button: 'left', clickCount: 1 });
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 80, y: 300, button: 'left', clickCount: 1 });
+  await until(() => client.evaluate(`!${dialog}`), mode + ' help retains outside-click dismissal');
+
+  window.setContentSize(375, 360);
+  await open();
+  await client.evaluate(`${dialog}.querySelector('summary').focus(); true`);
+  await client.key('Enter');
+  await until(() => client.evaluate(`${dialog}.scrollHeight > ${dialog}.clientHeight + 10`), mode + ' expanded help has scrollable content');
+  assert.equal(await client.evaluate(`(()=>{const r=${dialog}.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})()`), true, mode + ' scrollable help stays inside the short viewport');
+  const inner = await client.evaluate(`(()=>{const el=${dialog},r=el.getBoundingClientRect();el.scrollTop=0;return {point:{x:r.left+r.width/2,y:r.top+r.height/2},pageTop:${page}.scrollTop}})()`);
+  await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-internal-scroll.png`));
+  await wheel(inner.point, 160);
+  await until(() => client.evaluate(`${dialog}?.scrollTop > 10`), mode + ' wheel scrolls expanded help content');
+  await wheel(inner.point, 1000);
+  await wait(200);
+  assert.equal(await client.evaluate(`Boolean(${dialog}) && ${page}.scrollTop===${inner.pageTop}`), true, mode + ' help scrolling does not move the background or dismiss itself');
+  await captureSettled(window, path.join(output, `${mode}-heatmap-help-internal-scroll.png`));
+  await client.key('Escape');
+  await until(() => client.evaluate(`!${dialog} && document.activeElement===(${help})`), mode + ' scrolled help restores focus');
+  window.setContentSize(1120, 900);
+  checks.push(mode + '-help-wheel-' + (mode === 'browser' ? 'scrollbar-drag' : 'document-scroll') + '-immediate-dismiss-outside-click-internal-scroll');
+}
+
 async function exerciseHeatmapLegend(window, client, mode) {
   const legend = 'document.querySelector("[data-heatmap-legend]")';
   const help = `(${legend}).querySelector('button')`;
@@ -527,6 +599,7 @@ async function exerciseHeatmapLegend(window, client, mode) {
     await client.key('Escape');
     await until(() => client.evaluate(`!${dialog} && !document.body.innerText.includes('请至少选择一个 Agent')`), 'all sources restored');
   }
+  await exerciseHeatmapHelpScrolling(window, client, mode, help, dialog);
   for (const [locale, title, noUsage] of [['en', 'Daily tokens', 'No recorded usage'], ['ja', '1日のトークン使用量', '使用量の記録なし'], ['ko', '일일 토큰 사용량', '기록된 사용량 없음'], ['zh-CN', '每日 Token 用量', '无用量记录']]) {
     if (mode === 'browser') await client.evaluate(`localStorage.setItem('quotern.locale.preference',${JSON.stringify(locale)}); window.dispatchEvent(new StorageEvent('storage',{key:'quotern.locale.preference'})); true`);
     else window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'zh-CN' });

@@ -251,3 +251,64 @@ test('fork details discard copied activity evidence exactly as the full-history 
   const detail = (await (await app.request(`/functions/tud-session-detail?${scope}&source=codex&sessionId=fork-child`)).json()).data.session;
   assert.equal(detail.insights.signals.toolCalls, 1);
 });
+
+test('warm and concurrent full queries share enrichment without exposing cached rows to mutation', async t => {
+  const { dataDir, bucketStore } = await fixture(t);
+  const history = await readSessionHistory(dataDir, ['claude']);
+  let examinations = 0;
+  const evidence = history.evidence.map(event => new Proxy(event, {
+    get(target, key, receiver) { if (key === 'kind') examinations++; return Reflect.get(target, key, receiver); },
+  }));
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) }, async () => ({ ...history, evidence }));
+  const query = { days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } };
+  const first = await queries.full(query);
+  const initial = examinations;
+  assert.ok(initial > 0);
+  first.sessions[0]!.models![0]!.tokens = 999999;
+  first.sessions[0]!.insights!.relatedUsage = [];
+  first.sessions.splice(1);
+  const [a, b] = await Promise.all([queries.full(query), queries.full(query)]);
+  assert.equal(a.sessions.length, 27);
+  assert.ok(a.sessions[0]!.models![0]!.tokens < 999999, 'response mutation must not overwrite the cached model rows');
+  assert.equal(examinations, initial, 'unchanged history must not be enriched again');
+  assert.deepEqual(a, b);
+});
+
+test('simultaneous range loads share their history read and a later session write is still observed', async t => {
+  const { dataDir, bucketStore, input, events, discovered } = await fixture(t);
+  let reads = 0;
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) }, async (...args) => {
+    reads++; return readSessionHistory(...args);
+  });
+  const query = { days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } };
+  const [a, b] = await Promise.all([queries.full(query), queries.full(query)]);
+  assert.equal(reads, 1);
+  assert.deepEqual(a, b);
+  events[0] = { ...events[0], message: { id: 'm0', model: 'model-b', usage: { input_tokens: 999, output_tokens: 1 } } } as typeof events[number];
+  await writeFile(input, events.map(row => JSON.stringify(row)).join('\n') + '\n');
+  await syncSessionSource(dataDir, 'claude', discovered);
+  const updated = await queries.full(query);
+  assert.equal(updated.sessions.find(row => row.sessionId === 's00')!.tokens, 1000);
+});
+
+test('cached hydration retains descendant titles and follows current title and pricing metadata', async t => {
+  const { dataDir, bucketStore } = await fixture(t);
+  const history = await readSessionHistory(dataDir, ['claude']);
+  history.evidence.push({ source: 'claude', sessionId: 's01', id: 'parent', kind: 'metadata', timestamp: '2026-10-16T03:00:00Z', parentId: 's00', relationKind: 'subagent' });
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) }, async () => history);
+  const query = { days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } };
+  const original = getPricingSnapshot(); t.after(() => applyPricingSnapshot(original));
+  applyPricingSnapshot({ builtin: { exact: { 'model-a': { input: 1, output: 1 }, 'model-b': { input: 1, output: 1 } } }, overlay: null });
+  const first = await queries.full(query);
+  const parent = first.sessions.find(row => row.sessionId === 's00')!;
+  assert.equal(parent.insights!.relatedUsage![0]!.sessionTitle, 'Session 1');
+  const oldCost = parent.costUsd!;
+  history.titles.set(JSON.stringify(['claude', 's01']), { title: 'Renamed child', priority: 2 });
+  assert.equal((await queries.full(query)).sessions.find(row => row.sessionId === 's00')!.insights!.relatedUsage![0]!.sessionTitle, 'Renamed child');
+  history.titles.delete(JSON.stringify(['claude', 's01']));
+  const untitled = await queries.full(query);
+  assert.equal(untitled.sessions.find(row => row.sessionId === 's01')!.sessionTitle, undefined);
+  assert.equal(untitled.sessions.find(row => row.sessionId === 's00')!.insights!.relatedUsage![0]!.sessionTitle, undefined);
+  applyPricingSnapshot({ builtin: { exact: { 'model-a': { input: 2, output: 2 }, 'model-b': { input: 2, output: 2 } } }, overlay: null });
+  assert.equal((await queries.full(query)).sessions.find(row => row.sessionId === 's00')!.costUsd, oldCost * 2);
+});

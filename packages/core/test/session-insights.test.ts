@@ -2,8 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { enrichSessionInsights, extractSessionEvidence, sessionsToCsv } from '../src/session-insights.js';
 import type { SessionActivity } from '../src/session-observation.js';
+import type { SessionEvidence } from '../src/session-insights.js';
 
 const row = (sessionId: string, tokens: number | null, costUsd: number | null): SessionActivity => ({ source: 'codex', sessionId, tokens, costUsd, projectLabel: 'repo', model: 'test', lastActivityAt: '2026-10-22T10:00:00Z', costKind: costUsd === null ? 'unknown' : 'estimated', billing: { service: 'unknown', mode: 'unknown', accountRef: null, evidence: 'unknown' }, context: null, sharePercent: null });
+test('enriching many sessions does not rescan every metadata record for each session', () => {
+  const rows = Array.from({ length: 120 }, (_, index) => row(`session-${index}`, 10, 1));
+  let reads = 0;
+  const evidence: SessionEvidence[] = rows.map(session => new Proxy({ source: session.source, sessionId: session.sessionId,
+    id: 'meta', timestamp: session.lastActivityAt, kind: 'metadata' as const, sessionStart: true, projectKey: 'project' }, {
+    get(target, key, receiver) { if (key === 'kind') reads++; return Reflect.get(target, key, receiver); },
+  }));
+  enrichSessionInsights(rows, [], evidence);
+  assert.equal(rows[0]!.insights?.ownTokens, 10);
+  assert.deepEqual(rows.at(-1)!.insights?.dispatches, []);
+  assert.ok(reads < 2000, `metadata was examined ${reads} times for 120 records`);
+});
 test('thread totals retain own amounts, unknown child cost, typed forks and orphan sessions', () => {
   const rows = [row('root', 100, 1), row('child', 40, null), row('fork', 20, 0.2), row('orphan', 5, 0.1)];
   enrichSessionInsights(rows, [], [

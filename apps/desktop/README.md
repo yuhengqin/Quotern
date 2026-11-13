@@ -10,6 +10,7 @@ Electron 桌面客户端：与 CLI 共用 `~/.quotern` 数据。主进程管理�
 - 心跳文件 `~/.quotern/tud.heartbeat`：运行中续期；runtime 挂掉会自动拉起。对端桌面心跳过期时，新实例会 kill 旧进程再启动
 - `config.json` 损坏时尝试备份为 `config.json.bak.<ts>` 并重建，优先保留设备标识
 - 通过 **内存 Hono local-api**（不占 :8252）经 IPC 向渲染层提供与 CLI 相同的 `/functions/tud-*` 契约
+- 会话活动、分页/详情、性能分析、会话指标及额度历史查询由按需启动的独立分析 utilityProcess 执行，保留相同 API；数据、价格或范围变化后重建分析，未变化的请求复用洞察结果。分析失败不会回退主进程重算。
 - Dashboard / 设置读同一本地 queue
 - 订阅额度卡提供分钟级重置倒计时、日期切换、剩余额度节奏刻度，以及可按服务组件筛选的故障详情；与 Dashboard 共用展示实现。
 - 「订阅」设置中的服务故障/恢复通知默认开启，已有明确关闭的偏好保持关闭；首次服务观察仅建立基线。「打开额度面板」快捷键默认关闭，初始组合为 `Ctrl+Shift+U`（macOS 为 `Cmd+Shift+U`），支持输入自定义组合并保存。保存时检测格式与系统注册冲突，失败保留原设置及原快捷键；关闭后保留组合，重启恢复已开启的组合。旧订阅页的测试入口只在 Vite 开发模式显示；独立「通知」页提供正式可用的测试通知。
@@ -127,6 +128,8 @@ apps/desktop/
 │   ├── local-runtime.ts    # quotern-core 运行时（无 HTTP 端口）
 │   ├── sync-worker-host.ts # utilityProcess 宿主与恢复
 │   ├── sync-worker.ts      # 采集任务与独立 watchdog
+│   ├── session-analysis-host.ts # 只读会话查询的 utilityProcess 宿主
+│   ├── session-analysis-worker.ts # 分析队列、当前运行快照与查询缓存
 │   ├── local-api-ipc.ts    # IPC → 内存 local-api
 │   └── DesktopWindow.ts
 ├── src/preload/index.ts    # window.tud（窗口控制 + api.request）

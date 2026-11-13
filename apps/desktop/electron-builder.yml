@@ -30,6 +30,7 @@ files:
 asar: true
 asarUnpack:
   - out/main/sync-worker*.js
+  - out/main/session-analysis-worker*.js
   # Custom files mappings match their source paths before being renamed to node_modules.
   - out/native-runtime/**
 extraResources:

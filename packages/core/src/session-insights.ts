@@ -3,7 +3,7 @@ import type { SessionActivity } from './session-observation.js';
 import type { SessionMessage } from './session-metrics.js';
 import { sessionResumeCommand } from './session-resume.js';
 import { diagnoseSession, operationForCall, operationForResult, operationProjectKey, type SessionOperation, type SessionDiagnostics } from './session-diagnostics.js';
-import { sessionDispatches, type SessionDispatch } from './session-dispatch.js';
+import { createSessionDispatchIndex, sessionDispatches, type SessionDispatch } from './session-dispatch.js';
 
 export type SessionRelationKind = 'fork' | 'subagent' | 'unknown';
 /** Non-recursive usage snapshot for details, including targeted history responses. */
@@ -143,6 +143,7 @@ export function enrichSessionInsights(rows: SessionActivity[], messages: readonl
   }
   for (const m of messages) { const k = key(m.source, m.sessionId); const list = messageGroups.get(k) ?? []; list.push(m); messageGroups.set(k, list); }
   const byKey = new Map(rows.map(row => [key(row.source, row.sessionId), row]));
+  const dispatchIndex = createSessionDispatchIndex(evidence, candidates);
   for (const row of rows) {
     const events = (grouped.get(key(row.source, row.sessionId)) ?? []).sort((a,b) => a.timestamp.localeCompare(b.timestamp));
     const meta = events.filter(e => e.kind === 'metadata'), latest = <K extends keyof SessionEvidence>(field: K) => [...meta].reverse().find(e => e[field])?.[field];
@@ -163,7 +164,7 @@ export function enrichSessionInsights(rows: SessionActivity[], messages: readonl
       signals: { toolCalls: tools.length || (complete?0:null), editTurns, retryTurns: retries || (complete?0:null), firstPass: complete&&editTurns!==null&&editTurns>0?editTurns===1&&retries===0:null, errorCount: events.filter(e=>e.kind==='error').length || (complete?0:null), compactionCount: events.filter(e=>e.kind==='compaction').length || (complete?0:null), costPerEdit: editTurns && ownCost !== null ? ownCost/editTurns : null, tokensPerEdit: editTurns && row.tokens !== null ? row.tokens/editTurns : null, coverage: supported ? complete?'complete':'partial' : 'unsupported' },
       resumeCommand: resume ? [resume.executable, ...resume.args].join(' ') : null,
       diagnostics: diagnoseSession(row, events, candidates, supported ? complete ? 'complete' : 'partial' : 'unsupported'),
-      dispatches: sessionDispatches(row, events, evidence, candidates) };
+      dispatches: sessionDispatches(row, events, evidence, candidates, dispatchIndex) };
   }
   // Disconnect all participants in a cycle; never hide or remove a session.
   for (const row of rows) {

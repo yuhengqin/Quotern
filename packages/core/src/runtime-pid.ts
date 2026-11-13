@@ -4,6 +4,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { resolveDataDir } from './paths.js';
+import { isCurrentProcessStart, readProcessIdentity, resetAsyncProcessIdentityCache } from './runtime-process-async.js';
 
 /** Who holds exclusive sync/upload ownership in `tud.pid`. */
 export type RuntimeKind = 'cli' | 'desktop';
@@ -129,6 +130,7 @@ const winFieldCache = new Map<string, { value: string; readAt: number }>();
 /** Test seam. */
 export function resetProcessFieldCache(): void {
   winFieldCache.clear();
+  resetAsyncProcessIdentityCache();
 }
 
 /**
@@ -275,10 +277,13 @@ export function isStillSameRuntimeProcess(owner: RuntimeOwner): boolean {
   if (!isPidAlive(owner.pid)) return false;
 
   const args = readProcessArgs(owner.pid);
+  return matchesRuntimeOwner(owner, args, owner.startedAt ? readProcessStart(owner.pid) : null);
+}
+
+function matchesRuntimeOwner(owner: RuntimeOwner, args: string | null, start: string | null): boolean {
   const looksLikeRuntime = Boolean(args && argsMatchRuntimeKind(args, owner.kind));
 
   if (owner.startedAt) {
-    const start = readProcessStart(owner.pid);
     if (start && start === owner.startedAt) return true;
     // Locale/format noise can make `ps -o lstart=` differ across processes.
     // Only treat a mismatch as PID reuse when the command line is missing or
@@ -293,6 +298,13 @@ export function isStillSameRuntimeProcess(owner: RuntimeOwner): boolean {
     return Boolean(owner.startedAt);
   }
   return looksLikeRuntime;
+}
+
+async function isStillSameRuntimeProcessAsync(owner: RuntimeOwner): Promise<boolean> {
+  if (!isPidAlive(owner.pid)) return false;
+  if (owner.pid === process.pid && isCurrentProcessStart(owner.startedAt)) return true;
+  const identity = await readProcessIdentity(owner.pid);
+  return matchesRuntimeOwner(owner, identity.args, identity.startedAt);
 }
 
 /** Parse pid file: JSON `{pid,kind,startedAt?}` or legacy plain integer (treated as CLI). */
@@ -352,7 +364,7 @@ export async function writeRuntimeOwner(
   dataDir = resolveDataDir(),
 ): Promise<void> {
   await mkdir(dataDir, { recursive: true });
-  const startedAt = owner.startedAt ?? readProcessStart(owner.pid) ?? undefined;
+  const startedAt = owner.startedAt ?? (await readProcessIdentity(owner.pid)).startedAt ?? undefined;
   const payload = JSON.stringify({
     pid: owner.pid,
     kind: owner.kind,
@@ -385,7 +397,11 @@ export async function getRunningOwner(
 ): Promise<RuntimeOwner | null> {
   const owner = await readRuntimeOwner(dataDir);
   if (owner == null) return null;
-  if (!isStillSameRuntimeProcess(owner)) {
+  if (!await isStillSameRuntimeProcessAsync(owner)) {
+    // Inspection now yields to the event loop. Do not remove a newer owner's
+    // record that replaced the one we inspected while the OS query was pending.
+    const latest = await readRuntimeOwner(dataDir);
+    if (JSON.stringify(latest) !== JSON.stringify(owner)) return latest ? getRunningOwner(dataDir) : null;
     await clearPid(dataDir);
     return null;
   }

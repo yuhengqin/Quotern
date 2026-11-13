@@ -1,7 +1,7 @@
 import { resolveAggregateWindow } from './aggregate.js';
 import { resolveLocalCollectSince } from './config.js';
 import type { LocalApiDeps } from './server/state.js';
-import { computeTokens, getPricingSnapshot } from './pricing/index.js';
+import { computeTokens, getPricingFingerprint, getPricingSnapshot } from './pricing/index.js';
 import { aggregateSessionActivity, prepareSessionObservations, type PreparedSessionObservations, type SessionActivity, type SessionActivitySnapshot, type SessionObservation } from './session-observation.js';
 import { readSessionHistory, type SessionHistory } from './session-collector.js';
 import type { SessionMetricOptions, SessionMessage } from './session-metrics.js';
@@ -18,6 +18,7 @@ interface RangeState {
   history: SessionHistory; prepared: PreparedSessionObservations; options: SessionMetricOptions; snapshot: SessionActivitySnapshot;
   modelRows: Map<string, SessionActivity>; clocks?: { messages: Map<string, SessionMessage[]>; timings: Map<string, SessionTimingEvent[]> };
   durations: Map<string, ReturnType<typeof aggregateTaskTiming>>;
+  hydrations: Map<string, Promise<SessionActivity[]>>;
 }
 
 function markRelationCycles(rows: SessionActivity[]): void {
@@ -45,10 +46,21 @@ export class SessionQueryService {
   private nextHistoryId = 0;
   private prepared = new WeakMap<SessionObservation[], PreparedSessionObservations>();
   private pricing = getPricingSnapshot();
+  private readonly pendingRanges = new Map<string, Promise<RangeState>>();
 
   constructor(private readonly deps: LocalApiDeps, private readonly readHistory: typeof readSessionHistory) {}
 
   private async range(query: SessionRangeQuery): Promise<RangeState> {
+    const key = JSON.stringify([this.deps.bucketStore.getRevision(), resolveLocalCollectSince(this.deps.getConfig()), getPricingFingerprint(), query]);
+    const pending = this.pendingRanges.get(key);
+    if (pending) return pending;
+    const operation = this.buildRange(query);
+    this.pendingRanges.set(key, operation);
+    try { return await operation; }
+    finally { if (this.pendingRanges.get(key) === operation) this.pendingRanges.delete(key); }
+  }
+
+  private async buildRange(query: SessionRangeQuery): Promise<RangeState> {
     const bucketRevision = this.deps.bucketStore.getRevision();
     const window = resolveAggregateWindow(query.days, this.deps.bucketStore.reportSince(resolveLocalCollectSince(this.deps.getConfig())), undefined, query.bounds);
     const fromDate = query.collected ? window.statsSinceDate : window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
@@ -89,7 +101,7 @@ export class SessionQueryService {
         agentRole: [...events].reverse().find(event => event.agentRole?.trim())?.agentRole ?? null };
     }
     markRelationCycles(snapshot.sessions);
-    const state = { history, prepared, options, snapshot, modelRows: new Map(), durations: new Map() };
+    const state: RangeState = { history, prepared, options, snapshot, modelRows: new Map(), durations: new Map(), hydrations: new Map() };
     this.ranges.set(key, state);
     while (this.ranges.size > 12) this.ranges.delete(this.ranges.keys().next().value!);
     return state;
@@ -144,6 +156,28 @@ export class SessionQueryService {
   }
 
   private async hydrate(state: RangeState, identities?: Set<string>): Promise<SessionActivity[]> {
+    const key = identities ? JSON.stringify([...identities].sort()) : 'all';
+    let pending = state.hydrations.get(key);
+    if (!pending) {
+      pending = this.buildHydration(state, identities);
+      state.hydrations.set(key, pending);
+      while (state.hydrations.size > 12) state.hydrations.delete(state.hydrations.keys().next().value!);
+      const operation = pending;
+      void operation.catch(() => { if (state.hydrations.get(key) === operation) state.hydrations.delete(key); });
+    }
+    // API consumers filter responses and apply live account labels. Neither may
+    // mutate the cached model/insight objects shared with later requests.
+    const cloned = structuredClone(await pending);
+    for (const row of cloned) delete row.sessionTitle;
+    const result = await this.titled(state, cloned);
+    const titles = new Map(result.map(row => [sessionKey(row), row.sessionTitle]));
+    for (const row of result) for (const related of [...(row.insights?.relatedUsage ?? []), ...(row.insights?.dispatches ?? [])]) {
+      if (titles.has(sessionKey(related))) related.sessionTitle = titles.get(sessionKey(related));
+    }
+    return result;
+  }
+
+  private async buildHydration(state: RangeState, identities?: Set<string>): Promise<SessionActivity[]> {
     const selected = state.snapshot.sessions.filter(row => !identities || identities.has(sessionKey(row)));
     const missing = new Set(selected.filter(row => !state.modelRows.has(sessionKey(row))).map(sessionKey));
     if (missing.size) {
@@ -151,7 +185,7 @@ export class SessionQueryService {
       const full = aggregateSessionActivity([], state.history.messages.filter(message => missing.has(sessionKey(message))), { ...state.options, prepared, totalTokens: state.snapshot.totalTokens });
       for (const row of full.sessions) state.modelRows.set(sessionKey(row), row);
     }
-    const result = await this.titled(state, selected.map(row => state.modelRows.get(sessionKey(row))!));
+    const result = await this.titled(state, structuredClone(selected.map(row => state.modelRows.get(sessionKey(row))!)));
     for (const row of result) {
       const metric = this.timing(state, row); row.taskSeconds = metric.taskSeconds; row.taskTimingKind = metric.taskTimingKind; row.detailLevel = 'full';
     }

@@ -15,6 +15,7 @@ import {
   pidFilePath,
   readProcessArgs,
   readProcessStart,
+  resetProcessFieldCache,
   releaseRuntimeOwner,
   stopPid,
   writePid,
@@ -26,6 +27,24 @@ import {
   readRuntimeHeartbeat,
   touchRuntimeHeartbeat,
 } from '../src/runtime-supervisor.js';
+
+test('Windows owner validation keeps timers responsive while inspecting a live process', { skip: process.platform !== 'win32' }, async t => {
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore', windowsHide: true });
+  t.after(() => { child.kill(); });
+  assert.ok(child.pid);
+  const startedAt = readProcessStart(child.pid);
+  assert.ok(startedAt);
+  const dir = await mkdtemp(join(tmpdir(), 'quotern-async-pid-'));
+  await writeFile(pidFilePath(dir), JSON.stringify({ pid: child.pid, kind: 'cli', startedAt }));
+  resetProcessFieldCache();
+  let previous = performance.now(), longest = 0;
+  const timer = setInterval(() => { const now = performance.now(); longest = Math.max(longest, now - previous); previous = now; }, 5);
+  t.after(() => clearInterval(timer));
+  await new Promise(resolve => setTimeout(resolve, 15));
+  assert.equal((await getRunningOwner(dir))?.pid, child.pid);
+  await new Promise(resolve => setTimeout(resolve, 15));
+  assert.ok(longest < 200, `owner validation blocked timers for ${Math.round(longest)}ms`);
+});
 
 test('parseRuntimeOwner accepts JSON and legacy plain pid', () => {
   assert.deepEqual(parseRuntimeOwner('{"pid":42,"kind":"desktop"}'), {

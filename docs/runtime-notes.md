@@ -24,6 +24,8 @@ Desktop 已运行时，另开 `quotern start` 会作为 observer 提供浏览器
 
 证据：[runtime-pid 测试](../packages/core/test/runtime-pid.test.ts)、[CLI 服务实现](../packages/cli/src/service.ts)。
 
+异步 owner 读取与写入使用非阻塞进程探测：Windows 一次 CIM 查询读取命令行和 UTC 启动时间，兼容 WMIC 回退；并发探测合并，外部进程的成功缓存仅保留两秒。自身 PID 与本进程已确认的启动标识一致时直接确认，不在每次 Desktop watchdog 中重复启动 PowerShell。公开同步 helper 继续供同步调用方使用。
+
 ## Hook 与后台轮询
 
 可选 Agent 行为 Hook 与现有采集 Hook 分开管理；配置、交接、Claude 插件和真实请求的边界见 [Agent 集成](agent-integrations.md)。`/functions/tud-agent` 要求本机请求，写操作还需要运行实例的动作 token；演示模式不注册此路由。自动开窗复用成功额度观测，但必须由当前 runtime owner 执行，开发隔离时禁用。
@@ -51,6 +53,14 @@ worker 的启动请求合并，每代进程仅处理自己的消息与等待请�
 一轮采集中已落盘但尚未回传的增量，在失败后先通过磁盘刷新 BucketStore 和聚合缓存恢复；恢复失败时，下一轮先重试恢复。正常轮次继续只应用增量，不每轮全量重读。该恢复不提供 queue 与 cursor 跨文件写入在任意崩溃时刻的事务保证。
 
 原生 SIGTRAP 应保持致命信号语义，普通 SIGTERM / SIGINT / exit 清理监听继续保留，见 [native-crash-signals.ts](../apps/desktop/src/main/native-crash-signals.ts) 及[对应测试](../apps/desktop/src/main/native-crash-signals.test.ts)。
+
+### 会话分析与窗口响应
+
+Desktop 的 `/functions/tud-session-activity`、`tud-session-list`、`tud-session-detail`、`tud-performance`、`tud-usage-sessions`、`tud-quota-history` 仅 GET 经独立分析 utilityProcess 执行。该进程复用同一 Core local-api，按顺序应用主进程当前 BucketStore、有效采集起点、配置、分层价格和账号标签快照，再处理查询。桶与价格只在版本变化时重传；session-only 写入仍经磁盘快照版本检查发现，不依赖 bucket revision。额度历史只传递当前请求的安全快照，返回前由主进程再次核对账号 revision，切换后返回 `QUOTA_ACCOUNT_CHANGED`。
+
+Core 在一次洞察分析中共享派发索引；同范围在途构建与已完成 hydration 复用，返回对象单独复制，防止 API 筛选、调用方修改和账号标签污染缓存。范围、桶、历史或价格变化后失效；会话标题与账号标签继续读取当前值。
+
+分析进程按需启动，启动最多等待 15 秒、单次请求最多 30 秒；故障/超时拒绝所属请求并回收，后续请求可重建，绝不静默回退主进程分析。停止 runtime 同时回收同步与分析进程。安装包 `asarUnpack` 必须同时包含两种 worker chunk。诊断时对比主进程与 `session analysis utilityProcess ready pid=...` 的 PID；`logs/sync.log` 中 `cpu_phase/session_query` 的 `role=session-analysis`、route、status、wallMs 与 cpuMs 标识真实查询耗时，不能把它误认作主进程阻塞。
 
 ## 窗口与 IPC 初始化
 

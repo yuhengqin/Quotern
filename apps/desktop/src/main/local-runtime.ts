@@ -1,7 +1,7 @@
 /**
  * Desktop runtime: BucketStore + local-api stay in the Electron main process.
- * Parsers and queue IO run in a utilityProcess so sync cannot freeze
- * the UI event loop.
+ * Parsers/queue IO and heavy read-only session queries run in separate
+ * utilityProcesses so neither path can block the window event loop.
  */
 import {
   AggregateCache,
@@ -18,6 +18,8 @@ import {
   evictRuntimeKind,
   getHookStatus,
   getRunningOwner,
+  getPricingFingerprint,
+  getPricingSnapshot,
   HEARTBEAT_INTERVAL_MS,
   loadConfig,
   releaseRuntimeOwner,
@@ -41,6 +43,8 @@ import {
 import { evictCliAutostart } from './evict-cli-autostart';
 import { getQuotaRuntimeState, getQuotaRuntimeHistory, getQuotaBackupDirectory } from './quota-runtime';
 import { createRecoverableSync } from './sync-recovery';
+import { runSessionAnalysisRequest, stopSessionAnalysisWorker } from './session-analysis-host';
+import { isSessionAnalysisRequest } from './session-analysis-protocol';
 import {
   invalidateSyncWorkerCursors,
   runSyncViaWorker,
@@ -93,6 +97,7 @@ let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let watchdogFailures = 0;
 let watchdogTickInFlight = false;
 let syncEpoch = 0;
+let runtimeRequestGeneration = 0;
 let runtimeStopping = false;
 let stopInFlight: Promise<void> | null = null;
 
@@ -627,6 +632,7 @@ async function runWatchdogTick(): Promise<void> {
 
 export function stopLocalRuntime(): Promise<void> {
   if (stopInFlight) return stopInFlight;
+  runtimeRequestGeneration++;
   runtimeStopping = true;
   const operation = stopLocalRuntimeUnlocked();
   const shared = operation.finally(() => { if (stopInFlight === shared) stopInFlight = null; });
@@ -652,7 +658,7 @@ async function stopLocalRuntimeUnlocked(): Promise<void> {
   runSyncFn = null;
   publishSyncActivity(false);
   reArmPoll = null;
-  await stopSyncWorker();
+  await Promise.all([stopSyncWorker(), stopSessionAnalysisWorker()]);
   pollBackoff.reset();
   lastSyncDoneAt = 0;
   lastForegroundPokeAt = 0;
@@ -704,15 +710,21 @@ export async function localApiRequest(
   path: string,
   init?: { method?: string; body?: string; headers?: Record<string, string> },
 ): Promise<{ status: number; body: unknown }> {
+  const generation = runtimeRequestGeneration;
+  if (runtimeStopping || quitting) {
+    return { status: 503, body: { success: false, message: 'LOCAL_RUNTIME_NOT_READY', data: null } };
+  }
   if (!runtime && !quitting) {
+    let readyTimer: ReturnType<typeof setTimeout> | undefined;
     const ready = await Promise.race([
       recoverLocalRuntime()
         .then(() => true)
         .catch(() => false),
       new Promise<boolean>((resolve) => {
-        setTimeout(() => resolve(false), LOCAL_API_READY_WAIT_MS);
+        readyTimer = setTimeout(() => resolve(false), LOCAL_API_READY_WAIT_MS);
       }),
     ]);
+    clearTimeout(readyTimer);
     if (!ready || !runtime) {
       return {
         status: 503,
@@ -725,7 +737,7 @@ export async function localApiRequest(
     }
   }
 
-  if (!runtime) {
+  if (!runtime || runtimeStopping || quitting || generation !== runtimeRequestGeneration) {
     return {
       status: 503,
       body: {
@@ -740,6 +752,28 @@ export async function localApiRequest(
   const url = path.startsWith('http')
     ? path
     : `http://tud.local${path.startsWith('/') ? path : `/${path}`}`;
+
+  if (isSessionAnalysisRequest(url, method)) {
+    const current = runtime;
+    const parsed = new URL(url);
+    const provider = parsed.pathname === '/functions/tud-quota-history' ? parsed.searchParams.get('provider') : null;
+    const quotaHistory = provider && provider.length <= 100 ? getQuotaRuntimeHistory(provider) : null;
+    try {
+      const result = await runSessionAnalysisRequest(url, init, {
+        dataDir: current.dir, config: current.config,
+        bucketRevision: current.bucketStore.getRevision(), rows: current.bucketStore.getRows(),
+        collectSince: current.bucketStore.reportSince(resolveLocalCollectSince(current.config)),
+        pricingFingerprint: getPricingFingerprint(), pricing: getPricingSnapshot(), quotaState: getQuotaRuntimeState(), quotaHistory, quotaHistoryKey: provider ?? undefined,
+      });
+      if (result.status === 200 && quotaHistory && getQuotaRuntimeHistory(provider!)?.revision !== quotaHistory.revision) {
+        return { status: 409, body: { success: false, message: 'QUOTA_ACCOUNT_CHANGED', data: null } };
+      }
+      return result;
+    } catch (error) {
+      console.warn('[tud-desktop] session analysis request failed:', error instanceof Error ? error.message : String(error));
+      return { status: 500, body: { success: false, message: 'SESSION_ANALYSIS_UNAVAILABLE', data: null } };
+    }
+  }
 
   const headers = new Headers(init?.headers);
   if (init?.body != null && !headers.has('content-type')) {

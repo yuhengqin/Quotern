@@ -20,6 +20,8 @@ import type { ActivityRoot } from '../src/main/agent-activity/monitor';
 import type { TudConfig } from '../../../packages/core/src/types';
 import { serviceNotice, quotaNotice } from '../src/main/notifications/quota-notices';
 import { NotificationManager } from '../src/main/notifications/manager';
+// @ts-ignore shared JS fixture for opt-in native acceptance
+import { registerAppearanceFixture } from './appearance-fixture.mjs';
 
 const [desktop, output, debugPort] = process.argv.slice(2);
 assert.ok(desktop && output && debugPort);
@@ -55,6 +57,7 @@ async function sources(): Promise<ActivityRoot[]> {
 }
 
 async function main() {
+  registerAppearanceFixture();
   await mkdir(path.join(root, 'profile/notifications'), { recursive: true });
   await mkdir(path.join(root, 'project'), { recursive: true });
   await mkdir(codexHome, { recursive: true }); await mkdir(claudeHome, { recursive: true });

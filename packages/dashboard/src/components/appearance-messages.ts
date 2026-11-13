@@ -1,0 +1,43 @@
+import { registerMessages } from 'quotern-i18n';
+registerMessages({
+  'zh-CN': {
+    'appearance.style': '界面风格', 'appearance.default': '默认', 'appearance.catppuccin': 'Catppuccin', 'appearance.win95': 'Windows 95', 'appearance.newspaper': '复古报纸',
+    'appearance.classic': '经典玻璃', 'appearance.matrix': '黑客任务', 'appearance.cloud_observation': '云图观测', 'appearance.aquarium': '午夜水族箱',
+    'appearance.prism_arcade': '棱镜街机', 'appearance.stained_glass': '彩绘玻璃', 'appearance.migration': '候鸟迁徙', 'appearance.sketchbook': '手绘笔记',
+    'appearance.heart_monitor': '心电图', 'appearance.origami': '折纸', 'appearance.black_hole': '黑洞视界', 'appearance.lepidoptera': '蝶类图鉴', 'appearance.world_cup': '世界杯 2026',
+    'appearance.more': '查看全部风格（{{count}}）', 'appearance.fewer': '收起更多风格',
+    'appearance.decorations': '装饰动画', 'appearance.pause': '暂停装饰动画', 'appearance.reducedMotion': '已遵循系统设置，暂停动态效果。',
+    'appearance.artworkFailed': '装饰动画暂不可用，静态外观仍可使用。',
+    'appearance.recommended': '主题推荐', 'appearance.saveFailed': '外观设置未能保存。', 'appearance.retry': '重试保存',
+  },
+  en: {
+    'appearance.style': 'Interface style', 'appearance.default': 'Default', 'appearance.catppuccin': 'Catppuccin', 'appearance.win95': 'Windows 95', 'appearance.newspaper': 'Newspaper',
+    'appearance.classic': 'Classic glass', 'appearance.matrix': 'Matrix', 'appearance.cloud_observation': 'Cloud observation', 'appearance.aquarium': 'Midnight aquarium',
+    'appearance.prism_arcade': 'Prism arcade', 'appearance.stained_glass': 'Stained glass', 'appearance.migration': 'Migration', 'appearance.sketchbook': 'Sketchbook',
+    'appearance.heart_monitor': 'Heart monitor', 'appearance.origami': 'Origami', 'appearance.black_hole': 'Black hole', 'appearance.lepidoptera': 'Lepidoptera', 'appearance.world_cup': 'World Cup 2026',
+    'appearance.more': 'View all styles ({{count}})', 'appearance.fewer': 'Show fewer styles',
+    'appearance.decorations': 'Decorative animations', 'appearance.pause': 'Pause decorative animations', 'appearance.reducedMotion': 'Animations are paused by your system motion preference.',
+    'appearance.artworkFailed': 'Decorative animations are unavailable. The static style remains usable.',
+    'appearance.recommended': 'Theme default', 'appearance.saveFailed': 'Appearance settings could not be saved.', 'appearance.retry': 'Retry saving',
+  },
+  ja: {
+    'appearance.style': 'インターフェースのスタイル', 'appearance.default': 'デフォルト', 'appearance.catppuccin': 'Catppuccin', 'appearance.win95': 'Windows 95', 'appearance.newspaper': 'レトロな新聞',
+    'appearance.classic': 'クラシックガラス', 'appearance.matrix': 'マトリックス', 'appearance.cloud_observation': '雲の観測', 'appearance.aquarium': '真夜中の水族館',
+    'appearance.prism_arcade': 'プリズムアーケード', 'appearance.stained_glass': 'ステンドグラス', 'appearance.migration': '渡り鳥', 'appearance.sketchbook': 'スケッチブック',
+    'appearance.heart_monitor': '心電図', 'appearance.origami': '折り紙', 'appearance.black_hole': 'ブラックホール', 'appearance.lepidoptera': '蝶の図鑑', 'appearance.world_cup': 'ワールドカップ 2026',
+    'appearance.more': 'すべてのスタイル（{{count}}）', 'appearance.fewer': '表示を減らす',
+    'appearance.decorations': '装飾アニメーション', 'appearance.pause': '装飾アニメーションを停止', 'appearance.reducedMotion': 'システム設定に従い、動きを停止しています。',
+    'appearance.artworkFailed': '装飾アニメーションを読み込めません。静的なスタイルは引き続き使用できます。',
+    'appearance.recommended': 'テーマの推奨色', 'appearance.saveFailed': '外観設定を保存できませんでした。', 'appearance.retry': '保存を再試行',
+  },
+  ko: {
+    'appearance.style': '인터페이스 스타일', 'appearance.default': '기본', 'appearance.catppuccin': 'Catppuccin', 'appearance.win95': 'Windows 95', 'appearance.newspaper': '레트로 신문',
+    'appearance.classic': '클래식 유리', 'appearance.matrix': '매트릭스', 'appearance.cloud_observation': '구름 관측', 'appearance.aquarium': '심야 수족관',
+    'appearance.prism_arcade': '프리즘 아케이드', 'appearance.stained_glass': '스테인드글라스', 'appearance.migration': '철새 이동', 'appearance.sketchbook': '스케치북',
+    'appearance.heart_monitor': '심전도', 'appearance.origami': '종이접기', 'appearance.black_hole': '블랙홀', 'appearance.lepidoptera': '나비 도감', 'appearance.world_cup': '월드컵 2026',
+    'appearance.more': '모든 스타일 보기 ({{count}})', 'appearance.fewer': '간단히 보기',
+    'appearance.decorations': '장식 애니메이션', 'appearance.pause': '장식 애니메이션 일시 정지', 'appearance.reducedMotion': '시스템 동작 설정에 따라 애니메이션이 일시 정지되었습니다.',
+    'appearance.artworkFailed': '장식 애니메이션을 사용할 수 없습니다. 정적 스타일은 계속 사용할 수 있습니다.',
+    'appearance.recommended': '테마 추천', 'appearance.saveFailed': '외관 설정을 저장하지 못했습니다.', 'appearance.retry': '다시 저장',
+  },
+});

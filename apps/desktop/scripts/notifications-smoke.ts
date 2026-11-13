@@ -15,6 +15,8 @@ import { NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, type DesktopNotice } from '../s
 import type { ActivityEvent } from '../src/shared/agent-activity';
 // @ts-ignore opt-in JS acceptance driver
 import { connectPage, wait } from './desktop-cdp.mjs';
+// @ts-ignore shared JS fixture for opt-in UI acceptance
+import { registerAppearanceFixture } from './appearance-fixture.mjs';
 
 const [desktop, output, portArg] = process.argv.slice(2);
 assert.ok(desktop && output && portArg);
@@ -30,6 +32,7 @@ app.on('window-all-closed', () => {});
 app.commandLine.appendSwitch('remote-debugging-port', String(port));
 
 async function main() {
+  registerAppearanceFixture();
   await mkdir(root, { recursive: true });
   await mkdir(path.join(root, 'profile/notifications'), { recursive: true });
   await writeFile(path.join(root, 'profile/notifications/preferences.json'), JSON.stringify({ version: 1, modes: { agentComplete: 'always', agentConfirmation: 'always', agentError: 'always', quota: 'background', service: 'always' }, sound: 'none' }));
@@ -158,6 +161,8 @@ async function main() {
       mainWindow!.webContents.send('app:open-settings', { tab: 'notifications' });
       return client.evaluate('document.querySelectorAll("[data-notification-settings] button[aria-haspopup=listbox]").length===3');
     }, 'notification settings after the app shell subscribes');
+    await until(() => client.evaluate('window.tud.getAppearance().then(value => value?.style === "default" && value?.palette === "theme")'), 'appearance bridge initializes alongside notifications');
+    checks.push('appearance-bridge-initializes-alongside-notifications');
     const settingsText = await client.evaluate('document.querySelector("[data-notification-settings]").innerText') as string;
     assert.match(settingsText, /额度提醒/); assert.match(settingsText, /Agent 服务状态变化/);
     assert.doesNotMatch(settingsText, /本轮完成|需要确认或回答|Agent 错误|Agent 连接|连接通知|更新连接/);

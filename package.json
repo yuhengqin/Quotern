@@ -34,6 +34,7 @@
     "test:session-detail-ui": "node apps/desktop/scripts/run-session-detail-smoke.mjs",
     "test:keeper-insights-ui": "node apps/desktop/scripts/run-keeper-insights-smoke.mjs",
     "test:island-ux-ui": "node apps/desktop/scripts/run-island-ux-smoke.mjs",
+    "test:appearance-ui": "node apps/desktop/scripts/run-appearance-smoke.mjs",
     "test:session-pagination-ui": "node apps/desktop/scripts/run-session-pagination-smoke.mjs",
     "test:dashboard-ui": "node apps/desktop/scripts/run-session-pagination-smoke.mjs --dashboard-fixes-only",
     "test:heatmap-legend-ui": "node apps/desktop/scripts/run-session-pagination-smoke.mjs --heatmap-legend-only",

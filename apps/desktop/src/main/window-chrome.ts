@@ -18,6 +18,7 @@
  *    controls, as before.
  */
 import { TITLEBAR_HEIGHT } from '../shared/window-chrome.js';
+import { appearanceChrome, type AppearanceStyle } from '../shared/appearance.js';
 
 export type WindowChromeTheme = 'light' | 'dark';
 
@@ -53,15 +54,15 @@ export interface WindowChromeOptions {
 }
 
 /** The native Window Controls Overlay configuration for one theme. */
-export function titleBarOverlayFor(theme: WindowChromeTheme): {
+export function titleBarOverlayFor(theme: WindowChromeTheme, style: AppearanceStyle = 'default'): {
   color: string;
   symbolColor: string;
   height: number;
 } {
-  const colors = WINDOW_CONTROLS_OVERLAY_COLORS[theme];
+  const appearance = appearanceChrome(theme, style);
   return {
-    color: colors.color,
-    symbolColor: colors.symbolColor,
+    color: appearance.background,
+    symbolColor: appearance.foreground,
     height: TITLEBAR_HEIGHT,
   };
 }
@@ -76,6 +77,7 @@ export function titleBarOverlayFor(theme: WindowChromeTheme): {
 export function windowChromeFor(
   platform: NodeJS.Platform,
   theme: WindowChromeTheme,
+  style: AppearanceStyle = 'default',
 ): WindowChromeOptions {
   // macOS traffic lights are 12 DIP tall; center them in the title strip.
   const trafficLightY = (TITLEBAR_HEIGHT - 12) / 2;
@@ -91,7 +93,7 @@ export function windowChromeFor(
       return {
         // No `frame: false`: the native caption buttons / system menu live on.
         titleBarStyle: 'hidden',
-        titleBarOverlay: titleBarOverlayFor(theme),
+        titleBarOverlay: titleBarOverlayFor(theme, style),
       };
     case 'linux':
       // The renderer draws minimize / maximize / close on Linux.

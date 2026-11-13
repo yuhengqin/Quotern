@@ -1,0 +1,56 @@
+.appearance-motion-control { margin-block-start: 0.75rem; inline-size: fit-content; max-inline-size: 100%; }
+.appearance-motion-control .switch__content { max-inline-size: 100%; }
+.appearance-motion-control [data-slot="label"] { min-inline-size: 0; overflow-wrap: anywhere; }
+.appearance-motion-reduced { display: none; }
+@media (prefers-reduced-motion: reduce) { .appearance-motion-reduced { display: block; } }
+
+.appearance-decorations {
+  position: fixed; inset: var(--desktop-titlebar-height, 0px) 0 0; z-index: 30;
+  color: var(--accent); opacity: 0.2; overflow: clip; contain: strict;
+  pointer-events: none; user-select: none;
+}
+.appearance-decorations * { pointer-events: none; }
+.tray-popover:has(.appearance-decorations, .appearance-motion-notice) { position: relative; }
+.tray-popover > .appearance-decorations { position: absolute; inset: 0; border-radius: inherit; opacity: 0.16; }
+.appearance-motif { position: absolute; inline-size: min(34vw, 17.5rem); block-size: auto; inset-inline-end: 1rem; inset-block-end: 4rem; overflow: hidden; }
+.appearance-motif--cloud, .appearance-motif--birds, .appearance-motif--orbit { inset-inline-start: 1rem; inset-inline-end: auto; }
+.tray-popover .appearance-motif { inline-size: 10rem; inset-block-end: 3rem; inset-inline-end: 0.5rem; inset-inline-start: auto; }
+.appearance-code-column { position: absolute; top: -12rem; font: 12px/1.5 var(--font-dashboard-mono); writing-mode: vertical-rl; white-space: pre; mask-image: linear-gradient(transparent, #000 70%); }
+.appearance-motif--ecg { inline-size: min(40vw, 17.5rem); }
+.appearance-bird, .appearance-prism, .appearance-butterfly-wing, .appearance-orbit, .appearance-ball, .appearance-paper-fold { transform-box: fill-box; transform-origin: center; }
+.appearance-motion-pause { position: fixed; inset-inline-end: 1rem; inset-block-end: 1rem; z-index: 40; inline-size: 2rem; min-inline-size: 2rem; block-size: 2rem; border: 1px solid var(--border); color: var(--foreground); background: var(--surface); }
+.appearance-motion-pause--tray { position: static; margin-inline-start: 0.375rem; }
+.appearance-motion-notice { position: fixed; inset-inline-end: 1rem; inset-block-end: 1rem; z-index: 100010; max-inline-size: calc(100% - 2rem); display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--foreground); background: var(--overlay); font-size: 0.8125rem; }
+.tray-popover > .appearance-motion-notice { position: absolute; inset-inline: 0.5rem; inset-block-end: 0.5rem; max-inline-size: none; }
+
+/* Motion only opts in when the user and system both allow it. No JS frame loop. */
+@media (prefers-reduced-motion: no-preference) {
+  .appearance-code-column { animation: appearance-code-fall var(--duration) var(--delay) linear infinite; }
+  .appearance-cloud-back { animation: appearance-drift 18s ease-in-out infinite alternate; }
+  .appearance-cloud-front { animation: appearance-drift 12s -6s ease-in-out infinite alternate-reverse; }
+  .appearance-jelly { animation: appearance-float 10s ease-in-out infinite alternate; }
+  .appearance-bubble { animation: appearance-bubble-rise 15s var(--delay) ease-in-out infinite; }
+  .appearance-prism { animation: appearance-prism-turn 32s linear infinite; }
+  .appearance-prism--second { animation-duration: 44s; animation-direction: reverse; }
+  .appearance-glass-light { animation: appearance-glass-sweep 18s ease-in-out infinite alternate; }
+  .appearance-flock { animation: appearance-drift 24s ease-in-out infinite alternate; }
+  .appearance-bird { animation: appearance-wings 2.8s ease-in-out infinite alternate; }
+  .appearance-ecg { animation: appearance-ecg-sweep 12s linear infinite; }
+  .appearance-paper-fold { transform-origin: 90% 10%; animation: appearance-unfold 760ms ease-out both; }
+  .appearance-orbit { animation: appearance-prism-turn 48s linear infinite; }
+  .appearance-specimen { animation: appearance-float 18s ease-in-out infinite alternate; }
+  .appearance-butterfly-wing { animation: appearance-butterfly-wings 3.6s ease-in-out infinite alternate; }
+  .appearance-ball-travel { animation: appearance-football-travel 24s ease-in-out infinite alternate; }
+  .appearance-ball { animation: appearance-prism-turn 8s linear infinite; }
+}
+@keyframes appearance-code-fall { to { transform: translateY(calc(100vh + 15rem)); } }
+@keyframes appearance-drift { from { transform: translate(-10px, 0); } to { transform: translate(20px, -8px); } }
+@keyframes appearance-float { from { transform: translateY(6px); } to { transform: translateY(-10px); } }
+@keyframes appearance-bubble-rise { from { transform: translate(0, 10px); opacity: 0; } 25% { opacity: 1; } to { transform: translate(6px, -100px); opacity: 0; } }
+@keyframes appearance-prism-turn { to { transform: rotate(360deg); } }
+@keyframes appearance-glass-sweep { from { transform: translateX(-60px); opacity: 0.2; } to { transform: translateX(60px); opacity: 0.7; } }
+@keyframes appearance-wings { to { transform: scaleY(0.65); } }
+@keyframes appearance-ecg-sweep { to { transform: translateX(-280px); } }
+@keyframes appearance-unfold { from { transform: scaleX(0.12) rotate(12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes appearance-butterfly-wings { to { transform: scaleX(0.3); } }
+@keyframes appearance-football-travel { from { transform: translate(-10px, 16px); } to { transform: translate(145px, -18px); } }

@@ -28,6 +28,8 @@ import {
   type DashboardRange,
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
+import { APPEARANCE_GET_CHANNEL, APPEARANCE_SET_CHANNEL, APPEARANCE_INITIALIZE_CHANNEL, APPEARANCE_CHANGED_CHANNEL, isAppearancePreferences, type AppearancePreferences } from '../shared/appearance';
+import { APPEARANCE_VISIBILITY_CHANNEL, APPEARANCE_WATCH_VISIBILITY_CHANNEL, APPEARANCE_UNWATCH_VISIBILITY_CHANNEL } from '../shared/appearance';
 import {
   LOCALE_CHANGED_CHANNEL,
   LOCALE_GET_CHANNEL,
@@ -121,6 +123,7 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
 
 import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type NotificationSettingsState, type NotificationPreferencePatch, type NotificationDelivery, type NotificationSound } from '../shared/notifications';
 
+let appearanceVisibilitySubscribers = 0;
 const tudApi = {
   notifications: {
     getState: (): Promise<NotificationSettingsState> => ipcRenderer.invoke(NOTIFICATIONS_GET),
@@ -304,6 +307,28 @@ const tudApi = {
 
   getTheme: (): Promise<{ mode: ThemeMode; resolved: Theme }> =>
     ipcRenderer.invoke(THEME_GET_CHANNEL),
+
+  getAppearance: (): Promise<AppearancePreferences | null> => ipcRenderer.invoke(APPEARANCE_GET_CHANNEL),
+  setAppearance: (value: AppearancePreferences): Promise<AppearancePreferences> => ipcRenderer.invoke(APPEARANCE_SET_CHANNEL, value),
+  initializeAppearance: (value: AppearancePreferences): Promise<AppearancePreferences> => ipcRenderer.invoke(APPEARANCE_INITIALIZE_CHANNEL, value),
+  onAppearanceChanged: (callback: (value: AppearancePreferences) => void) => {
+    const listener = (_event: unknown, value: unknown) => { if (isAppearancePreferences(value)) callback(value); };
+    ipcRenderer.on(APPEARANCE_CHANGED_CHANNEL, listener);
+    return () => ipcRenderer.removeListener(APPEARANCE_CHANGED_CHANNEL, listener);
+  },
+  onAppearanceVisibilityChanged: (callback: (visible: boolean) => void) => {
+    let active = true;
+    const listener = (_event: unknown, visible: unknown) => { if (typeof visible === 'boolean') callback(visible); };
+    ipcRenderer.on(APPEARANCE_VISIBILITY_CHANNEL, listener);
+    appearanceVisibilitySubscribers++;
+    ipcRenderer.send(APPEARANCE_WATCH_VISIBILITY_CHANNEL);
+    return () => {
+      if (!active) return;
+      active = false;
+      ipcRenderer.removeListener(APPEARANCE_VISIBILITY_CHANNEL, listener);
+      if (--appearanceVisibilitySubscribers === 0) ipcRenderer.send(APPEARANCE_UNWATCH_VISIBILITY_CHANNEL);
+    };
+  },
 
   getLocalePreference: (): Promise<DesktopLocaleState> =>
     ipcRenderer.invoke(LOCALE_GET_CHANNEL),

@@ -10,7 +10,8 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { useTheme as useHeroUITheme } from '@heroui/react';
-import { PaletteRuntime } from '../../../../../packages/dashboard/src/components/PaletteControl';
+import { AppearanceProvider } from '../../../../../packages/dashboard/src/components/AppearanceProvider';
+import type { AppearancePreferences } from '../../shared/appearance';
 import {
   isThemeMode,
   type Theme,
@@ -44,14 +45,14 @@ const THEME_MODE_CYCLE: Record<ThemeMode, ThemeMode> = {
   dark: 'system',
 };
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children, initialAppearance, initialTheme }: { children: ReactNode; initialAppearance?: AppearancePreferences | null; initialTheme?: { mode: ThemeMode; resolved: Theme } }) {
   const {
     theme: heroUITheme,
     setTheme: setHeroUITheme,
-  } = useHeroUITheme('light');
+  } = useHeroUITheme(initialTheme?.resolved ?? 'light');
   const theme: Theme = heroUITheme === 'dark' ? 'dark' : 'light';
-  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
-  const themeModeRef = useRef<ThemeMode>('system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(initialTheme?.mode ?? 'system');
+  const themeModeRef = useRef<ThemeMode>(initialTheme?.mode ?? 'system');
   const themeRef = useRef<Theme>(theme);
 
   const applyTheme = useCallback((next: Theme): boolean => {
@@ -128,7 +129,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [theme, themeMode, setThemeMode, toggleTheme],
   );
 
-  return <ThemeContext.Provider value={value}><PaletteRuntime theme={theme} />{children}</ThemeContext.Provider>;
+  const bridge = typeof window.tud?.getAppearance === 'function' && typeof window.tud?.initializeAppearance === 'function' && typeof window.tud?.onAppearanceChanged === 'function' ? window.tud : undefined;
+  return <ThemeContext.Provider value={value}><AppearanceProvider theme={theme} bridge={bridge} initialPreferences={initialAppearance}>{children}</AppearanceProvider></ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {

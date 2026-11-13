@@ -75,6 +75,8 @@ import { createMainWindowLauncher } from './main-window-launcher';
 import { restoreNativeTrapHandler } from './native-crash-signals';
 import { configureQuoternAppIdentity } from './app-identity';
 import { registerShareBackgroundIpc } from './share-background-ipc';
+import { registerAppearanceIpc } from './appearance-ipc';
+import type { AppearanceStyle } from '../shared/appearance';
 import { PetController } from './pet-controller';
 import { PetActivation } from './pet-activation';
 import path from 'node:path';
@@ -141,6 +143,8 @@ let quotaRuntime: Awaited<ReturnType<typeof initializeQuotaRuntime>> | null = nu
 let notificationRuntime: Awaited<ReturnType<typeof initializeNotifications>> | null = null;
 let currentThemeMode: ThemeMode = 'system';
 let currentTheme: Theme = 'light';
+let currentAppearanceStyle: AppearanceStyle = 'default';
+let disposeAppearanceIpc: (() => void) | null = null;
 let pendingConfigResetNotice = false;
 const mainWindowLauncher = createMainWindowLauncher(showMainWindowNow, () => {
   if (process.platform === 'darwin') app.dock?.hide();
@@ -193,8 +197,7 @@ function applyResolvedTheme(next: Theme): void {
   if (next === currentTheme) return;
   currentTheme = next;
   for (const desktopWindow of windows) {
-    if (desktopWindow.window.isDestroyed()) continue;
-    desktopWindow.setThemeBackground(currentTheme);
+    if (!desktopWindow.window.isDestroyed()) desktopWindow.setThemeBackground(currentTheme, currentAppearanceStyle);
   }
   petController?.setDark(next === 'dark');
 }
@@ -431,6 +434,7 @@ function createWindow(opts?: { startHidden?: boolean }): void {
   const w = new DesktopWindow({
     preloadPath: defaultPreloadPath(),
     theme: currentTheme,
+    appearanceStyle: currentAppearanceStyle,
     title: 'Quotern',
     startHidden: opts?.startHidden,
   });
@@ -485,6 +489,12 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       currentThemeMode,
       nativeTheme.shouldUseDarkColors,
     );
+    disposeAppearanceIpc = await registerAppearanceIpc(app.getPath('userData'), value => {
+      currentAppearanceStyle = value.style;
+      for (const desktopWindow of windows) {
+        if (!desktopWindow.window.isDestroyed()) desktopWindow.setThemeBackground(currentTheme, value.style);
+      }
+    });
 
     registerMessages(NATIVE_MESSAGES);
     try {
@@ -756,6 +766,8 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     quotaRuntime?.dispose(); quotaRuntime = null;
     notificationRuntime?.dispose(); notificationRuntime = null;
     ipcMain.removeHandler(THEME_GET_CHANNEL);
+    disposeAppearanceIpc?.();
+    disposeAppearanceIpc = null;
     ipcMain.removeHandler(LOCALE_GET_CHANNEL);
     ipcMain.removeHandler(LOCALE_SET_CHANNEL);
     ipcMain.removeHandler(SHARE_CARD_COPY_IMAGE_CHANNEL);

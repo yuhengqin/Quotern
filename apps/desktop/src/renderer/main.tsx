@@ -33,13 +33,16 @@ async function startRenderer() {
   registerMessages(desktopRendererMessages);
   registerMessages(desktopShellMessages);
   registerMessages(desktopSubscriptionMessages);
-  const initialState: DesktopLocaleState = await window.tud.getLocalePreference()
-    .catch(() => ({ preference: 'system', resolved: 'zh-CN', systemLocale: 'zh-CN' }));
+  const [initialState, initialAppearance, initialTheme] = await Promise.all([
+    window.tud.getLocalePreference().catch((): DesktopLocaleState => ({ preference: 'system', resolved: 'zh-CN', systemLocale: 'zh-CN' })),
+    window.tud.getAppearance?.().catch(() => null),
+    window.tud.getTheme?.().catch(() => undefined),
+  ]);
   await setActiveLocale(initialState.resolved);
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <DesktopLocaleProvider initialState={initialState}>
-        <ThemeProvider>
+        <ThemeProvider initialAppearance={initialAppearance} initialTheme={initialTheme}>
           {isTrayPopover ? <TrayPopoverView /> : <RouterProvider router={router} />}
         </ThemeProvider>
       </DesktopLocaleProvider>

@@ -29,6 +29,7 @@ import {
 } from '../shared/dashboard-range';
 import { isThemeMode, type Theme, type ThemeMode } from '../shared/theme';
 import { APPEARANCE_GET_CHANNEL, APPEARANCE_SET_CHANNEL, APPEARANCE_INITIALIZE_CHANNEL, APPEARANCE_CHANGED_CHANNEL, isAppearancePreferences, type AppearancePreferences } from '../shared/appearance';
+import { APPEARANCE_VISIBILITY_CHANNEL, APPEARANCE_WATCH_VISIBILITY_CHANNEL, APPEARANCE_UNWATCH_VISIBILITY_CHANNEL } from '../shared/appearance';
 import {
   LOCALE_CHANGED_CHANNEL,
   LOCALE_GET_CHANNEL,
@@ -119,6 +120,7 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
   }
 }
 
+let appearanceVisibilitySubscribers = 0;
 const tudApi = {
   dshPet: {
     getNavigation: (): Promise<SessionNavigation | null> => ipcRenderer.invoke(DSH_PET_NAVIGATION_GET),
@@ -299,6 +301,19 @@ const tudApi = {
     const listener = (_event: unknown, value: unknown) => { if (isAppearancePreferences(value)) callback(value); };
     ipcRenderer.on(APPEARANCE_CHANGED_CHANNEL, listener);
     return () => ipcRenderer.removeListener(APPEARANCE_CHANGED_CHANNEL, listener);
+  },
+  onAppearanceVisibilityChanged: (callback: (visible: boolean) => void) => {
+    let active = true;
+    const listener = (_event: unknown, visible: unknown) => { if (typeof visible === 'boolean') callback(visible); };
+    ipcRenderer.on(APPEARANCE_VISIBILITY_CHANNEL, listener);
+    appearanceVisibilitySubscribers++;
+    ipcRenderer.send(APPEARANCE_WATCH_VISIBILITY_CHANNEL);
+    return () => {
+      if (!active) return;
+      active = false;
+      ipcRenderer.removeListener(APPEARANCE_VISIBILITY_CHANNEL, listener);
+      if (--appearanceVisibilitySubscribers === 0) ipcRenderer.send(APPEARANCE_UNWATCH_VISIBILITY_CHANNEL);
+    };
   },
 
   getLocalePreference: (): Promise<DesktopLocaleState> =>

@@ -63,3 +63,15 @@ test('two first windows initialize once and receive the same authoritative appea
   assert.deepEqual(values, [{ style: 'catppuccin', palette: 'rose' }, { style: 'catppuccin', palette: 'rose' }]);
   assert.equal(writes, 1);
 });
+
+test('decoration choices survive durable writes, broadcasts and controller recreation', async () => {
+  let disk: unknown = { style: 'matrix', palette: 'theme', decorations: true, version: 1 };
+  const published: AppearancePreferences[] = [];
+  const ports = { read: async () => disk, write: async (value: AppearancePreferences) => { disk = structuredClone(value); }, publish: (value: AppearancePreferences) => published.push(value), apply: () => {} };
+  const controller = createAppearanceController(ports);
+  assert.deepEqual(await controller.get(), { style: 'matrix', palette: 'theme', decorations: true });
+  await controller.set({ style: 'aquarium', palette: 'rose', decorations: false });
+  assert.deepEqual(published.at(-1), { style: 'aquarium', palette: 'rose', decorations: false });
+  assert.deepEqual(await createAppearanceController(ports).get(), published.at(-1));
+  await assert.rejects(controller.set({ style: 'aquarium', palette: 'rose', decorations: 1 }), /Invalid appearance/);
+});

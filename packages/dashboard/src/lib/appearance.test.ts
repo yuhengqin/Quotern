@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   APPEARANCE_STYLES,
+  hasAppearanceDecoration,
   normalizeAppearancePreferences,
   isAppearancePreferences,
   resolveAppearanceTokens,
@@ -16,6 +17,16 @@ test('legacy accent choices survive appearance migration and invalid styles', ()
   assert.equal(isAppearancePreferences({ style: 'win95', palette: 'theme' }), true);
   assert.equal(isAppearancePreferences({ style: 'win95', palette: 'url(untrusted)' }), false);
   assert.equal(isAppearancePreferences({ style: '__proto__', palette: 'theme' }), false);
+});
+
+test('decoration opt-in is validated, survives old preferences and never changes the default tokens', () => {
+  assert.deepEqual(normalizeAppearancePreferences({ style: 'matrix', palette: 'rose', decorations: true }), { style: 'matrix', palette: 'rose', decorations: true });
+  assert.deepEqual(normalizeAppearancePreferences({ style: 'origami', palette: 'theme', decorations: false }), { style: 'origami', palette: 'theme', decorations: false });
+  assert.deepEqual(normalizeAppearancePreferences({ style: 'matrix', palette: 'theme', decorations: 'true' }), { style: 'matrix', palette: 'theme' });
+  assert.equal(isAppearancePreferences({ style: 'matrix', palette: 'theme', decorations: 'true' }), false);
+  assert.deepEqual(resolveAppearanceTokens({ style: 'default', palette: 'theme', decorations: true }, 'dark'), {});
+  const animated = ['matrix', 'cloud_observation', 'aquarium', 'prism_arcade', 'stained_glass', 'migration', 'heart_monitor', 'origami', 'black_hole', 'lepidoptera', 'world_cup'];
+  for (const style of APPEARANCE_STYLES) assert.equal(hasAppearanceDecoration(style), animated.includes(style), style);
 });
 
 test('default recommendation emits no overrides and retains the existing native background', () => {

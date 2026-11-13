@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { demoStorageKey } from '../lib/demo-runtime';
 import { isAppearancePreferences, normalizeAppearancePreferences, resolveAppearanceTokens, type AppearanceBridge, type AppearancePreferences } from '../../../../apps/desktop/src/shared/appearance';
 import './appearance-themes.css';
+import { AppearanceDecorations } from './AppearanceDecorations';
 
 interface AppearanceContextValue {
   preferences: AppearancePreferences;
@@ -90,7 +91,7 @@ export function AppearanceProvider({ children, theme, bridge, initialPreferences
     applySnapshot(next); setSaveError(false); void persist(next, revision);
   }, [applySnapshot, persist]);
   const retry = useCallback(() => { void persist(current.current, ++intent.current); }, [persist]);
-  return <AppearanceContext.Provider value={{ preferences, update, saveError, retry }}>{children}</AppearanceContext.Provider>;
+  return <AppearanceContext.Provider value={{ preferences, update, saveError, retry }}>{children}<AppearanceDecorations style={preferences.style} enabled={preferences.decorations === true} bridge={bridge} onStop={() => update({ decorations: false })} saveError={saveError} retry={retry} /></AppearanceContext.Provider>;
 }
 export function useAppearance(): AppearanceContextValue {
   const value = useContext(AppearanceContext);

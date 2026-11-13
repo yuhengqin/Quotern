@@ -1,8 +1,8 @@
-import { Button, Label, Radio, RadioGroup } from '@heroui/react';
+import { Button, Description, Label, Radio, RadioGroup, Switch } from '@heroui/react';
 import { Check } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { useId, useState, type CSSProperties } from 'react';
-import { APPEARANCE_STYLES, appearanceChrome, isAppearanceStyle, resolveAppearanceTokens, type AppearanceStyle } from '../../../../apps/desktop/src/shared/appearance';
+import { APPEARANCE_STYLES, appearanceChrome, hasAppearanceDecoration, isAppearanceStyle, resolveAppearanceTokens, type AppearanceStyle } from '../../../../apps/desktop/src/shared/appearance';
 import { useAppearance } from './AppearanceProvider';
 import './appearance-messages';
 
@@ -36,9 +36,13 @@ export function AppearanceStyleControl({ theme }: { theme: 'light' | 'dark' }) {
         </Radio.Content></Radio>)}
       </div>
     </RadioGroup>
-    <Button data-appearance-more aria-expanded={expanded} aria-controls={optionsId} className="mt-2" size="sm" variant="tertiary" onPress={() => setExpanded(value => !value)}>
+    <Button data-appearance-more aria-expanded={expanded} aria-controls={optionsId} className="appearance-more-button" size="sm" variant="tertiary" onPress={() => setExpanded(value => !value)}>
       {expanded ? t('appearance.fewer') : t('appearance.more', { count: APPEARANCE_STYLES.length })}
     </Button>
+    {hasAppearanceDecoration(preferences.style) && <Switch className="appearance-motion-control" name="appearance-decorations" isSelected={preferences.decorations === true} onChange={decorations => update({ decorations })}>
+      <Switch.Content><Switch.Control><Switch.Thumb /></Switch.Control><Label>{t('appearance.decorations')}</Label></Switch.Content>
+      {preferences.decorations && <Description className="appearance-motion-reduced">{t('appearance.reducedMotion')}</Description>}
+    </Switch>}
     {saveError && <div data-appearance-save-error role="alert" className="mt-2 flex flex-wrap items-center gap-2 text-sm text-danger">
       <span>{t('appearance.saveFailed')}</span><Button data-appearance-retry size="sm" variant="secondary" onPress={retry}>{t('appearance.retry')}</Button>
     </div>}

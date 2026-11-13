@@ -1,4 +1,4 @@
-import { isAppearancePreferences, type AppearancePreferences } from '../shared/appearance.js';
+import { isAppearancePreferences, normalizeAppearancePreferences, type AppearancePreferences } from '../shared/appearance.js';
 
 interface AppearancePorts {
   read: () => Promise<unknown>;
@@ -12,13 +12,13 @@ export function createAppearanceController(ports: AppearancePorts) {
   let current: AppearancePreferences | null = null;
   let queue: Promise<unknown> = ports.read().then(value => {
     if (isAppearancePreferences(value)) {
-      current = { style: value.style, palette: value.palette };
+      current = normalizeAppearancePreferences(value);
       ports.apply({ ...current });
     }
   });
   const write = (value: unknown, initializeOnly: boolean): Promise<AppearancePreferences> => {
     if (!isAppearancePreferences(value)) return Promise.reject(Error('Invalid appearance preference'));
-    const next = { style: value.style, palette: value.palette };
+    const next = normalizeAppearancePreferences(value);
     const run = queue.then(async () => {
       if (initializeOnly && current) return { ...current };
       await ports.write(next);

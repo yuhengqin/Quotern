@@ -7,10 +7,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
+import { checkAppearanceMotion } from './appearance-motion-checks.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspace = path.resolve(desktop, '../..');
-const output = path.resolve(process.argv[2] ?? path.join(workspace, `.quotern-dev/appearance-ui-${Date.now()}`));
+const output = path.resolve(process.argv.slice(2).find(arg => !arg.startsWith('--')) ?? path.join(workspace, `.quotern-dev/appearance-ui-${Date.now()}`));
 assert.ok(!existsSync(output), 'Use a fresh owned output directory');
 await mkdir(path.join(output, 'profile'), { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
@@ -19,7 +20,7 @@ process.env.QUOTERN_CONFIG_HOME = path.join(output, 'config-home');
 process.env.QUOTERN_DEV_ISOLATED = '1';
 const port = await unusedPort(); app.commandLine.appendSwitch('remote-debugging-port', String(port));
 app.on('window-all-closed', () => {});
-const deadline = setTimeout(() => { console.error('Appearance acceptance exceeded 300 seconds'); app.exit(2); }, 300_000);
+const deadline = setTimeout(() => { console.error('Appearance acceptance exceeded 420 seconds'); app.exit(2); }, 420_000);
 const windows = [], clients = [], checks = [], requests = [];
 let server, tray, disposeAppearance, mainWindow, style = 'default', mode = 'light', resolved = 'light', locale = 'zh-CN';
 const until = async (predicate, label) => { for (let n = 0; n < 120; n++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
@@ -44,6 +45,10 @@ async function shot(client, name) {
   finally { if (!wasVisible && !client.window.isDestroyed()) client.window.hide(); }
 }
 async function settings(client, native) {
+  // CDP input does not foreground the native window as a real pointer would.
+  // Occluded Chromium pages can defer modal exit animations indefinitely.
+  client.window.show(); client.window.focus();
+  await until(() => client.evaluate('document.visibilityState === "visible"'), 'settings window is visible');
   await client.evaluate(`window.dispatchEvent(new CustomEvent('tud:open-settings', {detail:${native ? "{tab:'appearance'}" : '{}'}})); true`);
   await until(() => client.evaluate('Boolean(document.querySelector("input[name=appearance-style]"))'), 'theme style selector');
 }
@@ -54,7 +59,11 @@ async function select(client, name, value) {
   await client.click(radio(name, value));
   await until(() => client.evaluate(`document.querySelector('input[name="${name}"][value="${value}"]').checked`), name + ' ' + value);
 }
-async function closeSettings(client) { await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'settings closes'); }
+async function closeSettings(client) {
+  client.window.show(); client.window.focus();
+  await until(() => client.evaluate('document.visibilityState === "visible"'), 'closing window is visible');
+  await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'settings closes');
+}
 async function scrollTop(client) { await client.evaluate('(document.querySelector("[data-dashboard-scroll-container]") ?? document.scrollingElement).scrollTo({top:0, behavior:"instant"}); true'); }
 
 async function checkAxisLabels(client, label) {
@@ -92,7 +101,7 @@ async function checkHeaderIcons(client, label) {
 async function main() {
   const { APPEARANCE_STYLES } = await import('../out/main/appearance-shared-test.mjs');
   const sample = process.argv.find(value => value.startsWith('--styles='))?.slice(9).split(',');
-  const styles = APPEARANCE_STYLES.filter(value => value !== 'default' && (!sample || sample.includes(value)));
+  const styles = process.argv.includes('--motion-only') ? [] : APPEARANCE_STYLES.filter(value => value !== 'default' && (!sample || sample.includes(value)));
   const { createLocalApiApp, BucketStore } = await import('../../../packages/core/dist/index.js');
   const { DEFAULT_QUOTA_PREFERENCES } = await import('../../../packages/core/dist/quota/shared/quota.js');
   const dataDir = process.env.QUOTERN_DATA_DIR; await mkdir(path.join(dataDir, 'queue'), { recursive: true });
@@ -164,7 +173,7 @@ async function main() {
   await select(web, 'theme-preference', 'light'); await select(web, 'appearance-style', 'default'); await closeSettings(web);
   const restoredWeb = await snapshot(web);
   for (const key of ['background', 'foreground', 'font', 'radius', 'cardBackground', 'text']) assert.equal(restoredWeb[key], originalWeb[key], 'browser default restores ' + key);
-  checks.push('browser-all-styles-light-dark-no-reload-default-restoration');
+  checks.push(styles.length === 16 ? 'browser-all-styles-light-dark-no-reload-default-restoration' : 'browser-default-restoration');
   await web.evaluate('localStorage.removeItem("quotern-appearance"); localStorage.setItem("quotern-palette", "rose"); true');
   await browser.reload();
   await until(async () => (await snapshot(web)).palette === 'rose', 'browser migrates legacy accent');
@@ -227,6 +236,14 @@ async function main() {
     const restored = await snapshot(client);
     for (const key of ['background', 'foreground', 'font', 'radius', 'cardBackground', 'text']) assert.equal(restored[key], original[key], 'native default restores ' + key);
   }
+  if (!process.argv.includes('--static-only')) {
+    const openHidden = async () => {
+      const window = new BrowserWindow({ show: false, width: 800, height: 700, webPreferences: { preload: defaultPreloadPath(), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+      windows.push(window); await window.loadFile(path.join(desktop, 'out/renderer/index.html')); return connect(window);
+    };
+    await checkAppearanceMotion({ web, peer, native, popup, mainWindow, panel, settings, select, closeSettings, until, shot, output, openHidden });
+    checks.push('opt-in-decorations-all-effects-visibility-reduced-motion-pause-cleanup');
+  }
   await native.click('document.querySelector("[data-quota-card]")');
   await until(() => native.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'quota details remain accessible'); await native.key('Escape');
   await settings(native, true); await select(native, 'appearance-style', 'newspaper');
@@ -235,10 +252,12 @@ async function main() {
   await until(() => native.evaluate('document.querySelector("input[name=appearance-style][value=win95]").checked'), 'keyboard changes the theme');
   assert.equal(await native.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
   await shot(native, 'desktop-keyboard-narrow');
+  if (await native.evaluate('document.querySelector("[data-appearance-more]").getAttribute("aria-expanded") === "true"')) await native.click('document.querySelector("[data-appearance-more]")');
   for (const language of ['en', 'ja', 'ko', 'zh-CN']) {
     await native.evaluate(`window.tud.setLocalePreference(${JSON.stringify(language)})`);
     await wait(150); await shot(native, `desktop-settings-${language}-narrow`);
     assert.equal(await native.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
+    assert.ok((await native.evaluate('document.querySelector("[data-appearance-more]").textContent')).includes('17'), language + ' renders the catalogue count');
   }
   await native.click('document.querySelector("[data-appearance-more]")');
   assert.equal(await native.evaluate('document.querySelectorAll("input[name=appearance-style]").length'), 17);
@@ -267,9 +286,9 @@ async function main() {
   mainWindow.window.destroy(); mainWindow = null;
   await until(() => reference.child.isDestroyed() && nested.child.isDestroyed(), 'reference lifetime remains tied to its opener');
   checks.push('legacy-browser-accent-cross-tab-sync-and-reference-native-windows');
-  checks.push('native-all-styles-modes-titlebars-tray-sync-custom-accent-save-failure-retry-restart-default-keyboard-languages-quota-details');
+  checks.push(styles.length === 16 ? 'native-all-styles-modes-titlebars-tray-sync-custom-accent-save-failure-retry-restart-default-keyboard-languages-quota-details' : 'native-default-custom-accent-save-failure-retry-reload-keyboard-languages-quota-details');
   for (const client of clients) assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
-  await writeFile(path.join(output, 'results.json'), JSON.stringify({ ok: true, checks, output }, null, 2));
+  await writeFile(path.join(output, 'results.json'), JSON.stringify({ ok: true, staticStyles: styles, motion: !process.argv.includes('--static-only'), checks, output }, null, 2));
   console.log(JSON.stringify({ ok: true, checks, output }));
 }
 app.whenReady().then(main).catch(async error => {
@@ -281,7 +300,7 @@ app.whenReady().then(main).catch(async error => {
     const client = clients[index];
     if (client.window.isDestroyed()) continue;
     try {
-      await writeFile(path.join(output, `failure-${index}.json`), JSON.stringify({ errors: client.errors, state: await client.evaluate('({url:location.href, text:document.body.innerText, html:document.body.innerHTML.slice(0,20000)})') }, null, 2));
+      await writeFile(path.join(output, `failure-${index}.json`), JSON.stringify({ errors: client.errors, state: await client.evaluate('({url:location.href, hidden:document.hidden, reduced:matchMedia("(prefers-reduced-motion: reduce)").matches, decoration:document.querySelector("[data-appearance-decoration]")?.dataset.appearanceDecoration, text:document.body.innerText, html:document.body.innerHTML.slice(0,20000)})') }, null, 2));
       if (client.window.isVisible()) await shot(client, `failure-${index}`);
     } catch {}
   }

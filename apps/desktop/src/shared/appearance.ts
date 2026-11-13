@@ -19,18 +19,26 @@ export const PALETTES = [
 ] as const;
 export type PaletteId = typeof PALETTES[number][0];
 export type AppearancePalette = PaletteId | 'theme';
-export interface AppearancePreferences { style: AppearanceStyle; palette: AppearancePalette }
+export interface AppearancePreferences { style: AppearanceStyle; palette: AppearancePalette; decorations?: boolean }
 export const DEFAULT_APPEARANCE: AppearancePreferences = { style: 'default', palette: 'theme' };
 export const APPEARANCE_GET_CHANNEL = 'appearance:get';
 export const APPEARANCE_SET_CHANNEL = 'appearance:set';
 export const APPEARANCE_INITIALIZE_CHANNEL = 'appearance:initialize';
 export const APPEARANCE_CHANGED_CHANNEL = 'appearance:changed';
+export const APPEARANCE_VISIBILITY_CHANNEL = 'appearance:visibility';
+export const APPEARANCE_WATCH_VISIBILITY_CHANNEL = 'appearance:watch-visibility';
+export const APPEARANCE_UNWATCH_VISIBILITY_CHANNEL = 'appearance:unwatch-visibility';
 export interface AppearanceBridge {
   getAppearance: () => Promise<AppearancePreferences | null>;
   setAppearance: (value: AppearancePreferences) => Promise<AppearancePreferences>;
   initializeAppearance: (value: AppearancePreferences) => Promise<AppearancePreferences>;
   onAppearanceChanged: (callback: (value: AppearancePreferences) => void) => () => void;
+  onAppearanceVisibilityChanged?: (callback: (visible: boolean) => void) => () => void;
 }
+
+export const DECORATED_APPEARANCE_STYLES = ['matrix', 'cloud_observation', 'aquarium', 'prism_arcade', 'stained_glass', 'migration', 'heart_monitor', 'origami', 'black_hole', 'lepidoptera', 'world_cup'] as const satisfies readonly AppearanceStyle[];
+export type DecoratedAppearanceStyle = typeof DECORATED_APPEARANCE_STYLES[number];
+export const hasAppearanceDecoration = (style: AppearanceStyle): style is DecoratedAppearanceStyle => DECORATED_APPEARANCE_STYLES.some(value => value === style);
 
 export const isAppearanceStyle = (value: unknown): value is AppearanceStyle =>
   APPEARANCE_STYLES.some(style => style === value);
@@ -39,13 +47,15 @@ const validAccent = (value: unknown): value is AppearancePalette => value === 't
 export function isAppearancePreferences(value: unknown): value is AppearancePreferences {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
-  return isAppearanceStyle(candidate.style) && validAccent(candidate.palette);
+  return isAppearanceStyle(candidate.style) && validAccent(candidate.palette)
+    && (candidate.decorations === undefined || typeof candidate.decorations === 'boolean');
 }
 export function normalizeAppearancePreferences(value: unknown, legacyPalette?: unknown): AppearancePreferences {
   const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return {
     style: isAppearanceStyle(candidate.style) ? candidate.style : 'default',
     palette: validAccent(candidate.palette) ? candidate.palette : validPalette(legacyPalette) ? legacyPalette : 'theme',
+    ...(typeof candidate.decorations === 'boolean' ? { decorations: candidate.decorations } : {}),
   };
 }
 

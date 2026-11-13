@@ -12,11 +12,15 @@
 
 ## 第二阶段：装饰动画
 
-- [ ] 新增可持久化的装饰动画开关，默认关闭；旧数据无需迁移。浏览器跨标签页及 Desktop 主窗口/托盘共享。
-- [ ] 逐个加入代码雨、云、鱼泡、棱镜、彩窗光束、鸟群、心电扫线、纸飞机、轨道、蝶翼和足球。classic / sketchbook 与既有三款保持静态。
-- [ ] 装饰层无交互/读屏语义，不参与数据、尺寸、焦点或点击；限定图形数量与低干扰透明度。CSS 优先变换/透明度，无持续 JS 帧循环。
-- [ ] 系统减少动态效果、浏览器页面隐藏、Electron 窗口隐藏/最小化均停止并卸载动画；切主题/关闭时清理订阅。托盘裁剪到实际面板，不覆盖透明外沿。
-- [ ] 扩展契约/持久化测试和真实动画验收（全部主题、开关、跨窗口、隐藏恢复、减少动态效果、关闭与默认恢复）；检查截图。独立审查、适用测试通过后本地提交。
+- [x] 新增可持久化的装饰动画开关，默认关闭；旧数据无需迁移。浏览器跨标签页及 Desktop 主窗口/托盘共享。
+- [x] 逐个加入代码雨、云、水母气泡、棱镜、彩窗光束、鸟群、心电扫线、折纸展开、轨道、蝶翼和足球。classic / sketchbook 与既有三款保持静态。
+- [x] 装饰层无交互/读屏语义，不参与数据、尺寸、焦点或点击；限定图形数量与低干扰透明度。CSS 优先变换/透明度，无持续 JS 帧循环。
+- [x] 系统减少动态效果、浏览器页面隐藏、Electron 窗口隐藏/最小化均停止并卸载动画；切主题/关闭时清理订阅。托盘裁剪到实际面板，不覆盖透明外沿。
+- [x] 扩展契约/持久化测试和真实动画验收（全部主题、开关、跨窗口、隐藏恢复、减少动态效果、关闭与默认恢复）；检查截图。独立审查、适用测试通过后本地提交。
+
+动画阶段定点证据：`.quotern-dev/appearance-motion-delivery/motion-results.json`。11 款 × 深浅模式的真实主界面/托盘动画、暂停失败重试、页面隐藏与原生最小化、初始隐藏、键盘开关、资源阻断后额度详情可用均已验证。320 CSS px 的设置控件全部位于对话框内；原主界面在此模拟宽度下已有 331px scrollWidth，改动后仍为 331px，不能据本次验收声称整个仪表盘已适配 320px。独立代码审查提出的 Electron 事件重载类型问题与测试依赖 OS 减少动态效果问题已修复；10 张装饰截图复核未见明确遮挡或越界。
+
+交付验证：根级 `corepack pnpm test` 通过（`.quotern-dev/appearance-final-test.log`）；末次控件修正后的完整构建、Desktop typecheck、Dashboard 测试分别记录于 `appearance-controls-build.log`、`appearance-controls-typecheck.log`、`appearance-controls-unit.log`。真实联合验收为 `.quotern-dev/appearance-delivery-acceptance/results.json`；随后针对末次修正重新通过完整静态矩阵（`appearance-static-delivery/results.json`）与动画矩阵（`appearance-controls-green/motion-results.json`）。渲染检查发现并修复了翻译插值：项目使用 `{{count}}`；实际安装的 HeroUI 3.2.4 Switch.Content 必须包住 Control / Label，Description 位于同级。滑轨真实点击、键盘切换、四语言主题总数及减少动态效果说明均已回归，已查看末次控件截图。
 
 依据：项目 UI 规范、ui-ux-quality 的控件/布局/验证规则、HeroUI v3 Switch / RadioGroup 文档，以及现代 Web motion 指南。Electron 在禁用 backgroundThrottling 时不可靠地发布页面隐藏状态，必要时使用本窗口 show/hide/minimize/restore 的独立可见性通知，避免更改业务后台任务节流。
 

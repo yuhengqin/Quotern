@@ -106,6 +106,7 @@ declare global {
       setAppearance: import('../preload/index').TudApi['setAppearance'];
       initializeAppearance: import('../preload/index').TudApi['initializeAppearance'];
       onAppearanceChanged: import('../preload/index').TudApi['onAppearanceChanged'];
+      onAppearanceVisibilityChanged: import('../preload/index').TudApi['onAppearanceVisibilityChanged'];
       getLocalePreference: () => Promise<import('../shared/locale').DesktopLocaleState>;
       setLocalePreference: (preference: import('quotern-i18n').LocalePreference) => Promise<void>;
       onLocaleChanged: (callback: (state: import('../shared/locale').DesktopLocaleState) => void) => () => void;

@@ -236,7 +236,6 @@ export const DashboardOverviewCard = memo(function DashboardOverviewCard({
           onSelectDate={onSelectDate}
           selectedDate={selectedDate}
         />
-          <AchievementActivityLink />
       </div>
     </section>
   );
@@ -459,6 +458,7 @@ function HeatmapSection({
     <ActivityHeatmap
       days={days}
       embedded
+      footer={<AchievementActivityLink />}
       models={modelRows}
       onSelectDate={onSelectDate}
       selectedDate={selectedDate}

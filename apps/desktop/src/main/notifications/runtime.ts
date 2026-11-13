@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain, Notification } from 'electron';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { resolveDataDir } from 'quotern-core';
@@ -12,18 +11,14 @@ import type { QuotaNavigationTarget } from '../../shared/quota-navigation.js';
 import { AgentActivityMonitor, type ActivityRoot } from '../agent-activity/monitor.js';
 import { discoverAgentActivityRoots } from '../agent-activity/sources.js';
 import { AgentHookEvents } from '../agent-activity/hook-events.js';
-import { parseJsonc } from '../dsh-pet/jsonc.js';
 import { NotificationNavigation } from './navigation.js';
 import { NotificationPreferencesStore } from './preferences.js';
 import { NotificationManager } from './manager.js';
 import { NotificationSoundPlayer } from './sound.js';
-import { AgentNotificationEvents } from './agent-events.js';
 
 export async function initializeNotifications(options: { getMainWindow(): BrowserWindow | null; showMainWindow(): void; showQuota(target?: QuotaNavigationTarget): void; getLocale(): SupportedLocale; activityRoots?: ActivityRoot[] }) {
   const directory = path.join(app.getPath('userData'), 'notifications');
-  let legacyAgentMuted = false;
-  try { legacyAgentMuted = parseJsonc(await readFile(path.join(app.getPath('userData'), 'dsh-pet/main-config.jsonc'), 'utf8')).notificationsEnabled === false; } catch { /* No legacy preference is a normal first launch. */ }
-  const store = await NotificationPreferencesStore.open(path.join(directory, 'preferences.json'), { legacyAgentMuted });
+  const store = await NotificationPreferencesStore.open(path.join(directory, 'preferences.json'));
   const sound = new NotificationSoundPlayer(path.join(directory, 'sounds'));
   const navigation = new NotificationNavigation(), subscribers = new Set<(event: ActivityEvent) => void>();
   let issue: NotificationSettingsState['issue'] = null, paused = true, disposed = false, generation = 0, timer: ReturnType<typeof setInterval> | null = null;
@@ -44,11 +39,8 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
     },
   });
   const send = (notice: DesktopNotice, test = false) => disposed || paused && !test ? Promise.resolve('suppressed' as const) : manager.send(notice, test);
-  const router = new AgentNotificationEvents({ send, dismiss: predicate => manager.dismiss(predicate), text: (kind, source) => {
-    const provider = source === 'codex' ? 'Codex' : source === 'claude' ? 'Claude Code' : 'DSH';
-    return { title: notificationText(options.getLocale(), `${kind}Title`, { source: provider }), body: notificationText(options.getLocale(), `${kind}Body`) };
-  } });
-  const receive = (event: ActivityEvent) => { if (paused || disposed) return; router.accept(event); for (const listener of subscribers) { try { listener(event); } catch { /* One observer cannot stop delivery to others. */ } } };
+  // Agent events remain available to pets, independently of native notifications.
+  const receive = (event: ActivityEvent) => { if (paused || disposed) return; for (const listener of subscribers) { try { listener(event); } catch { /* One observer cannot stop delivery to others. */ } } };
   const monitor = new AgentActivityMonitor({ roots: options.activityRoots ?? discoverAgentActivityRoots, onEvent: receive });
   const hooks = new AgentHookEvents({ directory: path.join(resolveDataDir(), 'integrations/notification-events'), onEvent: receive });
   const activity: ActivitySubscription = { subscribe: listener => { subscribers.add(listener); return () => subscribers.delete(listener); }, capabilities: () => monitor.capabilities() };
@@ -58,7 +50,7 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
   ipcMain.handle(NOTIFICATIONS_SET, async (event, patch: NotificationPreferencePatch) => { trusted(event); await store.set(patch); issue = null; manager.reconcile(); changed(); return state(); });
   ipcMain.handle(NOTIFICATIONS_TEST, event => {
     trusted(event); issue = null; changed();
-    return send({ id: randomUUID(), category: 'agentComplete', title: notificationText(options.getLocale(), 'testTitle'), body: notificationText(options.getLocale(), 'testBody') }, true);
+    return send({ id: randomUUID(), category: 'quota', title: notificationText(options.getLocale(), 'testTitle'), body: notificationText(options.getLocale(), 'testBody') }, true);
   });
   ipcMain.handle(NOTIFICATIONS_PREVIEW_SOUND, async (event, value: NotificationSound) => {
     trusted(event); if (!['none', 'soft', 'bell'].includes(value)) throw new Error('Invalid notification sound');

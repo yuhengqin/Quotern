@@ -46,21 +46,18 @@ export function transformIntegrationHooks(document: unknown, remove: Record<stri
 }
 export async function integrationStatus(dataDir: string) {
   const manifest = await readAgentJson<Manifest>(join(agentDirectory(dataDir), 'installed.json'), {});
-  const result: Record<string, { installed: boolean; target: string; managed: boolean; notificationsReady: boolean }> = {};
+  const result: Record<string, { installed: boolean; target: string; managed: boolean }> = {};
   for (const agent of ['claude', 'codex'] as const) {
     const entry = manifest[agent], target = entry?.target ?? agentSettingsPath(agent);
-    let installed = false, notificationsReady = false;
+    let installed = false;
     if (entry) {
       try {
         const document = await readAgentJson<Record<string, unknown>>(target, {});
         const remaining = transformIntegrationHooks(document, entry.handlers);
         installed = JSON.stringify(document) !== JSON.stringify(remaining);
-        const required = ['Stop', 'PermissionRequest', 'PreToolUse', 'PostToolUse', ...(agent === 'claude' ? ['Notification', 'StopFailure', 'PostToolUseFailure'] : ['Interrupt'])];
-        const configured = object(document.hooks) ? document.hooks : {};
-        notificationsReady = required.every(event => Array.isArray(configured[event]) && (configured[event] as Record<string, unknown>[]).some(group => Array.isArray(group.hooks) && group.hooks.some(handler => object(handler) && entry.handlers.some(owned => handler.type === owned.type && handler.command === owned.command && JSON.stringify(handler.args) === JSON.stringify(owned.args) && handler.commandWindows === owned.commandWindows))));
       } catch { /* Corrupt or changed config is not installed successfully. */ }
     }
-    result[agent] = { installed, target, managed: !!entry, notificationsReady };
+    result[agent] = { installed, target, managed: !!entry };
   }
   return result;
 }

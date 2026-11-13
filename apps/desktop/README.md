@@ -175,17 +175,17 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 
 Windows 在启动时通过 `app-identity.ts` 设置与安装器一致的 `dev.quotern.desktop` AppUserModelID，避免按 Electron 默认身份发通知。Windows 的 `close` 回调也可能只是横幅超时，通知中心条目仍然存在；管理器在 Windows 保留有界的对象引用，继续支持点击、请求处理后的精确撤销及退出清理，不把横幅消失当作用户已处理（[Electron 35 事件与关闭语义](https://github.com/electron/electron/blob/v35.4.0/docs/api/notification.md#event-close)）。
 
-「通知」页分别设置本轮完成、需要确认或回答、Agent 错误、额度提醒和服务状态变化的「从不 / 仅后台 / 始终」策略。Agent 默认仅后台，额度/服务默认始终以保留原有行为；提示音默认柔和。订阅页原有阈值、重置、服务和账号规则继续生效。旧大肥鱼配置中明确关闭通知时，新设置继承该 Agent 静音偏好。偏好保存在 Electron userData 的 `notifications/preferences.json`，写入失败保留旧值；损坏时暂停提醒并提供恢复默认入口。
+「通知」页仅设置额度提醒和 Agent 厂商服务状态变化的「从不 / 仅后台 / 始终」策略，两类默认始终提醒，提示音默认柔和。订阅页原有阈值、重置、服务和账号规则继续生效。偏好保存在 Electron userData 的 `notifications/preferences.json`；升级时丢弃旧版会话完成、确认、错误策略，保留额度、服务和提示音设置。写入失败保留旧值，损坏时暂停提醒并提供恢复默认入口。
 
-Codex 日志 `task_complete` / `turn_complete` 与 Claude 明确 `end_turn` 表示本轮响应结束，不宣称目标成功。Codex 终态携带结构化 `error` 时改发错误通知，支持当前协议的新旧事件别名；独立 Error 事件属于瞬时事件，不能假设每个版本都会写入日志，旧版本未持久化的 API 错误无法由日志补足（[协议](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs)、[持久化规则](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/policy.rs)）。
+Quotern 不再发送 Agent 会话完成、确认或错误系统通知，也不提供「连接通知」设置。Codex、Claude 的日志和已有可选 Hook 事件仍提供桌宠的工作、等待、结果及错误状态；本轮结束不宣称目标成功。旧 `desktopNotifications` 偏好仅保留为已有 Hook 元数据流的兼容开关，不能启用系统通知。通用「Agent 集成」功能与 Hook 安装/移除入口保留，不自动改写用户的 Agent 配置。
 
-「Agent 连接」显式安装/更新现有可选集成 Hook：Codex 使用官方支持的 Stop、PermissionRequest、PreToolUse、PostToolUse、Interrupt 等事件；Claude 补充 Notification、StopFailure 和 PostToolUseFailure。只根据明确请求/失败证据提醒，不从输出中的错误文字推断失败。Hook 队列最多 512 条，仅保存类型、时间和会话/调用标识，不保存消息或工具输入输出；其他 Hook 保留，开发实例禁止修改真实 Agent 配置。
+活动监听启动时对已有日志建立 EOF 基线，只读取后续增量，不回放过期历史。Hook 队列最多 512 条，仅保存类型、时间和会话/调用标识，不保存消息或工具输入输出；这些事件只分发给活动订阅者，不进入通知管理器。
 
-界面显示「Hook 已安装」仅表示配置与脚本已安装。Codex 首次安装或更新后，还须在 `/hooks` 或 Codex 设置的 Hooks 页面审核并信任相应 Hook；Quotern 不替用户授予信任或审批工具（[Codex 信任机制](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)）。`SessionEnd` / `Interrupt` 用于撤销待确认提醒，不覆盖同一轮先发生、后读取到的明确完成或持久化错误；新的回合仍会阻止上一轮的迟到通知。
+「Agent 服务状态变化」来自订阅厂商的官方状态页。在启用订阅通道、服务提醒且通知策略允许时，所关注范围的有效状态级别发生变化才通知，包括故障程度变化和恢复。首次观察、未知或过期状态不会通知；事件新增、正文、处理阶段或时间更新本身不会单独提醒。多个账号按厂商合并。Quotern 自身采集、启动或 watchdog 异常目前主要记录日志，没有独立系统通知链路。
 
-已有日志启动时建立 EOF 基线，新会话只处理启动后的事件。过期、重复和乱序请求不回放；Hook 与日志的重复完成会合并。新一轮开始、对应工具返回或明确终态撤销已处理请求。通知点击保留 `source + sessionId`，主窗口重建后挂载读取并按导航编号确认消费，再进入共享 `/sessions` 精确记录；点击不批准或回答 Agent 请求。查询读取 `localCollectSince` 范围内的已采集历史，不补采集、不做标题或子串匹配；缺记录时保留目标等待常规同步。额度/服务通知继续定位对应额度窗口。
+额度通知点击定位对应额度窗口，服务通知点击定位「服务状态与事件」详情。共享会话精确定位与桌宠导航的兼容通道保留。
 
-「通知」页提供正式可用的测试通知；旧订阅页测试入口仍仅限 Vite 开发模式。`corepack pnpm test:notifications-ui [全新输出目录]` 使用隔离 profile、数据和受控事件，检查宠物关闭时的通知、真实 preload/设置、键盘操作、保存失败和窗口重建导航，生成宽/窄屏截图及结果 JSON。检查捕获系统 Toast 的 `show()`，不代表验证系统权限或实际送达；会调用一次生产提示音试听路径。
+「通知」页提供正式可用的测试通知；旧订阅页测试入口仍仅限 Vite 开发模式。`corepack pnpm test:notifications-ui [全新输出目录]` 使用隔离 profile、数据和受控事件，检查 Codex/Claude 日志和已有 Hook 活动仍可订阅且不发系统通知、额度/服务通知与点击、真实 preload/设置、键盘操作、保存失败及旧偏好兼容，生成宽/窄屏截图及结果 JSON。检查捕获系统 Toast 的 `show()`，不代表验证系统权限或实际送达；会调用一次生产提示音试听路径。
 
 ### Windows 原生与 CLI 实测
 
@@ -200,16 +200,15 @@ corepack pnpm exec node apps/desktop/scripts/notifications-agent-live.mjs .quote
 
 CLI 验收支持 `codex-complete`、`codex-confirm`、`codex-error`、`claude-complete`、`claude-confirm`、`claude-error`；同一 Agent 串行执行。使用已安装的真实 CLI，但模型响应及 HTTP 400 API 故障由 localhost 受控端点提供，不调用云模型。确认场景只请求打印固定标记，等待输出目录中的 `release-codex-confirm` / `release-claude-confirm` 文件后才允许这条测试命令；不授予会话或持久权限。Codex 的一次性 Hook 信任放行仅限验收实例中已经核对的自有脚本。CLI 路径可由 `QUOTERN_TEST_CODEX` / `QUOTERN_TEST_CLAUDE` 指定。
 
-检查通知中心撤销时，先不点击通知，等横幅超时；使用 `ready.json` 中的临时 `appId`，通过 Windows PowerShell 5.1 读取处理前后的原生历史，而不要求开启通知中心界面：
+CLI 场景现在用于观测活动流：应记录完成、等待及错误状态，同时不产生 Agent 系统通知。手动检查额度/服务原生通知时，向验收目录的 `command.json` 写入 `send` 指令，类别只允许 `quota` 或 `service`。使用 `ready.json` 中的临时 `appId`，通过 Windows PowerShell 5.1 读取原生历史：
 
 ```powershell
+Set-Content -LiteralPath '.quotern-dev/native-review-01/command.json' -Value '{"id":"send-1","action":"send","category":"service"}'
 powershell.exe -NoProfile -NonInteractive -File apps/desktop/scripts/notifications-windows-history.ps1 -AppId '<ready.json 中的 appId>'
-Set-Content -LiteralPath '.quotern-dev/native-review-01/release-codex-confirm' -Value 'release'
-# 再次读取历史，确认该待确认条目的 Tag 消失，其他条目保留。
 Set-Content -LiteralPath '.quotern-dev/native-review-01/command.json' -Value '{"id":"quit-1","action":"quit"}'
 ```
 
-2026-11-13 在 Windows、Codex 0.167.1、Claude Code 2.1.322 实测了两端完成、确认、API 错误六条链路；均产生真实原生通知，重复的 Hook / 日志信号没有重复发送。横幅实际显示、短提示音可听见及点击后打开会话详情有用户截图/交互反馈；处理后撤销通过原生历史 Tag 前后比对验证。柔和提示音、清脆试听、关闭声音，以及退出清理均已检查。此结果不代表真实云端故障、安装包升级或 macOS/Linux 实机验收。
+原生验收不代表真实云端故障、安装包升级或 macOS/Linux 实机验收。确认场景仍需按前述 `release-codex-confirm` / `release-claude-confirm` 文件释放受控命令；Quotern 不再为该请求显示通知。
 
 ## Windows 桌面宠物
 
@@ -241,7 +240,7 @@ Windows 设置 → 宠物 → **大肥鱼**。默认关闭，仅运行单实例�
 
 未占用时无需 `lock` 参数，原有手动操作保留。占用期间随机动画、漫游、自动余额展示与工作气泡让路，工作状态仍持续记录；到期自动解冻，旧编号明确返回 `lock-lost`，用户操作可提前接管。回执最多保留 512 条，终态保留 60 秒；120 秒没有后续播放报告的活跃记录转为 `failed/renderer-timeout`。运行时适配与生成代码测试位于 `scripts/dsh-pet-controls-*`，原生检查使用全新私有目录，避免正式采集。
 
-Agent 系统通知及其会话定位由独立通知运行时负责，见上文「系统通知」。
+Agent 活动流由独立运行时提供，只用于桌宠状态展示，不发送完成、确认或错误系统通知。
 
 额度来源需要明确选择，直接使用 Quotern 新鲜读数；真实余额和窗口已用百分比分别显示，缺失或陈旧不补零。工作状态订阅独立 Agent 活动流，本身不安装 Hook 或修改统计数据。各来源实际观测状态与缺失原因见设置；Codex 普通完成仅表示“有结果”，不会据此庆祝目标成功。过期状态会解除工作循环。
 

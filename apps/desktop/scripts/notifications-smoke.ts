@@ -1,4 +1,4 @@
-// Real Desktop preload, React routes and Notification click handlers, with private fixture data.
+// Real Desktop preload, notification settings and pet activity stream, with private fixture data.
 // OS toast delivery is intentionally excluded: show() captures the real Notification object.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -8,11 +8,11 @@ import path from 'node:path';
 import { app, BrowserWindow, ipcMain, Notification } from 'electron';
 import { createLocalApiApp } from '../../../packages/core/src/server/local-api';
 import { BucketStore } from '../../../packages/core/src/server/state';
-import { syncSessionSource } from '../../../packages/core/src/session-collector';
 import type { TudConfig } from '../../../packages/core/src/types';
 import { initializeNotifications } from '../src/main/notifications/runtime';
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/shared/quota';
 import { NOTIFICATIONS_SET } from '../src/shared/notifications';
+import type { ActivityEvent } from '../src/shared/agent-activity';
 // @ts-ignore opt-in JS acceptance driver
 import { connectPage, wait } from './desktop-cdp.mjs';
 
@@ -32,12 +32,11 @@ app.commandLine.appendSwitch('remote-debugging-port', String(port));
 async function main() {
   await mkdir(root, { recursive: true });
   await mkdir(path.join(root, 'profile/notifications'), { recursive: true });
-  await writeFile(path.join(root, 'profile/notifications/preferences.json'), JSON.stringify({ version: 1, sound: 'none' }));
+  await writeFile(path.join(root, 'profile/notifications/preferences.json'), JSON.stringify({ version: 1, modes: { agentComplete: 'always', agentConfirmation: 'always', agentError: 'always', quota: 'background', service: 'always' }, sound: 'none' }));
   const activityFile = path.join(root, 'activity.jsonl');
   await writeFile(activityFile, JSON.stringify({ type: 'session_meta', payload: { id: 'codex-live' } }) + '\n');
-  const input = path.join(root, 'fixture.jsonl');
-  await writeFile(input, ['old-session', 'new-session'].map((sessionId, index) => JSON.stringify({ type: 'assistant', sessionId, requestId: 'request-' + index, timestamp: '2026-10-05T04:00:00Z', message: { id: 'message-' + index, role: 'assistant', model: 'fixture-model', content: [{ type: 'text', text: 'fixture' }], usage: { input_tokens: 10, output_tokens: 5 } } })).join('\n') + '\n');
-  await syncSessionSource(root, 'claude', { complete: true, inputs: [{ path: input, kind: 'jsonl', sessionId: 'old-session' }] });
+  const claudeActivityFile = path.join(root, 'claude-activity.jsonl');
+  await writeFile(claudeActivityFile, JSON.stringify({ type: 'user', sessionId: 'claude-live' }) + '\n');
   const api = createLocalApiApp({ dataDir: root, bucketStore: new BucketStore(), getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z', localCollectSince: '2026-01-01T00:00:00Z' } as TudConfig) });
   ipcMain.handle('locale:get', () => ({ preference: 'zh-CN', resolved: 'zh-CN', systemLocale: 'zh-CN' }));
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' }));
@@ -48,7 +47,9 @@ async function main() {
   ipcMain.handle('quota:navigation:get', () => null);
   ipcMain.handle('quota:navigation:ack', () => {});
   ipcMain.handle('quota:dialog-state', () => {});
+  const routes: string[] = [];
   ipcMain.handle('tud:api-request', async (_event, route: string, init?: { method?: string; body?: string }) => {
+    routes.push(route);
     const response = await api.request(route, init); return { status: response.status, body: await response.json() };
   });
   let mainWindow: BrowserWindow | null = null, notice: Notification | null = null, shown = 0, failSave = false;
@@ -62,9 +63,10 @@ async function main() {
   };
   const originalHandle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = (channel, handler) => originalHandle(channel, (event, ...args) => { if (channel === NOTIFICATIONS_SET && failSave) { failSave = false; throw Error('fixture save failure'); } return handler(event, ...args); });
-  const initialized = await initializeNotifications({ getMainWindow: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, showQuota: () => {}, getLocale: () => 'zh-CN', activityRoots: [{ source: 'codex', path: activityFile }], showMainWindow: () => { setTimeout(createWindow, 100); } });
+  const quotaTargets: unknown[] = [], activity: ActivityEvent[] = [];
+  const initialized = await initializeNotifications({ getMainWindow: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, showQuota: target => { quotaTargets.push(target); }, getLocale: () => 'zh-CN', activityRoots: [{ source: 'codex', path: activityFile }, { source: 'claude', path: claudeActivityFile }], showMainWindow: createWindow });
   ipcMain.handle = originalHandle;
-  const clickNotice = async (id: string) => { await initialized.send({ id: randomUUID(), category: 'agentComplete', title: 'Fixture Agent', body: 'Navigation acceptance', target: { kind: 'session', value: { source: 'claude', sessionId: id } } }, true); assert.ok(notice); (notice as Notification).emit('click'); };
+  const unsubscribe = initialized.activity.subscribe(event => { activity.push(event); });
   const clients: Array<{ close(): void; evaluate(expression: string): Promise<unknown>; screenshot(file: string): Promise<void> }> = [], checks: string[] = [];
   const until = async (predicate: () => boolean | Promise<boolean>, label: string) => {
     for (let i = 0; i < 200; i++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label);
@@ -76,45 +78,64 @@ async function main() {
   };
   try {
     await initialized.start();
-    await appendFile(activityFile, JSON.stringify({ type: 'event_msg', timestamp: new Date().toISOString(), payload: { type: 'task_complete', turn_id: 'fixture-turn' } }) + '\n');
-    await until(() => shown > 0, 'pet-independent live Agent completion');
-    checks.push('live-codex-completion-with-no-pet-subsystem');
-    await clickNotice('old-session');
-    let client = await connect();
-    await until(() => client.evaluate('location.hash.includes("old-session") && Boolean(document.querySelector("[data-session-heading]"))'), 'late-mounted exact session');
-    assert.equal(await client.evaluate('document.querySelectorAll("[data-session-trigger]").length'), 1);
-    checks.push('notification-click-before-renderer-mount-opens-old-collected-session');
-    await client.key('Escape');
-    await clickNotice('old-session');
-    await until(() => client.evaluate('Boolean(document.querySelector("[data-session-heading]"))'), 'repeat notification reopens same row');
-    checks.push('repeat-click-reopens-exact-detail');
-    mainWindow!.destroy(); mainWindow = null;
-    await clickNotice('old-session'); await clickNotice('new-session');
-    client = await connect();
-    await until(() => client.evaluate('location.hash.includes("new-session") && Boolean(document.querySelector("[data-session-heading]"))'), 'rebuilt renderer receives latest notification');
-    await until(() => client.evaluate('window.tud.notifications.getNavigation().then(value=>value===null)'), 'matching navigation acknowledgement');
-    checks.push('window-rebuild-and-consecutive-clicks-retain-latest-target');
-    await clickNotice('not-collected');
-    await until(() => client.evaluate('document.body.innerText.includes("当前采集数据中未找到该会话")'), 'missing record message');
-    assert.equal(await client.evaluate('document.querySelectorAll("[data-session-trigger]").length'), 0);
-    checks.push('missing-id-never-falls-back-to-a-similar-session');
-    await client.screenshot(path.join(root, 'missing-session.png'));
-    mainWindow!.webContents.send('app:open-settings', { tab: 'notifications' });
-    await until(() => client.evaluate('document.querySelectorAll("[data-notification-settings] button[aria-haspopup=listbox]").length===6'), 'notification settings');
+    const timestamp = new Date().toISOString();
+    await appendFile(activityFile, [
+      { type: 'event_msg', payload: { type: 'task_complete', turn_id: 'fixture-turn' } },
+      { type: 'response_item', payload: { type: 'function_call', name: 'functions.request_user_input', call_id: 'fixture-ask' } },
+      { type: 'event_msg', payload: { type: 'error', message: 'fixture API failure' } },
+    ].map(record => JSON.stringify({ ...record, timestamp })).join('\n') + '\n');
+    await appendFile(claudeActivityFile, [
+      { type: 'assistant', message: { stop_reason: 'end_turn', content: [] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'fixture-ask', name: 'AskUserQuestion' }] } },
+      { type: 'assistant', isApiErrorMessage: true, message: { content: [] } },
+    ].map(record => JSON.stringify({ ...record, timestamp, sessionId: 'claude-live' })).join('\n') + '\n');
+    await until(() => activity.length === 6, 'Codex and Claude activity stays available to pets');
+    for (const source of ['codex', 'claude']) assert.deepEqual(activity.filter(event => event.source === source).map(event => event.state), ['result', 'waiting', 'error']);
+    assert.equal(shown, 0, 'Agent log activity must not send a system notification');
+    const hookDirectory = path.join(process.env.QUOTERN_DATA_DIR!, 'integrations/notification-events');
+    await mkdir(hookDirectory, { recursive: true });
+    for (const [index, [kind, event]] of [['confirmation', 'PermissionRequest'], ['error', 'StopFailure'], ['complete', 'Stop']].entries()) {
+      const id = `${Date.now() + index}-0123456789abcdef`;
+      await writeFile(path.join(hookDirectory, `${id}.json`), JSON.stringify({ version: 1, id, source: 'claude', sessionId: 'hook-live', at: Date.now() / 1000, kind, event }));
+    }
+    await until(() => activity.length === 9, 'legacy Hook activity stays available to pets');
+    assert.deepEqual(activity.filter(event => event.sessionId === 'hook-live').map(event => event.state), ['waiting', 'error', 'result']);
+    assert.equal(shown, 0, 'Agent Hook activity must not send a system notification');
+    checks.push('codex-claude-log-and-hook-states-remain-available-without-system-notices');
+    for (const category of ['quota', 'service'] as const) {
+      const target = { providerId: 'claude', providerType: 'claude' as const, ...(category === 'quota' ? { windowId: 'five-hour' } : {}) };
+      await initialized.send({ id: randomUUID(), category, title: 'Fixture notification', body: 'Quota navigation acceptance', target: { kind: 'quota', value: target } }, true);
+      assert.ok(notice); (notice as Notification).emit('click');
+      assert.deepEqual(quotaTargets.at(-1), target);
+    }
+    checks.push('quota-and-provider-service-notifications-deliver-and-keep-navigation');
+    createWindow();
+    const client = await connect();
+    await until(() => client.evaluate('Boolean(window.tud?.notifications)'), 'real notification preload');
+    await until(async () => {
+      mainWindow!.webContents.send('app:open-settings', { tab: 'notifications' });
+      return client.evaluate('document.querySelectorAll("[data-notification-settings] button[aria-haspopup=listbox]").length===3');
+    }, 'notification settings after the app shell subscribes');
+    const settingsText = await client.evaluate('document.querySelector("[data-notification-settings]").innerText') as string;
+    assert.match(settingsText, /额度提醒/); assert.match(settingsText, /Agent 服务状态变化/);
+    assert.doesNotMatch(settingsText, /本轮完成|需要确认或回答|Agent 错误|Agent 连接|连接通知|更新连接/);
+    assert.equal(routes.some(route => route.startsWith('/functions/tud-agent')), false, 'notification settings must not read or modify Agent connections');
+    assert.deepEqual(await client.evaluate('window.tud.notifications.getState().then(s=>Object.keys(s.preferences.modes))'), ['quota', 'service']);
+    checks.push('notification-settings-retain-only-quota-service-and-sound-without-agent-connections');
     const select = (index: number) => `document.querySelectorAll('[data-notification-settings] button[aria-haspopup=listbox]')[${index}]`;
     const closeMenu = async () => { if (await client.evaluate('Boolean(document.querySelector("[data-notification-settings] button[aria-haspopup=listbox][aria-expanded=true]"))')) await client.key('Escape'); };
     await client.click(select(0)); await client.key('End'); await client.key('Enter');
-    await until(() => client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.modes.agentComplete==="always")'), 'saved completion policy');
+    await until(() => client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.modes.quota==="always")'), 'saved quota policy');
     await closeMenu();
     checks.push('keyboard-policy-selection-persists');
     failSave = true;
     await client.click(select(0));
     await client.click('Array.from(document.querySelectorAll("[role=option]")).find(el=>el.getBoundingClientRect().height>0&&el.innerText.trim()==="从不")');
     await until(() => client.evaluate('document.querySelector("[data-notification-settings]").innerText.includes("操作失败")'), 'nearby save failure');
-    assert.equal(await client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.modes.agentComplete)'), 'always');
+    assert.equal(await client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.modes.quota)'), 'always');
     await closeMenu();
     checks.push('failed-write-preserves-effective-policy');
-    await client.click(select(5));
+    await client.click(select(2));
     await client.click('Array.from(document.querySelectorAll("[role=option]")).find(el=>el.getBoundingClientRect().height>0&&el.innerText.trim()==="清脆")');
     await until(() => client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.sound==="bell")'), 'saved sound');
     await closeMenu();
@@ -146,7 +167,7 @@ async function main() {
   } finally {
     Notification.prototype.show = originalShow;
     for (const client of clients) client.close();
-    mainWindow?.destroy(); initialized.dispose(); ipcMain.removeHandler('tud:api-request');
+    mainWindow?.destroy(); unsubscribe(); initialized.dispose(); ipcMain.removeHandler('tud:api-request');
   }
 }
 const deadline = setTimeout(() => app.exit(2), 110_000);

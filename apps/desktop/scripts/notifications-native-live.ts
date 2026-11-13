@@ -97,9 +97,6 @@ async function main() {
   const ids = new WeakMap<Notification, number>();
   Notification.prototype.show = function () {
     const id = ++sequence; ids.set(this, id);
-    // A clear test-only caption prevents manual clicks from consuming a toast
-    // whose automatic retraction is under observation.
-    if (process.env.QUOTERN_NATIVE_RETRACTION_TEST === '1' && this.title.endsWith('需要确认或回答')) this.title = `撤销测试（请勿点击）· ${this.title}`;
     record('native-send', { id, title: this.title, body: this.body, silent: this.silent });
     for (const event of ['show', 'click', 'close', 'failed'] as const) this.on(event as any, (...args: unknown[]) => record(`native-${event}`, { id, ...(event === 'failed' ? { error: String(args.at(-1)) } : {}) }));
     return nativeShow.call(this);
@@ -126,7 +123,7 @@ async function main() {
     try {
       let result: unknown = null;
       if (command.action === 'send') {
-        const value: DesktopNotice = { id: randomUUID(), category: command.category ?? 'agentComplete', title: command.title ?? 'Quotern 原生通知实测', body: '点击应打开独立验收窗口及指定会话。', target: { kind: 'session', value: { source: 'claude', sessionId: 'native-navigation-fixture' } } };
+        const value: DesktopNotice = { id: randomUUID(), category: command.category ?? 'service', title: command.title ?? 'Quotern 原生通知实测', body: '点击打开独立验收窗口。', target: { kind: 'quota', value: { providerId: 'claude', providerType: 'claude' } } };
         result = await runtime.send(value, true);
       } else if (command.action === 'show') showMainWindow();
       else if (command.action === 'hide') mainWindow?.hide();

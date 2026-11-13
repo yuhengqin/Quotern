@@ -1,4 +1,4 @@
-import type { DesktopNotice, NotificationDelivery, NotificationPreferences, NotificationSound } from '../../shared/notifications.js';
+import { NOTIFICATION_CATEGORIES, type DesktopNotice, type NotificationDelivery, type NotificationPreferences, type NotificationSound } from '../../shared/notifications.js';
 export interface NativeNotice {
   on(event: string, listener: (...args: any[]) => void): unknown;
   show(): void; close(): void;
@@ -17,7 +17,7 @@ export class NotificationManager {
   private readonly delivered = new Map<string, number>();
   constructor(private readonly options: Options) {}
   private allowed(notice: DesktopNotice, test: boolean): boolean {
-    if (this.disposed) return false;
+    if (this.disposed || !NOTIFICATION_CATEGORIES.includes(notice.category)) return false;
     const mode = this.options.preferences().modes[notice.category];
     return test || mode === 'always' || mode === 'background' && !this.options.isFocused();
   }

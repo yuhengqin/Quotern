@@ -6,11 +6,8 @@ import { notificationMessages } from '../../shared/notification-messages';
 import { DEFAULT_NOTIFICATION_PREFERENCES, NOTIFICATION_CATEGORIES, type NotificationPreferencePatch, type NotificationSettingsState, type NotificationSound } from '../../shared/notifications';
 import { FilterSelectPopover } from './FilterMenu';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
-import { agentAction, type AgentSettingsState } from '../../../../../packages/dashboard/src/components/AgentIntegrationSettings';
-import { request } from '@/lib/api';
 
 registerMessages(notificationMessages);
-type Connections = AgentSettingsState & { agents: Record<'codex' | 'claude', { installed: boolean; notificationsReady?: boolean; target: string }> };
 
 function PreferenceSelect({ label, value, choices, disabled, onChange }: { label: string; value: string; choices: { id: string; label: string }[]; disabled: boolean; onChange(value: string): void }) {
   return <Select aria-label={label} selectedKey={value} onSelectionChange={key => { if (typeof key === 'string' && choices.some(choice => choice.id === key)) onChange(key); }} isDisabled={disabled} variant="secondary" className="w-full sm:max-w-60">
@@ -22,14 +19,11 @@ function PreferenceSelect({ label, value, choices, disabled, onChange }: { label
 export function NotificationSettings() {
   const { t } = useTranslation();
   const [state, setState] = useState<NotificationSettingsState | null>(null);
-  const [agents, setAgents] = useState<Connections | null>(null);
-  const [pending, setPending] = useState<string | null>(null), [error, setError] = useState(false), [connectionError, setConnectionError] = useState(false), [feedback, setFeedback] = useState('');
+  const [pending, setPending] = useState<string | null>(null), [error, setError] = useState(false), [feedback, setFeedback] = useState('');
   const load = async () => { setError(false); try { setState(await window.tud.notifications.getState()); } catch { setError(true); } };
-  const loadAgents = async () => { setConnectionError(false); try { setAgents(await request<Connections>('/functions/tud-agent')); } catch { setConnectionError(true); } };
   useEffect(() => {
     let active = true;
     void window.tud.notifications.getState().then(value => { if (active) setState(value); }).catch(() => { if (active) setError(true); });
-    void request<Connections>('/functions/tud-agent').then(value => { if (active) setAgents(value); }).catch(() => { if (active) setConnectionError(true); });
     const unsubscribe = window.tud.notifications.onChanged(value => { if (active) setState(value); });
     return () => { active = false; unsubscribe(); };
   }, []);
@@ -44,13 +38,6 @@ export function NotificationSettings() {
   const preview = async () => {
     if (!state || pending) return; setPending('sound'); setError(false); setFeedback('');
     try { await window.tud.notifications.previewSound(state.preferences.sound); } catch { setError(true); } finally { setPending(null); }
-  };
-  const connect = async (agent: 'claude' | 'codex') => {
-    if (!agents || pending) return; setPending(agent); setConnectionError(false);
-    try {
-      const installed = await agentAction<Connections>(agents.token, { action: 'installation', agent, installed: true });
-      setAgents(await agentAction<Connections>(installed.token, { action: 'preferences', patch: { desktopNotifications: true } }));
-    } catch { setConnectionError(true); } finally { setPending(null); }
   };
   const modes = ['off', 'background', 'always'].map(id => ({ id, label: t(`notifications.${id}`) }));
   const sounds = ['none', 'soft', 'bell'].map(id => ({ id, label: t(`notifications.${id}`) }));
@@ -71,11 +58,5 @@ export function NotificationSettings() {
       {state.issue && <div role="alert" className="space-y-2 text-sm text-danger"><p>{t(`notifications.${state.issue === 'load' ? 'loadIssue' : state.issue === 'sound' ? 'soundIssue' : 'deliveryIssue'}`)}</p>{state.issue === 'load' && <Button variant="secondary" size="sm" isDisabled={disabled} onPress={() => void apply(DEFAULT_NOTIFICATION_PREFERENCES)}>{t('notifications.restore')}</Button>}</div>}
     </>}
     {error && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><p>{t('notifications.failed')}</p>{!state && <Button size="sm" variant="tertiary" onPress={() => void load()}>{t('notifications.retry')}</Button>}</div>}
-    <Surface variant="secondary" className="space-y-3 rounded-xl p-4">
-      <div className="flex items-center gap-1"><h3 className="font-medium">{t('notifications.connections')}</h3><SettingsHelpPopover title={t('notifications.connections')}><p>{t('notifications.connectionHelp')}</p></SettingsHelpPopover></div>
-      {(['codex', 'claude'] as const).map(agent => { const connected = agents?.preferences.desktopNotifications && agents.agents[agent].notificationsReady; return <div key={agent} className="flex flex-wrap items-center gap-2 text-sm"><span className="min-w-24">{agent === 'codex' ? 'Codex' : 'Claude Code'}</span><span className="flex-1 text-muted">{t(connected ? 'notifications.connected' : 'notifications.notConnected')}</span><Button size="sm" variant="secondary" aria-label={`${t(connected ? 'notifications.update' : 'notifications.connect')} ${agent === 'codex' ? 'Codex' : 'Claude Code'}`} isDisabled={!agents || !!agents.isolated || pending !== null} isPending={pending === agent} onPress={() => void connect(agent)}>{t(connected ? 'notifications.update' : 'notifications.connect')}</Button></div>; })}
-      {agents?.isolated && <p className="text-xs text-muted">{t('notifications.isolated')}</p>}
-      {connectionError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><p>{t('notifications.failed')}</p><Button size="sm" variant="tertiary" isDisabled={pending !== null} onPress={() => void loadAgents()}>{t('notifications.retry')}</Button></div>}
-    </Surface>
   </div>;
 }

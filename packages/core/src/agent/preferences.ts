@@ -3,6 +3,8 @@ import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { lock } from 'proper-lockfile';
 
+// Keep the legacy desktopNotifications opt-in for existing Hook activity streams
+// consumed by pets. It has no settings entry and never enables native notices.
 export const AGENT_FEATURES = ['quotaHints', 'tokenSaver', 'beginner', 'handoff', 'claudePane', 'glossary', 'claudeWindowStart', 'codexWindowStart', 'desktopNotifications'] as const;
 export type AgentFeature = typeof AGENT_FEATURES[number];
 export type AgentPreferences = Record<AgentFeature, boolean>;

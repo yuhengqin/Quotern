@@ -120,11 +120,11 @@
 
 ### Desktop 系统通知
 
-[NotificationSettings](../apps/desktop/src/renderer/components/NotificationSettings.tsx) 是 Desktop 专用「通知」页，复用 HeroUI Select、FilterSelectPopover 和 SettingsHelpPopover，浏览器 Dashboard 不增加系统通知设置副本。按事件设置从不/仅后台/始终，提示音支持关闭、试听和测试通知；保存失败保留有效旧值并就近反馈。只有系统 `show` 回调确认后显示“已显示”，超时仅说明请求已发出。原有订阅类型/账号开关继续生效。Agent 连接独立展示安装状态、显式连接/更新与失败重试，开发实例不修改真实配置。
+[NotificationSettings](../apps/desktop/src/renderer/components/NotificationSettings.tsx) 是 Desktop 专用「通知」页，复用 HeroUI Select、FilterSelectPopover 和 SettingsHelpPopover，浏览器 Dashboard 不增加系统通知设置副本。仅设置额度提醒、Agent 厂商服务状态变化的从不/仅后台/始终策略，提示音支持关闭、试听和测试通知；保存失败保留有效旧值并就近反馈。只有系统 `show` 回调确认后显示“已显示”，超时仅说明请求已发出。原有订阅类型/账号开关继续生效。通知页不读取或修改 Agent 连接，不提供会话完成、确认或错误通知。
 
-通知与活动监听由 `apps/desktop/src/main/notifications`、`main/agent-activity` 承担，不依赖宠物启停。旧宠物通知开关迁移到通知页；宠物仅展示活动，不重复发系统通知。会话点击沿用下面的精确查询、重复定位与渲染层重建确认契约，确认请求的点击仅查看会话，不代替 Agent 的审批/回答。
+通知与活动监听由 `apps/desktop/src/main/notifications`、`main/agent-activity` 承担，不依赖宠物启停。旧通知偏好中的三类 Agent 策略读取时丢弃，保留额度、服务和提示音设置。Agent 日志及已有 Hook 元数据仍供桌宠展示活动，不触发系统通知；通用「Agent 集成」Hook 设置保留。服务提醒来自所关注厂商的官方状态页，只在有效基线后的状态级别变化时发送；首次观察、未知/过期状态、事件内容或阶段更新不单独通知。Quotern 自身采集/runtime 异常目前记录日志，没有独立系统通知链路。
 
-Windows 横幅超时不等于用户已处理：保留通知中心条目的点击和按请求撤销能力，验证时同时检查原生历史而不只检查横幅消失。来源身份与安装器 AppUserModelID 保持一致。Agent 状态标为「Hook 已安装」，相邻帮助明确 Codex 安装/更新后需要在 Codex 审核信任，不能把文件安装成功表述为已获信任或保证运行成功。
+Windows 横幅超时不等于用户已处理：保留通知中心条目的点击和退出清理能力，验证时同时检查原生历史而不只检查横幅消失。来源身份与安装器 AppUserModelID 保持一致。额度与服务通知继续定位额度面板中的对应窗口或服务详情。
 
 ### 业务内复用入口
 

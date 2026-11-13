@@ -1,14 +1,14 @@
 import type { SessionNavigationTarget } from './agent-activity.js';
 import type { QuotaNavigationTarget } from './quota-navigation.js';
 
-export const NOTIFICATION_CATEGORIES = ['agentComplete', 'agentConfirmation', 'agentError', 'quota', 'service'] as const;
+export const NOTIFICATION_CATEGORIES = ['quota', 'service'] as const;
 export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
 export type NotificationMode = 'off' | 'background' | 'always';
 export type NotificationSound = 'none' | 'soft' | 'bell';
 export interface NotificationPreferences { modes: Record<NotificationCategory, NotificationMode>; sound: NotificationSound }
 export interface NotificationPreferencePatch { modes?: Partial<NotificationPreferences['modes']>; sound?: NotificationSound }
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  modes: { agentComplete: 'background', agentConfirmation: 'background', agentError: 'background', quota: 'always', service: 'always' }, sound: 'soft',
+  modes: { quota: 'always', service: 'always' }, sound: 'soft',
 };
 export type NotificationTarget = { kind: 'session'; value: SessionNavigationTarget } | { kind: 'quota'; value?: QuotaNavigationTarget };
 export interface DesktopNotice {

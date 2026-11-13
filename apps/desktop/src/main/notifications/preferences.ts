@@ -14,7 +14,7 @@ export class NotificationPreferencesStore {
   issue: 'load' | null = null;
   private constructor(private readonly write: (data: string) => Promise<void>) {}
   get preferences(): NotificationPreferences { return structuredClone(this.value); }
-  static async open(file: string, options: { legacyAgentMuted?: boolean; write?: (data: string) => Promise<void> } = {}) {
+  static async open(file: string, options: { write?: (data: string) => Promise<void> } = {}) {
     const store = new NotificationPreferencesStore(options.write ?? (async data => {
       const temporary = `${file}.${randomUUID()}.tmp`;
       await mkdir(path.dirname(file), { recursive: true });
@@ -28,13 +28,16 @@ export class NotificationPreferencesStore {
       const raw = JSON.parse(text);
       if (!object(raw) || raw.version !== 1) throw new Error('invalid preferences');
       const { version: _version, ...patch } = raw;
+      // Existing v1 files also contain the retired Agent policies. Discard only
+      // those keys so the user's quota/service policies and sound stay effective.
+      if (object(patch.modes)) {
+        for (const key of ['agentComplete', 'agentConfirmation', 'agentError']) delete patch.modes[key];
+      }
       if (!validNotificationPatch(patch)) throw new Error('invalid preferences');
       const stored = patch as NotificationPreferencePatch;
       store.value = { ...store.value, ...stored, modes: { ...store.value.modes, ...stored.modes } };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        if (options.legacyAgentMuted) for (const key of ['agentComplete', 'agentConfirmation', 'agentError'] as const) store.value.modes[key] = 'off';
-      } else {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         store.issue = 'load'; store.value.sound = 'none';
         for (const key of NOTIFICATION_CATEGORIES) store.value.modes[key] = 'off';
       }

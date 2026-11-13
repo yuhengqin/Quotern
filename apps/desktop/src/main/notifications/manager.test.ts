@@ -5,7 +5,7 @@ import { NotificationManager } from './manager.js';
 import { DEFAULT_NOTIFICATION_PREFERENCES, type DesktopNotice } from '../../shared/notifications.js';
 
 class NativeNotice extends EventEmitter { closes = 0; shows = 0; show() { this.shows++; } close() { this.closes++; this.emit('close'); } }
-const notice: DesktopNotice = { id: 'one', category: 'agentConfirmation', title: 'Agent', body: 'Check', sessionKey: 'codex:s', requestId: 'r', target: { kind: 'session', value: { source: 'codex', sessionId: 's' } } };
+const notice: DesktopNotice = { id: 'one', category: 'quota', title: 'Agent', body: 'Check', sessionKey: 'codex:s', requestId: 'r', target: { kind: 'session', value: { source: 'codex', sessionId: 's' } } };
 function fixture(retainAfterClose = false) {
   const preferences = structuredClone(DEFAULT_NOTIFICATION_PREFERENCES), natives: NativeNotice[] = [], sounds: string[] = [], clicks: DesktopNotice[] = [];
   let focused = false;
@@ -15,14 +15,24 @@ function fixture(retainAfterClose = false) {
 }
 test('delivery respects category policy; only a confirmed native show plays a sound', async () => {
   const f = fixture(); f.focus(true);
+  f.preferences.modes.quota = 'background';
   assert.equal(await f.manager.send(notice), 'suppressed'); assert.equal(f.natives.length, 0);
-  f.preferences.modes.agentConfirmation = 'always';
+  f.preferences.modes.quota = 'always';
   const pending = f.manager.send(notice); assert.equal(f.sounds.length, 0); assert.equal(f.natives.length, 1);
   f.natives[0]!.emit('show'); assert.equal(await pending, 'shown'); assert.deepEqual(f.sounds, ['soft']);
   f.natives[0]!.emit('show'); assert.equal(f.sounds.length, 1);
   assert.equal(await f.manager.send(notice), 'suppressed');
-  f.preferences.modes.agentError = 'off';
-  assert.equal(await f.manager.send({ ...notice, id: 'two', category: 'agentError' }), 'suppressed');
+  f.preferences.modes.service = 'off';
+  assert.equal(await f.manager.send({ ...notice, id: 'two', category: 'service' }), 'suppressed');
+  f.manager.dispose();
+});
+test('retired Agent categories cannot send notifications even through the test bypass', async () => {
+  const f = fixture();
+  for (const category of ['agentComplete', 'agentConfirmation', 'agentError']) {
+    assert.equal(await f.manager.send({ ...notice, category } as unknown as DesktopNotice, true), 'suppressed');
+  }
+  assert.equal(f.natives.length, 0);
+  assert.deepEqual(f.sounds, []);
   f.manager.dispose();
 });
 test('click opens the exact target; resolving one request leaves another session alone', async () => {
@@ -47,7 +57,7 @@ test('native failure is retryable and dismissed/disposed late events never play 
 
 test('an explicit test keeps its policy bypass when window focus changes', async () => {
   const f = fixture();
-  f.preferences.modes.agentConfirmation = 'off';
+  f.preferences.modes.quota = 'off';
   const pending = f.manager.send(notice, true);
   f.focus(true);
   f.manager.reconcile();

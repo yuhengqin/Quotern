@@ -13,6 +13,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
+import { ActivityHeatmapLegend } from './ActivityHeatmapLegend';
 import {
   applyPlatformFilterChange,
   PlatformFilterSelect,
@@ -66,6 +67,8 @@ interface ActivityHeatmapProps {
   toolRows?: DashboardToolUsageRow[];
   /** Render grid only — parent card owns title/chrome. */
   embedded?: boolean;
+  /** Optional content aligned with the legend, such as the achievement entry. */
+  footer?: ReactNode;
   /** Hide built-in platform filter (parent renders it). */
   hidePlatformFilter?: boolean;
   /** Controlled platform filter; `null` = 全部. */
@@ -325,6 +328,7 @@ export function ActivityHeatmap({
   models = [],
   toolRows = [],
   embedded = false,
+  footer,
   hidePlatformFilter = false,
   selectedSources: selectedSourcesProp,
   onSelectedSourcesChange,
@@ -663,29 +667,10 @@ export function ActivityHeatmap({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium text-muted">
-          {getTimezoneLabel()}
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted">{t('usage.heatmap.low')}</span>
-          <div className="flex gap-1">
-            {heatmapColors.map((c, i) => (
-              <span
-                key={i}
-                className="size-3 rounded-[2px]"
-                style={{ background: c }}
-              />
-            ))}
-          </div>
-          <span className="text-[10px] text-muted">{t('usage.heatmap.high')}</span>
-        </div>
-      </div>
-
       {tooltipNode}
         </>
       )}
-
+      <ActivityHeatmapLegend colors={heatmapColors} thresholds={heatmap.thresholds} footer={footer} />
     </div>
   );
 

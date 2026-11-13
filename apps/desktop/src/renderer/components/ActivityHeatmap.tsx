@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { ActivityHeatmapLegend } from '../../../../../packages/dashboard/src/components/ActivityHeatmapLegend';
 import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
@@ -60,6 +61,8 @@ interface ActivityHeatmapProps {
   toolRows?: DashboardToolUsageRow[];
   /** Render grid only — parent card owns title/chrome. */
   embedded?: boolean;
+  /** Optional content aligned with the legend, such as the achievement entry. */
+  footer?: ReactNode;
   /** Controlled platform filter; `null` = 全部. */
   selectedSources?: string[] | null;
   /** Currently selected YYYY-MM-DD (UTC). */
@@ -316,6 +319,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
   models = [],
   toolRows = [],
   embedded = false,
+  footer,
   selectedSources: selectedSourcesProp,
   selectedDate = null,
   onSelectDate,
@@ -625,23 +629,9 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end">
-        <div aria-label={t('usage.heatmap.intensity')} className="flex items-center gap-1.5">
-          <div className="flex gap-1">
-            {heatmapColors.map((c, i) => (
-              <span
-                key={i}
-                aria-label={t('usage.heatmap.intensityLevel', { level: i })}
-                className="size-3 rounded-[3px] border border-black/5"
-                style={{ background: c }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
         </>
       )}
-
+      <ActivityHeatmapLegend colors={heatmapColors} thresholds={heatmap.thresholds} footer={footer} />
       {tooltipNode}
     </div>
   );

@@ -97,6 +97,7 @@
 | 应用 Toast 队列与展示 | [AppToastContext](../packages/dashboard/src/components/AppToastContext.tsx) 提供队列；[AppToastRegion](../packages/dashboard/src/components/AppToastRegion.tsx) 与 [app-toast.css](../packages/dashboard/src/components/app-toast.css) 统一 AppShell、分享卡片和设置中的右上角提示 | `useAppToastQueue` 必须位于 Context Provider 内；短提示按内容收缩，长提示最多 24rem 且不超过视口减去两侧各 1rem，完整换行。保留 HeroUI 图标、加载、操作、关闭、堆叠与自动消失；局部队列可保留，价格页比较数量提示仍使用顶部居中 240px 的专用布局 | 独立 Context；`AppToastProvider` re-export 共享展示。main.tsx 在 document root 发布共享标题栏高度，index.css 将所有共享 Toast 放在标题栏下方 1rem，涵盖 body portal 中的分享/设置提示；托盘浮窗不预留标题栏 |
 | 按需帮助 | [HelpPopover](../packages/dashboard/src/components/HelpPopover.tsx)，SessionDetailDialog、SessionUsageBreakdown、PricingPage 使用 | 标题旁独立图标，Tooltip 只提示入口名称，点击 Popover 阅读定义、依据或覆盖信息；共享壳负责视口边界、焦点和 Escape，不使用筛选菜单外壳。现有 SettingsHelpPopover 是 Desktop 设置专用，CostExplanationLabel 绑定费用业务，均不适合直接承载共享会话指标 | 直接引用 Dashboard 实现，并在 index.css 登记 `@source` |
 | 图表基础 | [ChartPrimitives](../packages/dashboard/src/components/ChartPrimitives.tsx)，TokenUsageTrendCard、UsageDistributionCard 等使用 | Recharts 容器、主题、Tooltip/Legend；数据转换与指标含义留在业务图表中 | 同名独立副本 |
+| 日历热力图图例 | [ActivityHeatmapLegend](../packages/dashboard/src/components/ActivityHeatmapLegend.tsx)，ActivityHeatmap 使用 | 默认显示每日 Token 指标、少／多和五档主题色；footer 插槽与成就入口宽屏同排、窄屏换行。HelpPopover 按需解释灰色记录边界、相对分档、当前 Token 区间及统计时区；复用 formatTokens，重复阈值不生成空区间，无活跃日不虚构区间 | Desktop 独立 ActivityHeatmap 直接引用共享图例并传入自身阈值；index.css 登记 `@source` |
 | 堆叠图模型明细 | [UsageRowDetails](../packages/dashboard/src/components/UsageRowDetails.tsx)，ToolModelUsagePanel、ProjectUsagePanel 使用 | 整行作为点击和键盘入口，Popover 显示完整名称、原始费用格式化结果及本行模型占比；图形保持真实比例，极小条段也可经整行查看。保留鼠标模型提示，Escape、滚动或缩放关闭悬停提示 | Desktop 两个独立面板直接引用共享明细组件，并登记 CSS `@source` |
 | Agent 来源图标 | [ProviderIcon](../packages/dashboard/src/components/ProviderIcon.tsx)，会话、项目和 Agent 选择器使用 | Agent/采集来源标识及 fallback | 同名文件，分别核对资源与平台能力 |
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
@@ -173,6 +174,8 @@ Windows 横幅超时不等于用户已处理：保留通知中心条目的点击
 | 用量分享 | [ShareActivityModal](../packages/dashboard/src/components/ShareActivityModal.tsx)、[ShareBackgroundPicker](../packages/dashboard/src/components/ShareBackgroundPicker.tsx)、[ShareCardCarousel](../packages/dashboard/src/components/ShareCardCarousel.tsx)、[ShareCardActions](../packages/dashboard/src/components/ShareCardActions.tsx) | 绑定分享快照、背景库和海报导出；Desktop 分享弹窗 re-export Dashboard。组件不作为任意轮播或上传器 |
 
 热力图局部入口明确标注「热力图来源」，菜单解释仅影响本图；空选动作称为「取消全选」，保留已有无结果语义。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
+
+热力图图例专项验收：两端构建后运行 `corepack pnpm test:heatmap-legend-ui [全新输出目录]`，覆盖 HTTP / IPC、320/375/1120px 布局、帮助键盘与焦点返回、打开期间单位更新、四语言、重复阈值和空选来源时保留成就入口；追加 `--heatmap-close-bands` 检查不同阈值缩写后重合时使用近似范围、避免虚假精确区间。输出明暗截图仍需人工查看。
 
 当前没有统一的全页面 EmptyState；无数据、无匹配结果、读取失败由对应业务表达。新增页面先复用合适的 HeroUI 原件或现有业务表达，确有重复契约时再抽取。
 

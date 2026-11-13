@@ -235,7 +235,6 @@ export function DashboardOverviewCard({
             onSelectDate={onSelectDate}
             selectedDate={selectedDate}
           />
-          <AchievementActivityLink />
         </Card.Content>
       </Card>
     </section>
@@ -463,6 +462,7 @@ function HeatmapSection({
     <ActivityHeatmap
       days={days}
       embedded
+      footer={<AchievementActivityLink />}
       models={modelRows}
       onSelectDate={onSelectDate}
       selectedDate={selectedDate}

@@ -26,7 +26,7 @@ export function AchievementActivityLink() {
   const { t } = useTranslation();
   const { snapshot } = useAchievements();
   if (!snapshot || snapshot.summary.activeDays === 0) return null;
-  return <Link to="/achievements" className="mt-3 inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-accent">
+  return <Link to="/achievements" className="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-accent">
     <Award size={13} aria-hidden="true" />{t('achievement.entry.activityLink', { count: snapshot.summary.activeDays })}<ArrowUpRight size={12} aria-hidden="true" />
   </Link>;
 }

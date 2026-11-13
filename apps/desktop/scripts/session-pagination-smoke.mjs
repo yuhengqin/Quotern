@@ -16,6 +16,8 @@ const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workspace = path.resolve(desktop, '../..');
 const output = path.resolve(process.argv.slice(2).find(arg => !arg.startsWith('--')) ?? path.join(workspace, `.quotern-dev/session-pagination-ui-${Date.now()}-${process.pid}`));
 const dashboardOnly = process.argv.includes('--dashboard-fixes-only');
+const heatmapOnly = process.argv.includes('--heatmap-legend-only');
+const closeBands = process.argv.includes('--heatmap-close-bands');
 assert.ok(!existsSync(output), 'Use a fresh acceptance directory');
 await mkdir(path.join(output, 'profile'), { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
@@ -39,14 +41,16 @@ for (let index = 0; index < 84; index++) {
   if (index !== 73 && (index < 76 || index === 79)) titles.push([JSON.stringify(['claude', sessionId]), { title: displayTitles[index] ?? (child ? `Child ${index}` : `Fixture ${index}`), priority: 2 }]);
 }
 const bucketStore = new BucketStore();
-if (dashboardOnly) {
+if (dashboardOnly || heatmapOnly) {
   const bucket = (source, model, project, tokens, reportedCost) => ({
     source, model, project, hour_start: '2026-10-25T03:00:00Z', input_tokens: tokens,
     output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0,
     reasoning_output_tokens: 0, total_tokens: tokens, conversation_count: 1,
     ...(reportedCost == null ? {} : { reported_cost_usd: reportedCost }),
   });
-  bucketStore.apply([
+  bucketStore.apply(closeBands ? [1_000_000, 1_001_000, 1_002_000, 1_003_000].map((tokens, index) => ({
+    ...bucket('cursor', 'model-a', longProject, tokens, 1), hour_start: `2026-10-${21 + index}T03:00:00Z`,
+  })) : [
     bucket('cursor', 'model-a', longProject, 1_000_000, 715.06),
     bucket('cursor', 'tiny-reported-model', 'Tiny', 1_000, 0.004),
     bucket('claude', 'gpt-4o-mini', 'Tiny', 10, null),
@@ -54,15 +58,18 @@ if (dashboardOnly) {
   ]);
 }
 const facts = buildAchievementFacts([], [], [], new Date(referenceTime));
+const achievementSnapshot = evaluateAchievements(facts);
+if (heatmapOnly) achievementSnapshot.summary.activeDays = 1;
 const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-10-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: {} }, overlay: null },
   history: { messages, observations, timingEvents: [], evidence, titles, codexParents: [], missingSources: [] },
-  achievements: { ...evaluateAchievements(facts), earned: [], preferences: { showcaseIds: [], celebrationsEnabled: false }, unreadIds: [], coverage: { fromDate: '2026-10-01', asOfDate: '2026-10-25', timeZone: 'Asia/Shanghai', missingSessionSources: [], projectSources: [] } } };
+  achievements: { ...achievementSnapshot, earned: [], preferences: { showcaseIds: [], celebrationsEnabled: false }, unreadIds: [], coverage: { fromDate: '2026-10-01', asOfDate: '2026-10-25', timeZone: 'Asia/Shanghai', missingSessionSources: [], projectSources: [] } } };
 const hono = createLocalApiApp({ dataDir: path.join(output, 'must-not-create'), bucketStore, demo, getConfig: () => ({ deviceId: 'fixture', statsSince: demo.collectSince, localCollectSince: demo.collectSince }) });
 const calls = [], clients = [], windows = [], checks = [];
 let failurePage = 0, server;
 async function api(route, init = {}) {
   const url = new URL(route, 'http://localhost');
   calls.push({ path: url.pathname, query: Object.fromEntries(url.searchParams) });
+  if (heatmapOnly && url.pathname === '/functions/tud-achievements' && init.method === 'POST') return { status: 200, body: { success: true, message: 'ok', data: { snapshot: demo.achievements } } };
   // Opening the ordinary dashboard asks to ensure its collection range. Keep
   // this synthetic, read-only fixture in place instead of starting collection.
   if (url.pathname === '/functions/tud-ensure-local-range') return { status: 200, body: { success: true, message: 'ok', data: { expanded: false, localCollectSince: demo.collectSince, statsSince: demo.collectSince, sync: null, message: 'fixture' } } };
@@ -455,6 +462,80 @@ async function exerciseDashboardFixes(window, client, mode) {
   checks.push(mode + '-units-without-reload', mode + '-raw-subcent-and-chart-precision', mode + '-model-details-keyboard-focus', mode + '-project-help-and-long-name', mode + '-visible-denominator-restore', mode + '-complete-values-wide-narrow');
 }
 
+async function exerciseHeatmapLegend(window, client, mode) {
+  const legend = 'document.querySelector("[data-heatmap-legend]")';
+  const help = `(${legend}).querySelector('button')`;
+  const dialog = 'document.querySelector("[role=dialog]")';
+  await until(() => client.evaluate('Boolean(document.querySelector("button[aria-label=\\"查看 Cursor 模型明细\\"]"))'), mode + ' dashboard ready');
+  assert.equal(await client.evaluate(`(${legend})?.textContent.includes('每日 Token 用量')`), true, mode + ' legend names the daily Token metric');
+  assert.equal(await client.evaluate(`(${legend}).textContent.includes('少') && (${legend}).textContent.includes('多')`), true, 'legend has visible direction labels');
+  await until(() => client.evaluate(`Boolean((${legend}).parentElement.querySelector('a[href*=achievements]'))`), mode + ' achievement snapshot ready');
+  for (const width of [1120, 375, 320]) {
+    await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await client.evaluate(`(${legend}).scrollIntoView({block:'center'}); true`);
+    await wait(150);
+    const geometry = await client.evaluate(`(()=>{const el=(${legend}),r=el.getBoundingClientRect(),footer=el.parentElement,link=footer.querySelector('a[href*=achievements]'),a=link?.getBoundingClientRect();return {left:r.left,right:r.right,overflow:el.scrollWidth>el.clientWidth+1,font:getComputedStyle(el).fontSize,aligned:a&&Math.abs(a.top+a.height/2-r.top-r.height/2)<2,link:!!link}})()`);
+    assert.ok(geometry.left >= 0 && geometry.right <= width && !geometry.overflow, mode + ' readable legend at ' + width + ': ' + JSON.stringify(geometry));
+    assert.equal(geometry.font, '12px');
+    assert.equal(geometry.link, true, 'achievement navigation remains available');
+    if (width === 1120) assert.equal(geometry.aligned, true, 'achievement and legend share a baseline');
+    await captureSettled(window, path.join(output, `${mode}-heatmap-${width}.png`));
+    if (width === 1120) {
+      const clip = await client.evaluate(`(()=>{const r=(${legend}).parentElement.parentElement.getBoundingClientRect();return {x:Math.floor(r.left),y:Math.floor(r.top),width:Math.ceil(r.width),height:Math.ceil(r.height)}})()`);
+      await writeFile(path.join(output, `${mode}-heatmap-preview.png`), (await window.webContents.capturePage(clip)).toPNG());
+    }
+    await client.evaluate(`(${help}).focus(); true`);
+    await client.key(width === 375 ? ' ' : 'Enter');
+    await until(() => client.evaluate(`${dialog}?.innerText.includes('无用量记录')`), mode + ' keyboard legend help ' + width);
+    const content = await client.evaluate(`${dialog}.innerText`);
+    assert.ok(content.includes('相对') && content.includes('UTC+8'), 'help explains relative levels and statistics timezone');
+    assert.ok(content.includes('万'), 'real thresholds use the saved localized Token units');
+    assert.equal(await client.evaluate(`document.querySelectorAll('[data-heatmap-band]').length`), closeBands ? 4 : 2, 'only raw empty bands are omitted');
+    const bounds = await client.evaluate(`(()=>{const r=${dialog}.getBoundingClientRect();return {left:r.left,right:r.right,bottom:r.bottom,top:r.top,overflow:${dialog}.scrollWidth>${dialog}.clientWidth+1}})()`);
+    assert.ok(bounds.left >= 0 && bounds.right <= width && bounds.top >= 0 && bounds.bottom <= 900 && !bounds.overflow, 'help stays inside the viewport');
+    await captureSettled(window, path.join(output, `${mode}-heatmap-help-${width}.png`));
+    await client.evaluate(`localStorage.setItem('quotern-token-unit-mode','international'); window.dispatchEvent(new StorageEvent('storage',{key:'quotern-token-unit-mode'})); true`);
+    await until(() => client.evaluate(`${dialog}?.innerText.includes('1M') && !${dialog}.innerText.includes('万')`), mode + ' open help updates Token units');
+    if (closeBands) assert.equal(await client.evaluate(`${dialog}.innerText.includes('约 1M Token 附近') && !${dialog}.innerText.includes('1M < Token ≤ 1M')`), true, 'rounded boundaries use an approximate label instead of an impossible interval');
+    await client.evaluate(`localStorage.setItem('quotern-token-unit-mode','localized'); window.dispatchEvent(new StorageEvent('storage',{key:'quotern-token-unit-mode'})); true`);
+    await until(() => client.evaluate(`${dialog}?.innerText.includes('万')`), mode + ' localized units restored');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${dialog} && document.activeElement===(${help})`), mode + ' Escape restores legend help focus');
+  }
+  if (mode === 'browser') {
+    await client.click('document.querySelector("button[aria-label=\\"热力图来源：全部 Agent\\"]")');
+    await until(() => client.evaluate(`${dialog}?.innerText.includes('仅影响热力图')`), 'heatmap source scope');
+    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="取消全选")');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${dialog} && document.body.innerText.includes('请至少选择一个 Agent')`), 'empty source selection');
+    assert.equal(await client.evaluate(`Boolean(document.querySelector('[data-heatmap-footer] a[href*=achievements]'))`), true, 'empty source selection preserves achievement navigation');
+    await client.click(help);
+    await until(() => client.evaluate(`${dialog}?.innerText.includes('当前没有活跃日')`), 'no activity explanation');
+    assert.equal(await client.evaluate('document.querySelectorAll("[data-heatmap-band]").length'), 0, 'no activity has no fabricated Token boundaries');
+    await client.key('Escape');
+    await client.click('document.querySelector("button[aria-label^=\\"热力图来源：\\"]")');
+    await until(() => client.evaluate(`${dialog}?.innerText.includes('仅影响热力图')`), 'restore heatmap sources');
+    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="全部")');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${dialog} && !document.body.innerText.includes('请至少选择一个 Agent')`), 'all sources restored');
+  }
+  for (const [locale, title, noUsage] of [['en', 'Daily tokens', 'No recorded usage'], ['ja', '1日のトークン使用量', '使用量の記録なし'], ['ko', '일일 토큰 사용량', '기록된 사용량 없음'], ['zh-CN', '每日 Token 用量', '无用量记录']]) {
+    if (mode === 'browser') await client.evaluate(`localStorage.setItem('quotern.locale.preference',${JSON.stringify(locale)}); window.dispatchEvent(new StorageEvent('storage',{key:'quotern.locale.preference'})); true`);
+    else window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'zh-CN' });
+    await until(() => client.evaluate(`(${legend})?.textContent.includes(${JSON.stringify(title)})`), mode + ' translated legend ' + locale);
+    await client.click(help);
+    await until(() => client.evaluate(`${dialog}?.innerText.includes(${JSON.stringify(noUsage)})`), mode + ' translated help ' + locale);
+    assert.equal(await client.evaluate(`${dialog}.innerText.includes('usage.heatmap.')`), false, 'no missing translation keys');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${dialog}`), 'close translated help');
+  }
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.evaluate(`document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); document.documentElement.dataset.theme='dark'; (${legend}).scrollIntoView({block:'center'}); true`);
+  await captureSettled(window, path.join(output, `${mode}-heatmap-dark.png`));
+  assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
+  checks.push(mode + '-heatmap-legend-help-keyboard-focus-units-equal-thresholds-wide-narrow-themes');
+}
+
 async function main() {
   await mkdir(output, { recursive: true });
   server = createServer(async (req, res) => {
@@ -467,9 +548,10 @@ async function main() {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } }); windows.push(browser);
-  await browser.loadURL(`http://127.0.0.1:${server.address().port}/${dashboardOnly ? 'dashboard' : 'sessions?page=4'}`);
+  await browser.loadURL(`http://127.0.0.1:${server.address().port}/${dashboardOnly || heatmapOnly ? 'dashboard' : 'sessions?page=4'}`);
   const browserClient = await connect(browser);
-  if (dashboardOnly) await exerciseDashboardFixes(browser, browserClient, 'browser');
+  if (heatmapOnly) await exerciseHeatmapLegend(browser, browserClient, 'browser');
+  else if (dashboardOnly) await exerciseDashboardFixes(browser, browserClient, 'browser');
   else { await exercise(browser, browserClient, 'browser'); await exerciseCompactFilters(browser, browserClient, 'browser'); }
   browser.destroy();
   calls.length = 0;
@@ -483,13 +565,15 @@ async function main() {
   ipcMain.handle('dsh-pet:navigation-get', () => null);
   ipcMain.handle('dsh-pet:navigation-ack', () => {});
   ipcMain.handle('quota:navigation:get', () => null);
+  ipcMain.handle('notifications:navigation-get', () => null);
   ipcMain.handle('tud:api-request', (_event, route, init) => api(route, init));
   ipcMain.handle('quota:get', () => ({ providers: [], preferences: DEFAULT_QUOTA_PREFERENCES, notice: null }));
   ipcMain.handle('share-backgrounds:request', (_event, request) => { assert.deepEqual(request, { operation: 'legacy' }); return []; });
   const window = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
-  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: dashboardOnly ? '/dashboard' : '/sessions?page=4' });
+  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: dashboardOnly || heatmapOnly ? '/dashboard' : '/sessions?page=4' });
   const desktopClient = await connect(window);
-  if (dashboardOnly) await exerciseDashboardFixes(window, desktopClient, 'desktop');
+  if (heatmapOnly) await exerciseHeatmapLegend(window, desktopClient, 'desktop');
+  else if (dashboardOnly) await exerciseDashboardFixes(window, desktopClient, 'desktop');
   else { await exercise(window, desktopClient, 'desktop'); await exerciseCompactFilters(window, desktopClient, 'desktop'); }
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2));
   console.log(JSON.stringify({ ok: true, checks, output }));

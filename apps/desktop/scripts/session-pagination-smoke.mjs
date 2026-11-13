@@ -52,10 +52,11 @@ if (dashboardOnly || heatmapOnly) {
   bucketStore.apply(closeBands ? [1_000_000, 1_001_000, 1_002_000, 1_003_000].map((tokens, index) => ({
     ...bucket('cursor', 'model-a', longProject, tokens, 1), hour_start: `2026-10-${21 + index}T03:00:00Z`,
   })) : [
-    bucket('cursor', 'model-a', longProject, 1_000_000, 715.06),
+    { ...bucket('cursor', 'model-a', longProject, 1_000_000, 715.06), input_tokens: 650_000, output_tokens: 100_000,
+      cached_input_tokens: 200_000, cache_creation_input_tokens: 30_000, reasoning_output_tokens: 20_000 },
     bucket('cursor', 'tiny-reported-model', 'Tiny', 1_000, 0.004),
     bucket('claude', 'gpt-4o-mini', 'Tiny', 10, null),
-    ...['Beta', 'Gamma', 'Delta', 'Epsilon', 'unknown'].map((project, i) => bucket('cursor', 'free-model-' + i, project, 500 + i, 0.001)),
+    ...['Beta', 'Gamma', 'Delta', 'Epsilon', 'unknown'].map((project, i) => bucket('cursor', i === 4 ? longModel : 'free-model-' + i, project, 500 + i, i === 0 ? 0.006 : 0.001)),
   ]);
 }
 const facts = buildAchievementFacts([], [], [], new Date(referenceTime));
@@ -389,6 +390,7 @@ async function exerciseDashboardFixes(window, client, mode) {
   }
   await client.click('document.querySelector("input[value=international]").closest("label")');
   await until(() => client.evaluate('document.querySelector("input[value=international]")?.checked && document.querySelector("main").innerText.includes("1M")'), mode + ' reactive number units');
+  assert.equal(await client.evaluate('document.querySelector("[data-model-token-share]").innerText.includes("1M Token")'), true, 'model share follows international Token preference');
   assert.equal(await client.evaluate('performance.timeOrigin === window.__dashboardDocumentStart && Boolean(document.querySelector("[role=dialog]"))'), true, 'unit changes preserve the document and settings');
   await shot('units-settings-retained');
   await client.click('document.querySelector("input[value=localized]").closest("label")');
@@ -406,6 +408,7 @@ async function exerciseDashboardFixes(window, client, mode) {
     await until(() => client.evaluate('[...document.querySelectorAll("[role=dialog] [role=tablist] [role=tab]")].some(tab => tab.textContent.trim() === "常规设置" && tab.getAttribute("aria-selected") === "true")'), 'browser Home selects General settings');
   }
   await close();
+  await until(() => client.evaluate('document.querySelector("[data-model-token-share]").innerText.includes("100万 Token")'), mode + ' model share follows localized Token preference');
   const cursor = label('查看 Cursor 模型明细');
   await client.evaluate(`(${cursor}).focus(); true`);
   await client.key('Enter');
@@ -436,6 +439,7 @@ async function exerciseDashboardFixes(window, client, mode) {
   await shot('visible-total');
   await client.click('[...document.querySelectorAll("button")].find(el=>el.textContent.trim()==="恢复全部")');
   assert.equal(await client.evaluate('document.body.innerText.includes("显示项合计")'), false);
+  await exerciseModelTokenShare(window, client, mode);
   if (mode === 'browser') {
     await client.click(label('热力图来源：全部 Agent'));
     await until(() => client.evaluate('document.querySelector("[role=dialog]")?.innerText.includes("仅影响热力图")'), 'heatmap scope');
@@ -461,6 +465,74 @@ async function exerciseDashboardFixes(window, client, mode) {
   await client.call('Emulation.clearDeviceMetricsOverride');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
   checks.push(mode + '-units-without-reload', mode + '-raw-subcent-and-chart-precision', mode + '-model-details-keyboard-focus', mode + '-project-help-and-long-name', mode + '-visible-denominator-restore', mode + '-complete-values-wide-narrow');
+}
+
+async function exerciseModelTokenShare(window, client, mode) {
+  const card = 'document.querySelector("[data-model-token-share]")';
+  const button = name => `(${card}).querySelector('button[aria-label=' + ${JSON.stringify(JSON.stringify(name))} + ']')`;
+  const metric = name => `[...(${card}).querySelectorAll('[role=tab]')].find(el=>el.textContent.trim()===${JSON.stringify(name)})`;
+  const shot = async name => {
+    await client.evaluate(`(${card}).scrollIntoView({block:'center'}); true`);
+    await captureSettled(window, path.join(output, `${mode}-model-share-${name}.png`));
+  };
+  const modelKeys = () => client.evaluate(`[...(${card}).querySelectorAll('[data-model-share-item]')].map(el=>el.dataset.modelShareItem)`);
+  assert.equal(await client.evaluate(`(${card}).querySelectorAll('[data-model-share-item]').length`), 6, 'Top5 plus Other');
+  assert.equal(await client.evaluate(`Boolean(document.querySelector('button[aria-label="隐藏 Cursor"]').closest('.card').querySelector('.recharts-pie')) && !(${card}).querySelector('.recharts-pie')`), true, 'Agent retains its original donut');
+  assert.equal((await modelKeys())[1], 'model:free-model-0', 'cost view is ranked by cost');
+  await client.click(metric('Token'));
+  await until(async () => (await modelKeys())[1] === 'model:tiny-reported-model', mode + ' Token ranking');
+  assert.equal(await client.evaluate(`(${card}).innerText.includes('其他（3 个模型）') && (${card}).innerText.includes('查看全部（8）')`), true, 'complete model count and grouped remainder');
+  assert.equal(await client.evaluate(`(()=>{const buttons=[...(${card}).querySelectorAll('.model-share-row')];return buttons.every(button=>{const description=(button.getAttribute('aria-describedby')??'').split(' ').map(id=>document.getElementById(id)?.textContent??'').join(' ');return description.includes('%')&&description.includes('Token')&&description.includes('$')})})()`), true, 'each model and Other exposes share and amounts through accessible descriptions');
+  const accessibility = await client.call('Accessibility.getFullAXTree');
+  for (const name of ['隐藏 model-a', '查看其他 3 个模型']) {
+    const node = accessibility.nodes.find(node => node.role?.value === 'button' && node.name?.value === name);
+    assert.ok(node?.description?.value?.includes('%') && node.description.value.includes('Token') && node.description.value.includes('$'), 'renderer accessibility tree includes model values: ' + name);
+  }
+  await client.click(button('隐藏 model-a'));
+  await until(() => client.evaluate(`(${card}).querySelector('[data-model-share-total]').textContent==='3,520'`), mode + ' visible model denominator');
+  assert.equal(await client.evaluate(`(${card}).innerText.includes('28.4%') && !(${card}).querySelector('[data-model-share-band="model:model-a"]')`), true, 'shares and ribbon exclude hidden model');
+  await client.click(metric('费用'));
+  assert.equal(await client.evaluate(`(${button('显示 model-a')})?.getAttribute('aria-pressed')`), 'false', 'metric changes preserve hidden model');
+  await client.click(`[...(${card}).querySelectorAll('button')].find(el=>el.textContent.trim()==='恢复全部')`);
+  await client.click(metric('Token'));
+  const other = button('查看其他 3 个模型');
+  await client.evaluate(`(${other}).focus(); true`);
+  await client.key('Enter');
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), mode + ' keyboard Other opens all models');
+  assert.equal(await client.evaluate('document.querySelectorAll("[role=dialog] button[aria-pressed]").length'), 8, 'complete list retains all models');
+  await client.evaluate('document.querySelector("[role=dialog] button[aria-label=\\"隐藏 model-a\\"]").focus(); true');
+  await until(() => client.evaluate('document.querySelector("[role=tooltip]")?.innerText.includes("缓存写入")'), mode + ' classification detail on keyboard focus');
+  const details = await client.evaluate('document.querySelector("[role=tooltip]").innerText');
+  for (const value of ['输入（未缓存）', '65万', '缓存读取', '20万', '缓存写入', '3万', '输出', '10万', '推理', '2万']) assert.ok(details.includes(value), 'retained classification ' + value + ': ' + details);
+  await captureSettled(window, path.join(output, `${mode}-model-share-classifications.png`));
+  await client.key('Escape');
+  await until(() => client.evaluate('!document.querySelector("[role=tooltip]")'), 'tooltip closes before model dialog');
+  await client.key('Escape');
+  await until(() => client.evaluate(`!document.querySelector('[role=dialog]') && document.activeElement===(${other})`), mode + ' Other restores focus');
+  await client.key('Tab');
+  for (const width of [1120, 375, 320]) {
+    await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await until(() => client.evaluate(`(()=>{const body=(${card}).querySelector('.model-share-body');return body.getBoundingClientRect().width>0})()`), 'model layout measured');
+    await shot(width);
+    assert.equal(await client.evaluate(`(()=>{const root=(${card});return root.scrollWidth<=root.clientWidth+1 && [...root.querySelectorAll('.model-share-name,.model-share-meta')].every(el=>el.scrollWidth<=el.clientWidth+1)})()`), true, 'full long names and model numbers fit ' + width);
+    assert.equal(await client.evaluate(`(()=>{const root=(${card}),style=getComputedStyle(root),narrow=root.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)<420;return (getComputedStyle(root.querySelector('[data-model-share-canvas]')).display==='none')===narrow})()`), true, 'ribbon fallback follows the card width');
+  }
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  for (const width of [410, 430]) {
+    await client.evaluate(`(${card}).style.boxSizing='content-box'; (${card}).style.inlineSize='${width}px'; true`);
+    await until(() => client.evaluate(`getComputedStyle((${card}).querySelector('[data-model-share-canvas]')).display${width < 420 ? '===' : '!=='}'none'`), mode + ' independent card breakpoint ' + width);
+  }
+  await client.evaluate(`(${card}).style.removeProperty('inline-size'); (${card}).style.removeProperty('box-sizing'); true`);
+  for (const [locale, title] of [['en', 'Model distribution'], ['ja', 'モデル別の内訳'], ['ko', '모델 분포'], ['zh-CN', '模型分布']]) {
+    if (mode === 'browser') await client.evaluate(`localStorage.setItem('quotern.locale.preference',${JSON.stringify(locale)}); window.dispatchEvent(new StorageEvent('storage',{key:'quotern.locale.preference'})); true`);
+    else window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'zh-CN' });
+    await until(() => client.evaluate(`(${card}).innerText.includes(${JSON.stringify(title)})`), mode + ' translated model share ' + locale);
+    assert.equal(await client.evaluate(`(${card}).innerText.includes('usage.modelShare.')`), false, 'Other labels are translated');
+  }
+  await client.evaluate('document.documentElement.classList.remove("light"); document.documentElement.classList.add("dark"); document.documentElement.dataset.theme="dark"; true');
+  await shot('dark');
+  await client.evaluate('document.documentElement.classList.remove("dark"); document.documentElement.classList.add("light"); document.documentElement.dataset.theme="light"; true');
+  checks.push(mode + '-model-share-ranking-grouping-hide-restore-full-list-classifications-keyboard-units-responsive-themes-languages');
 }
 
 async function exerciseHeatmapHelpScrolling(window, client, mode, help, dialog) {

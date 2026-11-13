@@ -222,8 +222,9 @@ export function UsageDistributionCard({
   );
 }
 
-function DistributionRowList({
+export function DistributionRowList({
   showDetails = false,
+  unknownSharesAsDash = false,
   metric,
   rows,
   hiddenIds,
@@ -231,6 +232,7 @@ function DistributionRowList({
   onToggle,
 }: {
   showDetails?: boolean;
+  unknownSharesAsDash?: boolean;
   metric: DashboardDistributionMetric;
   rows: Array<DashboardDistributionRow & { value: number }>;
   hiddenIds: Set<string>;
@@ -283,7 +285,7 @@ function DistributionRowList({
                 {formatDashboardMetric(metric, row.value, locale)}
               </span>
               <span className="w-11 text-right text-muted tabular-nums">
-                {hidden ? '—' : `${percentage.toFixed(1)}%`}
+                {hidden || (unknownSharesAsDash && !Number.isFinite(row.value)) ? '—' : `${percentage.toFixed(1)}%`}
               </span>
             </Tooltip.Trigger>
             {showDetails ? (

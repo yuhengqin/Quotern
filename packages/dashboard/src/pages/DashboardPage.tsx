@@ -21,6 +21,7 @@ import { UsageInsightsPanel } from '../components/UsageInsightsPanel';
 import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
+import { ModelTokenShareCard } from '@/components/ModelTokenShareCard';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useRollingDayRange } from '@/hooks/useRollingDayRange';
 import { useCostExplanation } from '@/hooks/useCostExplanation';
@@ -386,11 +387,7 @@ export function DashboardPage() {
               rows={visibleDistributions.tools}
               title={t('usage.page.agentDistribution')}
             />
-            <UsageDistributionCard
-              description={t('usage.page.modelDistributionDesc')}
-              rows={visibleDistributions.models}
-              title={t('usage.page.modelDistribution')}
-            />
+            <ModelTokenShareCard rows={visibleDistributions.models} />
           </section>
         </div>
       )}

@@ -11,11 +11,11 @@
 | `packages/core` | 数据源发现、parser、queue、sync、定价、聚合与 local-api | 统计规则放在这里，避免各端自行解释同一字段 |
 | `packages/cli` | 命令解析、后台服务、HTTP 与 Dashboard 静态资源托管 | CLI 构建依赖 Core 和 Dashboard；服务注册与进程运行是两个状态 |
 | `packages/dashboard` | 浏览器面板，构建后随 CLI 分发 | 开发请求代理到本机 CLI，发布构建默认使用根路径 |
-| `apps/desktop/src/main` | 窗口、IPC、运行时管理、订阅额度与更新 | 采集通常委派给 utilityProcess，主进程应用结果并提供读数 |
+| `apps/desktop/src/main` | 窗口、IPC、运行时管理、订阅额度与更新 | 采集与重会话查询由各自 utilityProcess 执行，主进程应用结果并分发请求；采集仍有显式降级分支 |
 | `apps/desktop/src/preload` | `window.tud` 桥接 | 只暴露明确的方法及必要的返回数据 |
 | `apps/desktop/src/renderer` | 桌面主窗口和托盘面板 | 与 Dashboard 同构但独立，存在需要同步修改的同名文件 |
 
-两份 UI 的 transport 不同。浏览器通过 HTTP，桌面端优先通过 `window.tud.api.request` 调用主进程中的 Hono app。不要整目录复制 `api.ts`；共享字段含义和展示逻辑时，保留各自的 transport 和恢复处理。
+两份 UI 的 transport 不同。浏览器通过 HTTP，桌面端优先通过 `window.tud.api.request` 进入主进程；重会话查询分发给分析 utilityProcess 的 Hono app，其余请求在主进程内处理。不要整目录复制 `api.ts`；共享字段含义和展示逻辑时，保留各自的 transport 和恢复处理。实际分流范围见[运行维护](runtime-notes.md#会话分析与窗口响应)。
 
 ## 数据流
 
@@ -30,6 +30,18 @@ Agent 日志或数据库 / 需要登录状态的数据源
 ```
 
 订阅额度走另一条链路：`packages/core/src/quota` 读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效历史。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 经 `quota` IPC 向主窗口、托盘与宠物提供状态，并负责系统通知。两端共用卡片和详情展示，保留各自的额度历史目录。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和历史口径见[额度管理](./quota-management.md)。
+
+## Desktop 响应性约束
+
+这些约束适用于新增和修改的执行路径；既有例外必须保留明确的适用范围，并单独验证，不作为新代码的默认模式。
+
+- **先追踪执行进程。** Core 的同一函数在 CLI 中可能运行于独立 Node 服务，在 Desktop 中却可能经 IPC 进入 Electron 主进程。复用 Core、把函数声明为 `async`、套 `Promise` 或使用异步 IPC，都不会自动把同步解析、遍历和计算移出主进程。
+- **周期任务不得阻塞窗口线程。** 不在新增的主进程轮询、watchdog、聚焦或 IPC 查询路径中使用 `execSync`、`execFileSync`、`spawnSync`，或执行随历史数据增长的全量解析、多重扫描与同步目录递归。系统探测使用异步入口并合并在途请求；重计算放入独立执行单元。公开同步诊断 helper 仍存在，调用前必须确认所在进程。
+- **先减少工作，再隔离计算。** 会话关联使用共享索引；相同范围的在途查询与未变化的洞察结果复用。同步、历史快照、价格和窗口变化应正确失效，标题与账号标签保持当前值，返回对象不得污染缓存。仅降低刷新频率不能替代消除重复扫描。
+- **分析隔离必须覆盖生命周期。** 沿用 [session-analysis-host.ts](../apps/desktop/src/main/session-analysis-host.ts) 与对应协议，保证快照一致、旧代响应隔离、超时有界、停止期间及等待恢复的旧请求不能重建进程；分析失败返回错误，不回退主进程重算。现有采集 worker 的主进程 fallback 是单独的兼容路径，不能据此给分析新增同类降级。
+- **Windows 桌宠不恢复全局鼠标转发。** 内置与独立 helper 两条路径都禁用 `forward: true`，通过既有光标采样和去重 IPC 处理输入。helper 修复通过生成补丁接入，不能只看 vendor 快照；验证时同时核对实际生成产物，见 [Desktop 桌宠说明](../apps/desktop/README.md#原有图集宠物)。
+
+具体排查步骤、回归范围和已有事故线索见[卡顿排查与回归验收](runtime-notes.md#卡顿排查与回归验收)。
 
 ## 本地接口
 

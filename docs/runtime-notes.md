@@ -62,6 +62,24 @@ Core 在一次洞察分析中共享派发索引；同范围在途构建与已完
 
 分析进程按需启动，启动最多等待 15 秒、单次请求最多 30 秒；故障/超时拒绝所属请求并回收，后续请求可重建，绝不静默回退主进程分析。停止 runtime 同时回收同步与分析进程。安装包 `asarUnpack` 必须同时包含两种 worker chunk。诊断时对比主进程与 `session analysis utilityProcess ready pid=...` 的 PID；`logs/sync.log` 中 `cpu_phase/session_query` 的 `role=session-analysis`、route、status、wallMs 与 cpuMs 标识真实查询耗时，不能把它误认作主进程阻塞。
 
+## 卡顿排查与回归验收
+
+架构边界以 [Desktop 响应性约束](architecture-notes.md#desktop-响应性约束) 为准；此处保留可执行的排查顺序和历史线索。
+
+1. 记录实际启动入口、checkout/commit、数据目录及各进程 PID。先区分接口等待、renderer 长任务、Electron 主进程阻塞和 Windows 原生输入问题；CLI 网页流畅只能说明另一条执行路径仍可交互。
+2. 结合操作时间、CPU profile 和日志定位热点。按 PID 区分主进程、采集与分析进程，不仅依赖日志的 `role` 字段：历史采集日志中的 `role=main` 也可能属于采集子进程。记录最长连续任务和对应调用链，避免把整个异步请求的 wallMs 当成窗口线程阻塞时间。
+3. 性能相关修改使用代表性历史数据或足够规模的合成数据。覆盖冷加载、重复相同查询、至少一轮受影响的周期刷新、聚焦/同步后重验证，并在加载期间操作设置或菜单。对照改前改后结果、主进程采样与窗口响应；测试夹具的小数据集不能单独证明大历史下流畅。
+4. 按变更覆盖缓存失效、标题删除、价格更新、附加账号及查询期间账号切换；进程层覆盖启动共享、超时/崩溃、停止中请求、等待冷启动后才恢复的旧请求和退出回收。会话/进程相关回归分别见 [Core 查询测试](../packages/core/test/session-query-api.test.ts)、[归属测试](../packages/core/test/runtime-pid.test.ts)、[分析宿主测试](../apps/desktop/src/main/session-analysis-host.test.ts) 和 [runtime 生命周期测试](../apps/desktop/src/main/local-runtime-lifecycle.test.ts)。
+5. 交付时记录测试与实际运行证据各自覆盖的范围；构建和单测不能替代 Electron 实测。私有原始 profile、日志和合成产物留在所属 `.quotern-dev/`，文档只保留脱敏结论及可重定位线索；按服务归属规则退出本次实例。安装包、多屏或其他系统未实测时明确标注范围。
+
+反复出现的问题属于不同机制，排查时核对对应修复是否仍在实际执行路径中：
+
+| 日期 / Git 线索 | 已处理的风险与后续核对点 |
+| --- | --- |
+| 2026-10-19 `efa2ff0b`、2026-10-22 `56c532e2` | 两种桌宠的 Windows 全局鼠标转发风险；同时检查内置实现与生成 helper，不能只核对其中一端。原验收边界见 [Windows 独立宠物记录](superpowers/dsh-pet-validation.md)。 |
+| 2026-10-21 `168da1eb` | 采集 worker 的并发启动、旧代事件、退出确认与磁盘恢复；采集隔离存在不代表所有 API 计算都已离开主进程。 |
+| 2026-11-13 `5abdb300` | 逐会话全量证据扫描、重复洞察计算、主进程重查询及周期性同步 PowerShell 探测；设计与当次 Windows 45 秒采样证据见 [响应性修复记录](superpowers/specs/2026-11-13-desktop-responsiveness-design.md#windows-验收记录2026-11-13)。 |
+
 ## 窗口与 IPC 初始化
 
 托盘面板按托盘图标定位，固定显示额度摘要，失焦或按 Escape 时隐藏。Electron userData 下 `tray-panel.json` 中旧版固定状态、停放坐标和「摘要／完整」偏好均被忽略。仅使用本实例的窗口与状态。

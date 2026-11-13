@@ -30,6 +30,7 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
   const state = (): NotificationSettingsState => ({ preferences: store.preferences, supported: Notification.isSupported(), issue: store.issue ?? issue });
   const changed = () => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(NOTIFICATIONS_CHANGED, state()); };
   const manager = new NotificationManager({
+    retainAfterClose: process.platform === 'win32',
     preferences: () => store.preferences, isSupported: () => Notification.isSupported(), isFocused: () => !!BrowserWindow.getFocusedWindow(),
     create: value => new Notification(value), sound: (value, current) => sound.play(value, current),
     onIssue: value => { issue = value; changed(); },

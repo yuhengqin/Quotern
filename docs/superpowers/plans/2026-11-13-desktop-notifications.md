@@ -83,10 +83,19 @@ Files: Desktop preload/types, AppShell, settings navigation and `NotificationSet
 
 ## Final verification
 
-- `corepack pnpm test`: exit 0 on the final code; 2,282 passed, 37 environment-dependent skips, zero failures across root checks and all workspace packages. This also built Core, i18n, Dashboard, CLI and Desktop successfully.
+- `corepack pnpm test`: exit 0 on the final code including live-test fixes; 2,285 passed, 37 environment-dependent skips, zero failures across root checks and all workspace packages. This also built Core, i18n, Dashboard, CLI and Desktop successfully.
 - `corepack pnpm --filter quotern-desktop typecheck`: exit 0.
 - `corepack pnpm test:notifications-ui`: exit 0; ten checks passed using the production notification runtime, real preload and React UI, controlled log events and no pet subsystem. Includes exact navigation before renderer mount, repeated clicks, window rebuild/latest target, missing-session behavior, keyboard policy saving, rejected writes, Windows audio preview, native Notification object/handlers and narrow layout.
-- Final UI artifacts: `.quotern-dev/notifications-acceptance-1794521163433/`; wide and narrow screenshots were visually inspected. The expected injected save failure is captured in the test log and handled by the UI.
+- Final UI artifacts: `.quotern-dev/notifications-acceptance-1794544238361/`; the expected injected save failure is captured in the test log and handled by the UI. Native interaction and sound evidence are recorded separately below.
 - `git diff --check`: clean. No new dependency or lockfile change; no real Agent configuration was modified.
-- Limits: native Toast `show()` is captured, so actual Windows notification permissions/delivery have not been verified. Windows SoundPlayer executed successfully; macOS/Linux playback and real provider-run hook triggers were not exercised. Generated hooks were executed with fixtures. No package release or installed-client update was performed.
+- Limits: the automatic UI test captures `show()`; Windows native delivery was additionally verified in the live phase below. macOS/Linux playback and real cloud-model inference were not exercised. No package release or installed-client update was performed.
 - Handoff: retain `codex/desktop-notifications` and its worktree for review; local atomic commit only, no merge or push.
+
+## Windows live follow-up (2026-11-13)
+
+- Real installed CLIs: Codex 0.167.1 and Claude Code 2.1.322. Their runtime, hooks, approval requests, harmless tool execution and transcripts were real; model output and API failures came from a deterministic localhost endpoint with dummy credentials. No main-user Agent configuration or trust store was changed.
+- Six scenarios passed: both providers' completion, confirmation and API error. The evidence checker found exactly one matching native send per scenario despite duplicate Hook/log signals. Metadata: `.quotern-dev/notification-live-verification.json`; native records under `notification-native-live-20261113-{branded,final,retraction}`.
+- User feedback and screenshots confirmed visible Windows toasts and audible sound. Actual native click callbacks carried the exact source/session ID; the user observed the real session detail after the private collector caught up. The harness now collects its private CLI logs automatically, independently of production data.
+- Native history comparisons proved that both providers' pending approval Tags disappeared after PostToolUse, including after banner timeout, while unrelated entries remained. The notification center UI was disabled by the user; no system setting was changed. Soft sound, bell preview and a silent test notification were also checked through production IPC/player paths.
+- Fixed and reproduced with failing regression tests: (1) Windows banner `close` must retain a bounded history object for click/retraction; (2) a quiet SessionEnd must not discard an earlier durable Codex API failure; (3) the Windows process AppUserModelID must match the installer. Hook installation is now labelled accurately, with Codex review/trust instructions.
+- All owned acceptance processes stopped. The three unique test AppUserModelID registrations were removed; final native history was `[]`. Only the two known baseline-test Tags under the initial Electron identity were explicitly removed. Private evidence files remain ignored in the worktree.

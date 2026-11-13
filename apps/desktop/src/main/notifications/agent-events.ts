@@ -18,7 +18,11 @@ export class AgentNotificationEvents {
     if (!['codex', 'claude', 'dsh'].includes(event.source) || !event.sessionId || event.sessionId.length > 256 || /[\x00-\x1f\x7f]/.test(event.sessionId) || !Number.isFinite(at) || now - at > 120_000 || at - now > 60_000 || this.seen.has(event.id)) return;
     this.seen.add(event.id); if (this.seen.size > 10000) this.seen.delete(this.seen.values().next().value!);
     const session = `${event.source}:${event.sessionId}`;
-    if (at < Math.max(this.terminalAt.get(session) ?? 0, this.startedAt.get(session) ?? 0)) return;
+    if (at < (this.startedAt.get(session) ?? 0)) return;
+    // SessionEnd/Interrupt only retire pending questions. The durable result can
+    // be read later than that quiet hook and must still report an explicit error.
+    const terminalNotice = event.terminal && (event.notice === 'complete' || event.notice === 'error');
+    if (at < (this.terminalAt.get(session) ?? 0) && !terminalNotice) return;
     const sameSession = (value: DesktopNotice) => value.sessionKey === session;
     // Log and Hook readers advance independently. Older lifecycle records may not
     // withdraw a newer question, nor announce a previous turn after the next start.

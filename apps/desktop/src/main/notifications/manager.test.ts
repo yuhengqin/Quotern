@@ -6,11 +6,11 @@ import { DEFAULT_NOTIFICATION_PREFERENCES, type DesktopNotice } from '../../shar
 
 class NativeNotice extends EventEmitter { closes = 0; shows = 0; show() { this.shows++; } close() { this.closes++; this.emit('close'); } }
 const notice: DesktopNotice = { id: 'one', category: 'agentConfirmation', title: 'Agent', body: 'Check', sessionKey: 'codex:s', requestId: 'r', target: { kind: 'session', value: { source: 'codex', sessionId: 's' } } };
-function fixture() {
+function fixture(retainAfterClose = false) {
   const preferences = structuredClone(DEFAULT_NOTIFICATION_PREFERENCES), natives: NativeNotice[] = [], sounds: string[] = [], clicks: DesktopNotice[] = [];
   let focused = false;
   const manager = new NotificationManager({ preferences: () => preferences, isFocused: () => focused, isSupported: () => true,
-    create: () => { const value = new NativeNotice(); natives.push(value); return value; }, sound: async sound => { sounds.push(sound); }, onClick: value => { clicks.push(value); }, onIssue: () => {} });
+    create: () => { const value = new NativeNotice(); natives.push(value); return value; }, sound: async sound => { sounds.push(sound); }, onClick: value => { clicks.push(value); }, onIssue: () => {}, retainAfterClose });
   return { manager, preferences, natives, sounds, clicks, focus: (value: boolean) => focused = value };
 }
 test('delivery respects category policy; only a confirmed native show plays a sound', async () => {
@@ -55,4 +55,18 @@ test('an explicit test keeps its policy bypass when window focus changes', async
   f.natives[0]!.emit('show');
   assert.equal(await pending, 'shown');
   f.manager.dispose();
+});
+
+test('Windows timeout retains history click and retraction until the request is resolved', async () => {
+  const f = fixture(true), pending = f.manager.send(notice);
+  f.natives[0]!.emit('show'); await pending;
+  f.natives[0]!.emit('close'); // Windows banner timeout: still in Action Center.
+  f.natives[0]!.emit('click');
+  assert.equal(f.clicks.length, 1);
+  f.manager.dismiss(value => value.requestId === 'r');
+  assert.equal(f.natives[0]!.closes, 1);
+  f.natives[0]!.emit('click'); assert.equal(f.clicks.length, 1);
+  const second = f.manager.send({ ...notice, id: 'second' });
+  f.natives[1]!.emit('show'); await second; f.natives[1]!.emit('close');
+  f.manager.dispose(); assert.equal(f.natives[1]!.closes, 1);
 });

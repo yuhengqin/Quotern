@@ -12,6 +12,7 @@ function fixture(t: { after: (callback: () => void) => void }) {
   let userData = join(base, 'quotern-desktop');
   let sessionData = userData;
   let name = '';
+  let windowsAppId = '';
   return {
     base,
     app: {
@@ -21,8 +22,10 @@ function fixture(t: { after: (callback: () => void) => void }) {
         else sessionData = path;
       },
       setName: (value: string) => { name = value; },
+      setAppUserModelId: (value: string) => { windowsAppId = value; },
     },
     result: () => ({ userData, sessionData, name }),
+    windowsAppId: () => windowsAppId,
   };
 }
 
@@ -32,6 +35,14 @@ test('fresh installs use Quotern identity and userData', (t) => {
   assert.deepEqual(f.result(), {
     name: 'Quotern', userData: join(f.base, 'quotern-desktop'), sessionData: join(f.base, 'quotern-desktop'),
   });
+});
+
+test('Windows process identity matches the installer AppUserModelID', t => {
+  if (process.platform !== 'win32') { t.skip('Windows process identity'); return; }
+  const f = fixture(t);
+  configureQuoternAppIdentity(f.app);
+  assert.equal(f.windowsAppId(), 'dev.quotern.desktop');
+  assert.match(readFileSync('electron-builder.yml', 'utf8'), /^appId: dev\.quotern\.desktop\r?$/m);
 });
 
 test('existing Quotern profile keeps preferences, update state and session directory', (t) => {

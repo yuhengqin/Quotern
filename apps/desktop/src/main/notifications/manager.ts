@@ -8,6 +8,8 @@ interface Options {
   create(options: { title: string; body: string; silent: boolean }): NativeNotice;
   sound(sound: NotificationSound, current?: () => boolean): Promise<void>; onClick(notice: DesktopNotice): void;
   onIssue(issue: 'delivery' | 'sound'): void;
+  /** Windows close also means a banner timed out; its Action Center entry remains. */
+  retainAfterClose?: boolean;
 }
 export class NotificationManager {
   private disposed = false;
@@ -54,7 +56,12 @@ export class NotificationManager {
         finish('shown');
       });
       native.on('click', () => { if (current()) { try { this.options.onClick(notice); } catch { this.options.onIssue('delivery'); } } });
-      native.on('close', () => { if (current()) { this.active.delete(notice.id); finish('requested'); } });
+      native.on('close', () => {
+        if (current()) {
+          if (!this.options.retainAfterClose) this.active.delete(notice.id);
+          finish('requested');
+        }
+      });
       native.on('failed', failed);
       this.active.set(notice.id, record);
       try { native.show(); } catch { failed(); }

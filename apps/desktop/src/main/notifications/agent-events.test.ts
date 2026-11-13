@@ -59,3 +59,18 @@ test('a delayed start or terminal from another stream preserves a newer pending 
   events.accept({ ...base, id: 'delayed-terminal', timestamp: new Date(now - 250).toISOString(), state: 'result', terminal: true, notice: undefined });
   assert.equal(active.length, 1);
 });
+
+test('a quiet SessionEnd cannot swallow the earlier durable Codex API failure', () => {
+  const now = Date.now(), sent: DesktopNotice[] = [];
+  const events = new AgentNotificationEvents({ now: () => now, send: async value => { sent.push(value); }, dismiss: () => {}, text: () => ({ title: 'Agent', body: 'Error' }) });
+  const start: ActivityEvent = { id: 'start', source: 'codex', sessionId: 's', timestamp: new Date(now - 1000).toISOString(), state: 'working', evidence: 'hook:UserPromptSubmit', newTurn: true };
+  events.accept(start);
+  events.accept({ ...start, id: 'session-end', timestamp: new Date(now + 1000).toISOString(), newTurn: false, state: 'result', terminal: true, evidence: 'hook:SessionEnd' });
+  events.accept({ ...start, id: 'durable-error', timestamp: new Date(now).toISOString(), newTurn: false, state: 'error', terminal: true, notice: 'error', evidence: 'event_msg:task_complete' });
+  assert.equal(sent.length, 1); assert.equal(sent[0]!.category, 'agentError');
+  events.accept({ ...start, id: 'late-question', newTurn: false, notice: 'confirmation', state: 'waiting' });
+  assert.equal(sent.length, 1);
+  events.accept({ ...start, id: 'next-turn', timestamp: new Date(now + 2000).toISOString() });
+  events.accept({ ...start, id: 'old-error-after-next-start', timestamp: new Date(now).toISOString(), newTurn: false, state: 'error', terminal: true, notice: 'error' });
+  assert.equal(sent.length, 1);
+});

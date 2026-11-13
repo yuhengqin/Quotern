@@ -44,6 +44,22 @@ test('verified duplicates share custom thresholds and produce one notification a
   now++; used = 99; await manager.refresh('manual'); now++; used = 100; await manager.refresh('manual'); assert.equal(notices.length, 1);
 });
 
+test('reader account changes invalidate notifications without publishing private identity', async t => {
+  let now = 1000, identity = 'private-account-a';
+  const manager = new QuotaManager({ now: () => now,
+    readers: [{ id: 'codex', label: 'Codex', interval: 180, read: async () => markQuotaIdentity({ status: 'ready', fetchedAt: now, fiveHour: { usedPercent: 95, resetsAt: 2000 } }, identity) }],
+    store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history: {}, notice: null, async savePreferences() {}, async saveHistory() {} }, notify() {},
+  });
+  t.after(() => manager.dispose());
+  const first = (await manager.refresh('manual')).providers[0]!;
+  now++; const same = (await manager.refresh('manual')).providers[0]!;
+  assert.equal(same.notificationEpoch, first.notificationEpoch);
+  identity = 'private-account-b'; now++;
+  const switched = (await manager.refresh('manual')).providers[0]!;
+  assert.notEqual(switched.notificationEpoch, first.notificationEpoch);
+  assert.doesNotMatch(JSON.stringify(switched), /private-account/);
+});
+
 test('activity metadata preserves explicit tool and waiting events, without prompt/tool contents', async t => {
   const root = await mkdtemp(join(tmpdir(), 'quotern-activity-')); t.after(() => rm(root, { recursive: true, force: true }));
   const start = reduceAgentActivity(null, { session_id: 'one', hook_event_name: 'UserPromptSubmit', cwd: 'C:\\work\\Example', prompt: 'private' }, 'claude', 1000)!;

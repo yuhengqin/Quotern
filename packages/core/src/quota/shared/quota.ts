@@ -74,9 +74,15 @@ export interface QuotaServiceStatus {
   incidents?: { id: string; name: string; phase: string; level: QuotaServiceStatus['level']; componentIds: string[]; body: string; updatedAt: number | null; url: string }[];
   selectionEmpty?: boolean;
 }
-export interface QuotaServiceNotification { provider: string; label: string; level: QuotaServiceStatus['level']; url: string }
+export interface QuotaServiceNotification {
+  provider: string; label: string; level: QuotaServiceStatus['level']; url: string;
+  components?: QuotaServiceStatus['components'];
+  incidents?: QuotaServiceStatus['incidents'];
+}
 export interface QuotaProviderState {
   id: string;
+  /** Instance-local counter for invalidating reader-scoped notices; never an account fingerprint. */
+  notificationEpoch?: number;
   providerId?: string;
   profileLabel?: string;
   provenance?: QuotaProvenance;

@@ -12,7 +12,7 @@ await build({ entryPoints: [fileURLToPath(new URL('./notifications-smoke.ts', im
 // Core resolves its default data directory during module initialization, before
 // the bundled test body runs. Set isolation before Electron imports that bundle.
 const env = { ...process.env, QUOTERN_DEV_ISOLATED: '1', QUOTERN_DATA_DIR: path.join(output, 'data'), QUOTERN_CONFIG_HOME: path.join(output, 'config-home'), QUOTERN_DESKTOP_USER_DATA: path.join(output, 'profile') }; delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(electron, [bundle, desktop, output, String(await unusedPort())], { env, windowsHide: true, stdio: 'inherit' });
+const child = spawn(electron, [bundle, desktop, output, String(await unusedPort()), ...(process.argv.includes('--actions-only') ? ['--actions-only'] : [])], { env, windowsHide: true, stdio: 'inherit' });
 const deadline = setTimeout(() => { child.kill(); }, 125_000); deadline.unref();
 child.on('error', error => { console.error(error); process.exitCode = 1; });
 child.on('exit', code => { clearTimeout(deadline); process.exitCode = code ?? 1; });

@@ -16,6 +16,7 @@ export interface QuotaReader {
 }
 export interface QuotaNotification {
   provider: string;
+  notificationEpoch?: number;
   providerId?: string;
   accountRef?: string;
   label: string;
@@ -225,6 +226,7 @@ export class QuotaManager {
         slot.blockedUntil = slot.serverBlockedUntil;
       }
       normalized.service = slot.state.service;
+      normalized.notificationEpoch = (slot.state.notificationEpoch ?? 0) + (identity !== slot.identity ? 1 : 0);
       normalized.refreshing = true;
       slot.state = normalized;
       if (slot.reader.observationOnly) { slot.identity = identity; return; }
@@ -259,7 +261,7 @@ export class QuotaManager {
           if (this.sentAlerts.has(alertKey)) continue;
           this.sentAlerts.add(alertKey);
           if (this.sentAlerts.size > 5000) this.sentAlerts.delete(this.sentAlerts.values().next().value!);
-          try { this.deps.notify({ provider: slot.reader.id, providerId: this.key(slot.reader), ...(proof?.identityVerified && proof.accountRef ? { accountRef: proof.accountRef } : {}), label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), windowId: window.id, windowLabel: window.label, windowGroupLabel: window.groupLabel, windowPeriodSeconds: quotaWindowPeriodSeconds(window), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
+          try { this.deps.notify({ provider: slot.reader.id, notificationEpoch: normalized.notificationEpoch, providerId: this.key(slot.reader), ...(proof?.identityVerified && proof.accountRef ? { accountRef: proof.accountRef } : {}), label: slot.state.label, window: [window.groupLabel, window.label].filter(Boolean).join(' '), windowId: window.id, windowLabel: window.label, windowGroupLabel: window.groupLabel, windowPeriodSeconds: quotaWindowPeriodSeconds(window), kind, resetsAt: sample.resetsAt, usedPercent: window.usedPercent }); }
           catch { this.notice = '系统通知暂不可用，额度卡片仍会继续更新。'; }
         }
       }
@@ -337,7 +339,11 @@ export class QuotaManager {
         const prior = this.serviceBaselines.get(id);
         this.serviceBaselines.set(id, selected.level);
         if (this.preferences.serviceAlerts && prior !== undefined && prior !== selected.level) {
-          try { this.deps.notifyService?.({ provider: id, label: slot.reader.label, level: selected.level, url }); }
+          const followed = this.preferences.serviceComponents?.[id];
+          try { this.deps.notifyService?.({ provider: id, label: slot.reader.label, level: selected.level, url,
+            components: selected.components?.filter(component => component.level !== 'operational' && (followed === undefined || followed.includes(component.id))),
+            incidents: selected.incidents,
+          }); }
           catch { this.notice = '系统通知暂不可用，额度卡片仍会继续更新。'; }
         }
       }

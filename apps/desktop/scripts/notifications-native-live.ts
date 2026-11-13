@@ -18,6 +18,8 @@ import { DEFAULT_NOTIFICATION_PREFERENCES, type DesktopNotice } from '../src/sha
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/shared/quota';
 import type { ActivityRoot } from '../src/main/agent-activity/monitor';
 import type { TudConfig } from '../../../packages/core/src/types';
+import { serviceNotice, quotaNotice } from '../src/main/notifications/quota-notices';
+import { NotificationManager } from '../src/main/notifications/manager';
 
 const [desktop, output, debugPort] = process.argv.slice(2);
 assert.ok(desktop && output && debugPort);
@@ -56,7 +58,7 @@ async function main() {
   await mkdir(path.join(root, 'profile/notifications'), { recursive: true });
   await mkdir(path.join(root, 'project'), { recursive: true });
   await mkdir(codexHome, { recursive: true }); await mkdir(claudeHome, { recursive: true });
-  await writeFile(path.join(root, 'profile/notifications/preferences.json'), JSON.stringify({ version: 1, ...DEFAULT_NOTIFICATION_PREFERENCES, modes: Object.fromEntries(Object.keys(DEFAULT_NOTIFICATION_PREFERENCES.modes).map(key => [key, 'always'])) }));
+  await writeFile(path.join(root, 'profile/notifications/preferences.json'), JSON.stringify({ version: 1, ...DEFAULT_NOTIFICATION_PREFERENCES, sound: 'none', modes: Object.fromEntries(Object.keys(DEFAULT_NOTIFICATION_PREFERENCES.modes).map(key => [key, 'always'])) }));
   await patchAgentPreferences(data, { desktopNotifications: true });
   await setIntegrationInstalled(data, 'codex', true, { directory: codexHome });
   await setIntegrationInstalled(data, 'claude', true, { directory: claudeHome });
@@ -93,11 +95,13 @@ async function main() {
     return collecting;
   };
   const nativeShow = Notification.prototype.show, nativeClose = Notification.prototype.close;
+  const activate = NotificationManager.prototype.activate;
+  NotificationManager.prototype.activate = function (id, action) { const handled = activate.call(this, id, action); record('notice-action', { id, action, handled }); return handled; };
   let sequence = 0;
   const ids = new WeakMap<Notification, number>();
   Notification.prototype.show = function () {
     const id = ++sequence; ids.set(this, id);
-    record('native-send', { id, title: this.title, body: this.body, silent: this.silent });
+    record('native-send', { id, title: this.title, body: this.body, silent: this.silent, toastXml: this.toastXml });
     for (const event of ['show', 'click', 'close', 'failed'] as const) this.on(event as any, (...args: unknown[]) => record(`native-${event}`, { id, ...(event === 'failed' ? { error: String(args.at(-1)) } : {}) }));
     return nativeShow.call(this);
   };
@@ -108,7 +112,7 @@ async function main() {
     try { await play.apply(this, args); record('sound-complete', { sound: args[0] }); }
     catch (error) { record('sound-failed', { error: String(error) }); throw error; }
   };
-  const runtime = await initializeNotifications({ getMainWindow: () => mainWindow, showMainWindow, showQuota: showMainWindow, getLocale: () => 'zh-CN', activityRoots: sources });
+  const runtime = await initializeNotifications({ getMainWindow: () => mainWindow, showMainWindow, showQuota: target => { record('quota-opened', { target }); showMainWindow(); }, getLocale: () => 'zh-CN', activityRoots: sources, windowsAppId: process.env.QUOTERN_NATIVE_APP_ID, applicationDirectory: desktop });
   runtime.activity.subscribe(event => {
     record('activity', { source: event.source, sessionId: event.sessionId, notice: event.notice, evidence: event.evidence, requestId: event.requestId, resolvedRequestId: event.resolvedRequestId });
     void collect().catch(error => record('collection-failed', { error: String(error) }));
@@ -123,9 +127,14 @@ async function main() {
     try {
       let result: unknown = null;
       if (command.action === 'send') {
-        const value: DesktopNotice = { id: randomUUID(), category: command.category ?? 'service', title: command.title ?? 'Quotern 原生通知实测', body: '点击打开独立验收窗口。', target: { kind: 'quota', value: { providerId: 'claude', providerType: 'claude' } } };
+        const category = command.category ?? 'service';
+        if (!['quota', 'service'].includes(category)) throw new Error('Unsupported acceptance notification category');
+        const value: DesktopNotice = category === 'quota' ? quotaNotice({ provider: 'codex', providerId: 'codex', accountRef: 'a'.repeat(64), label: 'Codex · 通知验收', window: '5h', windowId: 'five-hour', windowLabel: '5h', windowPeriodSeconds: 18000, kind: command.kind ?? 'threshold-90', resetsAt: Math.floor(Date.now() / 1000) + 7200, usedPercent: command.usedPercent ?? 95 }, 'zh-CN') : serviceNotice({ provider: 'claude', label: 'Claude', level: command.level ?? 'major', url: 'https://status.claude.com/', components: [{ id: 'api', name: 'Claude API', level: 'major' }], incidents: [{ id: 'acceptance', name: 'API 请求失败率上升（验收数据）', phase: 'identified', level: 'major', componentIds: ['api'], body: '服务正在修复中。', updatedAt: Date.now() / 1000, url: 'https://status.claude.com/' }] }, 'zh-CN');
+        if (command.title) value.title = command.title;
+        if (command.expiresInMs) value.expiresAt = Date.now() + command.expiresInMs;
         result = await runtime.send(value, true);
       } else if (command.action === 'show') showMainWindow();
+      else if (command.action === 'reconcile') runtime.reconcileQuota(command.state);
       else if (command.action === 'hide') mainWindow?.hide();
       else if (command.action === 'destroy') { mainWindow?.destroy(); mainWindow = null; }
       else if (command.action === 'pause') runtime.pause();
@@ -137,7 +146,7 @@ async function main() {
       await json(path.join(root, 'reply.json'), { id: command.id, ok: true, result });
     } catch (error) { await json(path.join(root, 'reply.json'), { id: command.id, ok: false, error: String(error) }); }
   })().finally(() => { processing = false; }); }, 200);
-  app.once('before-quit', () => { clearInterval(poll); clearInterval(collector); runtime.dispose(); Notification.prototype.show = nativeShow; Notification.prototype.close = nativeClose; NotificationSoundPlayer.prototype.play = play; });
+  app.once('before-quit', () => { clearInterval(poll); clearInterval(collector); runtime.dispose(); Notification.prototype.show = nativeShow; Notification.prototype.close = nativeClose; NotificationManager.prototype.activate = activate; NotificationSoundPlayer.prototype.play = play; });
   await json(path.join(root, 'ready.json'), { pid: process.pid, root, data, codexHome, claudeHome, project: path.join(root, 'project'), supported: Notification.isSupported(), debugPort, appId: process.env.QUOTERN_NATIVE_APP_ID, retractionTest: process.env.QUOTERN_NATIVE_RETRACTION_TEST === '1' });
   record('ready', { supported: Notification.isSupported() });
 }

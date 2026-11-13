@@ -15,20 +15,35 @@ import { NotificationNavigation } from './navigation.js';
 import { NotificationPreferencesStore } from './preferences.js';
 import { NotificationManager } from './manager.js';
 import { NotificationSoundPlayer } from './sound.js';
+import { windowsNotificationAppId, WINDOWS_APP_USER_MODEL_ID } from '../app-identity.js';
+import { createWindowsNotifications, windowsNotificationIconPath } from './windows.js';
+import { isQuotaNoticeCurrent, resolveQuotaReminder } from './quota-notices.js';
+import type { QuotaState } from '../../shared/quota.js';
 
-export async function initializeNotifications(options: { getMainWindow(): BrowserWindow | null; showMainWindow(): void; showQuota(target?: QuotaNavigationTarget): void; getLocale(): SupportedLocale; activityRoots?: ActivityRoot[] }) {
+export async function initializeNotifications(options: { getMainWindow(): BrowserWindow | null; showMainWindow(): void; showQuota(target?: QuotaNavigationTarget): void; getLocale(): SupportedLocale; activityRoots?: ActivityRoot[]; windowsAppId?: string; applicationDirectory?: string }) {
   const directory = path.join(app.getPath('userData'), 'notifications');
   const store = await NotificationPreferencesStore.open(path.join(directory, 'preferences.json'));
   const sound = new NotificationSoundPlayer(path.join(directory, 'sounds'));
   const navigation = new NotificationNavigation(), subscribers = new Set<(event: ActivityEvent) => void>();
   let issue: NotificationSettingsState['issue'] = null, paused = true, disposed = false, generation = 0, timer: ReturnType<typeof setInterval> | null = null;
-  const state = (): NotificationSettingsState => ({ preferences: store.preferences, supported: Notification.isSupported(), issue: store.issue ?? issue });
+  let integrationFailed = false;
+  const state = (): NotificationSettingsState => ({ preferences: store.preferences, supported: Notification.isSupported(), issue: store.issue ?? issue ?? (integrationFailed ? 'integration' : null) });
   const changed = () => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(NOTIFICATIONS_CHANGED, state()); };
-  const manager = new NotificationManager({
+  let manager: NotificationManager;
+  let quotaState: QuotaState | null = null;
+  const appId = options.windowsAppId ?? windowsNotificationAppId(process.env.QUOTERN_DEV_ISOLATED === '1' ? app.getPath('userData') : undefined);
+  if (process.platform === 'win32') app.setAppUserModelId(appId);
+  const applicationDirectory = options.applicationDirectory ?? app.getAppPath();
+  const windows = process.platform === 'win32' ? await createWindowsNotifications({ app, appId, iconPath: windowsNotificationIconPath(app.isPackaged ? process.resourcesPath : null, applicationDirectory), temporary: appId !== WINDOWS_APP_USER_MODEL_ID, entry: process.defaultApp ? applicationDirectory : undefined, onAction: (id, action) => manager.activate(id, action) }).catch(error => { integrationFailed = true; console.warn('[quotern] notification integration unavailable:', error); return null; }) : null;
+  manager = new NotificationManager({
     retainAfterClose: process.platform === 'win32',
     preferences: () => store.preferences, isSupported: () => Notification.isSupported(), isFocused: () => !!BrowserWindow.getFocusedWindow(),
-    create: value => new Notification(value), sound: (value, current) => sound.play(value, current),
+    create: (value, notice) => {
+      const native = new Notification({ ...value, ...(windows ? { toastXml: windows.toast(notice, value, options.getLocale()) } : {}), ...(process.platform === 'darwin' ? { actions: [{ type: 'button' as const, text: notificationText(options.getLocale(), 'view') }, ...(notice.snoozable === false ? [] : [{ type: 'button' as const, text: notificationText(options.getLocale(), 'snooze') }])] } : {}) });
+      return Object.assign(native, { handlesActivation: !!windows });
+    }, sound: (value, current) => sound.play(value, current),
     onIssue: value => { issue = value; changed(); },
+    resolveNotice: notice => quotaState ? resolveQuotaReminder(notice, quotaState, options.getLocale()) : notice,
     onClick: notice => {
       if (notice.target?.kind === 'quota') { options.showQuota(notice.target.value); return; }
       if (notice.target?.kind === 'session') navigation.open(notice.target.value);
@@ -62,6 +77,7 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
   const focus = () => manager.reconcile(); app.on('browser-window-focus', focus);
   return {
     activity, send,
+    reconcileQuota(state: QuotaState) { quotaState = state; manager.dismiss(notice => !isQuotaNoticeCurrent(notice, state)); },
     async start() {
       if (disposed || !paused) return;
       paused = false;
@@ -72,6 +88,6 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
       timer = setInterval(() => { void hooks.poll().catch(() => {}); }, 1000); timer.unref();
     },
     pause() { paused = true; generation++; if (timer) clearInterval(timer); timer = null; monitor.dispose(); hooks.dispose(); manager.dismiss(() => true); sound.stop(); },
-    dispose() { this.pause(); disposed = true; manager.dispose(); sound.dispose(); subscribers.clear(); app.removeListener('browser-window-focus', focus); for (const channel of handlers) ipcMain.removeHandler(channel); },
+    dispose() { this.pause(); disposed = true; manager.dispose(); windows?.dispose(); sound.dispose(); subscribers.clear(); app.removeListener('browser-window-focus', focus); for (const channel of handlers) ipcMain.removeHandler(channel); },
   };
 }

@@ -74,6 +74,7 @@ test('development profile is selected before the single-instance lock and preser
   process.env.QUOTERN_DESKTOP_USER_DATA = join(f.base, 'isolated-profile');
   configureQuoternAppIdentity(f.app);
   assert.equal(f.result().userData, join(f.base, 'isolated-profile'));
+  if (process.platform === 'win32') assert.notEqual(f.windowsAppId(), 'dev.quotern.desktop');
   assert.equal(f.result().sessionData, join(f.base, 'isolated-profile'));
   assert.equal(readFileSync(join(original, 'desktop-prefs.json'), 'utf8'), 'production-prefs');
 });

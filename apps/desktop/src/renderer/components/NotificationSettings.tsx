@@ -55,7 +55,7 @@ export function NotificationSettings() {
         {!state.supported && <p role="status" className="text-sm text-muted">{t('notifications.unsupported')}</p>}
         {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
       </Surface>
-      {state.issue && <div role="alert" className="space-y-2 text-sm text-danger"><p>{t(`notifications.${state.issue === 'load' ? 'loadIssue' : state.issue === 'sound' ? 'soundIssue' : 'deliveryIssue'}`)}</p>{state.issue === 'load' && <Button variant="secondary" size="sm" isDisabled={disabled} onPress={() => void apply(DEFAULT_NOTIFICATION_PREFERENCES)}>{t('notifications.restore')}</Button>}</div>}
+      {state.issue && <div role="alert" className="space-y-2 text-sm text-danger"><p>{t(`notifications.${state.issue === 'load' ? 'loadIssue' : state.issue === 'sound' ? 'soundIssue' : state.issue === 'integration' ? 'integrationIssue' : 'deliveryIssue'}`)}</p>{state.issue === 'load' && <Button variant="secondary" size="sm" isDisabled={disabled} onPress={() => void apply(DEFAULT_NOTIFICATION_PREFERENCES)}>{t('notifications.restore')}</Button>}</div>}
     </>}
     {error && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><p>{t('notifications.failed')}</p>{!state && <Button size="sm" variant="tertiary" onPress={() => void load()}>{t('notifications.retry')}</Button>}</div>}
   </div>;

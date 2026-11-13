@@ -5,7 +5,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { mkdir, writeFile, appendFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { app, BrowserWindow, ipcMain, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import { createLocalApiApp } from '../../../packages/core/src/server/local-api';
 import { BucketStore } from '../../../packages/core/src/server/state';
 import type { TudConfig } from '../../../packages/core/src/types';
@@ -52,9 +52,11 @@ async function main() {
     routes.push(route);
     const response = await api.request(route, init); return { status: response.status, body: await response.json() };
   });
-  let mainWindow: BrowserWindow | null = null, notice: Notification | null = null, shown = 0, failSave = false;
+  let mainWindow: BrowserWindow | null = null, notice: Notification | null = null, shown = 0, closed = 0, failSave = false;
   const originalShow = Notification.prototype.show;
+  const originalClose = Notification.prototype.close;
   Notification.prototype.show = function () { notice = this; shown++; this.emit('show'); };
+  Notification.prototype.close = function () { closed++; return originalClose.call(this); };
   const createWindow = () => {
     if (mainWindow && !mainWindow.isDestroyed()) return;
     mainWindow = new BrowserWindow({ width: 1050, height: 750, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: false, backgroundThrottling: false, preload: path.join(desktop!, 'out/preload/index.js') } });
@@ -64,7 +66,7 @@ async function main() {
   const originalHandle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = (channel, handler) => originalHandle(channel, (event, ...args) => { if (channel === NOTIFICATIONS_SET && failSave) { failSave = false; throw Error('fixture save failure'); } return handler(event, ...args); });
   const quotaTargets: unknown[] = [], activity: ActivityEvent[] = [];
-  const initialized = await initializeNotifications({ getMainWindow: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, showQuota: target => { quotaTargets.push(target); }, getLocale: () => 'zh-CN', activityRoots: [{ source: 'codex', path: activityFile }, { source: 'claude', path: claudeActivityFile }], showMainWindow: createWindow });
+  const initialized = await initializeNotifications({ getMainWindow: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, showQuota: target => { quotaTargets.push(target); }, getLocale: () => 'zh-CN', activityRoots: [{ source: 'codex', path: activityFile }, { source: 'claude', path: claudeActivityFile }], showMainWindow: createWindow, applicationDirectory: desktop });
   ipcMain.handle = originalHandle;
   const unsubscribe = initialized.activity.subscribe(event => { activity.push(event); });
   const clients: Array<{ close(): void; evaluate(expression: string): Promise<unknown>; screenshot(file: string): Promise<void> }> = [], checks: string[] = [];
@@ -105,10 +107,28 @@ async function main() {
     for (const category of ['quota', 'service'] as const) {
       const target = { providerId: 'claude', providerType: 'claude' as const, ...(category === 'quota' ? { windowId: 'five-hour' } : {}) };
       await initialized.send({ id: randomUUID(), category, title: 'Fixture notification', body: 'Quota navigation acceptance', target: { kind: 'quota', value: target } }, true);
-      assert.ok(notice); (notice as Notification).emit('click');
+      assert.ok(notice);
+      if (process.platform === 'win32') {
+        const launch = /launch="([^"]+)"/.exec((notice as Notification).toastXml)?.[1]?.replaceAll('&amp;', '&');
+        assert.ok(launch); const previous = quotaTargets.length;
+        await shell.openExternal(launch); await until(() => quotaTargets.length > previous, 'real Windows notification protocol activation');
+      } else (notice as Notification).emit('click');
       assert.deepEqual(quotaTargets.at(-1), target);
     }
     checks.push('quota-and-provider-service-notifications-deliver-and-keep-navigation');
+    if (process.platform === 'win32') {
+      const id = randomUUID(), before = closed, navigations = quotaTargets.length;
+      await initialized.send({ id, category: 'quota', title: 'Deferred fixture', body: 'No visible window is opened', replaceKey: 'snooze-acceptance', target: { kind: 'quota', value: { providerId: 'claude', providerType: 'claude' } } }, true);
+      const snooze = /arguments="([^"]+:\/\/snooze\/[^\"]+)"/.exec((notice as unknown as Notification).toastXml)?.[1]?.replaceAll('&amp;', '&');
+      assert.ok(snooze); await shell.openExternal(snooze);
+      await until(() => closed > before, 'real Windows snooze protocol retracts the notice');
+      assert.equal(quotaTargets.length, navigations); assert.equal(mainWindow, null);
+      checks.push('windows-snooze-activation-retracts-without-opening-a-window');
+    }
+    if (process.argv.includes('--actions-only')) {
+      await writeFile(path.join(root, 'result.json'), JSON.stringify({ ok: true, checks, visibleWindows: 0, nativeDelivery: false }, null, 2));
+      console.log(JSON.stringify({ ok: true, checks, visibleWindows: 0, nativeDelivery: false })); return;
+    }
     createWindow();
     const client = await connect();
     await until(() => client.evaluate('Boolean(window.tud?.notifications)'), 'real notification preload');
@@ -166,6 +186,7 @@ async function main() {
     throw error;
   } finally {
     Notification.prototype.show = originalShow;
+    Notification.prototype.close = originalClose;
     for (const client of clients) client.close();
     mainWindow?.destroy(); unsubscribe(); initialized.dispose(); ipcMain.removeHandler('tud:api-request');
   }

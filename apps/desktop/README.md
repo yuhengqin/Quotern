@@ -173,7 +173,9 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 
 `src/main/notifications/` 统一管理原生通知、提示音、偏好和会话定位。Agent 活动运行时随 Desktop 启动，不依赖桌宠角色或开关；运行中的宠物仅订阅同一活动流。系统通知使用 Electron `Notification` 并静音，原生 `show` 确认后才独立播放提示音。内置柔和、清脆两段原创 PCM 音效，支持关闭与试听；Windows 使用隐藏 PowerShell `SoundPlayer`，macOS 使用 `afplay`，Linux 使用系统 `paplay`。播放失败保留通知并在设置中显示问题。
 
-Windows 在启动时通过 `app-identity.ts` 设置与安装器一致的 `dev.quotern.desktop` AppUserModelID，避免按 Electron 默认身份发通知。Windows 的 `close` 回调也可能只是横幅超时，通知中心条目仍然存在；管理器在 Windows 保留有界的对象引用，继续支持点击、请求处理后的精确撤销及退出清理，不把横幅消失当作用户已处理（[Electron 35 事件与关闭语义](https://github.com/electron/electron/blob/v35.4.0/docs/api/notification.md#event-close)）。
+Windows 在启动时通过 `app-identity.ts` 设置与安装器一致的 `dev.quotern.desktop` AppUserModelID，并在当前用户下注册 Quotern 显示名和应用图标。隔离 profile 使用独立身份，正常退出删除自己的临时身份；正式身份由卸载器清理。Windows 的 `close` 回调也可能只是横幅超时，通知中心条目仍然存在；管理器在 Windows 保留有界的对象引用，继续支持点击、精确撤销及退出清理，不把横幅消失当作用户已处理（[Electron 35 事件与关闭语义](https://github.com/electron/electron/blob/v35.4.0/docs/api/notification.md#event-close)）。
+
+Windows 通知提供「查看详情」「30 分钟后提醒」；恢复/重置通知只提供查看。XML 显式静音，由统一声音策略播放提示音。Electron 35 的 Windows click 不返回按钮参数，因此快捷操作经当前实例专用 URI 协议转发至随机命名管道；bootstrap 的激活分支不加载正常主进程、不抢占 runtime 或打开窗口。协议包含随机运行令牌，仅能操作仍有效的通知，查看才导航，暂缓不聚焦窗口。开发入口包含应用路径，portable 使用外层启动器路径，正常退出仅移除仍属于自己的协议；注册失败时保留基础通知并在通知页说明。macOS 使用原生 action，其他平台保留正文点击。
 
 「通知」页仅设置额度提醒和 Agent 厂商服务状态变化的「从不 / 仅后台 / 始终」策略，两类默认始终提醒，提示音默认柔和。订阅页原有阈值、重置、服务和账号规则继续生效。偏好保存在 Electron userData 的 `notifications/preferences.json`；升级时丢弃旧版会话完成、确认、错误策略，保留额度、服务和提示音设置。写入失败保留旧值，损坏时暂停提醒并提供恢复默认入口。
 
@@ -185,11 +187,15 @@ Quotern 不再发送 Agent 会话完成、确认或错误系统通知，也不�
 
 额度通知点击定位对应额度窗口，服务通知点击定位「服务状态与事件」详情。共享会话精确定位与桌宠导航的兼容通道保留。
 
+额度按厂商、已验证账号（否则 reader）和窗口替换，服务按厂商替换。服务正文展示级别、已订阅的异常组件及最新事件摘要。状态对账在无新提示时也撤销已失效的阈值、旧周期、恢复前故障和已关闭规则的通知；stale/unknown 不视为恢复。未公开账号引用的 reader 使用进程内递增版本识别切换，不透传私有身份。异常最长保留 24 小时，额度有已知重置时间时提前过期；恢复/重置保留 10 分钟。暂缓 30 分钟后仅重发同范围最新且仍有效的提醒；恢复、禁用、删除和退出取消重发，不跨重启补发。
+
 「通知」页提供正式可用的测试通知；旧订阅页测试入口仍仅限 Vite 开发模式。`corepack pnpm test:notifications-ui [全新输出目录]` 使用隔离 profile、数据和受控事件，检查 Codex/Claude 日志和已有 Hook 活动仍可订阅且不发系统通知、额度/服务通知与点击、真实 preload/设置、键盘操作、保存失败及旧偏好兼容，生成宽/窄屏截图及结果 JSON。检查捕获系统 Toast 的 `show()`，不代表验证系统权限或实际送达；会调用一次生产提示音试听路径。
+
+追加 `--actions-only` 只运行活动保留与通知动作链路，不创建窗口、不操作桌面输入、不播放声音，也不显示系统 Toast；Windows 仍通过真实系统 URI 激活和 bootstrap 转发验证查看定位、暂缓撤销及不打开窗口。它不能代替原生横幅、图标或通知中心的可视验收。
 
 ### Windows 原生与 CLI 实测
 
-另有手动选择运行的原生验收入口，默认测试不启动它。它保留 Electron 的真实 `show` / `close` / `click`，使用独立数据、profile、Agent 配置与临时 Windows 应用身份，正常退出时撤销通知并删除该临时身份。私有采集只读取本次 CLI 的日志。主用户的 Agent 配置、凭据、Hook 信任记录及系统通知设置保持原样。
+另有手动选择运行的原生验收入口，默认测试不启动它。它保留 Electron 的真实 `show` / `close` / 协议激活，记录 toast XML、实际动作和撤销事件，使用独立数据、profile、Agent 配置与临时 Windows 应用身份，正常退出时撤销通知并删除自己的身份和协议。私有采集只读取本次 CLI 的日志。主用户的 Agent 配置、凭据、Hook 信任记录及系统通知设置保持原样。
 
 在 worktree 根运行，下例两个命令分别在两个终端中执行，输出目录必须全新：
 

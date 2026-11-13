@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
+import { createHash } from 'node:crypto';
 
 interface AppIdentity {
   getPath(name: 'userData'): string;
@@ -11,6 +12,10 @@ interface AppIdentity {
 /** Keep aligned with electron-builder.yml and the installed Start Menu shortcut. */
 export const WINDOWS_APP_USER_MODEL_ID = 'dev.quotern.desktop';
 
+export function windowsNotificationAppId(isolatedProfile?: string): string {
+  return isolatedProfile ? `${WINDOWS_APP_USER_MODEL_ID}.dev.${createHash('sha256').update(isolatedProfile.toLowerCase()).digest('hex').slice(0, 16)}` : WINDOWS_APP_USER_MODEL_ID;
+}
+
 /** Configure before the single-instance lock and Chromium session are created. */
 export function configureQuoternAppIdentity(app: AppIdentity): void {
   const isolated = process.env.QUOTERN_DEV_ISOLATED === '1';
@@ -21,7 +26,7 @@ export function configureQuoternAppIdentity(app: AppIdentity): void {
   const userData = isolated ? override! : app.getPath('userData');
   mkdirSync(userData, { recursive: true });
   app.setName('Quotern');
-  if (process.platform === 'win32') app.setAppUserModelId(WINDOWS_APP_USER_MODEL_ID);
+  if (process.platform === 'win32') app.setAppUserModelId(windowsNotificationAppId(isolated ? userData : undefined));
   app.setPath('userData', userData);
   app.setPath('sessionData', userData);
 }

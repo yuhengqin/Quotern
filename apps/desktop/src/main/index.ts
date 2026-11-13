@@ -525,6 +525,7 @@ void acquireDesktopInstanceLock().then((gotLock) => {
     disposeWorkBuddySubscriptionIpc = registerWorkBuddySubscriptionIpc();
     notificationRuntime = await initializeNotifications({ getMainWindow, showMainWindow, showQuota: showQuotaPopover, getLocale: getNativeLocale });
     quotaRuntime = await initializeQuotaRuntime({ showMainWindow, showQuota: showQuotaPopover, getLocale: getNativeLocale, sendNotification: notificationRuntime.send, onChanged: state => {
+      notificationRuntime?.reconcileQuota(state);
       setTrayQuotaState(state);
       if (trayQuotaTitleEnabled) setTrayUsageTitle(quotaTrayTitle(state.providers, getNativeLocale()));
       petController?.updateQuotaState(state);

@@ -4,6 +4,7 @@ import { parseQuotaServiceSummary, selectQuotaServiceStatus } from '../src/quota
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/quota/shared/quota.js';
 import { QuotaManager } from '../src/quota/readers/quota-manager.js';
 import { validQuotaPatch } from '../src/quota/readers/quota-store.js';
+import type { QuotaServiceNotification, QuotaServiceStatus } from '../src/quota/shared/quota.js';
 
 const url = 'https://status.claude.com/';
 function summary(indicator = 'major') {
@@ -71,4 +72,21 @@ test('service polling deduplicates profiles and alerts, retains stale data, and 
   time += 901; await manager.refreshStatus(); assert.equal(alerts.length, 1);
   time += 901; indicator = 'none'; await manager.refreshStatus(); assert.deepEqual(alerts, ['major', 'operational']);
   manager.dispose();
+});
+
+test('service notices carry only followed affected components and current incident details', async () => {
+  let time = 100, indicator = 'none';
+  const alerts: (QuotaServiceNotification & Pick<QuotaServiceStatus, 'components' | 'incidents'>)[] = [];
+  const manager = new QuotaManager({ now: () => time, monotonic: () => time * 1000,
+    readers: [{ id: 'claude', label: 'Claude', interval: 300, statusUrl: url, read: async () => ({}) }],
+    store: { preferences: { ...DEFAULT_QUOTA_PREFERENCES, serviceComponents: { claude: ['api'] } }, history: {}, notice: null, savePreferences: async () => {}, saveHistory: async () => {} },
+    notify() {}, notifyService: value => alerts.push(value), fetchStatus: async () => parseQuotaServiceSummary(summary(indicator), url, time),
+  });
+  try {
+    await manager.refreshStatus();
+    time += 901; indicator = 'major'; await manager.refreshStatus();
+    assert.deepEqual(alerts[0]?.components, [{ id: 'api', name: 'Claude API', level: 'major' }]);
+    assert.equal(alerts[0]?.incidents?.[0].body, 'Working on a fix');
+    assert.equal(alerts[0]?.incidents?.[0].name, 'API requests fail');
+  } finally { manager.dispose(); }
 });

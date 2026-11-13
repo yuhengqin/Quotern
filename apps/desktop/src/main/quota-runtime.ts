@@ -5,7 +5,6 @@ import path from 'node:path';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
 import { SUBSCRIPTION_CHANNELS } from '../shared/subscription-channels';
 import type { SupportedLocale } from 'quotern-i18n';
-import { localizeQuotaWindowLabel } from 'quotern-i18n/quota';
 import { createQuotaRuntime, type QuotaManager } from 'quotern-core/quota/runtime';
 import { resolveDataDir } from 'quotern-core';
 import { quotaFetch, recoverQuotaNetwork } from './quota-fetch';
@@ -13,6 +12,7 @@ import { nativeText } from './native-messages';
 import { createQuotaShortcut } from './quota-shortcut';
 import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET, QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut } from '../shared/quota-desktop';
 import type { QuotaNavigationTarget } from '../shared/quota-navigation';
+import { quotaNotice, serviceNotice } from './notifications/quota-notices';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
@@ -31,21 +31,11 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
       options.onChanged(state);
     },
     notify: value => {
-      const locale = options.getLocale();
-      const reset = value.resetsAt ? new Date(value.resetsAt * 1000).toLocaleString(locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
-      const vars = { provider: value.label, window: localizeQuotaWindowLabel(locale, value.provider, {
-        id: value.windowId, label: value.windowLabel, groupLabel: value.windowGroupLabel, periodSeconds: value.windowPeriodSeconds,
-      }), percent: value.kind === 'reset'
-        ? Math.round(100 - value.usedPercent) : value.kind === 'depleted' ? 100 : Number(value.kind.slice(10)) };
-      const title = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetTitle' : value.kind === 'depleted' ? 'native.quota.depletedTitle' : 'native.quota.thresholdTitle', vars);
-      const body = nativeText(locale, value.kind === 'reset' ? 'native.quota.resetBody' : 'native.quota.thresholdBody', vars)
-        + (reset ? nativeText(locale, 'native.quota.resetsAt', { time: reset }) : '');
-      void sendNotification(title, body, { providerId: value.providerId ?? value.provider, providerType: value.provider, windowId: value.windowId, accountRef: value.accountRef }).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));
+      void options.sendNotification(quotaNotice(value, options.getLocale())).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));
     },
     notifyService: value => {
-      const locale = options.getLocale(), recovered = value.level === 'operational';
-      void sendNotification(nativeText(locale, recovered ? 'native.quota.serviceRestored' : 'native.quota.serviceIssue', { provider: value.label }),
-        nativeText(locale, 'native.quota.serviceBody'), { providerId: value.provider, providerType: value.provider }, 'service').catch(() => manager.reportNotice(nativeText(locale, 'native.quota.deliveryFailed')));
+      const selected = manager.getState().preferences.serviceComponents?.[value.provider as keyof NonNullable<QuotaState['preferences']['serviceComponents']>];
+      void options.sendNotification(serviceNotice(value, options.getLocale(), selected)).catch(() => manager.reportNotice(nativeText(options.getLocale(), 'native.quota.deliveryFailed')));
     },
   });
   activeManager = manager;

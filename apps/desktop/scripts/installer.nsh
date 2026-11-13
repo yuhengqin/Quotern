@@ -80,4 +80,9 @@
       System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
     ${EndIf}
   !macroend
+!else
+  !macro customUnInstall
+    DeleteRegKey HKCU "Software\Classes\AppUserModelId\${APP_ID}"
+    DeleteRegKey HKCU "Software\Classes\quotern-notice"
+  !macroend
 !endif

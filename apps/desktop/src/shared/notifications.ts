@@ -1,5 +1,6 @@
 import type { SessionNavigationTarget } from './agent-activity.js';
 import type { QuotaNavigationTarget } from './quota-navigation.js';
+import type { QuotaServiceStatus } from './quota.js';
 
 export const NOTIFICATION_CATEGORIES = ['quota', 'service'] as const;
 export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
@@ -14,9 +15,14 @@ export type NotificationTarget = { kind: 'session'; value: SessionNavigationTarg
 export interface DesktopNotice {
   id: string; category: NotificationCategory; title: string; body: string; target?: NotificationTarget;
   sessionKey?: string; requestId?: string; replaceKey?: string; occurredAt?: number;
+  expiresAt?: number;
+  snoozable?: boolean;
+  context?: { kind: 'quota'; alert: 'reset' | 'depleted' | `threshold-${number}`; resetsAt: number | null; epoch?: number }
+    | { kind: 'service'; level: QuotaServiceStatus['level']; selection: string; label: string };
 }
+export type NotificationAction = 'view' | 'snooze';
 export type NotificationDelivery = 'shown' | 'requested' | 'suppressed';
-export interface NotificationSettingsState { preferences: NotificationPreferences; supported: boolean; issue: 'load' | 'delivery' | 'sound' | null }
+export interface NotificationSettingsState { preferences: NotificationPreferences; supported: boolean; issue: 'load' | 'delivery' | 'sound' | 'integration' | null }
 export const NOTIFICATIONS_GET = 'notifications:get';
 export const NOTIFICATIONS_SET = 'notifications:set';
 export const NOTIFICATIONS_CHANGED = 'notifications:changed';

@@ -87,6 +87,8 @@
 
 ### 公共基础与应用入口
 
+Desktop 系统通知由 `apps/desktop/src/main/notifications/` 统一管理。原生外壳遵循系统样式；Windows attribution 使用注册的 Quotern 名称/图标，业务标题不重复承担应用标识。`quota-notices.ts` 保留额度窗口、阈值和重置时间，并为服务提供级别、订阅范围内异常组件及最新事件摘要。原生快捷操作为查看和暂缓 30 分钟；恢复/重置不提供暂缓。替换、状态对账与过期撤销必须同时处理可见通知和暂缓队列，不以 stale/unknown 宣称恢复。通知内容仍可从额度/服务详情查看；通知注册异常在通知设置中就地提示，不阻断其他偏好。
+
 | 能力 | Dashboard 入口与使用点 | 适用边界 | Desktop 方式 |
 | --- | --- | --- | --- |
 | 页面布局 | [AppShell](../packages/dashboard/src/components/AppShell.tsx)，由 `routes/__root.tsx` 注册 | 根路由的宽度、滚动容器、Provider 与全局弹层；页面通过 Outlet 接入 | 独立 `AppShell`，保留窗口/托盘差异 |

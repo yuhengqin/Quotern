@@ -3,8 +3,11 @@ import { app } from 'electron';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { forwardNotificationActivation, NOTIFICATION_ACTIVATION_FLAG } from './notifications/activation';
 
-if (process.argv.includes('--quotern-dsh-pet-helper')) {
+if (process.argv.includes(NOTIFICATION_ACTIVATION_FLAG)) {
+  void forwardNotificationActivation(process.argv).finally(() => app.exit(0));
+} else if (process.argv.includes('--quotern-dsh-pet-helper')) {
   const directory = process.env.QUOTERN_DSH_USER_DATA;
   if (!directory || !path.isAbsolute(directory)) app.exit(2);
   else {

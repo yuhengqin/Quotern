@@ -119,11 +119,12 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
   }
 }
 
-import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type NotificationSettingsState, type NotificationPreferencePatch, type NotificationDelivery, type NotificationSound } from '../shared/notifications';
+import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type NotificationSettingsState, type NotificationPreferencePatch, type NotificationDelivery, type NotificationSound } from '../shared/notifications';
 
 const tudApi = {
   notifications: {
     getState: (): Promise<NotificationSettingsState> => ipcRenderer.invoke(NOTIFICATIONS_GET),
+    clear: (): Promise<NotificationSettingsState> => ipcRenderer.invoke(NOTIFICATIONS_CLEAR),
     setPreferences: (patch: NotificationPreferencePatch): Promise<NotificationSettingsState> => ipcRenderer.invoke(NOTIFICATIONS_SET, patch),
     test: (): Promise<NotificationDelivery> => ipcRenderer.invoke(NOTIFICATIONS_TEST),
     previewSound: (sound: NotificationSound): Promise<void> => ipcRenderer.invoke(NOTIFICATIONS_PREVIEW_SOUND, sound),

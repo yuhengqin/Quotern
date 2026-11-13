@@ -16,3 +16,9 @@ test('invalid Unicode cannot turn a valid alert into malformed XML', () => {
   assert.equal(Buffer.from(xml, 'utf8').toString('utf8'), xml);
   assert.match(xml, /API 🚨/);
 });
+
+test('clear-all is a real protocol action and ordinary banners are not long-lived', () => {
+  const xml = buildWindowsToast({ title: '2 项提醒', body: 'Summary', viewUrl: 'quotern-test://view/id', viewLabel: '查看详情', snoozeLabel: '', dismissAllUrl: 'quotern-test://dismiss-all/id?token=one&n=2', dismissAllLabel: '关闭全部提醒' });
+  assert.match(xml, /content="关闭全部提醒" activationType="protocol" arguments="quotern-test:\/\/dismiss-all\/id\?token=one&amp;n=2"/);
+  assert.doesNotMatch(xml, /scenario="(?:alarm|reminder)"|duration="long"/);
+});

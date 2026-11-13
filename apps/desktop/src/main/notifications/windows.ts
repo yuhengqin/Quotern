@@ -42,7 +42,7 @@ export async function createWindowsNotifications(options: {
   return {
     scheme,
     toast(notice: DesktopNotice, text: { title: string; body: string }, locale: SupportedLocale) {
-      return buildWindowsToast({ ...text, viewUrl: bridge.url(notice.id, 'view'), snoozeUrl: notice.snoozable === false ? undefined : bridge.url(notice.id, 'snooze'), viewLabel: notificationText(locale, 'view'), snoozeLabel: notificationText(locale, 'snooze') });
+      return buildWindowsToast({ ...text, viewUrl: bridge.url(notice.id, 'view'), snoozeUrl: notice.actions?.includes('snooze') ? bridge.url(notice.id, 'snooze') : undefined, dismissAllUrl: notice.actions?.includes('dismiss-all') ? bridge.url(notice.id, 'dismiss-all') : undefined, viewLabel: notificationText(locale, 'view'), snoozeLabel: notificationText(locale, 'snooze'), dismissAllLabel: notificationText(locale, 'dismissAll') });
     },
     dispose() {
       bridge.dispose();

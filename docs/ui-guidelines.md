@@ -87,7 +87,7 @@
 
 ### 公共基础与应用入口
 
-Desktop 系统通知由 `apps/desktop/src/main/notifications/` 统一管理。原生外壳遵循系统样式；Windows attribution 使用注册的 Quotern 名称/图标，业务标题不重复承担应用标识。`quota-notices.ts` 保留额度窗口、阈值和重置时间，并为服务提供级别、订阅范围内异常组件及最新事件摘要。原生快捷操作为查看和暂缓 30 分钟；恢复/重置不提供暂缓。替换、状态对账与过期撤销必须同时处理可见通知和暂缓队列，不以 stale/unknown 宣称恢复。通知内容仍可从额度/服务详情查看；通知注册异常在通知设置中就地提示，不阻断其他偏好。
+Desktop 系统通知由 `apps/desktop/src/main/notifications/` 统一管理。原生外壳遵循系统样式；Windows attribution 使用注册的 Quotern 名称/图标，业务标题不重复承担应用标识。`quota-notices.ts` 保留额度窗口、阈值和重置时间，并为服务提供级别、订阅范围内异常组件及最新事件摘要。普通提醒在固定 1 秒窗口内合并，额度耗尽和严重服务中断直接发送；`summary.ts` 的摘要显示数量及最多三项标题，查看进入额度面板，单项仍精确定位。原生快捷操作为查看、暂缓 30 分钟，以及多项时的「关闭全部提醒」；恢复/重置不提供暂缓，混合摘要仅对可暂缓的原始事项安排再次提醒。替换、状态对账与过期撤销必须同时处理原始事项、待合并队列和暂缓队列，不以 stale/unknown 宣称恢复；摘要部分失效后保留其余有效事项且不重复发声。通知内容仍可从额度/服务详情查看；通知注册异常在通知设置中就地提示，不阻断其他偏好。
 
 | 能力 | Dashboard 入口与使用点 | 适用边界 | Desktop 方式 |
 | --- | --- | --- | --- |
@@ -124,6 +124,8 @@ Desktop 系统通知由 `apps/desktop/src/main/notifications/` 统一管理。�
 ### Desktop 系统通知
 
 [NotificationSettings](../apps/desktop/src/renderer/components/NotificationSettings.tsx) 是 Desktop 专用「通知」页，复用 HeroUI Select、FilterSelectPopover 和 SettingsHelpPopover，浏览器 Dashboard 不增加系统通知设置副本。仅设置额度提醒、Agent 厂商服务状态变化的从不/仅后台/始终策略，提示音支持关闭、试听和测试通知；保存失败保留有效旧值并就近反馈。只有系统 `show` 回调确认后显示“已显示”，超时仅说明请求已发出。原有订阅类型/账号开关继续生效。通知页不读取或修改 Agent 连接，不提供会话完成、确认或错误通知。
+
+「关闭全部提醒」在通知设置标题旁提供跨平台入口，包含本进程管理的当前通知、待合并事项和暂缓事项；清理成功/失败就地反馈，不修改提醒偏好，后续新事件继续通知。Windows 原生协议提供同名动作，macOS 使用原生附加动作，Linux 和原生动作注册失败时使用设置入口。横幅自动收起由系统管理，不强制常驻；不能承诺清除重启前遗留的系统历史。验收运行 `corepack pnpm test:notifications-ui [全新输出目录]`，覆盖队列合并、紧急直达、真实协议和设置键盘清理/失败重试；Windows 原生历史另用隔离 AppID 核对。
 
 通知与活动监听由 `apps/desktop/src/main/notifications`、`main/agent-activity` 承担，不依赖宠物启停。旧通知偏好中的三类 Agent 策略读取时丢弃，保留额度、服务和提示音设置。Agent 日志及已有 Hook 元数据仍供桌宠展示活动，不触发系统通知；通用「Agent 集成」Hook 设置保留。服务提醒来自所关注厂商的官方状态页，只在有效基线后的状态级别变化时发送；首次观察、未知/过期状态、事件内容或阶段更新不单独通知。Quotern 自身采集/runtime 异常目前记录日志，没有独立系统通知链路。
 

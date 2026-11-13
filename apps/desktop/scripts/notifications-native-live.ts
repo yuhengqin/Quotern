@@ -126,7 +126,10 @@ async function main() {
     if (!command.id || command.id === lastCommand) return; lastCommand = command.id;
     try {
       let result: unknown = null;
-      if (command.action === 'send') {
+      if (command.action === 'send-burst') {
+        const requests: DesktopNotice[] = Array.from({ length: command.count ?? 3 }, (_, index) => quotaNotice({ provider: 'codex', providerId: `codex@acceptance-${index}`, accountRef: String(index).repeat(64).slice(0, 64), label: `Codex · 验收 ${index + 1}`, window: '5h', windowId: 'five-hour', windowLabel: '5h', windowPeriodSeconds: 18000, kind: 'threshold-90', resetsAt: Math.floor(Date.now() / 1000) + 7200, usedPercent: 95 }, 'zh-CN'));
+        result = await Promise.all(requests.map(value => runtime.send(value)));
+      } else if (command.action === 'send') {
         const category = command.category ?? 'service';
         if (!['quota', 'service'].includes(category)) throw new Error('Unsupported acceptance notification category');
         const value: DesktopNotice = category === 'quota' ? quotaNotice({ provider: 'codex', providerId: 'codex', accountRef: 'a'.repeat(64), label: 'Codex · 通知验收', window: '5h', windowId: 'five-hour', windowLabel: '5h', windowPeriodSeconds: 18000, kind: command.kind ?? 'threshold-90', resetsAt: Math.floor(Date.now() / 1000) + 7200, usedPercent: command.usedPercent ?? 95 }, 'zh-CN') : serviceNotice({ provider: 'claude', label: 'Claude', level: command.level ?? 'major', url: 'https://status.claude.com/', components: [{ id: 'api', name: 'Claude API', level: 'major' }], incidents: [{ id: 'acceptance', name: 'API 请求失败率上升（验收数据）', phase: 'identified', level: 'major', componentIds: ['api'], body: '服务正在修复中。', updatedAt: Date.now() / 1000, url: 'https://status.claude.com/' }] }, 'zh-CN');

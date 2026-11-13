@@ -17,14 +17,17 @@ export interface DesktopNotice {
   sessionKey?: string; requestId?: string; replaceKey?: string; occurredAt?: number;
   expiresAt?: number;
   snoozable?: boolean;
+  /** Ordered native actions, assigned by the notification manager. */
+  actions?: NotificationAction[];
   context?: { kind: 'quota'; alert: 'reset' | 'depleted' | `threshold-${number}`; resetsAt: number | null; epoch?: number }
     | { kind: 'service'; level: QuotaServiceStatus['level']; selection: string; label: string };
 }
-export type NotificationAction = 'view' | 'snooze';
+export type NotificationAction = 'view' | 'snooze' | 'dismiss-all';
 export type NotificationDelivery = 'shown' | 'requested' | 'suppressed';
-export interface NotificationSettingsState { preferences: NotificationPreferences; supported: boolean; issue: 'load' | 'delivery' | 'sound' | 'integration' | null }
+export interface NotificationSettingsState { preferences: NotificationPreferences; supported: boolean; pendingCount?: number; issue: 'load' | 'delivery' | 'sound' | 'integration' | null }
 export const NOTIFICATIONS_GET = 'notifications:get';
 export const NOTIFICATIONS_SET = 'notifications:set';
+export const NOTIFICATIONS_CLEAR = 'notifications:clear';
 export const NOTIFICATIONS_CHANGED = 'notifications:changed';
 export const NOTIFICATIONS_TEST = 'notifications:test';
 export const NOTIFICATIONS_PREVIEW_SOUND = 'notifications:preview-sound';

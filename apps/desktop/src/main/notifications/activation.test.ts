@@ -9,8 +9,10 @@ test('the actual local pipe forwards only valid live notification actions withou
   const url = bridge.url('notice one', 'snooze');
   assert.equal(await forwardNotificationActivation(['electron', 'app', NOTIFICATION_ACTIVATION_FLAG, bridge.pipe, url]), true);
   assert.deepEqual(received, [['notice one', 'snooze']]);
+  assert.equal(await forwardNotificationActivation(['electron', 'app', NOTIFICATION_ACTIVATION_FLAG, bridge.pipe, bridge.url('batch', 'dismiss-all')]), true);
+  assert.deepEqual(received.at(-1), ['batch', 'dismiss-all']);
   const forged = new URL(url); forged.searchParams.set('token', 'wrong');
   assert.equal(await forwardNotificationActivation(['electron', 'app', NOTIFICATION_ACTIVATION_FLAG, bridge.pipe, forged.toString()]), false);
-  assert.equal(received.length, 1);
+  assert.equal(received.length, 2);
   assert.equal(await forwardNotificationActivation(['electron', 'app']), false);
 });

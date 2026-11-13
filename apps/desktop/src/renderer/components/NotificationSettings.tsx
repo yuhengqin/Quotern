@@ -20,6 +20,7 @@ export function NotificationSettings() {
   const { t } = useTranslation();
   const [state, setState] = useState<NotificationSettingsState | null>(null);
   const [pending, setPending] = useState<string | null>(null), [error, setError] = useState(false), [feedback, setFeedback] = useState('');
+  const [clearFeedback, setClearFeedback] = useState<'cleared' | 'clearFailed' | null>(null);
   const load = async () => { setError(false); try { setState(await window.tud.notifications.getState()); } catch { setError(true); } };
   useEffect(() => {
     let active = true;
@@ -39,6 +40,11 @@ export function NotificationSettings() {
     if (!state || pending) return; setPending('sound'); setError(false); setFeedback('');
     try { await window.tud.notifications.previewSound(state.preferences.sound); } catch { setError(true); } finally { setPending(null); }
   };
+  const clear = async () => {
+    if (pending) return; setPending('clear'); setClearFeedback(null);
+    try { setState(await window.tud.notifications.clear()); setClearFeedback('cleared'); }
+    catch { setClearFeedback('clearFailed'); } finally { setPending(null); }
+  };
   const modes = ['off', 'background', 'always'].map(id => ({ id, label: t(`notifications.${id}`) }));
   const sounds = ['none', 'soft', 'bell'].map(id => ({ id, label: t(`notifications.${id}`) }));
   const disabled = !state || pending !== null;
@@ -46,7 +52,8 @@ export function NotificationSettings() {
     {!state && !error && <p role="status" className="text-sm text-muted">{t('agent.load')}</p>}
     {state && <>
       <Surface variant="secondary" className="space-y-4 rounded-xl p-4">
-        <div className="flex items-center gap-1"><h3 className="font-medium">{t('notifications.title')}</h3><SettingsHelpPopover title={t('notifications.title')}><p>{t('notifications.policyHelp')}</p></SettingsHelpPopover></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-1"><h3 className="font-medium">{t('notifications.title')}</h3><SettingsHelpPopover title={t('notifications.title')}><p>{t('notifications.policyHelp')}</p></SettingsHelpPopover></div><Button variant="secondary" size="sm" isDisabled={disabled || !state.pendingCount} isPending={pending === 'clear'} onPress={() => void clear()}>{t('notifications.dismissAll')}</Button></div>
+        {clearFeedback && <p role={clearFeedback === 'clearFailed' ? 'alert' : 'status'} className={`text-sm ${clearFeedback === 'clearFailed' ? 'text-danger' : 'text-success'}`}>{t(`notifications.${clearFeedback}`)}</p>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{NOTIFICATION_CATEGORIES.map(category => <PreferenceSelect key={category} label={t(`notifications.${category}`)} value={state.preferences.modes[category]} choices={modes} disabled={disabled} onChange={mode => void apply({ modes: { [category]: mode } } as NotificationPreferencePatch)} />)}</div>
       </Surface>
       <Surface variant="secondary" className="space-y-4 rounded-xl p-4">

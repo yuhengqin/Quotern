@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { resolveDataDir } from 'quotern-core';
 import type { SupportedLocale } from 'quotern-i18n';
 import { notificationText } from '../../shared/notification-messages.js';
-import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type DesktopNotice, type NotificationPreferencePatch, type NotificationSettingsState, type NotificationSound } from '../../shared/notifications.js';
+import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type DesktopNotice, type NotificationPreferencePatch, type NotificationSettingsState, type NotificationSound } from '../../shared/notifications.js';
 import { DSH_PET_NAVIGATION, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK } from '../../shared/dsh-pet.js';
 import type { ActivityEvent, ActivitySubscription } from '../../shared/agent-activity.js';
 import type { QuotaNavigationTarget } from '../../shared/quota-navigation.js';
@@ -19,6 +19,7 @@ import { windowsNotificationAppId, WINDOWS_APP_USER_MODEL_ID } from '../app-iden
 import { createWindowsNotifications, windowsNotificationIconPath } from './windows.js';
 import { isQuotaNoticeCurrent, resolveQuotaReminder } from './quota-notices.js';
 import type { QuotaState } from '../../shared/quota.js';
+import { summarizeNotices } from './summary.js';
 
 export async function initializeNotifications(options: { getMainWindow(): BrowserWindow | null; showMainWindow(): void; showQuota(target?: QuotaNavigationTarget): void; getLocale(): SupportedLocale; activityRoots?: ActivityRoot[]; windowsAppId?: string; applicationDirectory?: string }) {
   const directory = path.join(app.getPath('userData'), 'notifications');
@@ -27,7 +28,7 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
   const navigation = new NotificationNavigation(), subscribers = new Set<(event: ActivityEvent) => void>();
   let issue: NotificationSettingsState['issue'] = null, paused = true, disposed = false, generation = 0, timer: ReturnType<typeof setInterval> | null = null;
   let integrationFailed = false;
-  const state = (): NotificationSettingsState => ({ preferences: store.preferences, supported: Notification.isSupported(), issue: store.issue ?? issue ?? (integrationFailed ? 'integration' : null) });
+  const state = (): NotificationSettingsState => ({ preferences: store.preferences, supported: Notification.isSupported(), pendingCount: manager?.count ?? 0, issue: store.issue ?? issue ?? (integrationFailed ? 'integration' : null) });
   const changed = () => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(NOTIFICATIONS_CHANGED, state()); };
   let manager: NotificationManager;
   let quotaState: QuotaState | null = null;
@@ -36,10 +37,12 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
   const applicationDirectory = options.applicationDirectory ?? app.getAppPath();
   const windows = process.platform === 'win32' ? await createWindowsNotifications({ app, appId, iconPath: windowsNotificationIconPath(app.isPackaged ? process.resourcesPath : null, applicationDirectory), temporary: appId !== WINDOWS_APP_USER_MODEL_ID, entry: process.defaultApp ? applicationDirectory : undefined, onAction: (id, action) => manager.activate(id, action) }).catch(error => { integrationFailed = true; console.warn('[quotern] notification integration unavailable:', error); return null; }) : null;
   manager = new NotificationManager({
+    batch: { delayMs: 1000, summarize: notices => summarizeNotices(notices, options.getLocale()) },
+    onChange: changed,
     retainAfterClose: process.platform === 'win32',
     preferences: () => store.preferences, isSupported: () => Notification.isSupported(), isFocused: () => !!BrowserWindow.getFocusedWindow(),
     create: (value, notice) => {
-      const native = new Notification({ ...value, ...(windows ? { toastXml: windows.toast(notice, value, options.getLocale()) } : {}), ...(process.platform === 'darwin' ? { actions: [{ type: 'button' as const, text: notificationText(options.getLocale(), 'view') }, ...(notice.snoozable === false ? [] : [{ type: 'button' as const, text: notificationText(options.getLocale(), 'snooze') }])] } : {}) });
+      const native = new Notification({ ...value, ...(windows ? { toastXml: windows.toast(notice, value, options.getLocale()) } : {}), ...(process.platform === 'darwin' ? { actions: notice.actions?.map(action => ({ type: 'button' as const, text: notificationText(options.getLocale(), action === 'dismiss-all' ? 'dismissAll' : action) })) } : {}) });
       return Object.assign(native, { handlesActivation: !!windows });
     }, sound: (value, current) => sound.play(value, current),
     onIssue: value => { issue = value; changed(); },
@@ -60,8 +63,9 @@ export async function initializeNotifications(options: { getMainWindow(): Browse
   const hooks = new AgentHookEvents({ directory: path.join(resolveDataDir(), 'integrations/notification-events'), onEvent: receive });
   const activity: ActivitySubscription = { subscribe: listener => { subscribers.add(listener); return () => subscribers.delete(listener); }, capabilities: () => monitor.capabilities() };
   const trusted = (event: Electron.IpcMainInvokeEvent) => { const window = options.getMainWindow(); if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Notification sender rejected'); };
-  const handlers = [NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK];
+  const handlers = [NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK];
   ipcMain.handle(NOTIFICATIONS_GET, event => { trusted(event); return state(); });
+  ipcMain.handle(NOTIFICATIONS_CLEAR, event => { trusted(event); manager.clear(); return state(); });
   ipcMain.handle(NOTIFICATIONS_SET, async (event, patch: NotificationPreferencePatch) => { trusted(event); await store.set(patch); issue = null; manager.reconcile(); changed(); return state(); });
   ipcMain.handle(NOTIFICATIONS_TEST, event => {
     trusted(event); issue = null; changed();

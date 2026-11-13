@@ -11,7 +11,7 @@ import { BucketStore } from '../../../packages/core/src/server/state';
 import type { TudConfig } from '../../../packages/core/src/types';
 import { initializeNotifications } from '../src/main/notifications/runtime';
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/shared/quota';
-import { NOTIFICATIONS_SET } from '../src/shared/notifications';
+import { NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, type DesktopNotice } from '../src/shared/notifications';
 import type { ActivityEvent } from '../src/shared/agent-activity';
 // @ts-ignore opt-in JS acceptance driver
 import { connectPage, wait } from './desktop-cdp.mjs';
@@ -52,7 +52,7 @@ async function main() {
     routes.push(route);
     const response = await api.request(route, init); return { status: response.status, body: await response.json() };
   });
-  let mainWindow: BrowserWindow | null = null, notice: Notification | null = null, shown = 0, closed = 0, failSave = false;
+  let mainWindow: BrowserWindow | null = null, notice: Notification | null = null, shown = 0, closed = 0, failSave = false, failClear = false;
   const originalShow = Notification.prototype.show;
   const originalClose = Notification.prototype.close;
   Notification.prototype.show = function () { notice = this; shown++; this.emit('show'); };
@@ -64,7 +64,7 @@ async function main() {
     void mainWindow.loadFile(path.join(desktop!, 'out/renderer/index.html'), { hash: '/dashboard' });
   };
   const originalHandle = ipcMain.handle.bind(ipcMain);
-  ipcMain.handle = (channel, handler) => originalHandle(channel, (event, ...args) => { if (channel === NOTIFICATIONS_SET && failSave) { failSave = false; throw Error('fixture save failure'); } return handler(event, ...args); });
+  ipcMain.handle = (channel, handler) => originalHandle(channel, (event, ...args) => { if (channel === NOTIFICATIONS_SET && failSave) { failSave = false; throw Error('fixture save failure'); } if (channel === NOTIFICATIONS_CLEAR && failClear) { failClear = false; throw Error('fixture clear failure'); } return handler(event, ...args); });
   const quotaTargets: unknown[] = [], activity: ActivityEvent[] = [];
   const initialized = await initializeNotifications({ getMainWindow: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, showQuota: target => { quotaTargets.push(target); }, getLocale: () => 'zh-CN', activityRoots: [{ source: 'codex', path: activityFile }, { source: 'claude', path: claudeActivityFile }], showMainWindow: createWindow, applicationDirectory: desktop });
   ipcMain.handle = originalHandle;
@@ -125,6 +125,28 @@ async function main() {
       assert.equal(quotaTargets.length, navigations); assert.equal(mainWindow, null);
       checks.push('windows-snooze-activation-retracts-without-opening-a-window');
     }
+    const ordinary = (id: string): DesktopNotice => ({ id, category: 'quota', title: `Codex · ${id} 额度偏低`, body: '5h 已使用 90%', replaceKey: id, target: { kind: 'quota', value: { providerId: id, providerType: 'codex', windowId: 'five-hour' } }, context: { kind: 'quota', alert: 'threshold-90', resetsAt: null } });
+    const beforeBurst = shown;
+    const burst = ['work', 'personal', 'weekly'].map(id => initialized.send(ordinary(id)));
+    assert.equal(shown, beforeBurst, 'ordinary notices wait for the fixed batching window');
+    assert.deepEqual(await Promise.all(burst), ['shown', 'shown', 'shown']);
+    assert.equal(shown, beforeBurst + 1);
+    assert.equal((notice as unknown as Notification).title, '3 项额度提醒');
+    checks.push('ordinary-real-runtime-burst-is-one-localized-native-summary');
+    if (process.platform === 'win32') {
+      const dismissAll = /arguments="([^"]+:\/\/dismiss-all\/[^\"]+)"/.exec((notice as unknown as Notification).toastXml)?.[1]?.replaceAll('&amp;', '&');
+      assert.ok(dismissAll);
+      const beforeClear = closed, navigations = quotaTargets.length;
+      await shell.openExternal(dismissAll);
+      await until(() => closed > beforeClear, 'real Windows clear-all protocol');
+      assert.equal(quotaTargets.length, navigations); assert.equal(mainWindow, null);
+      checks.push('windows-clear-all-protocol-does-not-navigate');
+    }
+    const urgent = ordinary('immediate'); urgent.context = { kind: 'quota', alert: 'depleted', resetsAt: null };
+    const beforeUrgent = shown; const urgentSend = initialized.send(urgent);
+    assert.equal(shown, beforeUrgent + 1, 'depletion bypasses the aggregation delay');
+    assert.equal(await urgentSend, 'shown');
+    checks.push('new-critical-event-delivers-immediately-after-clearing');
     if (process.argv.includes('--actions-only')) {
       await writeFile(path.join(root, 'result.json'), JSON.stringify({ ok: true, checks, visibleWindows: 0, nativeDelivery: false }, null, 2));
       console.log(JSON.stringify({ ok: true, checks, visibleWindows: 0, nativeDelivery: false })); return;
@@ -155,6 +177,16 @@ async function main() {
     assert.equal(await client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.modes.quota)'), 'always');
     await closeMenu();
     checks.push('failed-write-preserves-effective-policy');
+    const clearButton = `Array.from(document.querySelectorAll('[data-notification-settings] button')).find(b=>b.textContent==='关闭全部提醒')`;
+    failClear = true;
+    await client.click(clearButton);
+    await until(() => client.evaluate('document.querySelector("[data-notification-settings]").innerText.includes("关闭提醒失败")'), 'nearby clear failure');
+    assert.equal(await client.evaluate('window.tud.notifications.getState().then(s=>s.pendingCount>0)'), true);
+    await client.evaluate(`${clearButton}.focus()`); await client.key('Enter');
+    await until(() => client.evaluate('window.tud.notifications.getState().then(s=>s.pendingCount===0)'), 'keyboard clear-all');
+    await until(() => client.evaluate('document.querySelector("[data-notification-settings]").innerText.includes("当前提醒已关闭")'), 'clear success feedback');
+    assert.equal(await client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.modes.quota)'), 'always');
+    checks.push('settings-clear-all-keyboard-failure-retry-keeps-future-policy');
     await client.click(select(2));
     await client.click('Array.from(document.querySelectorAll("[role=option]")).find(el=>el.getBoundingClientRect().height>0&&el.innerText.trim()==="清脆")');
     await until(() => client.evaluate('window.tud.notifications.getState().then(s=>s.preferences.sound==="bell")'), 'saved sound');

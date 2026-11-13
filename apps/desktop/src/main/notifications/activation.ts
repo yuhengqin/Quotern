@@ -9,7 +9,7 @@ export const NOTIFICATION_ACTIVATION_FLAG = '--quotern-notification-action';
 /** The helper never imports the normal main process or claims a runtime/profile. */
 export async function forwardNotificationActivation(argv: readonly string[]): Promise<boolean> {
   const index = argv.indexOf(NOTIFICATION_ACTIVATION_FLAG), pipe = argv[index + 1];
-  const url = argv.find(value => /^[a-z][a-z0-9-]*:\/\/(view|snooze)\//i.test(value));
+  const url = argv.find(value => /^[a-z][a-z0-9-]*:\/\/(view|snooze|dismiss-all)\//i.test(value));
   if (index < 0 || !pipe || !url || url.length > 4096 || !/^quotern-notifications-[a-f0-9-]+(?:\.sock)?$/.test(path.basename(pipe.replace(/^\\\\\.\\pipe\\/, '')))) return false;
   return new Promise(resolve => {
     let data = '', settled = false;
@@ -44,7 +44,7 @@ export async function createNotificationActivation(scheme: string, onAction: (id
       try {
         const url = new URL(JSON.parse(data.slice(0, data.indexOf('\n'))).url);
         const id = decodeURIComponent(url.pathname.slice(1));
-        if (!disposed && url.protocol === `${scheme}:` && (url.hostname === 'view' || url.hostname === 'snooze') && url.searchParams.get('token') === token && id && id.length <= 256) ok = onAction(id, url.hostname) !== false;
+        if (!disposed && url.protocol === `${scheme}:` && (url.hostname === 'view' || url.hostname === 'snooze' || url.hostname === 'dismiss-all') && url.searchParams.get('token') === token && id && id.length <= 256) ok = onAction(id, url.hostname) !== false;
       } catch { /* Malformed/expired activations do nothing. */ }
       socket.removeAllListeners('data'); socket.end(JSON.stringify({ ok }) + '\n');
     });

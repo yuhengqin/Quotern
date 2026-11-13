@@ -175,7 +175,7 @@ macOS/Linux 自动发现当前用户的私有 Context socket，已退出进程�
 
 Windows 在启动时通过 `app-identity.ts` 设置与安装器一致的 `dev.quotern.desktop` AppUserModelID，并在当前用户下注册 Quotern 显示名和应用图标。隔离 profile 使用独立身份，正常退出删除自己的临时身份；正式身份由卸载器清理。Windows 的 `close` 回调也可能只是横幅超时，通知中心条目仍然存在；管理器在 Windows 保留有界的对象引用，继续支持点击、精确撤销及退出清理，不把横幅消失当作用户已处理（[Electron 35 事件与关闭语义](https://github.com/electron/electron/blob/v35.4.0/docs/api/notification.md#event-close)）。
 
-Windows 通知提供「查看详情」「30 分钟后提醒」；恢复/重置通知只提供查看。XML 显式静音，由统一声音策略播放提示音。Electron 35 的 Windows click 不返回按钮参数，因此快捷操作经当前实例专用 URI 协议转发至随机命名管道；bootstrap 的激活分支不加载正常主进程、不抢占 runtime 或打开窗口。协议包含随机运行令牌，仅能操作仍有效的通知，查看才导航，暂缓不聚焦窗口。开发入口包含应用路径，portable 使用外层启动器路径，正常退出仅移除仍属于自己的协议；注册失败时保留基础通知并在通知页说明。macOS 使用原生 action，其他平台保留正文点击。
+Windows 通知提供「查看详情」「30 分钟后提醒」，多项时追加「关闭全部提醒」；恢复/重置不提供暂缓。XML 显式静音，由统一声音策略播放提示音。Electron 35 的 Windows click 不返回按钮参数，因此快捷操作经当前实例专用 URI 协议转发至随机命名管道；bootstrap 的激活分支不加载正常主进程、不抢占 runtime 或打开窗口。协议包含随机运行令牌，仅能操作仍有效的通知，查看才导航，暂缓不聚焦窗口。开发入口包含应用路径，portable 使用外层启动器路径，正常退出仅移除仍属于自己的协议；注册失败时保留基础通知并在通知页说明。macOS 使用原生 action，其他平台保留正文点击。
 
 「通知」页仅设置额度提醒和 Agent 厂商服务状态变化的「从不 / 仅后台 / 始终」策略，两类默认始终提醒，提示音默认柔和。订阅页原有阈值、重置、服务和账号规则继续生效。偏好保存在 Electron userData 的 `notifications/preferences.json`；升级时丢弃旧版会话完成、确认、错误策略，保留额度、服务和提示音设置。写入失败保留旧值，损坏时暂停提醒并提供恢复默认入口。
 
@@ -189,9 +189,13 @@ Quotern 不再发送 Agent 会话完成、确认或错误系统通知，也不�
 
 额度按厂商、已验证账号（否则 reader）和窗口替换，服务按厂商替换。服务正文展示级别、已订阅的异常组件及最新事件摘要。状态对账在无新提示时也撤销已失效的阈值、旧周期、恢复前故障和已关闭规则的通知；stale/unknown 不视为恢复。未公开账号引用的 reader 使用进程内递增版本识别切换，不透传私有身份。异常最长保留 24 小时，额度有已知重置时间时提前过期；恢复/重置保留 10 分钟。暂缓 30 分钟后仅重发同范围最新且仍有效的提醒；恢复、禁用、删除和退出取消重发，不跨重启补发。
 
+普通提醒进入固定 1 秒合并窗口，同 scope 更新不延长窗口；额度耗尽和严重服务中断立即发送。多项摘要显示数量及最多三项标题，查看进入额度面板，其余信息继续从账号/服务详情访问；单项保持精准定位。每项的有效期、策略与暂缓独立管理，部分事项失效后保留其余事项，不重复播放已显示提醒的声音。混合摘要的暂缓只重新安排警告，不再次安排恢复/重置。
+
+通知设置标题旁的「关闭全部提醒」与原生动作共用管理器，一次撤销本进程管理的通知中心条目、待合并事项和暂缓事项；不改提醒偏好，新事件仍正常通知。该入口不枚举或清除应用重启前遗留的系统历史。原生横幅按系统默认时长自动收起，横幅收起不视为已处理。macOS 使用原生附加动作，Linux 及原生注册失败时可从设置清理。
+
 「通知」页提供正式可用的测试通知；旧订阅页测试入口仍仅限 Vite 开发模式。`corepack pnpm test:notifications-ui [全新输出目录]` 使用隔离 profile、数据和受控事件，检查 Codex/Claude 日志和已有 Hook 活动仍可订阅且不发系统通知、额度/服务通知与点击、真实 preload/设置、键盘操作、保存失败及旧偏好兼容，生成宽/窄屏截图及结果 JSON。检查捕获系统 Toast 的 `show()`，不代表验证系统权限或实际送达；会调用一次生产提示音试听路径。
 
-追加 `--actions-only` 只运行活动保留与通知动作链路，不创建窗口、不操作桌面输入、不播放声音，也不显示系统 Toast；Windows 仍通过真实系统 URI 激活和 bootstrap 转发验证查看定位、暂缓撤销及不打开窗口。它不能代替原生横幅、图标或通知中心的可视验收。
+追加 `--actions-only` 只运行活动保留与通知动作链路，不创建窗口、不操作桌面输入、不播放声音，也不显示系统 Toast；Windows 仍通过真实系统 URI 激活和 bootstrap 转发验证查看定位、暂缓撤销、全部清理及不打开窗口，并检查普通提醒合并、耗尽即时发送。完整 UI 验收再检查设置清理的键盘操作和失败重试。它不能代替原生横幅、图标或通知中心的可视验收。
 
 ### Windows 原生与 CLI 实测
 
@@ -211,6 +215,8 @@ CLI 场景现在用于观测活动流：应记录完成、等待及错误状态�
 ```powershell
 Set-Content -LiteralPath '.quotern-dev/native-review-01/command.json' -Value '{"id":"send-1","action":"send","category":"service"}'
 powershell.exe -NoProfile -NonInteractive -File apps/desktop/scripts/notifications-windows-history.ps1 -AppId '<ready.json 中的 appId>'
+Set-Content -LiteralPath '.quotern-dev/native-review-01/command.json' -Value '{"id":"burst-1","action":"send-burst","count":3}'
+# 等 reply.json 确认，再检查历史只增加一个摘要；点击原生「关闭全部提醒」后再次检查历史。
 Set-Content -LiteralPath '.quotern-dev/native-review-01/command.json' -Value '{"id":"quit-1","action":"quit"}'
 ```
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  APPEARANCE_STYLES,
   normalizeAppearancePreferences,
   isAppearancePreferences,
   resolveAppearanceTokens,
@@ -40,8 +41,14 @@ test('explicit accent overrides a style recommendation without discarding its su
   assert.equal(original['--background'], '#eff1f5');
 });
 
+test('the full reference catalogue remains selectable alongside the unchanged default', () => {
+  const reference = ['classic', 'matrix', 'win95', 'newspaper', 'cloud_observation', 'aquarium', 'prism_arcade', 'stained_glass', 'migration', 'sketchbook', 'heart_monitor', 'origami', 'catppuccin', 'black_hole', 'lepidoptera', 'world_cup'];
+  assert.deepEqual(new Set(APPEARANCE_STYLES), new Set(['default', ...reference]));
+  for (const style of reference) assert.equal(isAppearancePreferences({ style, palette: 'theme' }), true, style);
+});
+
 test('every nondefault style provides distinct readable surfaces and matching native chrome', () => {
-  for (const style of ['catppuccin', 'win95', 'newspaper'] as const) {
+  for (const style of APPEARANCE_STYLES.filter(style => style !== 'default')) {
     for (const theme of ['light', 'dark'] as const) {
       const tokens = resolveAppearanceTokens({ style, palette: 'theme' }, theme);
       assert.match(tokens['--background'], /^#[0-9a-f]{6}$/i);
@@ -59,7 +66,7 @@ test('new theme text, muted labels and accent labels retain readable contrast', 
     return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
   };
   const contrast = (a: string, b: string) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-  for (const style of ['catppuccin', 'win95', 'newspaper'] as const) for (const mode of ['light', 'dark'] as const) {
+  for (const style of APPEARANCE_STYLES.filter(style => style !== 'default')) for (const mode of ['light', 'dark'] as const) {
     const tokens = resolveAppearanceTokens({ style, palette: 'theme' }, mode);
     for (const surface of ['--background', '--surface', '--surface-secondary', '--overlay']) {
       for (const text of ['--foreground', '--muted']) assert.ok(contrast(tokens[surface], tokens[text]) >= 4.5, `${style} ${mode} ${text} on ${surface}`);

@@ -5,6 +5,7 @@ import electron from 'electron';
 
 const main = fileURLToPath(new URL('../out/main/', import.meta.url));
 await build({ entryPoints: {
+  'appearance-shared-test': fileURLToPath(new URL('../src/shared/appearance.ts', import.meta.url)),
   'appearance-ipc-test': fileURLToPath(new URL('../src/main/appearance-ipc.ts', import.meta.url)),
   'appearance-window-test': fileURLToPath(new URL('../src/main/DesktopWindow.ts', import.meta.url)),
   'appearance-tray-test': fileURLToPath(new URL('../src/main/TrayPopover.ts', import.meta.url)),

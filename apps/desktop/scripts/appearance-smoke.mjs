@@ -19,7 +19,7 @@ process.env.QUOTERN_CONFIG_HOME = path.join(output, 'config-home');
 process.env.QUOTERN_DEV_ISOLATED = '1';
 const port = await unusedPort(); app.commandLine.appendSwitch('remote-debugging-port', String(port));
 app.on('window-all-closed', () => {});
-const deadline = setTimeout(() => { console.error('Appearance acceptance exceeded 180 seconds'); app.exit(2); }, 180_000);
+const deadline = setTimeout(() => { console.error('Appearance acceptance exceeded 300 seconds'); app.exit(2); }, 300_000);
 const windows = [], clients = [], checks = [], requests = [];
 let server, tray, disposeAppearance, mainWindow, style = 'default', mode = 'light', resolved = 'light', locale = 'zh-CN';
 const until = async (predicate, label) => { for (let n = 0; n < 120; n++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
@@ -33,21 +33,44 @@ async function connect(window) {
 const radio = (name, value) => `document.querySelector('input[name="${name}"][value="${value}"]').closest('label')`;
 const snapshot = client => client.evaluate(`(() => { const root = document.documentElement, card = document.querySelector('[data-quota-card]'); if (!card) return {}; const s = getComputedStyle(root), c = getComputedStyle(card); return { style: root.dataset.appearance, palette: root.dataset.palette, mode: root.dataset.theme, background: s.getPropertyValue('--background').trim(), foreground: s.getPropertyValue('--foreground').trim(), accent: s.getPropertyValue('--accent').trim(), font: getComputedStyle(document.body).fontFamily, radius: c.borderRadius, cardBackground: c.backgroundColor, borderTopWidth: c.borderTopWidth, borderTopStyle: c.borderTopStyle, borderTopColor: c.borderTopColor, borderBottomColor: c.borderBottomColor, text: card.innerText }; })()`);
 async function shot(client, name) {
+  const wasVisible = client.window.isVisible();
+  if (!wasVisible) client.window.showInactive();
   await client.evaluate('document.fonts.ready.then(() => true)');
   client.window.webContents.invalidate();
   await client.window.webContents.capturePage();
   await wait(80);
-  await client.screenshot(path.join(output, `${name}.png`));
+  try { await client.screenshot(path.join(output, `${name}.png`)); }
+  catch (error) { throw Error(`Screenshot ${name}: ${error.message}`, { cause: error }); }
+  finally { if (!wasVisible && !client.window.isDestroyed()) client.window.hide(); }
 }
 async function settings(client, native) {
   await client.evaluate(`window.dispatchEvent(new CustomEvent('tud:open-settings', {detail:${native ? "{tab:'appearance'}" : '{}'}})); true`);
   await until(() => client.evaluate('Boolean(document.querySelector("input[name=appearance-style]"))'), 'theme style selector');
 }
 async function select(client, name, value) {
+  if (name === 'appearance-style' && !await client.evaluate(`Boolean(document.querySelector('input[name="${name}"][value="${value}"]'))`)) {
+    await client.click('document.querySelector("[data-appearance-more]")');
+  }
   await client.click(radio(name, value));
   await until(() => client.evaluate(`document.querySelector('input[name="${name}"][value="${value}"]').checked`), name + ' ' + value);
 }
 async function closeSettings(client) { await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'settings closes'); }
+async function scrollTop(client) { await client.evaluate('(document.querySelector("[data-dashboard-scroll-container]") ?? document.scrollingElement).scrollTo({top:0, behavior:"instant"}); true'); }
+
+async function checkAxisLabels(client, label) {
+  await client.evaluate('document.querySelector("[data-slot=chart]").scrollIntoView({block:"center"}); true');
+  await until(() => client.evaluate('document.querySelectorAll(".recharts-cartesian-axis-tick-label text").length > 0'), 'chart labels rendered');
+  const axes = await client.evaluate(`(() => {
+    const luminance = color => (color.match(/[\\d.]+/g) || []).slice(0,3).map(Number).map(c=>c/255).map(c=>c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4).reduce((sum,c,i)=>sum+c*[0.2126,0.7152,0.0722][i],0);
+    return [...document.querySelectorAll('.recharts-cartesian-axis-tick-label text')].map(el => {
+      const foreground=getComputedStyle(el).fill, background=getComputedStyle(el.closest('.card')).backgroundColor;
+      const a=luminance(foreground), b=luminance(background);
+      return {text:el.textContent,foreground,background,contrast:(Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)};
+    });
+  })()`);
+  assert.ok(axes.length > 0, label + ' actual chart labels exist');
+  for (const tick of axes) assert.ok(tick.contrast >= 4.5, label + ' axis label contrast: ' + JSON.stringify(tick));
+}
 
 async function checkHeaderIcons(client, label) {
   const icons = await client.evaluate(`(() => {
@@ -67,6 +90,9 @@ async function checkHeaderIcons(client, label) {
 }
 
 async function main() {
+  const { APPEARANCE_STYLES } = await import('../out/main/appearance-shared-test.mjs');
+  const sample = process.argv.find(value => value.startsWith('--styles='))?.slice(9).split(',');
+  const styles = APPEARANCE_STYLES.filter(value => value !== 'default' && (!sample || sample.includes(value)));
   const { createLocalApiApp, BucketStore } = await import('../../../packages/core/dist/index.js');
   const { DEFAULT_QUOTA_PREFERENCES } = await import('../../../packages/core/dist/quota/shared/quota.js');
   const dataDir = process.env.QUOTERN_DATA_DIR; await mkdir(path.join(dataDir, 'queue'), { recursive: true });
@@ -76,6 +102,8 @@ async function main() {
   await writeFile(path.join(dataDir, 'config.json'), JSON.stringify(config));
   const store = new BucketStore(); store.apply([{ source: 'codex', model: 'appearance-fixture', project: 'Synthetic theme project', hour_start: iso, input_tokens: 2500, output_tokens: 500, total_tokens: 3000, conversation_count: 1 }]);
   const quota = { providers: [{ id: 'codex@appearance', providerId: 'codex', label: 'Codex · 工作账号', profileLabel: '工作账号', planLabel: 'Pro', status: 'ready', fetchedAt: now, queriedAt: now, stale: false, message: null, resetCredits: 2, refreshing: false, nextRefreshAt: null, details: [], analyses: {}, provenance: { source: 'native', observer: 'Codex', observedAt: now, identityVerified: true, accountRef: 'appearance-fixture' }, windows: [{ id: 'five-hour', label: '5h', durationSeconds: 18000, resetsAt: now + 3600, usedPercent: 24 }, { id: 'weekly', label: '7d', durationSeconds: 604800, resetsAt: now + 86400, usedPercent: 93 }] }], preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), notice: null };
+  // Compare stable information while the full catalogue runs across minute boundaries.
+  quota.preferences.resetTimeMode = 'date';
   const runtime = { getState: () => quota, refresh: async () => quota, setPreferences: async patch => { Object.assign(quota.preferences, patch); return quota; } };
   const api = createLocalApiApp({ dataDir, bucketStore: store, getConfig: () => config, quota: runtime });
   const request = async (route, init) => { const record = { route, method: init?.method ?? 'GET', status: 'pending' }; requests.push(record); const response = await api.request(`http://localhost${route}`, init); record.status = response.status; return { status: response.status, body: await response.json() }; };
@@ -118,7 +146,7 @@ async function main() {
   await settings(web, false);
   for (const theme of ['light', 'dark']) {
     await select(web, 'theme-preference', theme);
-    for (const value of ['catppuccin', 'win95', 'newspaper']) {
+    for (const value of styles) {
       const origin = await web.evaluate('performance.timeOrigin');
       await select(web, 'appearance-style', value);
       await until(async () => (await snapshot(web)).style === value, 'browser style');
@@ -126,10 +154,11 @@ async function main() {
       if (value === 'win95') { assert.equal(themed.borderTopWidth, '2px', 'Win95 cards keep their bevel'); assert.notEqual(themed.borderTopColor, themed.borderBottomColor); }
       if (value === 'newspaper') { assert.equal(themed.borderTopStyle, 'double'); assert.equal(themed.borderTopWidth, '3px'); }
       assert.equal(await web.evaluate('performance.timeOrigin'), origin);
-      await shot(web, `browser-settings-${value}-${theme}`);
+      if (value === 'world_cup') await shot(web, `browser-settings-gallery-${theme}`);
       await closeSettings(web);
+      await checkAxisLabels(web, 'browser ' + value + ' ' + theme);
       if (value === 'win95' && theme === 'light') await checkHeaderIcons(web, 'browser-win95-light');
-      await shot(web, `browser-${value}-${theme}`); await settings(web, false);
+      await scrollTop(web); await shot(web, `browser-${value}-${theme}`); await settings(web, false);
     }
   }
   await select(web, 'theme-preference', 'light'); await select(web, 'appearance-style', 'default'); await closeSettings(web);
@@ -159,17 +188,18 @@ async function main() {
   const originalNative = await snapshot(native), originalTray = await snapshot(popup);
   for (const theme of ['light', 'dark']) {
     await settings(native, true); await select(native, 'theme-preference', theme);
-    for (const value of ['catppuccin', 'win95', 'newspaper']) {
+    for (const value of styles) {
       await select(native, 'appearance-style', value);
       await until(async () => (await snapshot(popup)).style === value && (await snapshot(popup)).mode === theme, 'tray shares selected style and mode');
       const main = await snapshot(native), compact = await snapshot(popup);
       assert.equal(compact.background, main.background); assert.equal(compact.font, main.font);
-      if (value !== 'catppuccin') assert.equal(await popup.evaluate('getComputedStyle(document.querySelector(".tray-popover")).borderRadius'), '0px', 'retro tray shell follows the selected geometry');
+      if (['win95', 'newspaper', 'matrix', 'heart_monitor', 'origami'].includes(value)) assert.equal(await popup.evaluate('getComputedStyle(document.querySelector(".tray-popover")).borderRadius'), '0px', 'square tray shell follows the selected geometry');
       assert.equal(mainWindow.window.getBackgroundColor().toLowerCase(), main.background.toLowerCase());
-      await shot(native, `desktop-settings-${value}-${theme}`);
+      if (value === 'world_cup') await shot(native, `desktop-settings-gallery-${theme}`);
       await closeSettings(native);
+      await checkAxisLabels(native, 'desktop ' + value + ' ' + theme);
       if (value === 'win95' && theme === 'light') await checkHeaderIcons(native, 'desktop-win95-light');
-      await shot(native, `desktop-${value}-${theme}`); await shot(popup, `tray-${value}-${theme}`);
+      await scrollTop(native); await shot(native, `desktop-${value}-${theme}`); await shot(popup, `tray-${value}-${theme}`);
       await settings(native, true);
     }
     await closeSettings(native);
@@ -210,6 +240,15 @@ async function main() {
     await wait(150); await shot(native, `desktop-settings-${language}-narrow`);
     assert.equal(await native.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
   }
+  await native.click('document.querySelector("[data-appearance-more]")');
+  assert.equal(await native.evaluate('document.querySelectorAll("input[name=appearance-style]").length'), 17);
+  await select(native, 'appearance-style', 'world_cup');
+  await native.click('document.querySelector("[data-appearance-more]")');
+  assert.equal(await native.evaluate('document.querySelector("input[name=appearance-style][value=world_cup]").checked'), true, 'collapsed gallery keeps current selection');
+  await native.click('document.querySelector("[data-appearance-more]")');
+  await native.evaluate('document.querySelector("input[name=appearance-style][value=world_cup]").focus(); true'); await native.key('ArrowUp');
+  await until(() => native.evaluate('document.querySelector("input[name=appearance-style][value=lepidoptera]").checked'), 'expanded gallery keyboard navigation');
+  await shot(native, 'desktop-gallery-narrow');
   await native.call('Emulation.clearDeviceMetricsOverride'); await closeSettings(native);
   const openReference = async (owner, client) => {
     let child; owner.webContents.once('did-create-window', created => { child = created; });

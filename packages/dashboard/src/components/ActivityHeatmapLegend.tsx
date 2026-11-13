@@ -24,13 +24,11 @@ export function ActivityHeatmapLegend({
       <div data-heatmap-legend className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-muted">
         <div className="inline-flex items-center gap-1">
           <span>{title}</span>
-          <HelpPopover title={title}>
-            <p>{t('usage.heatmap.legendDescription')}</p>
-            <div className="flex items-center gap-2">
+          <HelpPopover title={t('usage.heatmap.legendHelpTitle')}>
+            <div className="flex items-center gap-3">
               <span aria-hidden="true" className="size-3 shrink-0 rounded-[3px] border border-foreground/10" style={{ background: colors[0] }} />
               <span>{t('usage.heatmap.noRecordedUsage')}</span>
             </div>
-            <p className="text-muted">{t('usage.heatmap.legendZeroDescription')}</p>
             {thresholds.t3 > 0 ? (
               <dl className="space-y-2">
                 {boundaries.map((min, index) => {
@@ -48,18 +46,26 @@ export function ActivityHeatmapLegend({
                         ? t('usage.heatmap.rangeAround', { value: lower })
                         : t('usage.heatmap.rangeBetween', { min: lower, max: upper });
                   return (
-                    <div key={level} data-heatmap-band className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                      <dt className="flex items-center gap-2">
+                    <div key={level} data-heatmap-band className="flex items-start gap-3">
+                      <dt className="flex h-5 shrink-0 items-center">
                         <span aria-hidden="true" className="size-3 shrink-0 rounded-[3px] border border-foreground/10" style={{ background: colors[level] }} />
-                        {t('usage.heatmap.level', { level })}
+                        <span className="sr-only">{t('usage.heatmap.level', { level })}</span>
                       </dt>
-                      <dd className="font-mono tabular-nums">{range}</dd>
+                      <dd className="min-w-0 font-mono tabular-nums">{range}</dd>
                     </div>
                   );
                 })}
               </dl>
             ) : <p>{t('usage.heatmap.legendNoActivity')}</p>}
-            <p className="text-muted">{t('usage.heatmap.legendTimezone')}</p>
+            {thresholds.t3 > 0 && <p className="text-muted">{t('usage.heatmap.legendRangeNote')}</p>}
+            <details className="border-t border-separator pt-2 text-muted">
+              <summary className="w-fit cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent">{t('usage.heatmap.legendMethod')}</summary>
+              <div className="mt-2 space-y-2">
+                <p>{t('usage.heatmap.legendDescription')}</p>
+                <p>{t('usage.heatmap.legendZeroDescription')}</p>
+                <p>{t('usage.heatmap.legendTimezone')}</p>
+              </div>
+            </details>
           </HelpPopover>
         </div>
         <div className="inline-flex items-center gap-1.5">

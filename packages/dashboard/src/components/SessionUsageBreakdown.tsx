@@ -1,10 +1,11 @@
-import { useId, useState, type ReactNode } from 'react';
-import { Button, Table } from '@heroui/react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Button, Popover, Table } from '@heroui/react';
+import { useInteractOutside } from 'react-aria';
 import { Link } from '@tanstack/react-router';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SupportedLocale } from 'quotern-i18n';
-import type { buildSessionDetail, DetailModel } from '../lib/session-detail';
+import type { buildSessionDetail, DetailModel, DetailPricingGroup } from '../lib/session-detail';
 import { costLabel } from '../lib/session-labels';
 import { shouldShowUsageTotal, visibleServiceTiers } from '../lib/session-detail-presentation';
 import type { PricingModelSelection } from '../lib/pricing-selection';
@@ -31,17 +32,87 @@ export function DetailValue({ label, value, className = '' }: { label: ReactNode
   return <div className={`flex min-w-0 items-baseline justify-between gap-4 ${className}`}><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words text-right tabular-nums text-foreground">{value}</dd></div>;
 }
 
+const pricingItemKeys = { input: 'usage.detail.uncachedInput', output: 'usage.detail.outputTotal', cache_read: 'usage.detail.cacheRead', cache_write: 'usage.distribution.cacheWrite' } as const;
+
+function PricingRate({ group, format }: { group: DetailPricingGroup; format: DetailFormat }) {
+  const { t, i18n } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null), content = useRef<HTMLDivElement>(null);
+  useInteractOutside({ ref: content, isDisabled: !open, onInteractOutside: event => {
+    if (!trigger.current || !event.composedPath().includes(trigger.current)) setOpen(false);
+  } });
+  useEffect(() => {
+    if (!open) return;
+    const document = trigger.current?.ownerDocument;
+    const onScroll = (event: Event) => {
+      if (trigger.current && event.target instanceof Node && event.target.contains(trigger.current)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      // The outer Modal also owns Escape/focus restoration. Close only this
+      // non-modal layer and restore its exact trigger after that layer unmounts.
+      event.preventDefault(); event.stopPropagation();
+      setOpen(false);
+      requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
+    };
+    document?.addEventListener('scroll', onScroll, true);
+    document?.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document?.removeEventListener('scroll', onScroll, true);
+      document?.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open]);
+  const items = [...group.items].sort((a, b) => (a.rateUsdPerMillion ?? Infinity) - (b.rateUsdPerMillion ?? Infinity));
+  const rates = [...new Set(items.map(item => item.rateUsdPerMillion))];
+  const price = (value: number | null) => formatPricingDisplayRate(value, 'USD', null, i18n.resolvedLanguage).text;
+  const title = t('usage.detail.rateDetails', { item: t(pricingItemKeys[group.category]) });
+  const conditions = (item: DetailPricingGroup['items'][number]) => {
+    const condition = item.conditions, parts: string[] = [];
+    if (condition?.serviceTier) parts.push(condition.serviceTier === 'fast' ? 'Fast' : 'Flex');
+    if (condition?.minInputTokens !== undefined) parts.push(t('usage.detail.longContext'), t(condition.maxInputTokens === undefined ? 'usage.detail.inputOver' : 'usage.detail.inputBetween', {
+      min: format.tokens(condition.minInputTokens), max: format.tokens(condition.maxInputTokens),
+    }));
+    else if (condition?.maxInputTokens !== undefined) parts.push(t('usage.detail.normalContext'), t('usage.detail.inputUpTo', { max: format.tokens(condition.maxInputTokens) }));
+    if (!parts.length) parts.push(t(condition ? 'usage.detail.baseRate' : 'usage.detail.conditionsUnavailable'));
+    if (item.category === 'cache_write_5m' || item.category === 'cache_write_1h') parts.push(t(item.category === 'cache_write_5m' ? 'usage.detail.cacheWrite5m' : 'usage.detail.cacheWrite1h'));
+    return parts.join(' · ');
+  };
+  if (rates.every(rate => rate === null) && items.every(item => !item.conditions)) return <span>—</span>;
+  return <Popover isOpen={open} onOpenChange={setOpen}>
+    <Button ref={trigger} variant="ghost" size="sm" aria-label={title} className="h-auto min-h-7 max-w-full gap-1 rounded px-1 py-1 text-xs text-accent tabular-nums" data-pricing-rate={group.category}>
+      <span>{rates.length > 2 ? t('usage.detail.rateCount', { count: items.length }) : rates.map(price).join(' / ')}</span><ChevronDown aria-hidden className="size-3 shrink-0" />
+    </Button>
+    <Popover.Content ref={content} isNonModal shouldSkipAnimation maxHeight={448} placement="bottom end" className="flex w-[36rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface">
+      <Popover.Dialog className="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-3 text-xs outline-none sm:p-4" data-pricing-tiers={group.category}>
+        <Popover.Heading className="font-semibold">{title}</Popover.Heading>
+        <table className="w-full table-fixed text-xs">
+          <thead><tr className="border-b border-separator text-left text-muted">
+            <th scope="col" className="w-[40%] pb-2 pr-2 font-normal">{t('usage.detail.rateConditions')}</th>
+            <th scope="col" className="w-[20%] pb-2 text-right font-normal">{t('usage.detail.quantity')}</th>
+            <th scope="col" className="w-[20%] pb-2 pl-2 text-right font-normal">{t('usage.detail.unitPrice')}</th>
+            <th scope="col" className="w-[20%] pb-2 pl-2 text-right font-normal">{t('usage.detail.itemCost')}</th>
+          </tr></thead>
+          <tbody>{items.map((item, index) => <tr key={index} className="border-b border-separator/50 last:border-0">
+            <th scope="row" className="break-words py-2 pr-2 text-left font-normal">{conditions(item)}</th>
+            <td className="py-2 text-right tabular-nums">{format.tokens(item.tokens)}</td>
+            <td className="break-words py-2 pl-2 text-right tabular-nums">{price(item.rateUsdPerMillion)}</td>
+            <td className="py-2 pl-2 text-right tabular-nums">{item.costUsd === null && item.knownCostUsd === 0 ? '—' : format.money(item.costUsd, item.knownCostUsd)}</td>
+          </tr>)}</tbody>
+        </table>
+        {items.some(item => item.conditions?.minInputTokens !== undefined || item.conditions?.maxInputTokens !== undefined) && <p className="text-muted">{t('usage.detail.contextRateNote')}</p>}
+      </Popover.Dialog>
+    </Popover.Content>
+  </Popover>;
+}
+
 function ModelPricing({ model, format }: { model: DetailModel; format: DetailFormat }) {
   const { t, i18n } = useTranslation();
-  const rateKeys = { input: 'usage.detail.uncachedInput', output: 'usage.detail.outputTotal', cache_read: 'usage.detail.cacheRead', cache_write: 'usage.distribution.cacheWrite', cache_write_5m: 'usage.detail.cacheWrite5m', cache_write_1h: 'usage.detail.cacheWrite1h' } as const;
-  const order = { input: 0, cache_read: 1, cache_write: 2, cache_write_5m: 3, cache_write_1h: 4, output: 5 };
-  const items = [...model.costBreakdown].sort((a, b) => order[a.category] - order[b.category] || (a.rateUsdPerMillion ?? Infinity) - (b.rateUsdPerMillion ?? Infinity));
-  const family = (category: keyof typeof order) => category.startsWith('cache_write') ? 'cache_write' : category;
-  const visibleItems = items.filter(item => item.tokens !== 0 || !items.some(other => other !== item && family(other.category) === family(item.category) && other.tokens !== 0));
+  const items = model.costBreakdown;
+  const hasLongContext = items.some(item => (item.tokens ?? 0) > 0 && item.conditions?.minInputTokens !== undefined);
   const incomplete = items.some(item => item.costUsd === null);
   const unpricedTokens = model.pricingEvidence.reduce((sum, price) => sum + price.unpricedTokens, 0);
   return <div className="space-y-2 px-3 py-3 sm:px-5" data-model-pricing>
-    <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{t('usage.detail.usagePricing')}</span><span className="text-muted">{costLabel(model.costKind, (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale)}</span></div>
+    <div className="flex flex-wrap items-baseline justify-between gap-3"><span className="font-medium">{t('usage.detail.usagePricing')}</span><span className="flex flex-wrap items-center gap-2 text-muted">{hasLongContext && <span className="inline-flex items-center gap-1">{t('usage.detail.includesLongContext')}<HelpPopover title={t('usage.detail.longContext')}><p>{t('usage.detail.contextRateNote')}</p></HelpPopover></span>}{costLabel(model.costKind, (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale)}</span></div>
     <table className="w-full text-xs">
       <caption className="sr-only">{t('usage.detail.modelPricing', { model: model.model })}</caption>
       <thead><tr className="border-b border-separator text-muted">
@@ -50,11 +121,11 @@ function ModelPricing({ model, format }: { model: DetailModel; format: DetailFor
         <th scope="col" className="px-3 py-2 text-right font-normal">{t('usage.detail.unitPrice')}</th>
         <th scope="col" className="py-2 text-right font-normal">{t('usage.detail.itemCost')}</th>
       </tr></thead>
-      <tbody>{visibleItems.map((item, index) => <tr key={index} className="border-b border-separator/50 last:border-0">
-        <th scope="row" className="py-2 text-left font-normal">{t(rateKeys[item.category])}</th>
-        <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{format.tokens(item.tokens)}</td>
-        <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatPricingDisplayRate(item.rateUsdPerMillion, 'USD', null, i18n.resolvedLanguage).text}</td>
-        <td className="whitespace-nowrap py-2 text-right tabular-nums">{item.costUsd === null && item.knownCostUsd === 0 ? '—' : format.money(item.costUsd, item.knownCostUsd)}</td>
+      <tbody>{model.pricingGroups.map(group => <tr key={group.category} className="border-b border-separator/50 last:border-0" data-pricing-item={group.category}>
+        <th scope="row" className="py-2 text-left font-normal">{t(pricingItemKeys[group.category])}</th>
+        <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{format.tokens(group.tokens)}</td>
+        <td className="px-3 py-1 text-right tabular-nums"><PricingRate group={group} format={format} /></td>
+        <td className="whitespace-nowrap py-2 text-right tabular-nums">{group.costUsd === null && group.knownCostUsd === 0 ? '—' : format.money(group.costUsd, group.knownCostUsd)}</td>
       </tr>)}</tbody>
     </table>
     {incomplete && <p className="text-muted">{t(items.some(item => item.knownCostUsd > 0) ? 'usage.detail.itemCostsPartial' : 'usage.detail.itemCostsUnavailable')}</p>}

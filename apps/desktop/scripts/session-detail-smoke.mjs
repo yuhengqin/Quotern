@@ -62,6 +62,13 @@ const partialPriced = { ...priced, sessionId: 'fixture-partial-priced', sessionT
   { category: 'cache_write_5m', tokens: 200_000, rateUsdPerMillion: 1.25, costUsd: 0.25, knownCostUsd: 0.25 },
   { category: 'cache_write_1h', tokens: 100_000, rateUsdPerMillion: 2, costUsd: null, knownCostUsd: 0.1 },
 ] }] };
+const tieredModel = { ...model(723_000, 0.6415), model: 'gpt-6.1-sol', requests: 3, input_tokens: 30_000, cached_input_tokens: 660_000,
+  cache_creation_input_tokens: 3_000, output_tokens: 18_000, reasoning_output_tokens: 12_000, serviceTiers: ['standard', 'fast', 'flex'], costBreakdown: [
+    ...[['input', 10_000, 4, 0.04], ['cache_read', 280_000, 0.2, 0.056], ['cache_write', 1_000, 5, 0.005], ['output', 10_000, 15, 0.15]].map(([category, tokens, rateUsdPerMillion, costUsd]) => ({ category, tokens, rateUsdPerMillion, costUsd, knownCostUsd: costUsd, conditions: { minInputTokens: 272_000 } })),
+    ...[['input', 10_000, 4, 0.04], ['cache_read', 100_000, 0.2, 0.02], ['cache_write', 1_000, 5, 0.005], ['output', 10_000, 20, 0.2]].map(([category, tokens, rateUsdPerMillion, costUsd]) => ({ category, tokens, rateUsdPerMillion, costUsd, knownCostUsd: costUsd, conditions: { serviceTier: 'fast', maxInputTokens: 272_000 } })),
+    ...[['input', 10_000, 2, 0.02], ['cache_read', 280_000, 0.1, 0.028], ['cache_write', 1_000, 2.5, 0.0025], ['output', 10_000, 7.5, 0.075]].map(([category, tokens, rateUsdPerMillion, costUsd]) => ({ category, tokens, rateUsdPerMillion, costUsd, knownCostUsd: costUsd, conditions: { serviceTier: 'flex', minInputTokens: 272_000 } })),
+  ] };
+const tiered = { ...priced, sessionId: 'fixture-tiered', sessionTitle: 'Pricing tiers from applied rules', tokens: 723_000, costUsd: 0.6415, models: [tieredModel] };
 const largeActivity = { ...root, sessionId: 'fixture-large-activity', sessionTitle: 'Large activity counts and long labels', insights: { ...root.insights, signals: { ...root.insights.signals, toolCalls: Number.MAX_SAFE_INTEGER, editTurns: 100_000_000, retryTurns: 0, errorCount: 0, compactionCount: 1 } } };
 let locale = 'zh-CN';
 let directoryFailure = false;
@@ -99,7 +106,7 @@ const api = async (route, init) => {
     if (fallback && detailDelay) await wait(detailDelay);
     if (fallback && detailFailure) return { status: 500, body: { success: false, message: 'FIXTURE_DETAIL_FAILURE', data: null } };
     const id = url.searchParams.get('sessionId');
-    const row = [empty, unassigned, unclassified, child, emptyKnown, emptySubtotal, emptyZero, zeroPerformance, partialPerformance, multi, legacy, multiplePrices, unknownModel, largeActivity, priced, recorded, partialPriced].find(row => row.sessionId === id) ?? root;
+    const row = [empty, unassigned, unclassified, child, emptyKnown, emptySubtotal, emptyZero, zeroPerformance, partialPerformance, multi, legacy, multiplePrices, unknownModel, largeActivity, priced, recorded, partialPriced, tiered].find(row => row.sessionId === id) ?? root;
     // Model the legacy runtime: any exact identity request uses collected history,
     // regardless of newer UI-only parameters. Bounded source requests stay selected.
     return { status: 200, body: { success: true, data: { sessions: id ? [row] : detailMissing ? [root, fork] : [root, child, fork], totalTokens: 21_100_000, attributedTokens: 21_100_000, otherTokens: 0, tokenTotalMismatch: false, missingSources: [], observedAt: '2026-10-25T05:40:00Z', billing: [], range: { fromDate: '2026-10-01', toDate: '2026-10-25', kind: id ? 'collected' : 'selected' } } } };
@@ -139,6 +146,52 @@ async function pricingHeadingsVisible(client) {
     }));
   })()`), true, 'all header text, including wrapped English labels, stays above the first price row');
 }
+async function checkPricingTiers(client, label) {
+  await client.evaluate('localStorage.setItem("quotern-token-unit-mode", "international"); true');
+  await client.click(modelToggle);
+  assert.deepEqual(await client.evaluate(`[...${dialog}.querySelectorAll('[data-pricing-item]')].map(row=>row.dataset.pricingItem)`), ['input','cache_read','cache_write','output']);
+  const trigger = `${dialog}.querySelector('[data-pricing-rate="input"]')`;
+  await client.evaluate(`(${trigger}).scrollIntoView({block:'center'}); (${trigger}).focus(); true`);
+  await client.screenshot(path.join(output, `${label}-pricing-summary.png`));
+  await client.key('Enter');
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers="input"]'))`), 'keyboard opens rate tiers');
+  const rows = await client.evaluate(`[...document.querySelector('[data-pricing-tiers="input"] tbody').rows].map(row=>[...row.cells].map(cell=>cell.innerText))`);
+  assert.equal(rows.length, 3, 'equal unit prices with different applied conditions stay separate');
+  assert.equal(rows.filter(row=>row[2]==='$4').length, 2);
+  assert.ok(rows.some(row=>row[0].includes('Fast') && row[0].includes('≤ 272K')));
+  assert.ok(rows.some(row=>row[0].includes('Flex') && row[0].includes('> 272K')));
+  await client.screenshot(path.join(output, `${label}-pricing-tiers.png`));
+  await client.key('Escape');
+  await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]') && document.activeElement?.dataset.pricingRate==='input' && Boolean(${dialog})`), 'rate Escape restores trigger without closing session');
+  await client.click(trigger);
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'mouse opens rate tiers');
+  await client.click(`${dialog}.querySelector('.modal__header')`);
+  await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]')`), 'outside click closes rate tiers');
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
+  await client.click(trigger);
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'narrow rate tiers');
+  assert.equal(await client.evaluate(`(() => {const d=document.querySelector('[data-pricing-tiers]'),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&d.scrollWidth<=d.clientWidth+1;})()`), true, 'tier contents fit the narrow viewport');
+  await client.screenshot(path.join(output, `${label}-pricing-tiers-narrow.png`));
+  await client.key('Escape');
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.evaluate(`(${trigger}).scrollIntoView({block:'center'}); (${trigger}).focus(); true`);
+  await client.key(' ');
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'Space opens rate tiers');
+  await client.evaluate(`(() => { const body=${dialog}.querySelector('.modal__body'); body.scrollTop=body.scrollTop>0?0:40; })()`);
+  await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]')`), 'ancestor scrolling dismisses rate tiers');
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 400, deviceScaleFactor: 1, mobile: false });
+  await client.click(trigger);
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'short viewport rate tiers');
+  const point = await client.evaluate(`(() => { const p=document.querySelector('[data-pricing-tiers]'),r=p.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,scrollable:p.scrollHeight>p.clientHeight+1}; })()`);
+  assert.equal(point.scrollable, true, 'short viewport makes the tier panel internally scrollable');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', x: point.x, y: point.y, deltaX: 0, deltaY: 120 });
+  await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]')?.scrollTop>0)`), 'internal wheel scroll keeps rate tiers open');
+  await client.screenshot(path.join(output, `${label}-pricing-tiers-short.png`));
+  await client.key('Escape');
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  checks.push(`${label}-pricing-groups-applied-conditions-equal-rates-keyboard-pointer-and-narrow`);
+  checks.push(`${label}-pricing-space-ancestor-dismiss-and-internal-wheel-scroll`);
+}
 async function main() {
   await mkdir(output, { recursive: true });
   const windowFixture = path.join(output, 'window-main.mjs');
@@ -149,8 +202,10 @@ async function main() {
   ipcMain.handle('auto-update:get-state', () => ({ status: 'unsupported', currentVersion: 'fixture' }));
   ipcMain.handle('dashboard-range:get', () => 'last-7-days');
   ipcMain.handle('dashboard-range:set', (_event, value) => value);
-  ipcMain.handle('dsh-pet:navigation-get', () => navigation);
-  ipcMain.handle('dsh-pet:navigation-ack', (_event, id) => { if (navigation?.navigationId === id) navigation = null; });
+  for (const prefix of ['notifications', 'dsh-pet']) {
+    ipcMain.handle(`${prefix}:navigation-get`, () => navigation);
+    ipcMain.handle(`${prefix}:navigation-ack`, (_event, id) => { if (navigation?.navigationId === id) navigation = null; });
+  }
   ipcMain.handle('tud:api-request', (_event, route, init) => api(route, init));
   const preloadPath = path.join(desktop, 'out/preload/index.js');
   const window = new BrowserWindow({ width: 1080, height: 900, show: true, webPreferences: { preload: preloadPath, contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
@@ -337,6 +392,7 @@ async function main() {
   await until(() => client.evaluate(`!${dialog}`), 'close before repeated notification');
   navigation = { navigationId: 'fixture-notice-2', source: 'codex', sessionId: 'fixture-root' };
   window.webContents.send('dsh-pet:navigation');
+  window.webContents.send('notifications:navigation');
   await until(() => client.evaluate(`Boolean(${dialog})`), 'repeated notification');
   await wait(250);
   checks.push('repeat-notification-reopens-dialog');
@@ -462,6 +518,9 @@ async function main() {
   assert.equal(await client.evaluate(`${dialog}.getAttribute('aria-label')`), title, 'late response cannot reopen a child after back');
   detailDelay = 0;
   checks.push('related-failure-retry-missing-back-and-late-response-guard');
+  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/sessions?sessionSource=codex&sessionId=fixture-tiered&sessionFocus=pricing-tiers' });
+  await until(async () => (await text(client)).includes(tiered.sessionTitle), 'desktop applied pricing tiers');
+  await checkPricingTiers(client, 'desktop');
   window.destroy();
 
   const dashboard = path.join(workspace, 'packages/dashboard/dist');
@@ -660,7 +719,11 @@ async function main() {
   assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length`), 1, 'identical model names still combine');
   assert.equal(await browser.evaluate(`(${modelToggle}).getAttribute('aria-expanded')`), 'false', 'multiple pricing records are collapsed within their model');
   await browser.click(modelToggle);
-  assert.equal(await browser.evaluate(`(() => { const rows=[...${dialog}.querySelector('[data-model-pricing] tbody').rows].filter(row=>row.cells[0].textContent==='Uncached input'); return rows.length===2 && rows[0].cells[2].textContent==='$2' && rows[1].cells[2].textContent==='$3' && rows.every(row=>row.cells[3].textContent==='—'); })()`), true, 'old runtime reference rates retain their quantities without claiming item costs');
+  assert.equal(await browser.evaluate(`(() => { const rows=[...${dialog}.querySelector('[data-model-pricing] tbody').rows].filter(row=>row.cells[0].textContent==='Uncached input'); return rows.length===1 && rows[0].cells[2].textContent.includes('$2 / $3') && rows[0].cells[3].textContent==='—'; })()`), true, 'old runtime reference rates merge categories without claiming item costs');
+  await browser.click(`${dialog}.querySelector('[data-pricing-rate="input"]')`);
+  await until(() => browser.evaluate(`Boolean(document.querySelector('[data-pricing-tiers="input"]'))`), 'legacy rate details');
+  assert.equal(await browser.evaluate(`document.querySelector('[data-pricing-tiers]').innerText.includes('Conditions not recorded')`), true, 'legacy prices do not invent context or speed conditions');
+  await browser.key('Escape');
   assert.equal(await browser.evaluate(`document.body.innerText.includes('fixture-overlay') || document.body.innerText.includes('Matching method')`), false);
   assert.equal(await browser.evaluate(`document.querySelectorAll('[role="dialog"]').length`), 1, 'calculation details use the main body rather than another popover');
   await browser.screenshot(path.join(output, 'browser-model-multiple-rates.png'));
@@ -688,7 +751,11 @@ async function main() {
   await browser.evaluate('localStorage.setItem("quotern.locale.preference", "en"); true');
   await openFixture(partialPriced);
   await browser.click(modelToggle);
-  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('[data-model-pricing] tbody').rows].filter(row=>row.cells[0].textContent.startsWith('Cache write (')).map(row=>[...row.cells].map(cell=>cell.innerText))`), [['Cache write (5 min)','200K','$1.25','$0.25'], ['Cache write (1 hour)','100K','$2','≥ $0.1']]);
+  assert.deepEqual(await browser.evaluate(`[...${dialog}.querySelector('[data-model-pricing] tbody').rows].filter(row=>row.cells[0].textContent==='Cache writes').map(row=>[...row.cells].map(cell=>cell.innerText))`), [['Cache writes','300K','$1.25 / $2','≥ $0.35']]);
+  await browser.click(`${dialog}.querySelector('[data-pricing-rate="cache_write"]')`);
+  await until(() => browser.evaluate(`Boolean(document.querySelector('[data-pricing-tiers="cache_write"]'))`), 'cache lifetime tiers');
+  assert.equal(await browser.evaluate(`document.querySelector('[data-pricing-tiers]').innerText.includes('Cache write (5 min)') && document.querySelector('[data-pricing-tiers]').innerText.includes('Cache write (1 hour)')`), true);
+  await browser.key('Escape');
   assert.ok((await text(browser)).includes('Some costs cannot be broken down'));
   checks.push('cache-lifetimes-partial-item-costs-and-saved-token-unit-preferences');
   await openFixture(recorded);
@@ -696,6 +763,23 @@ async function main() {
   assert.equal(await browser.evaluate(`[...${dialog}.querySelector('[data-model-pricing] tbody').rows].every(row=>row.cells[3].textContent==='—')`), true);
   assert.ok((await text(browser)).includes('$7'));
   checks.push('item-quantity-rate-cost-chain-and-reported-total-remain-distinct');
+  await openFixture(tiered);
+  await checkPricingTiers(browser, 'browser');
+  for (const [language, longLabel] of [['zh-CN','长上下文'], ['ja','長いコンテキスト'], ['ko','긴 컨텍스트'], ['en','Long context']]) {
+    await browser.evaluate(`localStorage.setItem('quotern.locale.preference',${JSON.stringify(language)}); localStorage.setItem('quotern-token-unit-mode','international'); true`);
+    await openFixture(tiered);
+    await browser.click(modelToggle);
+    await browser.click(`${dialog}.querySelector('[data-pricing-rate="input"]')`);
+    await until(() => browser.evaluate(`document.querySelector('[data-pricing-tiers]')?.innerText.includes(${JSON.stringify(longLabel)})`), 'translated applied conditions');
+    if (language === 'zh-CN') {
+      await browser.evaluate(`localStorage.setItem('quotern-token-unit-mode','localized'); window.dispatchEvent(new StorageEvent('storage',{key:'quotern-token-unit-mode',newValue:'localized'})); true`);
+      await until(() => browser.evaluate(`document.querySelector('[data-pricing-tiers]')?.innerText.includes('27.2万')`), 'open tier view updates token units');
+      assert.equal(await browser.evaluate(`[...document.querySelector('[data-pricing-tiers] tbody').rows].filter(row=>row.cells[2].innerText==='$4').length`), 2, 'rate units stay fixed while request thresholds follow display preferences');
+      await browser.screenshot(path.join(output, 'browser-pricing-tiers-zh-localized.png'));
+    }
+    await browser.key('Escape');
+  }
+  checks.push('pricing-conditions-four-locales-and-live-token-unit-preference');
   await openFixture(unknownModel);
   assert.equal(await browser.evaluate(`${dialog}.querySelectorAll('table tbody tr').length>=1`), true, 'a recorded unknown model is still a model row');
   assert.equal(await browser.evaluate(`${dialog}.querySelector('table tbody tr').cells[0].innerText`), 'unknown');

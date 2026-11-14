@@ -121,3 +121,37 @@ test('model expansion aggregates matching rates while preserving unknown old-run
   assert.ok(Math.abs(detail.usage.costUsd! - 1.6) < 1e-12, 'display details do not reprice source totals');
   assert.equal(JSON.stringify(sample), before);
 });
+
+test('equal rates preserve different rule conditions across related sessions', () => {
+  const sample = row();
+  sample.models![0].costBreakdown = [{ category: 'input', tokens: 70, rateUsdPerMillion: 4, costUsd: 0.00028, knownCostUsd: 0.00028, conditions: { minInputTokens: 272_000 } } as any];
+  sample.insights!.relatedUsage![0].models![0].costBreakdown = [{ category: 'input', tokens: 10, rateUsdPerMillion: 4, costUsd: 0.00004, knownCostUsd: 0.00004, conditions: { serviceTier: 'fast', maxInputTokens: 272_000 } } as any];
+  sample.insights!.relatedUsage![1].models = [];
+  const detail = buildSessionDetail(sample, 'thread');
+  const input = detail.usage.models[0].costBreakdown.filter(item => item.category === 'input');
+  assert.equal(input.length, 2);
+  assert.deepEqual(input.map(item => [(item as any).conditions, item.tokens]), [[{ minInputTokens: 272_000 }, 70], [{ serviceTier: 'fast', maxInputTokens: 272_000 }, 10]]);
+});
+
+test('pricing presentation merges categories but keeps all tier and cache lifetime details available', () => {
+  const sample = row(), first = sample.models![0];
+  first.costBreakdown = [
+    { category: 'input', tokens: 60, rateUsdPerMillion: 2, costUsd: 0.00012, knownCostUsd: 0.00012, conditions: { maxInputTokens: 272_000 } },
+    { category: 'input', tokens: 10, rateUsdPerMillion: 4, costUsd: 0.00004, knownCostUsd: 0.00004, conditions: { minInputTokens: 272_000 } },
+    { category: 'cache_read', tokens: 10, rateUsdPerMillion: 0.1, costUsd: 0.000001, knownCostUsd: 0.000001 },
+    { category: 'cache_write_5m', tokens: 3, rateUsdPerMillion: 1.25, costUsd: 0.00000375, knownCostUsd: 0.00000375 },
+    { category: 'cache_write_1h', tokens: 2, rateUsdPerMillion: 2, costUsd: 0.000004, knownCostUsd: 0.000004 },
+    { category: 'cache_write', tokens: 0, rateUsdPerMillion: 2.5, costUsd: 0, knownCostUsd: 0 },
+    { category: 'output', tokens: 20, rateUsdPerMillion: 10, costUsd: null, knownCostUsd: 0.0001 },
+  ] as any;
+  const before = structuredClone(sample);
+  const groups = (buildSessionDetail(sample, 'own').usage.models[0] as any).pricingGroups;
+  assert.ok(Array.isArray(groups), 'the model provides one presentation group per token category');
+  assert.deepEqual(groups.map((group: any) => [group.category, group.tokens]), [['input', 70], ['cache_read', 10], ['cache_write', 5], ['output', 20]]);
+  assert.equal(groups[0].costUsd, 0.00016);
+  assert.equal(groups[0].items.length, 2);
+  assert.deepEqual(groups[2].items.map((item: any) => item.category), ['cache_write_5m', 'cache_write_1h']);
+  assert.equal(groups[3].costUsd, null);
+  assert.equal(groups[3].knownCostUsd, 0.0001);
+  assert.deepEqual(sample, before);
+});

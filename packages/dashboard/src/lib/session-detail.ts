@@ -6,7 +6,12 @@ type Insight = NonNullable<SessionActivity['insights']>;
 type RelatedUsage = NonNullable<Insight['relatedUsage']>[number];
 type ModelUsage = NonNullable<SessionActivity['models']>[number];
 export type DetailMember = Omit<RelatedUsage, 'relationKind'> & { relationKind: 'own' | RelatedUsage['relationKind'] };
-export type DetailModel = ModelUsage & { pricingEvidence: NonNullable<ModelUsage['pricing']>[]; costBreakdown: SessionModelCostItem[] };
+export type DetailPricingGroup = {
+  category: 'input' | 'cache_read' | 'cache_write' | 'output';
+  tokens: number | null; costUsd: number | null; knownCostUsd: number;
+  items: SessionModelCostItem[];
+};
+export type DetailModel = ModelUsage & { pricingEvidence: NonNullable<ModelUsage['pricing']>[]; costBreakdown: SessionModelCostItem[]; pricingGroups: DetailPricingGroup[] };
 export const detailTokenFields = ['input_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'output_tokens', 'reasoning_output_tokens'] as const;
 type TokenParts = Record<typeof detailTokenFields[number], number | null>;
 type CostKind = SessionActivity['costKind'];
@@ -34,6 +39,22 @@ function modelCostItems(row: ModelUsage): SessionModelCostItem[] {
   return ([['input', row.input_tokens], ['cache_read', row.cached_input_tokens], ['cache_write', row.cache_creation_input_tokens], ['output', output]] as const).map(([category, tokens]) => ({ category, tokens, rateUsdPerMillion: row.pricing?.rates?.[category] ?? null, costUsd: null, knownCostUsd: 0 }));
 }
 
+function pricingGroups(items: SessionModelCostItem[], models: ModelUsage[]): DetailPricingGroup[] {
+  return (['input', 'cache_read', 'cache_write', 'output'] as const).map(category => {
+    const members = items.filter(item => (item.category.startsWith('cache_write') ? 'cache_write' : item.category) === category);
+    if (!members.length) {
+      const tokens = sum(models.map(model => category === 'output'
+        ? sum([model.output_tokens, model.reasoning_output_tokens])
+        : model[category === 'input' ? 'input_tokens' : category === 'cache_read' ? 'cached_input_tokens' : 'cache_creation_input_tokens']));
+      members.push({ category, tokens, rateUsdPerMillion: null, costUsd: tokens === 0 ? 0 : null, knownCostUsd: 0 });
+    }
+    return { category, tokens: members.length ? sum(members.map(item => item.tokens)) : null,
+      costUsd: members.length ? sum(members.map(item => item.costUsd)) : null,
+      knownCostUsd: members.reduce((total, item) => total + item.knownCostUsd, 0),
+      items: members.some(item => item.tokens !== 0) ? members.filter(item => item.tokens !== 0) : members };
+  });
+}
+
 function summarizeModels(members: DetailMember[]): DetailModel[] {
   const byModel = new Map<string, ModelUsage[]>();
   for (const member of members) for (const model of member.models ?? []) {
@@ -50,7 +71,8 @@ function summarizeModels(members: DetailMember[]): DetailModel[] {
     }
     const costItems = new Map<string, SessionModelCostItem>();
     for (const item of rows.flatMap(modelCostItems)) {
-      const key = JSON.stringify([item.category, item.rateUsdPerMillion]), previous = costItems.get(key);
+      const key = JSON.stringify([item.category, item.rateUsdPerMillion, !!item.conditions,
+        item.conditions?.serviceTier, item.conditions?.minInputTokens, item.conditions?.maxInputTokens]), previous = costItems.get(key);
       costItems.set(key, previous ? { ...item, tokens: sum([previous.tokens, item.tokens]), costUsd: sum([previous.costUsd, item.costUsd]), knownCostUsd: previous.knownCostUsd + item.knownCostUsd } : { ...item });
     }
     return {
@@ -60,6 +82,7 @@ function summarizeModels(members: DetailMember[]): DetailModel[] {
       costKind: costKind(rows.map(row => row.costKind)), serviceTiers: [...new Set(rows.flatMap(row => row.serviceTiers))],
       pricingEvidence: [...pricing.values()],
       costBreakdown: [...costItems.values()],
+      pricingGroups: pricingGroups([...costItems.values()], rows),
     };
   }).sort((a, b) => (b.costUsd ?? b.knownCostUsd) - (a.costUsd ?? a.knownCostUsd) || b.tokens - a.tokens || a.model.localeCompare(b.model));
 }

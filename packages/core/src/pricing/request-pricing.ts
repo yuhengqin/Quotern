@@ -5,11 +5,18 @@ export const REQUEST_PRICING_REVISION = '2026-11-14-codex-long-context';
 
 export const TOKEN_FIELDS = ['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'reasoning_output_tokens'] as const;
 export type TokenParts = Record<typeof TOKEN_FIELDS[number], number>;
+/** Conditions of the rules that supplied this component's effective rate. Absent on legacy estimates. */
+export interface TokenPricingConditions {
+  serviceTier?: 'fast' | 'flex';
+  minInputTokens?: number;
+  maxInputTokens?: number;
+}
 export interface TokenCostItem {
   category: 'input' | 'output' | 'cache_read' | 'cache_write' | 'cache_write_1h' | 'cache_write_5m';
   tokens: number;
   rateUsdPerMillion: number | null;
   costUsd: number | null;
+  conditions?: TokenPricingConditions;
 }
 
 export function tokenCostItem(category: TokenCostItem['category'], tokens: number, rate: number | undefined): TokenCostItem {
@@ -92,17 +99,38 @@ export function builtinRequestRules(model: string, source: string, base: ModelPr
 }
 
 export function priceRequest(fact: RequestPricingFact, base: ModelPricingRates, rules: RequestPricingRule[]): { cost: number; unpricedTokens: number; ruleReferences: string[]; items: TokenCostItem[] } {
-  const matched = rules.filter(rule => (!rule.serviceTier || rule.serviceTier === fact.serviceTier)
+  const eligible = rules.filter(rule => (!rule.serviceTier || rule.serviceTier === fact.serviceTier)
     && (!rule.effectiveFrom || Date.parse(fact.timestamp) >= Date.parse(rule.effectiveFrom))
-    && (!rule.effectiveTo || Date.parse(fact.timestamp) < Date.parse(rule.effectiveTo))
-    && (rule.minInputTokens === undefined || fact.requestInputTokens !== undefined && fact.requestInputTokens > rule.minInputTokens));
+    && (!rule.effectiveTo || Date.parse(fact.timestamp) < Date.parse(rule.effectiveTo)));
+  const matched = eligible.filter(rule => rule.minInputTokens === undefined || fact.requestInputTokens !== undefined && fact.requestInputTokens > rule.minInputTokens);
   // Base/TTL first, whole-request context second, explicit service tier last.
   matched.sort((a, b) => Number(!!a.serviceTier) - Number(!!b.serviceTier) || (a.minInputTokens ?? -1) - (b.minInputTokens ?? -1));
   const rates = Object.assign({}, base, ...matched.map(rule => rule.rates));
+  type RateKey = keyof RequestPricingRule['rates'];
+  const applied = new Map<RateKey, RequestPricingRule>();
+  for (const rule of matched) for (const key of Object.keys(rule.rates) as RateKey[]) applied.set(key, rule);
+  const conditionsFor = (key: RateKey): TokenPricingConditions => {
+    const rule = applied.get(key), conditions: TokenPricingConditions = {};
+    if (rule?.serviceTier === 'fast' || rule?.serviceTier === 'flex') conditions.serviceTier = rule.serviceTier;
+    if (rule?.minInputTokens !== undefined) conditions.minInputTokens = rule.minInputTokens;
+    if (fact.requestInputTokens !== undefined) {
+      // Only a future rule that can supersede this field establishes an upper bound.
+      const limits = eligible.filter(next => next.rates[key] !== undefined && next.minInputTokens !== undefined
+        && next.minInputTokens >= fact.requestInputTokens!
+        && Number(!!next.serviceTier) >= Number(!!rule?.serviceTier)).map(next => next.minInputTokens!);
+      if (limits.length) conditions.maxInputTokens = Math.min(...limits);
+    }
+    return conditions;
+  };
   const oneHour = Math.min(fact.cache_creation_input_tokens, fact.cacheWrite1hTokens ?? 0);
   const fiveMinute = Math.min(fact.cache_creation_input_tokens - oneHour, fact.cacheWrite5mTokens ?? 0);
   const fields: Array<[TokenCostItem['category'], number, number | undefined]> = [['input', fact.input_tokens, rates.input], ['output', fact.output_tokens + fact.reasoning_output_tokens, rates.output], ['cache_read', fact.cached_input_tokens, rates.cache_read], ['cache_write', fact.cache_creation_input_tokens - oneHour - fiveMinute, rates.cache_write], ['cache_write_1h', oneHour, rates.cache_write_1h ?? rates.cache_write], ['cache_write_5m', fiveMinute, rates.cache_write_5m ?? rates.cache_write]];
   return { cost: fields.reduce((sum, [, n, rate]) => sum + n * (rate ?? 0), 0) / 1e6,
     unpricedTokens: fields.reduce((sum, [, n, rate]) => sum + (rate === undefined ? n : 0), 0), ruleReferences: [...new Set(matched.map(rule => rule.reference))],
-    items: fields.filter(([category, tokens]) => tokens > 0 || !category.startsWith('cache_write_')).map(([category, tokens, rate]) => tokenCostItem(category, tokens, rate)) };
+    items: fields.filter(([category, tokens]) => tokens > 0 || !category.startsWith('cache_write_')).map(([category, tokens, rate]) => {
+      const key: RateKey = category === 'input' || category === 'output' ? category
+        : category === 'cache_read' ? 'cache_read'
+        : (category === 'cache_write_1h' || category === 'cache_write_5m') && rates[category] !== undefined ? category : 'cache_write';
+      return { ...tokenCostItem(category, tokens, rate), conditions: conditionsFor(key) };
+    }) };
 }

@@ -367,6 +367,7 @@ export interface SessionModelCostItem {
   /** Only confirmed components of the model amount; never an allocation of a reported total. */
   costUsd: number | null;
   knownCostUsd: number;
+  conditions?: TokenCostItem['conditions'];
 }
 export interface SessionModelUsage {
   costBreakdown?: SessionModelCostItem[];
@@ -552,11 +553,12 @@ function summarizeSessionModels(events: SessionObservation[]): SessionModelUsage
       const explanation = quantities ? explainRowCost({ ...quantities, pricing_requests: row.pricingFact ? [row.pricingFact] : undefined, hour_start: row.timestamp, source: row.source, model, project: '', total_tokens: row.tokens, conversation_count: 0 }) : null;
       const canExplainCost = Boolean(row.tokenParts && row.usageKnown && row.costBasis === 'request-facts' && row.costKind !== 'recorded');
       const rates = getModelPricingRates(model, { source: row.source });
-      const items = explanation?.items ?? (['input', 'cache_read', 'cache_write', 'output'] as const).map(category => ({ category, tokens: 0, rateUsdPerMillion: rates?.[category] ?? null, costUsd: null }));
+      const items: TokenCostItem[] = explanation?.items ?? (['input', 'cache_read', 'cache_write', 'output'] as const).map(category => ({ category, tokens: 0, rateUsdPerMillion: rates?.[category] ?? null, costUsd: null }));
       for (const item of items) {
         const costUsd = canExplainCost ? item.costUsd : null;
         const contribution: SessionModelCostItem = { ...item, tokens: row.tokenParts ? item.tokens : null, costUsd, knownCostUsd: costUsd ?? 0 };
-        const key = JSON.stringify([item.category, item.rateUsdPerMillion]);
+        const key = JSON.stringify([item.category, item.rateUsdPerMillion, !!item.conditions,
+          item.conditions?.serviceTier, item.conditions?.minInputTokens, item.conditions?.maxInputTokens]);
         const previous = costItems.get(key);
         costItems.set(key, previous ? { ...contribution,
           tokens: previous.tokens === null || contribution.tokens === null ? null : previous.tokens + contribution.tokens,

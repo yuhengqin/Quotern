@@ -7,7 +7,7 @@ import { afterEach, test } from 'node:test';
 import { AggregateCache } from '../src/aggregate-cache.js';
 import * as core from '../src/pricing/index.js';
 import type { RequestPricingFact } from '../src/pricing/request-pricing.js';
-import { prepareSessionObservations, type SessionObservation } from '../src/session-observation.js';
+import { aggregateSessionActivity, prepareSessionObservations, type SessionObservation } from '../src/session-observation.js';
 import { buildUsageReport } from '../src/usage-report.js';
 import type { QueueBucket } from '../src/types.js';
 
@@ -142,4 +142,46 @@ test('a sealed cache with the old table-only fingerprint is rejected and rebuilt
     assert.equal(cache.getUsageSummary([bucket()], '2026-01-01').totalCostUsd, 0.251);
     assert.notEqual(JSON.parse(await readFile(path, 'utf8')).pricingFingerprint, sealed.pricingFingerprint);
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('cost items identify the actual length and speed rules even when their prices coincide', () => {
+  core.applyRemotePricingOverlay({ exact: rates });
+  const short = core.explainRowCost(bucket([fact({ requestInputTokens: 110_000, cached_input_tokens: 100_000, serviceTier: 'fast' })]));
+  const long = core.explainRowCost(bucket());
+  const input = (explanation: typeof short) => explanation.items!.find(item => item.category === 'input')! as any;
+  assert.equal(input(short).rateUsdPerMillion, 4);
+  assert.equal(input(long).rateUsdPerMillion, 4);
+  assert.deepEqual(input(short).conditions, { serviceTier: 'fast', maxInputTokens: 272_000 });
+  assert.deepEqual(input(long).conditions, { minInputTokens: 272_000 });
+  const flex = core.explainRowCost(bucket([fact({ serviceTier: 'flex' })]));
+  assert.deepEqual(input(flex).conditions, { serviceTier: 'flex', minInputTokens: 272_000 });
+  const unknown = core.explainRowCost(bucket([fact({ serviceTier: 'fast', requestInputTokens: undefined })]));
+  assert.deepEqual(input(unknown).conditions, { serviceTier: 'fast' });
+});
+
+test('a partial explicit rule labels only the fields it actually overrides', () => {
+  core.applyRemotePricingOverlay({ exact: rates, request_rules: [{ model: sol, source: 'codex', serviceTier: 'fast',
+    minInputTokens: 500_000, rates: { input: 9 }, reference: 'https://example.test/large-input' }] });
+  const explanation = core.explainRowCost(bucket([fact({ requestInputTokens: 610_000, cached_input_tokens: 600_000, serviceTier: 'fast' })]));
+  const items = explanation.items! as any[];
+  assert.deepEqual(items.find(item => item.category === 'input').conditions, { serviceTier: 'fast', minInputTokens: 500_000 });
+  assert.deepEqual(items.find(item => item.category === 'cache_read').conditions, { serviceTier: 'fast', minInputTokens: 272_000 });
+  core.applyRemotePricingOverlay({ exact: rates });
+  const old = core.explainRowCost(bucket([fact({ serviceTier: 'fast', timestamp: '2026-09-30T04:00:00Z' })]));
+  assert.deepEqual((old.items!.find(item => item.category === 'input') as any).conditions, { minInputTokens: 272_000 });
+});
+
+test('session cost breakdown keeps equal prices with different applied rules separate', () => {
+  core.applyRemotePricingOverlay({ exact: rates });
+  const observation = (request: RequestPricingFact): SessionObservation => ({ id: request.id, timestamp: request.timestamp,
+    source: 'codex', sessionId: 'same-price', model: sol, tokens: Object.values(Object.fromEntries(core.TOKEN_FIELDS.map(key => [key, request[key]]))).reduce((a, b) => a + b, 0),
+    tokenParts: request, pricingFact: request, requestKnown: true, usageKnown: true, costBasis: 'request-facts', costKind: 'estimated', costUsd: null,
+    billing: { service: 'openai', mode: 'subscription', accountRef: null, evidence: 'recorded' } });
+  const events = [observation(fact()), observation(fact({ id: 'short-fast', requestInputTokens: 110_000, cached_input_tokens: 100_000, serviceTier: 'fast' }))];
+  const breakdown = aggregateSessionActivity(events, [], { totalTokens: 422_000 }).sessions[0]!.models![0]!.costBreakdown!;
+  const input = breakdown.filter(item => item.category === 'input');
+  assert.equal(input.length, 2);
+  assert.deepEqual(input.map(item => [(item as any).conditions, item.rateUsdPerMillion, item.tokens]), [
+    [{ minInputTokens: 272_000 }, 4, 10_000], [{ serviceTier: 'fast', maxInputTokens: 272_000 }, 4, 10_000],
+  ]);
 });

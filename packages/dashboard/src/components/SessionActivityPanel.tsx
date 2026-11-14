@@ -119,6 +119,10 @@ function SessionList({ rows, total, scope, range }: { rows: SessionActivity[]; t
 export function SessionBrowser({ rows, availableSessions = rows, usage, value, onChange, range, pageData, loading = false, onExport, onNormalizePage }: { rows: SessionActivity[]; availableSessions?: SessionActivity[]; usage?: SessionUsage; value: SessionPageSearch; onChange(patch: Partial<SessionPageSearch>): void; range?: DetailRange; pageData?: SessionListPage; loading?: boolean; onExport?(): Promise<string>; onNormalizePage?(page: number): void }) {
   const { t, i18n } = useTranslation();
   const { q: query, sources, page, project, sort, direction } = value;
+  // Router navigation is asynchronous; acknowledge edits before it updates the URL.
+  const [searchQuery, setSearchQuery] = useState(query);
+  useEffect(() => { setSearchQuery(query); }, [query]);
+  const changeSearch = (q: string) => { setSearchQuery(q); onChange({ q }); };
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLDivElement>(null);
   const { contains } = useFilter({ sensitivity: 'base' });
   const facets = useMemo(() => pageData?.facets ?? sessionActivityFacets(rows, query, sources, project), [pageData, rows, query, sources, project]);
@@ -156,7 +160,7 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
     <div className="flex flex-col gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
       <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 w-full max-w-full flex-wrap items-center gap-2 @3xl/session-browser:w-auto @3xl/session-browser:flex-none">
-        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 w-full @3xl/session-browser:w-56" value={query} onChange={q => onChange({ q })}>
+        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 w-full @3xl/session-browser:w-56" value={searchQuery} onChange={changeSearch}>
           <Label className="sr-only">{t('usage.activity.search')}</Label>
           <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
         </SearchField>
@@ -196,11 +200,11 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
       </div>
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
-        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
+        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { changeSearch(''); searchInput.current?.focus(); }} />}
         {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { onChange({ sources: sources.filter(value => value !== source) }); sourceTrigger.current?.focus(); }} />)}
         {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { onChange({ project: '' }); projectTrigger.current?.querySelector<HTMLButtonElement>('button')?.focus(); }} />}
         {value.model&&<SessionFilterChip label={value.model} onRemove={()=>onChange({model:undefined})}/>}
-        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
+        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setSearchQuery(''); onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
       <div ref={resultTop} className="min-w-0 scroll-mt-4">
         <p role="status" data-session-count className="text-xs tabular-nums text-muted">

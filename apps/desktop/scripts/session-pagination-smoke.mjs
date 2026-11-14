@@ -141,6 +141,36 @@ async function exercise(window, client, mode) {
   await until(() => client.evaluate(`${activePage}==='1' && (location.search+location.hash).includes('pageSize=24')`), mode + ' capacity resets page');
   assert.equal(await client.evaluate('document.querySelectorAll("[data-session-trigger]").length'), 24);
   const search = `document.querySelector('input[placeholder="名称、项目、模型或会话 ID"]')`;
+  // Type real key events: filling the whole value cannot expose a caret reset.
+  const typeSearch = async text => {
+    for (const key of text) {
+      await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key, code: 'Key' + key.toUpperCase(), text: key, unmodifiedText: key });
+      await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key, code: 'Key' + key.toUpperCase() });
+    }
+    await until(() => client.evaluate(`new URLSearchParams(location.hash.includes('?') ? location.hash.split('?')[1] : location.search).get('q')===(${search}).value && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' keyboard search settles');
+  };
+  const searchKey = async (key, windowsVirtualKeyCode) => {
+    await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode });
+    await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode });
+  };
+  const caret = () => client.evaluate(`({value:(${search}).value,start:(${search}).selectionStart,end:(${search}).selectionEnd,focused:document.activeElement===(${search})})`);
+  await client.click(search);
+  await typeSearch('quotern');
+  assert.equal((await caret()).value, 'quotern', 'keyboard entry keeps every character');
+  await client.key('Home');
+  await searchKey('ArrowRight', 39);
+  await searchKey('ArrowRight', 39);
+  assert.equal((await caret()).start, 2, 'keyboard positions the caret inside the query');
+  await typeSearch('x');
+  assert.deepEqual(await caret(), { value: 'quxotern', start: 3, end: 3, focused: true }, 'inserting inside the query preserves the caret after asynchronous URL updates');
+  await typeSearch('y');
+  assert.deepEqual(await caret(), { value: 'quxyotern', start: 4, end: 4, focused: true }, 'continued typing stays at the insertion point');
+  await searchKey('Backspace', 8);
+  await until(() => client.evaluate(`(${search}).value==='quxotern' && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' middle backspace settles');
+  assert.deepEqual(await caret(), { value: 'quxotern', start: 3, end: 3, focused: true }, 'deleting inside the query preserves the caret');
+  await client.click('document.querySelector(".search-field__clear-button")');
+  await until(() => client.evaluate(`(${search}).value==='' && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' keyboard search clears');
+  checks.push(mode + '-keyboard-search-middle-insert-backspace-caret');
   await client.fill(search, parentTitle);
   await until(() => client.evaluate('document.querySelectorAll("[data-session-trigger]").length===1 && document.querySelector("[data-session-count]")?.textContent.trim()==="1 条主会话"'), mode + ' search before paging');
   assert.equal(await client.evaluate(`document.activeElement===${search}`), true, 'search retains focus during asynchronous queries');

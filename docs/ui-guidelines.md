@@ -178,6 +178,8 @@ Windows 横幅超时不等于用户已处理：保留通知中心条目的点击
 | 价格筛选与比较 | [PricingTools](../packages/dashboard/src/components/PricingTools.tsx)、[PricingMoreFilters](../packages/dashboard/src/components/PricingMoreFilters.tsx)、[PricingComparison](../packages/dashboard/src/components/PricingComparison.tsx) | 厂商、上下文、日期、汇率、渠道及估算场景属于价格业务；共享 PricingPage 的 loadCatalog 读取 runtime 生效表，Desktop 注入 IPC 价格与用量读取；runtime 不可用时回退内置目录；两端价格路由共用 parsePricingSearch，models 参数携带来源/模型集合，按保守身份解析筛选同一模型的渠道分组，保留清除入口及未匹配提示。PricingDetails 的现有渠道详情展示逐调用 ID 的价格来源、核实日期与旧价状态，正常 current 状态不加标签；PricingPage 数据帮助保留来源与检查摘要，旧 runtime 无此元数据时保持未记录，不使用加载时间伪造核实日期 |
 | 用量分享 | [ShareActivityModal](../packages/dashboard/src/components/ShareActivityModal.tsx)、[ShareBackgroundPicker](../packages/dashboard/src/components/ShareBackgroundPicker.tsx)、[ShareCardCarousel](../packages/dashboard/src/components/ShareCardCarousel.tsx)、[ShareCardActions](../packages/dashboard/src/components/ShareCardActions.tsx) | 绑定分享快照、背景库和海报导出；Desktop 分享弹窗 re-export Dashboard。组件不作为任意轮播或上传器 |
 
+会话搜索由共享 `SessionBrowser` 同步维护输入草稿，URL `q` 表示已应用查询。输入法组字期间保留已应用筛选、计数与结果；结束后读取完整输入值并去重更新，取消且原文未变时不重复查询。组字期间的 Enter / Escape 交给输入法；搜索框清除、移除搜索条件和清除全部均不查询被丢弃的拼音，取消清除按压仍保留已编辑文字。英文即时搜索、分页及历史恢复保持原行为。`test:session-pagination-ui` 通过真实浏览器组合输入事件核对 HTTP / IPC 请求，系统输入法候选与键盘行为另做实测。
+
 热力图局部入口明确标注「热力图来源」，菜单解释仅影响本图；空选动作称为「取消全选」，保留已有无结果语义。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
 
 热力图图例专项验收：两端构建后运行 `corepack pnpm test:heatmap-legend-ui [全新输出目录]`，覆盖 HTTP / IPC、320/375/1120px 布局、帮助键盘与焦点返回、页面滚轮、浏览器容器滚动条拖动与 Desktop 文档滚动时立即关闭、外部点击关闭、矮窗口浮层内部滚动、打开期间单位更新、四语言、重复阈值和空选来源时保留成就入口；追加 `--heatmap-close-bands` 检查不同阈值缩写后重合时使用近似范围、避免虚假精确区间。输出明暗截图仍需人工查看。

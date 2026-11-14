@@ -119,6 +119,90 @@ async function assertSelectTextFits(client, trigger, label) {
     label + ' keeps its text complete and vertically centered: ' + JSON.stringify(geometry));
 }
 const allPickers = 'document.querySelectorAll(".select__trigger, .autocomplete__trigger")';
+async function exerciseSearchComposition(client, mode, search) {
+  const query = `new URLSearchParams(location.hash.includes('?') ? location.hash.split('?')[1] : location.search).get('q') ?? ''`;
+  const state = () => client.evaluate(`({value:(${search}).value,start:(${search}).selectionStart,end:(${search}).selectionEnd,focused:document.activeElement===(${search}),q:(${query}),count:document.querySelector('[data-session-count]').textContent,rows:document.querySelectorAll('[data-session-trigger]').length,busy:document.querySelector('section[aria-label="全部会话"]').getAttribute('aria-busy')})`);
+  const listCalls = () => calls.filter(call => call.path.endsWith('/tud-session-list'));
+  const compose = text => client.call('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length });
+  const settle = expected => until(async () => { const current = await state(); return current.q === expected && current.busy === 'false'; }, mode + ' committed IME search ' + expected);
+  await settle('');
+  await client.click(search);
+  const initial = await state(), before = listCalls().length;
+  for (const text of ['h', 'hui', "hui'hua"]) await compose(text);
+  // Leave time for an incorrectly scheduled router/API update to become observable.
+  await wait(150);
+  const composing = await state();
+  assert.equal(composing.q, '', 'unconfirmed pinyin must not update the URL');
+  assert.equal(listCalls().length, before, 'unconfirmed pinyin must not request filtered sessions');
+  assert.equal(composing.count, initial.count, 'composition preserves the applied result count');
+  assert.equal(composing.rows, initial.rows, 'composition preserves the applied results');
+  assert.equal(composing.value, "hui'hua");
+  await client.call('Input.insertText', { text: '会话' });
+  await settle('会话');
+  assert.equal(listCalls().length, before + 1, 'confirming composition searches the final value once');
+  assert.deepEqual(await client.evaluate(`({value:(${search}).value,start:(${search}).selectionStart,end:(${search}).selectionEnd})`), { value: '会话', start: 2, end: 2 });
+  await client.key('Home');
+  await client.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+  await client.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+  const middleBefore = listCalls().length;
+  for (const text of ['ce', "ce'shi", "ce'sh", "ce'shi"]) await compose(text);
+  await wait(150);
+  assert.equal((await state()).q, '会话');
+  assert.equal((await state()).value, "会ce'shi话", 'editing pinyin retains the surrounding Chinese text');
+  assert.equal(listCalls().length, middleBefore, 'middle composition must not query temporary pinyin');
+  await client.call('Input.insertText', { text: '测试' });
+  await settle('会测试话');
+  assert.deepEqual(await client.evaluate(`({value:(${search}).value,start:(${search}).selectionStart,end:(${search}).selectionEnd,focused:document.activeElement===(${search})})`), { value: '会测试话', start: 3, end: 3, focused: true }, 'confirming in the middle keeps the caret after the inserted characters');
+  const cancelBefore = listCalls().length;
+  await compose('huil');
+  await compose('');
+  await wait(150);
+  assert.equal((await state()).q, '会测试话');
+  assert.equal((await state()).value, '会测试话', 'canceling composition retains the committed text');
+  assert.equal(listCalls().length, cancelBefore, 'canceling unchanged composition must not search again');
+  const clearBefore = listCalls().length;
+  await compose('hui');
+  await client.click('document.querySelector(".search-field__clear-button")');
+  await settle('');
+  assert.equal((await state()).value, '');
+  assert.equal(listCalls().slice(clearBefore).some(call => call.query.q?.includes('hui')), false, 'clearing active composition must not search the temporary pinyin');
+  for (const clearTarget of [`document.querySelector('button[aria-label="移除筛选：搜索：会话"]')`, `[...document.querySelectorAll('button')].find(button => button.textContent.trim()==='清除筛选')`]) {
+    await client.fill(search, '会话');
+    await settle('会话');
+    const beforeClear = listCalls().length;
+    await compose('hui');
+    await client.click(clearTarget);
+    await settle('');
+    assert.equal((await state()).value, '');
+    assert.equal(listCalls().slice(beforeClear).some(call => call.query.q?.includes('hui')), false, 'every search-clear entry suppresses discarded composition');
+  }
+  await client.fill(search, '会话');
+  await settle('会话');
+  await compose('hui');
+  const clearPoint = await client.evaluate(`(()=>{const r=document.querySelector('.search-field__clear-button').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  const reenterBefore = listCalls().length;
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...clearPoint });
+  await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...clearPoint, button: 'left', clickCount: 1 });
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: clearPoint.x - 80, y: clearPoint.y, buttons: 1 });
+  await wait(150);
+  assert.equal((await state()).q, '会话', 'leaving a held clear button is not a final cancellation');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...clearPoint, buttons: 1 });
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', ...clearPoint, button: 'left', clickCount: 1 });
+  await settle('');
+  assert.equal(listCalls().slice(reenterBefore).some(call => call.query.q?.includes('hui')), false, 'reentering and completing the clear press must not search the discarded pinyin');
+  await client.fill(search, '会话');
+  await settle('会话');
+  await compose('hui');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...clearPoint });
+  await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', ...clearPoint, button: 'left', clickCount: 1 });
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: clearPoint.x - 80, y: clearPoint.y, buttons: 1 });
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: clearPoint.x - 80, y: clearPoint.y, button: 'left', clickCount: 1 });
+  await settle('会话hui');
+  assert.equal((await state()).value, '会话hui', 'canceling a clear press preserves the edited text and resumes searching');
+  await client.click('document.querySelector(".search-field__clear-button")');
+  await settle('');
+  checks.push(mode + '-ime-composition-no-query-commit-once-middle-edit-cancel');
+}
 async function exercise(window, client, mode) {
   await until(() => client.evaluate(`${activePage}==='4' && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' initial server page');
   await assertSelectTextFits(client, allPickers, mode + ' session filters and pagination');
@@ -171,6 +255,7 @@ async function exercise(window, client, mode) {
   await client.click('document.querySelector(".search-field__clear-button")');
   await until(() => client.evaluate(`(${search}).value==='' && document.querySelector('section[aria-label="全部会话"]')?.getAttribute('aria-busy')==='false'`), mode + ' keyboard search clears');
   checks.push(mode + '-keyboard-search-middle-insert-backspace-caret');
+  await exerciseSearchComposition(client, mode, search);
   await client.fill(search, parentTitle);
   await until(() => client.evaluate('document.querySelectorAll("[data-session-trigger]").length===1 && document.querySelector("[data-session-count]")?.textContent.trim()==="1 条主会话"'), mode + ' search before paging');
   assert.equal(await client.evaluate(`document.activeElement===${search}`), true, 'search retains focus during asynchronous queries');

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties } from 'react';
 import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
 import { Autocomplete, Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, useFilter } from '@heroui/react';
@@ -121,9 +121,47 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
   const { q: query, sources, page, project, sort, direction } = value;
   // Router navigation is asynchronous; acknowledge edits before it updates the URL.
   const [searchQuery, setSearchQuery] = useState(query);
-  useEffect(() => { setSearchQuery(query); }, [query]);
-  const changeSearch = (q: string) => { setSearchQuery(q); onChange({ q }); };
+  const composingSearch = useRef(false), clearingSearch = useRef(false), submittedSearch = useRef(query);
+  const clearPointer = useRef<AbortController | null>(null);
+  useEffect(() => () => { clearPointer.current?.abort(); }, []);
+  useEffect(() => {
+    submittedSearch.current = query;
+    if (!composingSearch.current && !clearingSearch.current) setSearchQuery(query);
+  }, [query]);
+  const changeSearch = (q: string) => {
+    setSearchQuery(q);
+    if (composingSearch.current || clearingSearch.current || q === submittedSearch.current) return;
+    submittedSearch.current = q;
+    onChange({ q });
+  };
+  const clearSearch = () => { clearPointer.current?.abort(); clearPointer.current = null; clearingSearch.current = false; composingSearch.current = false; changeSearch(''); };
   const searchInput = useRef<HTMLInputElement>(null), sourceTrigger = useRef<HTMLButtonElement>(null), projectTrigger = useRef<HTMLDivElement>(null);
+  const searchClearPress: Pick<ComponentProps<typeof Button>, 'onPointerDownCapture'> = {
+    onPointerDownCapture: event => {
+      if (event.button !== 0 || !composingSearch.current) return;
+      // Pointer-down can end composition before clearing; wait for the final release.
+      clearingSearch.current = true;
+      clearPointer.current?.abort();
+      const controller = new AbortController(), button = event.currentTarget, pointerId = event.pointerId;
+      clearPointer.current = controller;
+      const finish = (canceled: boolean) => {
+        controller.abort();
+        if (clearPointer.current !== controller) return;
+        clearPointer.current = null;
+        if (canceled) {
+          clearingSearch.current = false;
+          if (searchInput.current) changeSearch(searchInput.current.value);
+        }
+      };
+      const release = (pointer: PointerEvent) => {
+        if (pointer.pointerId !== pointerId || (pointer.type === 'pointerup' && pointer.button !== 0)) return;
+        finish(pointer.type === 'pointercancel' || !button.contains(pointer.target as Node));
+      };
+      button.ownerDocument.addEventListener('pointerup', release, { capture: true, signal: controller.signal });
+      button.ownerDocument.addEventListener('pointercancel', release, { capture: true, signal: controller.signal });
+      button.ownerDocument.defaultView?.addEventListener('blur', () => finish(true), { signal: controller.signal });
+    },
+  };
   const { contains } = useFilter({ sensitivity: 'base' });
   const facets = useMemo(() => pageData?.facets ?? sessionActivityFacets(rows, query, sources, project), [pageData, rows, query, sources, project]);
   const filtered = useMemo(() => pageData ? rows : sortSessionActivity(filterSessionActivity(rows, query, sources, project).filter(row=>!value.model||row.model===value.model||row.models?.some(model=>model.model===value.model)), sort, direction), [pageData, rows, query, sources, project, sort, direction,value.model]);
@@ -160,9 +198,16 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
     <div className="flex flex-col gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
       <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 w-full max-w-full flex-wrap items-center gap-2 @3xl/session-browser:w-auto @3xl/session-browser:flex-none">
-        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 w-full @3xl/session-browser:w-56" value={searchQuery} onChange={changeSearch}>
+        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 w-full @3xl/session-browser:w-56" value={searchQuery} onChange={changeSearch} onClear={clearSearch}>
           <Label className="sr-only">{t('usage.activity.search')}</Label>
-          <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
+          <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')}
+            onCompositionStart={() => { composingSearch.current = true; }}
+            onCompositionEnd={event => { composingSearch.current = false; changeSearch(event.currentTarget.value); }}
+            onKeyDownCapture={event => {
+              // Keep SearchField's key handlers out of IME confirmation/cancellation.
+              if ((event.key === 'Enter' || event.key === 'Escape') && (composingSearch.current || event.nativeEvent.isComposing || event.keyCode === 229)) event.stopPropagation();
+            }}
+          /><SearchField.ClearButton {...searchClearPress} /></SearchField.Group>
         </SearchField>
         <Select aria-label="Agent" selectionMode="multiple" value={sources.length ? sources : ['all']} onChange={keys => {
           const next = Array.isArray(keys) ? keys.map(String) : keys == null ? [] : [String(keys)];
@@ -200,11 +245,11 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
       </div>
       </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
-        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { changeSearch(''); searchInput.current?.focus(); }} />}
+        {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} buttonProps={searchClearPress} onRemove={() => { clearSearch(); searchInput.current?.focus(); }} />}
         {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { onChange({ sources: sources.filter(value => value !== source) }); sourceTrigger.current?.focus(); }} />)}
         {project && <SessionFilterChip label={`${t('usage.explorer.project')}: ${project}`} onRemove={() => { onChange({ project: '' }); projectTrigger.current?.querySelector<HTMLButtonElement>('button')?.focus(); }} />}
         {value.model&&<SessionFilterChip label={value.model} onRemove={()=>onChange({model:undefined})}/>}
-        <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { setSearchQuery(''); onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
+        <Button {...searchClearPress} variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { clearPointer.current?.abort(); clearPointer.current = null; clearingSearch.current = false; composingSearch.current = false; submittedSearch.current = ''; setSearchQuery(''); onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
       <div ref={resultTop} className="min-w-0 scroll-mt-4">
         <p role="status" data-session-count className="text-xs tabular-nums text-muted">
@@ -230,9 +275,9 @@ export function FocusedSession({ rows, source, sessionId, focusKey, range }: { r
   </div>;
 }
 
-function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): void }) {
+function SessionFilterChip({ label, onRemove, buttonProps }: { label: string; onRemove(): void; buttonProps?: Pick<ComponentProps<typeof Button>, 'onPointerDownCapture'> }) {
   const { t } = useTranslation();
-  return <Button className="!h-6 !min-h-6 max-w-full !gap-1 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={onRemove} aria-label={t('usage.activity.removeFilter', { label })}>
+  return <Button {...buttonProps} className="!h-6 !min-h-6 max-w-full !gap-1 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={onRemove} aria-label={t('usage.activity.removeFilter', { label })}>
     <span className="min-w-0 truncate" title={label}>{label}</span><X className="size-3 shrink-0" aria-hidden />
   </Button>;
 }

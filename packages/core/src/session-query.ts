@@ -3,7 +3,7 @@ import { resolveLocalCollectSince } from './config.js';
 import type { LocalApiDeps } from './server/state.js';
 import { computeTokens, getPricingFingerprint, getPricingSnapshot } from './pricing/index.js';
 import { aggregateSessionActivity, prepareSessionObservations, type PreparedSessionObservations, type SessionActivity, type SessionActivitySnapshot, type SessionObservation } from './session-observation.js';
-import { readSessionHistory, type SessionHistory } from './session-collector.js';
+import { readSessionHistory, isSessionHistoryCurrent, canCacheSessionHistory, type SessionHistory } from './session-collector.js';
 import type { SessionMetricOptions, SessionMessage } from './session-metrics.js';
 import { aggregateTaskTiming, attributeTaskTimingEvents, type SessionTimingEvent } from './task-timing.js';
 import { attachSessionTitles, sessionTitleKey } from './session-titles.js';
@@ -12,6 +12,7 @@ import { pageSessionList, selectSessionList, sessionKey, sessionTree, type Sessi
 import { localDateAndHour } from './timezone.js';
 import { inTimeBounds, type UsageBounds } from './usage-window.js';
 import { buildPerformanceReport, type PerformanceFilters, type PerformanceReport } from './performance-analysis.js';
+import { HTTPException } from 'hono/http-exception';
 
 export interface SessionRangeQuery { days: number; bounds?: UsageBounds; sources?: string[]; collected?: boolean }
 interface RangeState {
@@ -47,11 +48,23 @@ export class SessionQueryService {
   private prepared = new WeakMap<SessionObservation[], PreparedSessionObservations>();
   private pricing = getPricingSnapshot();
   private readonly pendingRanges = new Map<string, Promise<RangeState>>();
+  private cacheRevision = '';
 
   constructor(private readonly deps: LocalApiDeps, private readonly readHistory: typeof readSessionHistory) {}
 
+  private refreshCaches(): string {
+    const revision = JSON.stringify([this.deps.bucketStore.getRevision(), resolveLocalCollectSince(this.deps.getConfig()), getPricingFingerprint()]);
+    if (revision !== this.cacheRevision) { this.cacheRevision = revision; this.ranges.clear(); }
+    const pricing = getPricingSnapshot();
+    if (pricing.builtin !== this.pricing.builtin || pricing.overlay !== this.pricing.overlay || pricing.manual !== this.pricing.manual) {
+      this.pricing = pricing; this.prepared = new WeakMap();
+    }
+    for (const [key, state] of this.ranges) if (!canCacheSessionHistory(state.history)) this.ranges.delete(key);
+    return revision;
+  }
+
   private async range(query: SessionRangeQuery): Promise<RangeState> {
-    const key = JSON.stringify([this.deps.bucketStore.getRevision(), resolveLocalCollectSince(this.deps.getConfig()), getPricingFingerprint(), query]);
+    const key = JSON.stringify([this.refreshCaches(), query]);
     const pending = this.pendingRanges.get(key);
     if (pending) return pending;
     const operation = this.buildRange(query);
@@ -61,6 +74,10 @@ export class SessionQueryService {
   }
 
   private async buildRange(query: SessionRangeQuery): Promise<RangeState> {
+    // Retry inside this operation: range(query) may still point to our own
+    // pending Promise when only session history changes during the await.
+    for (let attempt = 0; attempt < 3; attempt++) {
+    const revision = this.refreshCaches();
     const bucketRevision = this.deps.bucketStore.getRevision();
     const window = resolveAggregateWindow(query.days, this.deps.bucketStore.reportSince(resolveLocalCollectSince(this.deps.getConfig())), undefined, query.bounds);
     const fromDate = query.collected ? window.statsSinceDate : window.fromDate > window.statsSinceDate ? window.fromDate : window.statsSinceDate;
@@ -71,11 +88,7 @@ export class SessionQueryService {
     });
     const usageSources = [...new Set(rows.map(row => row.source))];
     const history = await this.readHistory(this.deps.dataDir, usageSources, options);
-    if (this.deps.bucketStore.getRevision() !== bucketRevision) return this.range(query);
-    const pricing = getPricingSnapshot();
-    if (pricing.builtin !== this.pricing.builtin || pricing.overlay !== this.pricing.overlay || pricing.manual !== this.pricing.manual) {
-      this.pricing = pricing; this.ranges.clear(); this.prepared = new WeakMap();
-    }
+    if (this.refreshCaches() !== revision || !isSessionHistoryCurrent(history)) continue;
     let historyId = this.historyIds.get(history.observations);
     if (!historyId) { historyId = ++this.nextHistoryId; this.historyIds.set(history.observations, historyId); }
     const key = JSON.stringify([historyId, bucketRevision, options, history.missingSources, usageSources.sort(), Boolean(query.collected)]);
@@ -102,9 +115,12 @@ export class SessionQueryService {
     }
     markRelationCycles(snapshot.sessions);
     const state: RangeState = { history, prepared, options, snapshot, modelRows: new Map(), durations: new Map(), hydrations: new Map() };
-    this.ranges.set(key, state);
+    if (canCacheSessionHistory(history)) this.ranges.set(key, state);
     while (this.ranges.size > 12) this.ranges.delete(this.ranges.keys().next().value!);
     return state;
+    }
+    throw new HTTPException(503, { message: 'SESSION_HISTORY_CHANGED',
+      res: Response.json({ success: false, message: 'SESSION_HISTORY_CHANGED', data: null }, { status: 503 }) });
   }
 
   private async titled(state: RangeState, rows = state.snapshot.sessions): Promise<SessionActivity[]> {

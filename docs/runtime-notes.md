@@ -60,6 +60,8 @@ Desktop 的 `/functions/tud-session-activity`、`tud-session-list`、`tud-sessio
 
 Core 在一次洞察分析中共享派发索引；同范围在途构建与已完成 hydration 复用，返回对象单独复制，防止 API 筛选、调用方修改和账号标签污染缓存。范围、桶、历史或价格变化后失效；会话标题与账号标签继续读取当前值。
 
+历史缓存以内部弱引用关联来源代次；来源替换、删除、损坏或成功写入后，释放所有引用旧代次的历史组合与查询范围。桶、采集起点或价格变更也释放旧范围。容量淘汰只取消缓存资格，不使本次已读数据无效；连续版本变化最多在同一查询内重读三次，仍无法取得有效快照时返回 `503` / `SESSION_HISTORY_CHANGED` 标准 JSON 错误，下一次请求可以恢复。不能在同 key 的 pending 查询中重新等待自身。
+
 分析进程按需启动，启动最多等待 15 秒、单次请求最多 30 秒；故障/超时拒绝所属请求并回收，后续请求可重建，绝不静默回退主进程分析。停止 runtime 同时回收同步与分析进程。安装包 `asarUnpack` 必须同时包含两种 worker chunk。诊断时对比主进程与 `session analysis utilityProcess ready pid=...` 的 PID；`logs/sync.log` 中 `cpu_phase/session_query` 的 `role=session-analysis`、route、status、wallMs 与 cpuMs 标识真实查询耗时，不能把它误认作主进程阻塞。
 
 ## 卡顿排查与回归验收

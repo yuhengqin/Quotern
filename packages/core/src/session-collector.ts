@@ -42,17 +42,45 @@ interface SourceSnapshot {
   complete: boolean;
   files: Record<string, FileSnapshot>;
 }
-const cache = new Map<string, { stamp: string; value: SourceSnapshot }>();
+interface SourceVersion { current: boolean; cacheable: boolean }
+interface CachedSource { stamp: string; value: SourceSnapshot; version: SourceVersion }
+const cache = new Map<string, CachedSource>();
+const snapshotVersions = new WeakMap<SourceSnapshot, SourceVersion>();
+const historyVersions = new WeakMap<SessionObservation[], SourceVersion[]>();
 const pendingSources = new Map<string, Promise<SourceSnapshot | null>>();
 const materializedSources = new WeakMap<SourceSnapshot, ReturnType<typeof materialize>>();
 const sourcePath = (dataDir: string, source: string) => join(dataDir, 'sessions', `${source}.json`);
 const validSource = (source: string) => /^[a-z][a-z0-9-]*$/.test(source);
 
+/** Keep validity out of the history's plain-data/backup/demo contract. */
+export function isSessionHistoryCurrent(history: SessionHistory): boolean {
+  return historyVersions.get(history.observations)?.every(version => version.current) ?? true;
+}
+
+export function canCacheSessionHistory(history: SessionHistory): boolean {
+  return historyVersions.get(history.observations)?.every(version => version.current && version.cacheable) ?? true;
+}
+
+function discardRetiredHistories(): void {
+  for (const [key, entry] of histories) if (!canCacheSessionHistory(entry.history)) histories.delete(key);
+}
+
+function retireSource(path: string, expected: CachedSource | undefined): void {
+  // A failed old read must not invalidate a newer successful load.
+  if (!expected || cache.get(path) !== expected) return;
+  expected.version.current = false;
+  expected.version.cacheable = false;
+  cache.delete(path);
+  discardRetiredHistories();
+}
+
 async function loadSource(path: string, source: string): Promise<SourceSnapshot | null> {
+  const previous = cache.get(path);
   try {
     const st = await stat(path), stamp = `${st.mtimeMs}:${st.ctimeMs}:${st.size}:${st.ino}`;
     const hit = cache.get(path);
     if (hit?.stamp === stamp) return hit.value;
+    retireSource(path, hit);
     const key = JSON.stringify([path, stamp]);
     let pending = pendingSources.get(key);
     if (!pending) {
@@ -62,15 +90,24 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
         const after = await stat(path);
         // A sync may rename a newer snapshot while this read is in flight.
         if (`${after.mtimeMs}:${after.ctimeMs}:${after.size}:${after.ino}` !== stamp) return loadSource(path, source);
-        cache.delete(path);
-        cache.set(path, { stamp, value });
-        while (cache.size > 64) cache.delete(cache.keys().next().value!);
+        retireSource(path, cache.get(path));
+        const version = { current: true, cacheable: true };
+        snapshotVersions.set(value, version);
+        cache.set(path, { stamp, value, version });
+        while (cache.size > 64) {
+          const oldest = cache.keys().next().value!;
+          // Capacity eviction doesn't make a completed read incorrect. It only
+          // prevents it from retaining another persistent history/range graph.
+          cache.get(oldest)!.version.cacheable = false;
+          cache.delete(oldest);
+        }
+        discardRetiredHistories();
         return value;
       })().finally(() => pendingSources.delete(key));
       pendingSources.set(key, pending);
     }
     return await pending;
-  } catch { return null; }
+  } catch { retireSource(path, previous); return null; }
 }
 
 /** Verify the entire consumed prefix, including in-place middle rewrites. */
@@ -136,7 +173,7 @@ async function saveSource(path: string, value: SourceSnapshot): Promise<void> {
         await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
       }
     }
-    cache.delete(path);
+    retireSource(path, cache.get(path));
   } finally { await unlink(temporary).catch(() => {}); }
 }
 
@@ -265,13 +302,19 @@ export async function readSessionHistory(
   usageSources: readonly string[],
   options: SessionMetricOptions = {},
 ): Promise<SessionHistory> {
-  const files = await readdir(join(dataDir, 'sessions')).catch(() => [] as string[]);
+  const directory = join(dataDir, 'sessions');
+  const listed = await readdir(directory).catch(() => null);
+  const files = listed ?? [];
+  if (listed) {
+    const present = new Set(files.map(file => join(directory, file)));
+    for (const [path, entry] of cache) if (dirname(path) === directory && !present.has(path)) retireSource(path, entry);
+  }
   const sources = [...new Set([...usageSources, ...(options.sources ?? []), ...files.filter((file) => file.endsWith('.json')).map((file) => file.slice(0, -5))])]
     .filter(source => validSource(source) && (!options.sources?.length || options.sources.includes(source))).sort();
   const snapshots = await Promise.all(sources.map(source => loadSource(sourcePath(dataDir, source), source)));
   const historyKey = JSON.stringify([dataDir, sources]);
   let cached = histories.get(historyKey);
-  if (!cached || !snapshots.every((value, index) => value === cached!.snapshots[index])) {
+  if (!cached || !canCacheSessionHistory(cached.history) || !snapshots.every((value, index) => value === cached!.snapshots[index])) {
   const messages: CollectedSessionMessage[] = [];
   const timingEvents: SessionTimingEvent[] = [];
   const evidence: SessionEvidence[] = [];
@@ -304,7 +347,10 @@ export async function readSessionHistory(
     }
   }
   cached = { snapshots, incomplete, missing, history: { messages, timingEvents, observations: [...observations.values()], evidence, titles, missingSources, codexParents } };
-  histories.delete(historyKey); histories.set(historyKey, cached);
+  // Bind tokens to the snapshots actually read, not a newer cache[path] entry.
+  historyVersions.set(cached.history.observations, snapshots.flatMap(snapshot => snapshot ? [snapshotVersions.get(snapshot)!] : []));
+  histories.delete(historyKey);
+  if (canCacheSessionHistory(cached.history)) histories.set(historyKey, cached);
   while (histories.size > 8) histories.delete(histories.keys().next().value!);
   }
   const { history, missing, incomplete } = cached;

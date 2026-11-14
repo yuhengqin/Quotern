@@ -1,9 +1,9 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { syncSessionSource, readSessionHistory } from '../src/session-collector.js';
+import { syncSessionSource, readSessionHistory, isSessionHistoryCurrent } from '../src/session-collector.js';
 import { createLocalApiApp } from '../src/server/local-api.js';
 import { BucketStore } from '../src/server/state.js';
 import type { TudConfig } from '../src/types.js';
@@ -311,4 +311,99 @@ test('cached hydration retains descendant titles and follows current title and p
   assert.equal(untitled.sessions.find(row => row.sessionId === 's00')!.insights!.relatedUsage![0]!.sessionTitle, undefined);
   applyPricingSnapshot({ builtin: { exact: { 'model-a': { input: 2, output: 2 }, 'model-b': { input: 2, output: 2 } } }, overlay: null });
   assert.equal((await queries.full(query)).sessions.find(row => row.sessionId === 's00')!.costUsd, oldCost * 2);
+});
+
+test('a superseded history read retries within the shared pending query', { timeout: 5000 }, async t => {
+  const { dataDir, bucketStore, input, events, discovered } = await fixture(t);
+  let release!: () => void, entered!: () => void, reads = 0;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) }, async (...args) => {
+    const history = await readSessionHistory(...args);
+    if (++reads === 1) { entered(); await gate; }
+    return history;
+  });
+  const query = { days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } };
+  const a = queries.full(query), b = queries.full(query);
+  await started;
+  events[0] = { ...events[0], message: { id: 'm0', model: 'model-b', usage: { input_tokens: 999, output_tokens: 1 } } } as typeof events[number];
+  await writeFile(input, events.map(row => JSON.stringify(row)).join('\n') + '\n');
+  await syncSessionSource(dataDir, 'claude', discovered);
+  release();
+  const results = await Promise.all([a, b]);
+  assert.equal(reads, 2, 'concurrent callers share the retry instead of waiting on their own pending Promise');
+  for (const result of results) assert.equal(result.sessions.find(row => row.sessionId === 's00')!.tokens, 1000);
+});
+
+test('source deletion retires every overlapping history while unrelated sources stay reusable', async t => {
+  const { dataDir } = await fixture(t);
+  await syncSessionSource(dataDir, 'codex', { complete: true, inputs: [] });
+  const all = await readSessionHistory(dataDir, []);
+  const claude = await readSessionHistory(dataDir, [], { sources: ['claude'] });
+  const codex = await readSessionHistory(dataDir, [], { sources: ['codex'] });
+  await unlink(join(dataDir, 'sessions', 'claude.json'));
+  const next = await readSessionHistory(dataDir, []);
+  assert.equal(next.observations.length, 0);
+  assert.equal(isSessionHistoryCurrent(all), false);
+  assert.equal(isSessionHistoryCurrent(claude), false);
+  assert.equal(isSessionHistoryCurrent(codex), true);
+  assert.equal((await readSessionHistory(dataDir, [], { sources: ['codex'] })).observations, codex.observations);
+});
+
+test('corrupt source updates retire old histories and a repaired snapshot is readable', async t => {
+  const { dataDir } = await fixture(t);
+  const path = join(dataDir, 'sessions', 'claude.json'), contents = await readFile(path, 'utf8');
+  const previous = await readSessionHistory(dataDir, ['claude']);
+  await writeFile(path, '{invalid');
+  const missing = await readSessionHistory(dataDir, ['claude']);
+  assert.equal(isSessionHistoryCurrent(previous), false);
+  assert.deepEqual(missing.missingSources, ['claude']);
+  await writeFile(path, contents);
+  assert.equal((await readSessionHistory(dataDir, ['claude'])).observations.length, 27);
+});
+
+test('more sources than cache capacity can still complete a query', { timeout: 5000 }, async t => {
+  const { dataDir, bucketStore } = await fixture(t);
+  for (let i = 0; i < 65; i++) {
+    const source = 'source-' + String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26);
+    await writeFile(join(dataDir, 'sessions', source + '.json'), JSON.stringify({ version: 12, source, complete: true, files: {} }));
+  }
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) }, readSessionHistory);
+  const query = { days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } };
+  assert.equal((await queries.list(query, {})).pagination.totalSessions, 27);
+  assert.equal((await queries.list(query, {})).pagination.totalSessions, 27);
+});
+
+test('a collection-start change during history loading rebuilds the selected window', async t => {
+  const { dataDir, bucketStore } = await fixture(t);
+  const config = { statsSince: '2026-01-01T00:00:00Z' } as TudConfig;
+  let release!: () => void, entered!: () => void, first = true;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => config }, async (...args) => {
+    const history = await readSessionHistory(...args);
+    if (first) { first = false; entered(); await gate; }
+    return history;
+  });
+  const pending = queries.full({ days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } });
+  await started;
+  config.statsSince = '2026-10-17T00:00:00Z';
+  release();
+  const result = await pending;
+  assert.equal(result.range?.fromDate, '2026-10-17');
+  assert.equal(result.sessions.length, 0);
+});
+
+test('exhausted snapshot retries return a JSON error and the next stable request recovers', async t => {
+  const { dataDir, bucketStore } = await fixture(t);
+  let changing = true, revision = 0;
+  t.mock.method(bucketStore, 'getRevision', () => changing ? ++revision : revision);
+  const app = createLocalApiApp({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) });
+  const failed = await app.request(`/functions/tud-session-list?${scope}`);
+  assert.equal(failed.status, 503);
+  assert.deepEqual(await failed.json(), { success: false, message: 'SESSION_HISTORY_CHANGED', data: null });
+  changing = false;
+  const recovered = await app.request(`/functions/tud-session-list?${scope}`);
+  assert.equal(recovered.status, 200);
+  assert.equal((await recovered.json()).data.pagination.totalSessions, 27);
 });

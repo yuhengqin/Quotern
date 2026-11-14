@@ -7,7 +7,11 @@ import { useTranslation } from 'quotern-i18n/react';
 import { cn } from '@/lib/utils';
 import { isTopmostPopover } from '../lib/overlay-dismiss';
 
-/** Rich help opens on interest, without moving focus or blocking the page. */
+/**
+ * 完整的按需说明：可包含有信息价值的标题、多段正文、列表、链接和展开内容。
+ * 支持自定义触发器；悬停/聚焦/长按打开，移入浮层可继续阅读与操作，不抢焦点。
+ * 简短、无交互的提示使用 Tooltip；常规问号入口使用下方的 HelpPopover 包装。
+ */
 export function HelpPopup({ title, showTitle = true, children, trigger, isOpen, onOpenChange }: {
   title: string;
   showTitle?: boolean;
@@ -67,6 +71,11 @@ export function HelpPopup({ title, showTitle = true, children, trigger, isOpen, 
   </span>;
 }
 
+/**
+ * HelpPopup 的独立帮助图标入口，内容场景和交互与 HelpPopup 相同。
+ * 默认省略重复标题并使用深色紧凑样式；标题补充新信息时才启用 showTitle。
+ * title 始终用于无障碍命名，隐藏可见标题不应删除该参数。
+ */
 export function HelpPopover({ title, showTitle = false, children, ariaLabel, icon, triggerClassName }: {
   title: string;
   /** Only show headings that add information beyond the adjacent label. */

@@ -13,7 +13,11 @@ function TooltipContent({ children, className, showArrow = true, ...props }: Com
   </HeroTooltip.Content>;
 }
 
-/** Short, non-interactive hints share the WeKnora tooltip skin. */
+/**
+ * 简短、无交互的提示：按钮/图标用途、短操作说明、精确数值。
+ * 多段正文、列表、链接或可操作内容使用 HelpPopup / HelpPopover；
+ * 即使使用相同的深色样式，也不要将完整说明放入 Tooltip。
+ */
 export const Tooltip = Object.assign(TooltipRoot, {
   Content: TooltipContent,
   Trigger: HeroTooltip.Trigger,

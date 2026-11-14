@@ -20,25 +20,37 @@ const operation = (value: unknown) => object(value)
   && optional(value, ['generated'], item => typeof item === 'boolean')
   && optional(value, ['outputChars'], number)
   && optional(value, ['dispatchSource'], item => item === 'codex' || item === 'antigravity');
+const responseHash = (value: unknown) => text(value) && /^[a-f0-9]{64}$/.test(value);
+const billing = (value: unknown) => object(value) && text(value.service) && ['subscription', 'api', 'unknown'].includes(String(value.mode))
+  && ['recorded', 'unknown'].includes(String(value.evidence)) && (value.accountRef === null || text(value.accountRef));
+const observation = (row: unknown) => event(row) && object(row) && text(row.model) && number(row.tokens) && typeof row.usageKnown === 'boolean'
+  && (row.costUsd === null || number(row.costUsd)) && ['recorded', 'estimated', 'unknown'].includes(String(row.costKind))
+  && billing(row.billing)
+  && optional(row, ['tokenParts', 'estimatedTokenParts'], tokens) && optional(row, ['pricingFact'], fact)
+  && optional(row, ['codexCompactionId', 'codexCoveredResponseId'], responseHash)
+  && optional(row, ['context'], context => object(context) && (context.usedTokens === null || number(context.usedTokens)) && (context.limitTokens === null || number(context.limitTokens)) && stamp(context.observedAt));
+const responseObservation = (value: unknown) => object(value) && responseHash(value.id) && observation(value.event)
+  && object(value.event) && value.event.source === 'codex' && value.event.codexCompactionId === value.id
+  && optional(value, ['threadUsage'], tokens);
+const responseState = (value: unknown) => object(value) && map(value.pending, responseObservation)
+  && Object.entries(value.pending as ObjectValue).every(([id, item]) => responseHash(id) && object(item) && item.id === id)
+  && Array.isArray(value.markers) && value.markers.every(responseHash) && optional(value, ['latest'], responseObservation);
 
 /** Check fields consumed by history materialization before creating a restore directory. */
 export function validateBackupSessions(value: ObjectValue, source: string): void {
-  requireValid(Number.isInteger(value.version) && Number(value.version) >= 3 && Number(value.version) <= 12 && value.source === source && typeof value.complete === 'boolean' && object(value.files));
+  requireValid(Number.isInteger(value.version) && Number(value.version) >= 3 && Number(value.version) <= 13 && value.source === source && typeof value.complete === 'boolean' && object(value.files));
   for (const file of Object.values(value.files)) {
     requireValid(object(file) && object(file.context) && text(file.context.sessionId) && typeof file.complete === 'boolean'
       && ['size', 'mtimeMs', 'ino', 'offset'].every(key => number(file[key])) && text(file.guard));
     requireValid(optional(file.context, ['parentId', 'projectLabel', 'observationModel', 'insightTurnId', 'insightModel'], text));
+    requireValid(optional(file.context, ['observationCodexResponses'], responseState));
+    requireValid(optional(file.context, ['observationCodexBilling'], billing));
     requireValid(map(file.messages, row => event(row) && object(row) && ['user', 'assistant'].includes(String(row.role))));
     requireValid(optional(file, ['timings'], rows => map(rows, row => event(row) && object(row) && ['user', 'activity', 'task-start', 'task-end', 'task-abort'].includes(String(row.kind)))));
     requireValid(optional(file, ['evidence'], rows => map(rows, row => event(row) && object(row) && ['metadata', 'request', 'turn', 'tool', 'tool-result', 'retry', 'error', 'compaction', 'coverage'].includes(String(row.kind))
       && optional(row, ['operation'], operation))));
     requireValid(optional(file, ['titles'], rows => map(rows, row => object(row) && text(row.title) && number(row.priority))));
-    requireValid(optional(file, ['observations'], rows => map(rows, row => event(row) && object(row) && text(row.model) && number(row.tokens) && typeof row.usageKnown === 'boolean'
-      && (row.costUsd === null || number(row.costUsd)) && ['recorded', 'estimated', 'unknown'].includes(String(row.costKind))
-      && object(row.billing) && text(row.billing.service) && ['subscription', 'api', 'unknown'].includes(String(row.billing.mode))
-      && ['recorded', 'unknown'].includes(String(row.billing.evidence)) && (row.billing.accountRef === null || text(row.billing.accountRef))
-      && optional(row, ['tokenParts', 'estimatedTokenParts'], tokens) && optional(row, ['pricingFact'], fact)
-      && optional(row, ['context'], context => object(context) && (context.usedTokens === null || number(context.usedTokens)) && (context.limitTokens === null || number(context.limitTokens)) && stamp(context.observedAt)))));
+    requireValid(optional(file, ['observations'], rows => map(rows, observation)));
   }
 }
 

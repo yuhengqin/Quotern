@@ -21,7 +21,7 @@ import { createCodexLineReader } from './parsers/codex-log-reader.js';
 import { localDateAndHour } from './timezone.js';
 import { inTimeBounds } from './usage-window.js';
 
-const VERSION = 12;
+const VERSION = 13;
 interface FileSnapshot {
   evidence?: Record<string, SessionEvidence>;
   complete: boolean;
@@ -86,7 +86,7 @@ async function loadSource(path: string, source: string): Promise<SourceSnapshot 
     if (!pending) {
       pending = (async () => {
         const value = JSON.parse(await readFile(path, 'utf8')) as SourceSnapshot;
-        if (![3, 4, 5, 6, 7, 8, 9, 10, 11, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
+        if (![3, 4, 5, 6, 7, 8, 9, 10, 11, 12, VERSION].includes(value.version) || value.source !== source || !value.files || typeof value.files !== 'object') return null;
         const after = await stat(path);
         // A sync may rename a newer snapshot while this read is in flight.
         if (`${after.mtimeMs}:${after.ctimeMs}:${after.size}:${after.ino}` !== stamp) return loadSource(path, source);

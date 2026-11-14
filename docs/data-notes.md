@@ -183,7 +183,9 @@ Dashboard 与 Desktop 主页面的两张趋势图共用日期标签、粒度和�
 
 ## 会话诊断与导出
 
-数值证据缓存版本为 11。fork 与 subagent 分开统计；`own` 是可加总口径，`combined` 不重复汇总。缺少费用时保留 `null` 和已知小计；排除 DSH 继承 seed。Droid 与 Grok 的累计快照保留原始计量点，并按会话差分。
+数值证据缓存版本为 13。fork 与 subagent 分开统计；`own` 是可加总口径，`combined` 不重复汇总。缺少费用时保留 `null` 和已知小计；排除 DSH 继承 seed。Droid 与 Grok 的累计快照保留原始计量点，并按会话差分。
+
+Codex 会话观察将 `token_usage_record.response_id` 与 `compacted.compaction_response_id` 配对，补齐独立压缩请求。状态仅保存响应哈希及数值投影，保留请求原有时间、模型、档位和匿名归属，不改变普通累计基线或任务计时。最近响应已由普通请求明细或明确的线程累计快照覆盖时不重复计量；覆盖判定在日期筛选前完成，也适用于分次采集后到达的普通通知。升级会重读仍存在的日志，原日志已删除的旧会话数值继续保留。证据：[会话压缩回归](../packages/core/test/session-codex-compaction.test.ts)。
 
 Droid/Grok 对新出现的较小累计值保留此前高水位，避免旧副本和压缩后读数重复收费。缺少前次 Token 细项时，后续差额的费用保持未知。Grok 仅有总 Token 时沿用采集器的输入 80%／输出 20% 估价假设，并在会话定价解释中明确披露；请求数和真实输入输出拆分仍为未知。
 

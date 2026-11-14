@@ -25,6 +25,9 @@ export interface SessionContextObservation {
   observedAt: string;
 }
 export interface SessionObservation {
+  /** Hashes only: ordinary notifications can cover a separately marked response. */
+  codexCompactionId?: string;
+  codexCoveredResponseId?: string;
   estimatedTokenParts?: TokenParts;
   costAssumption?: 'grok-80-20';
   seq?: number;
@@ -53,6 +56,12 @@ export interface SessionObservation {
   replayKey?: string;
 }
 export interface ObservationContext {
+  observationCodexBilling?: SessionBilling;
+  observationCodexResponses?: {
+    pending: Record<string, CodexResponseObservation>;
+    markers: string[];
+    latest?: CodexResponseObservation;
+  };
   insightTurnId?: string;
   insightModel?: string;
   insightStart?: number;
@@ -72,6 +81,7 @@ export interface ObservationContext {
   observationCost?: number;
   observationLimit?: number;
 }
+interface CodexResponseObservation { id: string; event: SessionObservation; threadUsage?: TokenParts }
 type Obj = Record<string, unknown>;
 export function extractSessionObservations(source: string, record: Obj, context: ObservationContext): SessionObservation[] {
   if (source === 'muse') {
@@ -99,6 +109,56 @@ function timestamp(v: unknown): string | null {
   if (v === null || v === undefined || v === '') return null;
   const n = typeof v === 'number' ? v < 1e12 ? v * 1000 : v : Date.parse(String(v));
   return Number.isFinite(n) && Math.abs(n) < 8.64e15 ? new Date(n).toISOString() : null;
+}
+
+function codexTokenParts(usage: Obj): TokenParts {
+  const cached = count(usage.cached_input_tokens ?? usage.cache_read_input_tokens);
+  const write = count(usage.cache_creation_input_tokens ?? usage.cache_write_input_tokens);
+  const reasoning = count(usage.reasoning_output_tokens);
+  const aliasWrite = usage.cache_creation_input_tokens == null && usage.cache_write_input_tokens != null ? write : 0;
+  return { input_tokens: Math.max(0, count(usage.input_tokens) - cached - aliasWrite),
+    output_tokens: Math.max(0, count(usage.output_tokens) - reasoning), cached_input_tokens: cached,
+    cache_creation_input_tokens: write, reasoning_output_tokens: reasoning };
+}
+const sameCodexParts = (a: TokenParts | undefined, b: TokenParts) => !!a && TOKEN_FIELDS.every(field => a[field] === b[field]);
+
+/** Response usage is independent of the ordinary cumulative clock. Unmarked records stay pending. */
+function codexCompactionObservation(record: Obj, context: ObservationContext): SessionObservation | null {
+  const payload = obj(record.payload);
+  const rawId = record.type === 'compacted' ? payload.compaction_response_id : payload.response_id;
+  if (typeof rawId !== 'string' || !rawId.trim()) return null;
+  const id = createHash('sha256').update(rawId.trim()).digest('hex');
+  const state = context.observationCodexResponses ??= { pending: {}, markers: [] };
+  if (record.type === 'compacted') {
+    if (!state.pending[id]) { if (!state.markers.includes(id)) state.markers.push(id); return null; }
+  } else {
+    const clock = timestamp(record.timestamp), parts = codexTokenParts(obj(payload.usage));
+    if (!clock || !TOKEN_FIELDS.some(field => parts[field] > 0)) return null;
+    // Reuse request pricing/billing projection with an isolated context. Neither
+    // response usage nor thread_token_usage advances the ordinary baseline.
+    const projected = extractSessionObservation('codex', { type: 'event_msg', timestamp: clock, payload: { type: 'token_count', info: {
+      model: text(payload.model) || context.observationModel,
+      last_token_usage: { input_tokens: parts.input_tokens + parts.cached_input_tokens, cached_input_tokens: parts.cached_input_tokens,
+        cache_creation_input_tokens: parts.cache_creation_input_tokens, output_tokens: parts.output_tokens + parts.reasoning_output_tokens,
+        reasoning_output_tokens: parts.reasoning_output_tokens },
+    } } }, { ...context, observationTotal: undefined, observationCodexResponses: undefined });
+    if (!projected) return null;
+    const { context: _requestContext, ...event } = projected;
+    const proof = context.observationCodexBilling;
+    if (!context.observationAuth && event.billing.mode === 'unknown' && proof?.service === event.billing.service && proof.accountRef === event.billing.accountRef) event.billing = { ...proof };
+    event.id = `codex-compaction:${id}`;
+    event.codexCompactionId = id;
+    event.replayKey = `codex-response:${id}`;
+    if (event.pricingFact) event.pricingFact.id = id;
+    const threadUsage = obj(payload.thread_token_usage);
+    state.pending[id] ??= { id, event, ...(Object.keys(threadUsage).length ? { threadUsage: codexTokenParts(threadUsage) } : {}) };
+    state.latest = state.pending[id];
+    if (!state.markers.includes(id)) return null;
+  }
+  const candidate = state.pending[id]!;
+  delete state.pending[id];
+  state.markers = state.markers.filter(marker => marker !== id);
+  return candidate.event;
 }
 
 /** Provider/auth fields are evidence; model names and zero costs are not. */
@@ -132,6 +192,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
     context.observationAuth = text(payload.auth_mode) || context.observationAuth;
     return null;
   }
+  if (source === 'codex' && (record.type === 'token_usage_record' || record.type === 'compacted')) return codexCompactionObservation(record, context);
   if ((source === 'pi' || source === 'omp') && record.type === 'session') {
     context.sessionId = text(record.id) || context.sessionId;
     return null;
@@ -144,6 +205,7 @@ export function extractSessionObservation(source: string, record: Obj, context: 
   let tokenParts = { input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 };
   let usageKnown = false, costUsd: number | null = null, reportedTotal = 0;
   let pricingFact: RequestPricingFact | undefined, requestKnown = false;
+  let codexCoveredResponseId: string | undefined;
   let costScope: 'session-total' | undefined, costIncomplete = false;
   if (source === 'codex') {
     const event = payload.type === 'token_count' ? payload : obj(payload.msg);
@@ -177,11 +239,17 @@ export function extractSessionObservation(source: string, record: Obj, context: 
       if (last.cache_creation_input_tokens == null && last.cache_write_input_tokens != null) normalized.input_tokens = Math.max(0, normalized.input_tokens! - count(last.cache_write_input_tokens));
     }
     for (const key of keys) normalized[key] ??= 0;
-    const cached = normalized.cached_input_tokens!, reasoning = normalized.reasoning_output_tokens!;
-    tokenParts = { input_tokens: Math.max(0, normalized.input_tokens! - cached), output_tokens: Math.max(0, normalized.output_tokens! - reasoning), cached_input_tokens: cached, cache_creation_input_tokens: normalized.cache_creation_input_tokens!, reasoning_output_tokens: reasoning };
+    tokenParts = codexTokenParts(normalized);
     reportedTotal = normalized.total_tokens!;
     usageKnown = !repeated && (Object.keys(last).length > 0 || Boolean(previous));
     requestKnown = Object.keys(last).length > 0 && !repeated;
+    const response = context.observationCodexResponses?.latest;
+    if (usageKnown && response?.event.sessionId === context.sessionId && response.event.model === model
+      && (sameCodexParts(response.event.tokenParts, tokenParts) || Object.keys(total).length > 0 && sameCodexParts(response.threadUsage, codexTokenParts(current)))) {
+      codexCoveredResponseId = response.id;
+      delete context.observationCodexResponses!.pending[response.id];
+      delete context.observationCodexResponses!.latest;
+    }
     id = digest([record.timestamp, Object.keys(total).length ? total : last]);
     const capacity = positive(info.model_context_window);
     if (capacity) context.observationLimit = capacity;
@@ -246,11 +314,14 @@ export function extractSessionObservation(source: string, record: Obj, context: 
     costKind = 'estimated';
   }
   context.observationModel = model;
+  const proof = billing(provider, auth, account);
+  if (source === 'codex' && usageKnown && proof.mode !== 'unknown') context.observationCodexBilling = { ...proof };
   return { id, source, sessionId: context.sessionId, timestamp: clock, model, tokens, usageKnown, costUsd, costKind,
+    ...(codexCoveredResponseId ? { codexCoveredResponseId } : {}),
     ...(usageKnown ? { tokenParts, pricingFact, requestKnown } : {}),
     ...(costKind !== 'recorded' && pricingFact ? { costBasis: 'request-facts' as const } : {}),
     ...(costScope ? { costScope, costIncomplete } : {}),
-    billing: billing(provider, auth, account), ...(contextual ? { context: { ...contextual, observedAt: clock } } : {}),
+    billing: proof, ...(contextual ? { context: { ...contextual, observedAt: clock } } : {}),
     ...(context.projectLabel ? { projectLabel: context.projectLabel } : {}), ...(context.profileId ? { profileId: context.profileId } : {}),
     ...(context.parentId ? { parentId: context.parentId } : {}), ...(source === 'codex' ? { replayKey: (() => {
       const info = obj(obj(payload.type === 'token_count' ? payload : payload.msg).info);
@@ -309,9 +380,11 @@ export interface SessionModelUsage {
 
 export function mergeSessionObservation(previous: SessionObservation | undefined, next: SessionObservation): SessionObservation {
   if (!previous) return next;
-  if (next.source === 'codex' && next.tokens < previous.tokens) return { ...next, tokens: previous.tokens, costUsd: previous.costUsd, costKind: previous.costKind,
-    usageKnown: previous.usageKnown, tokenParts: previous.tokenParts, pricingFact: previous.pricingFact, requestKnown: previous.requestKnown, costBasis: previous.costBasis, costIncomplete: previous.costIncomplete };
-  return next.timestamp >= previous.timestamp ? next : previous;
+  const merged = next.source === 'codex' && next.tokens < previous.tokens ? { ...next, tokens: previous.tokens, costUsd: previous.costUsd, costKind: previous.costKind,
+    usageKnown: previous.usageKnown, tokenParts: previous.tokenParts, pricingFact: previous.pricingFact, requestKnown: previous.requestKnown, costBasis: previous.costBasis, costIncomplete: previous.costIncomplete }
+    : next.timestamp >= previous.timestamp ? next : previous;
+  const covered = merged.codexCoveredResponseId ?? previous.codexCoveredResponseId ?? next.codexCoveredResponseId;
+  return covered ? { ...merged, codexCoveredResponseId: covered } : merged;
 }
 
 export interface PreparedSessionObservations { events: SessionObservation[]; missingSources: string[] }
@@ -319,7 +392,11 @@ export interface PreparedSessionObservations { events: SessionObservation[]; mis
 /** Range-independent accounting: preserve cumulative deltas and inherited-prefix semantics. */
 export function prepareSessionObservations(events: readonly SessionObservation[]): PreparedSessionObservations {
   const selected = new Map<string, SessionObservation>();
+  // Resolve notification twins before time/fork filtering, including a marker
+  // that was already published during an earlier incremental scan.
+  const coveredResponses = new Set(events.filter(e => e.source === 'codex' && e.usageKnown && e.codexCoveredResponseId).map(e => e.codexCoveredResponseId!));
   for (const e of events) {
+    if (e.source === 'codex' && e.codexCompactionId && coveredResponses.has(e.codexCompactionId)) continue;
     const key = JSON.stringify([e.source, e.sessionId, e.id]);
     selected.set(key, mergeSessionObservation(selected.get(key), e));
   }
@@ -359,7 +436,17 @@ export function prepareSessionObservations(events: readonly SessionObservation[]
     }
     for (const event of rows.slice(0, copied)) inherited.add(event);
   }
-  return { events: ordered.filter(event => !inherited.has(event)), missingSources: [...missingParents] };
+  const compactionResponses = new Set<string>();
+  const unique = ordered.filter(event => {
+    if (inherited.has(event)) return false;
+    if (event.source !== 'codex' || !event.codexCompactionId) return true;
+    // Native response IDs name one request even if a copied child log lost
+    // its parent metadata. Resolve this before date-window selection as well.
+    if (compactionResponses.has(event.codexCompactionId)) return false;
+    compactionResponses.add(event.codexCompactionId);
+    return true;
+  });
+  return { events: unique, missingSources: [...missingParents] };
 }
 
 export function aggregateSessionActivity(events: readonly SessionObservation[], messages: readonly SessionMessage[], options: SessionMetricOptions & { totalTokens: number; now?: number; prepared?: PreparedSessionObservations; modelDetails?: boolean }): SessionActivitySnapshot {

@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { EnvHttpProxyAgent } from 'undici';
 import { mergeModelsDevPricing, MODELS_DEV_URL } from './models-dev.mjs';
 import type { QueueBucket } from '../types.js';
-import { builtinRequestRules, priceRequest, tokenCostItem, TOKEN_FIELDS, validRequestRules, type TokenCostItem } from './request-pricing.js';
+import { builtinRequestRules, priceRequest, tokenCostItem, TOKEN_FIELDS, validRequestRules, REQUEST_PRICING_REVISION, type TokenCostItem } from './request-pricing.js';
 export * from './request-pricing.js';
 import { pricingOverlayPath } from '../paths.js';
 import pricingData from './pricing.json' with { type: 'json' };
@@ -87,7 +87,7 @@ let fingerprintState: PricingSnapshot | null = null, fingerprint = '';
 export function getPricingFingerprint(): string {
   const next = getPricingSnapshot();
   if (!fingerprintState || next.builtin !== fingerprintState.builtin || next.overlay !== fingerprintState.overlay || next.manual !== fingerprintState.manual) {
-    fingerprintState = next; fingerprint = createHash('sha256').update(JSON.stringify(next)).digest('hex');
+    fingerprintState = next; fingerprint = createHash('sha256').update(JSON.stringify({ ...next, requestPricingRevision: REQUEST_PRICING_REVISION })).digest('hex');
   }
   return fingerprint;
 }

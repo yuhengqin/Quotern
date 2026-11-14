@@ -42,7 +42,8 @@ test('Codex session includes the standalone compaction request with its original
   assert.equal(events[0]?.timestamp, stamp);
   assert.equal(events[0]?.billing.mode, 'subscription');
   assert.ok(events[0]?.billing.accountRef);
-  assert.ok(Math.abs(session.costUsd! - 0.1091492) < 1e-9);
+  // API long context: 153 * $4 + 453632 * $0.2 + 6348 * $15 per million.
+  assert.ok(Math.abs(session.costUsd! - 0.1865584) < 1e-9);
   assert.equal(result.otherTokens, 0);
 });
 

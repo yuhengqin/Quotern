@@ -151,7 +151,11 @@ Dashboard 与 Desktop 共享价格页及目录转换，订阅行显示“订阅�
 
 覆盖表可提供 `request_rules` 数组，每条明确 `model`（准确定价 ID）、`source`、`rates` 与 HTTPS `reference`，可选 `serviceTier`、`minInputTokens`、`effectiveFrom` 和 `effectiveTo`。阈值是整个请求输入严格大于阈值时，对整个请求采用该档费率；只看半小时累计值不会触发。时间为左闭右开，未提供边界的规则由维护者承担适用范围。TTL 费率使用 `cache_write_5m` / `cache_write_1h`，未指定的费率继续取基础表；缺失与明确零费率分别保留。
 
-内置当前修饰规则于 2026-10-18 核对 [Anthropic 定价](https://platform.claude.com/docs/en/about-claude/pricing)与 [OpenAI 定价](https://developers.openai.com/api/docs/pricing)，仅从该日 UTC 起应用，不能反向证明历史费率。内置范围为 Claude 官方定价 ID 的 5m/1h 缓存、明确支持型号的 Fast 与 Haiku 5.5 请求长度档，以及 Codex 中 GPT-6 Astra / GPT-6.1 Sol / GPT-6 Luna 的 Fast/Flex。其他型号或渠道需明确规则，不能套用相同倍率。表生成时间仍不是供应商调价时间，`requestPricing` 另报告请求覆盖、沿用旧口径的 Token、档位与规则出处。
+内置修饰规则最初于 2026-10-18 核对 [Anthropic 定价](https://platform.claude.com/docs/en/about-claude/pricing)与 [OpenAI 定价](https://developers.openai.com/api/docs/pricing)：Claude 官方定价 ID 的 5m/1h 缓存、明确支持型号的 Fast 与 Haiku 5.5 请求长度档，以及 Codex 中 GPT-6 Astra / GPT-6.1 Sol / GPT-6 Luna 的 Fast/Flex，保留从该日 UTC 起应用的下界，不能反向证明历史费率。
+
+2026-11-14 补核上述三个 Codex 官方定价 ID 的 API 长上下文规则：完整单请求输入（未缓存输入 + 缓存读 + 缓存写）严格超过 272,000 时，对整个请求的输入及缓存读写使用 2 倍费率，输出（含推理）使用 1.5 倍费率，Fast/Flex 再分别乘 2 / 0.5。这项新增规则按当前 API 参考价重估已有完整请求证据，不虚构供应商的历史生效日期；原有档位规则的日期下界仍保留。订阅标记不取消 API 等价估价中的加价，实际订阅支付仍以服务商账单为准。没有完整请求输入的累计差额和旧桶不推断长上下文，继续沿用原估价；多个短请求合桶也不触发阈值。其他型号或渠道需明确规则，不能套用相同倍率。
+
+价格指纹同时包含内置请求计价修订号，规则更新后拒绝旧指纹的磁盘费用封存并按数值事实重算，不要求重采原日志。手动基础单价继续接受相应修饰；显式 `request_rules` 沿用“档位优先、同档位高阈值优先、同条件后提供者优先”的逐字段覆盖顺序。表生成时间和规则核实时间仍不是供应商调价时间，`requestPricing` 另报告请求覆盖、沿用旧口径的 Token、档位与规则出处。证据：[Codex 长上下文回归](../packages/core/test/codex-long-context-pricing.test.ts)。
 
 会话缓存 Schema 10 在原独立观察上增加可选 `tokenParts`、`pricingFact` 与请求证据。已有日志会重扫补齐，已删除日志的旧总量继续可读，但拆分未知。带新事实的估价在读取时按当前规则重算，来源报告金额保持原记录。模型表逐调用归属，同一窗口的会话来源累计金额不按模型比例分配；模型表可能是调用估价而会话总额来自来源，界面明确说明。任务时长在分会话前按真实 turn UUID 及父子关系确定归属，避免 fork 重复计时。确定的 Codex 重复累计通知不污染已知请求数。
 

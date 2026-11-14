@@ -1,5 +1,8 @@
 import type { ModelPricingRates } from './matcher.js';
 
+/** Bump when built-in request rules or their calculation change, so persisted costs are rebuilt. */
+export const REQUEST_PRICING_REVISION = '2026-11-14-codex-long-context';
+
 export const TOKEN_FIELDS = ['input_tokens', 'output_tokens', 'cached_input_tokens', 'cache_creation_input_tokens', 'reasoning_output_tokens'] as const;
 export type TokenParts = Record<typeof TOKEN_FIELDS[number], number>;
 export interface TokenCostItem {
@@ -61,7 +64,7 @@ export function validRequestRules(value: unknown): value is RequestPricingRule[]
     && Object.entries(rule.rates).every(([key, v]) => ['input', 'output', 'cache_read', 'cache_write', 'cache_write_1h', 'cache_write_5m'].includes(key) && typeof v === 'number' && Number.isFinite(v) && v >= 0));
 }
 
-/** Verified current modifiers, scoped to direct vendor pricing IDs; no historical backdating. */
+/** Verified API reference modifiers, scoped to direct vendor pricing IDs. */
 export function builtinRequestRules(model: string, source: string, base: ModelPricingRates): RequestPricingRule[] {
   const common = { model, source, effectiveFrom: '2026-10-18T00:00:00Z' };
   const rules: RequestPricingRule[] = [];
@@ -71,7 +74,19 @@ export function builtinRequestRules(model: string, source: string, base: ModelPr
     if (/^anthropic\/claude-(?:opus-5(?:[.-]5)?|opus-4[.-]8)$/.test(model)) rules.push({ ...common, serviceTier: 'fast', rates: { ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, v! * 2])), cache_write_5m: base.input * 2.5, cache_write_1h: base.input * 4 }, reference: 'https://platform.claude.com/docs/en/about-claude/pricing' });
   }
   if (source === 'codex' && /^openai\/gpt-(?:6-astra|6[.]1-sol|6-luna)$/.test(model)) {
-    for (const [serviceTier, multiplier] of [['fast', 2], ['flex', 0.5]] as const) rules.push({ ...common, serviceTier, rates: Object.fromEntries(Object.entries(base).map(([k, v]) => [k, v! * multiplier])) as ModelPricingRates, reference: 'https://developers.openai.com/api/docs/pricing' });
+    const reference = 'https://developers.openai.com/api/docs/pricing';
+    const scaledRates = (tier: number, long: boolean): ModelPricingRates => Object.fromEntries(
+      Object.entries(base).filter(([, value]) => value !== undefined).map(([key, value]) =>
+        [key, value! * tier * (long ? key === 'output' ? 1.5 : 2 : 1)]),
+    );
+    // Current API-equivalent reference prices, not a claim about historical subscription bills.
+    const context = { model, source, minInputTokens: 272_000, reference };
+    rules.push({ ...context, rates: scaledRates(1, true) });
+    for (const [serviceTier, multiplier] of [['fast', 2], ['flex', 0.5]] as const) {
+      rules.push({ ...common, serviceTier, rates: scaledRates(multiplier, false), reference });
+      // Tier rules contain absolute rates; each combination must retain the context multiplier.
+      rules.push({ ...context, effectiveFrom: common.effectiveFrom, serviceTier, rates: scaledRates(multiplier, true) });
+    }
   }
   return rules;
 }

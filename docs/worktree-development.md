@@ -1,6 +1,6 @@
 # worktree 开发规范
 
-适用于直接在 main 开发、并行分支开发、Git worktree 管理及开发服务的启动、验证和清理。目标是让每个会话独立完成开发，不占用、停止或改写其他会话的资源。
+适用于直接在 main 开发、并行分支开发、Git worktree 管理及开发服务的启动、验证和清理。目标是让每个会话独立完成开发，并能按用户要求清理已完成的工作区。
 
 ## 工作区与分支
 
@@ -9,7 +9,12 @@
 - 操作前确认 `git status --short --branch`、`git worktree list --porcelain` 及当前绝对目录。已有合适且属于本任务的 worktree 时复用。Codex 新分支使用 `codex/<short-desc>`；其他贡献分支按 [CONTRIBUTING.md](../CONTRIBUTING.md#分支规范)。
 - 不在其他会话正在使用的目录切分支、构建、重置、清理文件或安装依赖。每个 worktree 保留自己的 `node_modules` 入口、workspace 包链接、构建缓存及 `dist` / `out`；禁止手动将这些目录指向其他 worktree。外部依赖由 pnpm 的全局虚拟存储共享，具体要求见下节。
 - 不把其他任务的未提交修改纳入自己的提交。合并时确认目标目录及分支归属；若目标目录正被其他会话开发或运行服务，保留自己的可验收分支，等待明确协调后再集成。
-- 清理前检查未提交修改、未推送提交和本任务启动的服务。只删除本任务确认可丢弃的分支或 worktree；Codex 管理的 worktree 使用应用提供的归档工具。
+
+## worktree 清理
+
+- 用户要求清理 worktree 或已合入分支时，直接按请求执行，包括其他历史会话创建的 worktree；该请求即为清理授权，无需再次确认，也不要求回到原会话操作。
+- 应用归档与 `git worktree remove` 均可用于清理 Codex 管理的 worktree；应用归档受会话归属或关联限制时，可直接使用 Git。worktree 的创建者、存放位置、detached HEAD 或 Codex 管理身份均不构成清理限制。
+- 清理按用户指定范围执行；单个目标出现实际阻塞时，报告具体对象和错误，并继续处理其余可清理目标。
 
 ## 依赖初始化与共享
 
@@ -27,7 +32,7 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 - `--frozen-lockfile` 失败时先核对固定的 pnpm 版本、安装配置与依赖声明。只有任务明确需要调整依赖时，才使用 `corepack pnpm add` / `remove` / `update` 并同步检查清单和锁文件；不要为绕过失败删除锁文件或切换包管理器。
 - 已有安装可能沿用 `node_modules/.modules.yaml` 记录的旧 `virtualStoreDir`，仅修改配置后执行 `install`（包括 `--force`）不保证迁移。先确认目录归属并停止本会话使用依赖的服务；将当前 worktree 根及各 workspace 包的 `node_modules` 改名保留为迁移备份，再执行上述安装命令。确认共享真实路径、构建和测试后，才清理这些本会话的备份。其他会话仍在使用时，保留原安装，改在独立 worktree 验证。
 - 固定版本 pnpm 11.1.2 会尊重显式设置的 `enableGlobalVirtualStore: true`，CI 也使用全局虚拟存储；不能依赖“CI 自动禁用”的通用文档描述。不要为了跳过本地安装交互而临时设置 `CI=true`，它还会改变其他安装行为。验证共享时同时检查安装后的 `node_modules/.modules.yaml` 中 `virtualStoreDir` 及依赖的真实路径，不能只看配置值。
-- 清理 worktree 只处理本任务所属的入口和产物，保留共享存储，不顺带执行 `pnpm store prune` 或删除 store / `links` 目录。共享存储回收作为单独维护任务处理。
+- 清理 worktree 处理目标 worktree 的依赖入口和产物，保留共享存储，不顺带执行 `pnpm store prune` 或删除 store / `links` 目录。共享存储回收作为单独维护任务处理。
 
 共享存储中的库无法依赖项目祖先目录中的隐式依赖。当前通过版本限定的 `packageExtensions` 补齐 HeroUI 3.2.4 遗漏的 `@internationalized/date` 声明；Dashboard / Desktop 的 TypeScript `paths` 将 `react`、`react-dom` 及其子路径的类型解析固定到各项目自己的 `@types` 包，避免库声明仅解析到共享目录中的 JavaScript 文件。升级相关依赖时核对这些兼容配置，不能通过修改共享存储内的文件或放宽类型检查规避问题。
 

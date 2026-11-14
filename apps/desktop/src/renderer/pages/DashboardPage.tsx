@@ -20,6 +20,7 @@ import { StatusBanner } from '@/components/StatusBanner';
 import { ProjectUsagePanel } from '@/components/ProjectUsagePanel';
 import { ToolModelUsagePanel } from '@/components/ToolModelUsagePanel';
 import { UsageDistributionCard } from '@/components/UsageDistributionCard';
+import { ModelTokenShareCard } from '../../../../../packages/dashboard/src/components/ModelTokenShareCard';
 import { SubscriptionUsageGrid } from '@/components/SubscriptionUsageGrid';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useRollingDayRange } from '@/hooks/useRollingDayRange';
@@ -418,11 +419,7 @@ export function DashboardPage() {
               rows={visibleDistributions.tools}
               title={t('usage.page.agentDistribution')}
             />
-            <UsageDistributionCard
-              description={t('usage.page.modelDistributionDesc')}
-              rows={visibleDistributions.models}
-              title={t('usage.page.modelDistribution')}
-            />
+            <ModelTokenShareCard rows={visibleDistributions.models} />
           </section>
         </div>
       )}

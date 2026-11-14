@@ -579,6 +579,8 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.weekday.sat': ['周六', 'Sat', '土', '토'],
   'usage.weekday.sun': ['周日', 'Sun', '日', '일'],
   'usage.distribution.metricAria': ['{{title}}指标', '{{title}} metric', '{{title}}の指標', '{{title}} 지표'],
+  'usage.modelShare.otherCount': ['其他（{{count}} 个模型）', 'Other ({{count}} models)', 'その他（{{count}} モデル）', '기타 ({{count}}개 모델)'],
+  'usage.modelShare.viewOther': ['查看其他 {{count}} 个模型', 'View {{count}} other models', 'その他の {{count}} モデルを表示', '기타 모델 {{count}}개 보기'],
   'usage.distribution.show': ['显示 {{label}}', 'Show {{label}}', '{{label}}を表示', '{{label}} 표시'],
   'usage.distribution.hide': ['隐藏 {{label}}', 'Hide {{label}}', '{{label}}を非表示', '{{label}} 숨기기'],
   'usage.distribution.uncachedInput': ['输入（未缓存）', 'Input (uncached)', '入力（非キャッシュ）', '입력(캐시되지 않음)'],

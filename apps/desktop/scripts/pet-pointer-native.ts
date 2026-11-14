@@ -1,7 +1,9 @@
 // Run through pet-pointer-smoke.mjs: real Electron windows/preload/renderer, private profile.
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { app, BrowserWindow, ipcMain, Menu, screen } from 'electron';
 import { PetController } from '../src/main/pet-controller';
 import { registerPetAssetScheme } from '../src/main/pet-catalog';
@@ -15,8 +17,10 @@ app.setPath('sessionData', path.join(output!, 'profile/session'));
 app.setAppPath(desktop!);
 registerPetAssetScheme();
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const until = async (read: () => unknown | Promise<unknown>, label: string) => {
-  for (let i = 0; i < 150; i++) { if (await read()) return; await wait(20); }
+const execFileAsync = promisify(execFile);
+const until = async (read: () => unknown | Promise<unknown>, label: string, timeoutMs = 3000) => {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) { if (await read()) return; await wait(20); }
   throw new Error(`Timed out: ${label}`);
 };
 
@@ -43,6 +47,8 @@ async function main() {
   const internals = controller as any;
   internals.refreshData = async () => {};
   let pet: BrowserWindow | undefined;
+  let cover: BrowserWindow | undefined;
+  let originalPetIsAlwaysOnTop: (() => boolean) | undefined;
   try {
     await controller.initialize();
     ipcMain.on(PET_COMMAND_CHANNEL, (_event, command) => commands.push(command));
@@ -168,7 +174,58 @@ async function main() {
     cursor = { x: work.x + work.width - 5, y: pet!.getBounds().y + y };
     await until(() => pet!.webContents.executeJavaScript('window.__ttPetHover === true'), 'hover after showing again');
     checks.push('reshow-resumes-hover');
-    await writeFile(path.join(output!, 'result.json'), JSON.stringify({ ok: true, checks, ignores }, null, 2));
+
+    cursor = { x: -10000, y: -10000 };
+    await until(() => !internals.state.hover && !internals.edgeTimer, 'stable pet bounds before topmost test');
+    const stableBounds = pet!.getBounds();
+    cover = new BrowserWindow({ ...stableBounds, show: false, frame: false, skipTaskbar: true, focusable: false, backgroundColor: '#ffffff', title: 'Quotern topmost test cover' });
+    await cover.loadURL('data:text/plain,Quotern%20topmost%20acceptance');
+    cover.showInactive();
+    // SetWindowPos sends messages to the owning Electron thread. Await the
+    // helper asynchronously so that thread can dispatch those messages.
+    const probeOrder = async (demote = false) => JSON.parse((await execFileAsync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-File', path.join(desktop!, 'scripts/pet-topmost-native.ps1'),
+      '-PetHandle', String(pet!.getNativeWindowHandle().readBigUInt64LE()),
+      '-CoverHandle', String(cover!.getNativeWindowHandle().readBigUInt64LE()),
+      '-OwnerProcessId', String(process.pid), ...(demote ? ['-Demote'] : []),
+    ], { encoding: 'utf8', windowsHide: true, timeout: 10_000 })).stdout) as { petTopmost: boolean; petAboveCover: boolean; foreground: number };
+    let petFocusEvents = 0;
+    pet!.on('focus', () => { petFocusEvents++; });
+    // Windows does not reliably allow a topmost bit to be forged with
+    // SetWindowLongPtr. Keep the actual demotion real, and simulate the stale
+    // query result at the Electron API boundary instead.
+    originalPetIsAlwaysOnTop = pet!.isAlwaysOnTop.bind(pet!);
+    pet!.isAlwaysOnTop = () => true;
+    const demoted = await probeOrder(true);
+    assert.equal(demoted.petTopmost, false, 'fixture really removes native topmost');
+    assert.equal(demoted.petAboveCover, false, 'fixture really puts the pet below an ordinary window');
+    await until(async () => {
+      const state = await probeOrder();
+      return state.petTopmost && state.petAboveCover;
+    }, 'native topmost recovers despite the stale flag', 6500);
+    const recovered = await probeOrder();
+    assert.equal(petFocusEvents, 0, 'recovery never activates the pet');
+    assert.notEqual(recovered.foreground, Number(pet!.getNativeWindowHandle().readBigUInt64LE()), 'the pet never becomes the native foreground window');
+    assert.deepEqual(pet!.getBounds(), stableBounds, 'recovery never moves or resizes the pet');
+    checks.push('native-z-order-recovers-with-stale-topmost-query-without-moving-or-focusing');
+
+    await controller.hide();
+    // Deliberately leave the hidden window demoted. It must not be raised by
+    // background recovery, and showing it again must repair it immediately.
+    const hidden = await probeOrder(true);
+    assert.equal(hidden.petTopmost, false);
+    assert.equal(hidden.petAboveCover, false);
+    await wait(5200);
+    const stillHidden = await probeOrder();
+    assert.equal(stillHidden.petTopmost, false, 'hidden pets never reassert topmost');
+    assert.equal(stillHidden.petAboveCover, false, 'hidden pets never reorder native windows');
+    await controller.activate();
+    const reshown = await probeOrder();
+    assert.equal(reshown.petTopmost, true, 'showing restores native topmost, not just relative order');
+    assert.equal(reshown.petAboveCover, true, 'showing an existing window immediately restores topmost');
+    checks.push('hidden-native-window-stays-demoted-and-reshow-restores-immediately');
+    await writeFile(path.join(output!, 'result.json'), JSON.stringify({ ok: true, checks, ignores, topmost: { demoted, recovered, hidden, stillHidden, reshown, petFocusEvents, querySimulated: true } }, null, 2));
     console.log(JSON.stringify({ ok: true, checks }));
   } catch (error) {
     const failure = { message: String(error), checks, cursor, bounds: pet?.getBounds(),
@@ -179,13 +236,15 @@ async function main() {
     await writeFile(path.join(output!, 'failure.json'), JSON.stringify(failure, null, 2));
     throw error;
   } finally {
+    if (pet && originalPetIsAlwaysOnTop) pet.isAlwaysOnTop = originalPetIsAlwaysOnTop;
     controller.dispose();
+    cover?.destroy();
     screen.getCursorScreenPoint = originalCursor;
     BrowserWindow.prototype.setIgnoreMouseEvents = originalIgnore;
     Menu.prototype.popup = originalPopup;
   }
 }
-const deadline = setTimeout(() => app.exit(2), 30_000);
+const deadline = setTimeout(() => app.exit(2), 45_000);
 void app.whenReady().then(main).then(() => { clearTimeout(deadline); app.exit(0); }, error => {
   clearTimeout(deadline); console.error(error); app.exit(1);
 });

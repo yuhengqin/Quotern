@@ -271,6 +271,8 @@ Agent 活动流由独立运行时提供，只用于桌宠状态展示，不发�
 
 宠物使用同一份本机用量和订阅额度，后台、主窗口或宠物菜单发起同步时都会显示工作状态。悬浮窗支持点击切换表情与短句、右键菜单开关主窗口、拖动及随方向切换跑动、右侧贴边和 200ms 滑动展开；双击按两次普通点击处理，精灵外区域透传鼠标。Windows 不启用全局鼠标转发，使用 16ms 光标轮询维护命中、悬停及视线；局部坐标只在悬停变化时去重发送给宠物窗口。按下至释放/取消期间保留原生输入和拖拽捕获。窗口不监听全局按键活动，也不读取按键内容。隐藏后停止鼠标位置轮询；系统减少动态效果时暂停精灵逐帧动画。
 
+Windows 上，图集宠物显示时立即以 `screen-saver` 层级重申置顶，可见期间每 5 秒再次执行；隐藏、窗口关闭和控制器退出时清理定时器。恢复不依赖 `isAlwaysOnTop()`：Windows 的置顶样式位为真时，实际窗口顺序仍可能异常。重申通过原生不激活窗口的调用完成，保留位置与输入焦点，用于恢复普通桌面窗口之间的层级。
+
 Windows 实机验收建议：
 
 1. 用隔离开发入口 `pnpm dev:desktop` 启动，打开设置的「宠物」页，确认列表按大肥鱼、Clawd、Bot 排列，开启宠物，依次切换内置角色、大小、Bot 颜色及预览动作。
@@ -279,7 +281,7 @@ Windows 实机验收建议：
 4. 隐藏后重新显示、退出并重启 Desktop，确认角色、大小、位置及贴边状态保留。再导入一个合法 ZIP 或 Codex 宠物，检查 V1/V2 图集、移除与重新导入操作。
 5. 分别从主窗口、宠物右键菜单触发同步，并等待一次后台自动同步，确认同步期间切换到工作动作、完成后恢复。
 
-`corepack pnpm --filter quotern-desktop exec node scripts/pet-pointer-smoke.mjs` 在全新私有目录中构建输入验收 fixture，运行真实 Electron 窗口、preload 和宠物 renderer，不启动采集、不覆盖正在使用的 `out`。它审计原生穿透/转发调用，通过受控 OS 光标样本与 renderer 输入事件检查悬停倾斜、按下捕获、点击阈值、拖拽反向/释放、取消、贴边展开与隐藏后停止轮询；菜单仅验回调。结果保存在 `apps/desktop/.quotern-dev/pet-pointer-smoke-*/result.json`。该检查不代替真实物理鼠标、多屏或不同 DPI 的人工手感验收。
+`corepack pnpm --filter quotern-desktop exec node scripts/pet-pointer-smoke.mjs` 在全新私有目录中构建输入验收 fixture，运行真实 Electron 窗口、preload 和宠物 renderer，不启动采集、不覆盖正在使用的 `out`。它审计原生穿透/转发调用，通过受控 OS 光标样本与 renderer 输入事件检查悬停倾斜、按下捕获、点击阈值、拖拽反向/释放、取消、贴边展开与隐藏后停止轮询；菜单仅验回调。随后通过 Windows PowerShell 运行 `pet-topmost-native.ps1`，仅在核对 PID 归属的测试窗口上真实降级层级，并在 Electron API 边界模拟置顶查询仍返回真，检查恢复后的原生顺序、位置、宠物未激活以及隐藏/重显行为。这不是对原始 Windows 样式位异常触发过程的重现。结果保存在 `apps/desktop/.quotern-dev/pet-pointer-smoke-*/result.json`。该检查不代替真实物理鼠标、多屏或不同 DPI 的人工手感验收。
 
 ## 待统一规划
 

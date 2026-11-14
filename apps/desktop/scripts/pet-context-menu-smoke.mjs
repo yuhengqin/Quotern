@@ -149,7 +149,7 @@ try {
     await close(fishInspector);
     await until(() => fish.evaluate('!window.__dshPetDebug.inputBusy'), 'native menu cancellation after renderer leave');
   });
-  for (const [size, width] of [['small', 160], ['medium', 204], ['large', 264]]) await check(`dsh-native-size:${size}`, async () => {
+  for (const [size, width] of [['small', 204], ['medium', 264], ['large', 364]]) await check(`dsh-native-size:${size}`, async () => {
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")'); await choose(fishInspector, `size:${size}`);
     await until(() => main.evaluate(`window.tud.dshPet.getState().then(s=>s.status==='running'&&s.config.main.pets[0].size===${width})`), 'helper resize persisted');
     await connectFish();
@@ -172,7 +172,7 @@ try {
     await until(async () => !(await selection()).enabled, 'fish hidden');
     assert.equal((await selection()).currentKind, 'dsh');
     await main.evaluate('window.tud.pet.setEnabled(true)'); await connectFish();
-    assert.equal(await main.evaluate('window.tud.dshPet.getState().then(s=>s.config.main.pets[0].size)'), 264);
+    assert.equal(await main.evaluate('window.tud.dshPet.getState().then(s=>s.config.main.pets[0].size)'), 364);
   });
   await check('native-role-menu-switches-dsh-back-to-bot-exclusively', async () => {
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")'); await choose(fishInspector, 'character:builtin:bot');

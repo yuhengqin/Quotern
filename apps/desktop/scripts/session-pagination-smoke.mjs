@@ -42,6 +42,10 @@ for (let index = 0; index < 84; index++) {
   if (index !== 73 && (index < 76 || index === 79)) titles.push([JSON.stringify(['claude', sessionId]), { title: displayTitles[index] ?? (child ? `Child ${index}` : `Fixture ${index}`), priority: 2 }]);
 }
 const bucketStore = new BucketStore();
+const timingEvents = [
+  { source: 'claude', sessionId: 'fixture-74', id: 'task-start', kind: 'user', timestamp: '2026-10-25T04:02:00Z' },
+  { source: 'claude', sessionId: 'fixture-74', id: 'task-end', kind: 'activity', timestamp: '2026-10-25T04:14:00Z' },
+];
 if (dashboardOnly || heatmapOnly) {
   const bucket = (source, model, project, tokens, reportedCost) => ({
     source, model, project, hour_start: '2026-10-25T03:00:00Z', input_tokens: tokens,
@@ -62,7 +66,7 @@ const facts = buildAchievementFacts([], [], [], new Date(referenceTime));
 const achievementSnapshot = evaluateAchievements(facts);
 if (heatmapOnly) achievementSnapshot.summary.activeDays = 1;
 const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-10-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: {} }, overlay: null },
-  history: { messages, observations, timingEvents: [], evidence, titles, codexParents: [], missingSources: [] },
+  history: { messages, observations, timingEvents, evidence, titles, codexParents: [], missingSources: [] },
   achievements: { ...achievementSnapshot, earned: [], preferences: { showcaseIds: [], celebrationsEnabled: false }, unreadIds: [], coverage: { fromDate: '2026-10-01', asOfDate: '2026-10-25', timeZone: 'Asia/Shanghai', missingSessionSources: [], projectSources: [] } } };
 const hono = createLocalApiApp({ dataDir: path.join(output, 'must-not-create'), bucketStore, demo, getConfig: () => ({ deviceId: 'fixture', statsSince: demo.collectSince, localCollectSince: demo.collectSince }) });
 const calls = [], clients = [], windows = [], checks = [];
@@ -166,6 +170,8 @@ async function exercise(window, client, mode) {
   const disclosure = `(${row74}).querySelector('[data-session-disclosure]')`;
   assert.equal(await client.evaluate(`Boolean(document.querySelector('button button'))`), false, 'disclosure and detail triggers must not be nested');
   assert.equal(await client.evaluate('document.querySelector("[data-session-sort]").getClientRects().length'), 0, 'wide sorting uses the column headers');
+  assert.equal(await client.evaluate(`(${row74}).querySelector('[data-session-duration]').textContent.includes(${JSON.stringify(mode === 'desktop' ? '≈ 12分' : '≈ 12m')})`), true, 'ordinary pages include the estimated task duration before selecting duration sorting');
+  assert.equal(await client.evaluate(`document.querySelector('[aria-label="会话显示选项"] button[aria-label^="任务时长"]')===null`), true, 'duration sorting belongs to the column header');
   assert.ok(await client.evaluate('Boolean([...document.querySelectorAll("[data-session-trigger]")].some(el=>el.querySelector("[data-session-title]")?.textContent==="未命名会话" && el.querySelector("[data-session-short-id]")?.textContent==="xture-73"))'), 'unnamed sessions retain a separate short identity');
   const longProjectRow = `[...document.querySelectorAll('[data-session-row]')].find(el=>el.querySelector('[data-session-title]')?.textContent===${JSON.stringify(displayTitles[72])})`;
   assert.equal(await client.evaluate(`(${longProjectRow}).querySelector('[data-session-project]')?.getAttribute('title')`), longProject, 'full project identity remains available');
@@ -184,7 +190,7 @@ async function exercise(window, client, mode) {
   const child76 = `[...(${children}).querySelectorAll('[data-session-trigger]')].find(el=>el.querySelector('[data-session-short-id]')?.textContent==='xture-76')`;
   assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-title]').textContent`), 'Ada', 'trusted nickname arrives through the lightweight API');
   assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-short-id]').textContent`), 'xture-76');
-  const aligned = await client.evaluate(`['project','activity','tokens','cost'].map(name=>{ const a=(${row74}).querySelector('[data-session-'+name+']').getBoundingClientRect(),b=(${child76}).querySelector('[data-session-'+name+']').getBoundingClientRect();return {name,delta:Math.abs((name==='tokens'||name==='cost'?a.right:a.left)-(name==='tokens'||name==='cost'?b.right:b.left))}; })`);
+  const aligned = await client.evaluate(`['project','activity','duration','tokens','cost'].map(name=>{ const a=(${row74}).querySelector('[data-session-'+name+']').getBoundingClientRect(),b=(${child76}).querySelector('[data-session-'+name+']').getBoundingClientRect();return {name,delta:Math.abs((name==='tokens'||name==='cost'||name==='duration'?a.right:a.left)-(name==='tokens'||name==='cost'||name==='duration'?b.right:b.left))}; })`);
   assert.ok(aligned.every(item => item.delta <= 1), mode + ' parent/child column alignment: ' + JSON.stringify(aligned));
   assert.equal(await client.evaluate(`(${child76}).querySelector('[data-session-tokens] > span').getBoundingClientRect().width<=1`), true, 'wide descendants inherit the Token header');
   const nestedDisclosure = `(${children}).querySelector('[data-session-disclosure]')`;

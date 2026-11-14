@@ -63,7 +63,8 @@ test('list pages return lightweight rows and complete counts; filters and sortin
   assert.equal(data.sessions[0].detailLevel, 'summary');
   assert.equal(data.sessions[0].insights, undefined);
   assert.equal(data.sessions[0].models, undefined);
-  assert.equal(data.sessions[0].taskSeconds, undefined);
+  assert.equal(data.sessions[0].taskSeconds, 0);
+  assert.equal(data.sessions[0].taskTimingKind, 'estimated');
   assert.deepEqual(data.facets.models, ['model-a', 'model-b']);
   const filtered = (await (await app.request(`/functions/tud-session-list?${scope}&model=model-a&sort=tokens&direction=ascending&pageSize=12&page=99`)).json()).data;
   assert.equal(filtered.pagination.page, 2);
@@ -71,6 +72,35 @@ test('list pages return lightweight rows and complete counts; filters and sortin
   assert.equal(filtered.sessions[0].sessionId, 's25');
   const searched = (await (await app.request(`/functions/tud-session-list?${scope}&q=Session%202&sort=recent`)).json()).data;
   assert.equal(searched.pagination.totalSessions, 8);
+});
+
+test('summary pages expose recorded, estimated, zero and unavailable task times without hydrating details', async t => {
+  const { dataDir, bucketStore } = await fixture(t);
+  const history = await readSessionHistory(dataDir, ['claude']);
+  for (const sessionId of ['recorded', 'zero', 'unknown']) {
+    history.messages.push({ ...history.messages[0]!, source: 'codex', sessionId });
+    history.observations.push({ ...history.observations[0]!, source: 'codex', sessionId });
+  }
+  history.evidence.push({ source: 'codex', sessionId: 'zero', id: 'parent', kind: 'metadata', timestamp: '2026-10-16T03:00:00Z', parentId: 'recorded', relationKind: 'subagent' });
+  history.timingEvents.push(
+    { source: 'codex', sessionId: 'recorded', id: 'end', kind: 'task-end', turnId: 'recorded-turn', timestamp: '2026-10-16T04:03:00Z', durationMs: 90_000 },
+    { source: 'codex', sessionId: 'zero', id: 'end', kind: 'task-end', turnId: 'zero-turn', timestamp: '2026-10-16T04:03:00Z', durationMs: 0 },
+    { source: 'claude', sessionId: 's00', id: 'user', kind: 'user', timestamp: '2026-10-16T04:00:00Z' },
+    { source: 'claude', sessionId: 's00', id: 'activity', kind: 'activity', timestamp: '2026-10-16T04:01:30Z' },
+  );
+  const queries = new SessionQueryService({ dataDir, bucketStore, getConfig: () => ({ statsSince: '2026-01-01T00:00:00Z' } as TudConfig) }, async () => history);
+  const query = { days: 7, bounds: { fromDate: '2026-10-16', toDate: '2026-10-16' } };
+  for (const sort of ['recent', 'duration'] as const) {
+    const page = await queries.list(query, { sort, pageSize: 48 });
+    for (const [sessionId, seconds, kind] of [['recorded', 90, 'recorded'], ['zero', 0, 'recorded'], ['unknown', null, 'unavailable'], ['s00', 90, 'estimated']] as const) {
+      const row = page.sessions.find(row => row.sessionId === sessionId)!;
+      assert.equal(row.taskSeconds, seconds, `${sort}: ${sessionId}`);
+      assert.equal(row.taskTimingKind, kind, `${sort}: ${sessionId}`);
+      assert.equal(row.detailLevel, 'summary');
+      assert.equal(row.models, undefined);
+      assert.equal(row.insights, undefined);
+    }
+  }
 });
 
 test('details load an exact session within the frozen window and export includes off-page matches', async t => {

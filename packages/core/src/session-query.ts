@@ -158,9 +158,13 @@ export class SessionQueryService {
     const sessions = await this.titled(state);
     if (filters.sort === 'duration') for (const row of sessions) row.taskSeconds = this.timing(state, row).taskSeconds;
     const page = pageSessionList({ ...state.snapshot, sessions, billing: state.snapshot.billing.map(row => ({ ...row })) }, filters);
-    page.sessions = page.sessions.map(row => ({ source: row.source, sessionId: row.sessionId, sessionTitle: row.sessionTitle, projectLabel: row.projectLabel, model: row.model,
+    page.sessions = page.sessions.map(row => {
+      const timing = this.timing(state, row);
+      return { source: row.source, sessionId: row.sessionId, sessionTitle: row.sessionTitle, projectLabel: row.projectLabel, model: row.model,
       lastActivityAt: row.lastActivityAt, tokens: row.tokens, costUsd: row.costUsd, costKind: row.costKind, sharePercent: row.sharePercent,
-      billing: row.billing, context: null, modelNames: row.modelNames, relation: row.relation, detailLevel: 'summary' }));
+      taskSeconds: timing.taskSeconds, taskTimingKind: timing.taskTimingKind,
+      billing: row.billing, context: null, modelNames: row.modelNames, relation: row.relation, detailLevel: 'summary' };
+    });
     if (page.range) page.range = { ...page.range, sources: query.sources ?? [] };
     this.labels(page);
     return page;

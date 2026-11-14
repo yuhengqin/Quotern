@@ -64,7 +64,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | `GET /functions/tud-quota-history?provider=ID` | 按当前额度账号读取窗口及周期，返回观察区间和可可靠关联的本机订阅用量；查询期间身份变化返回 409，不暴露内部历史分区键 |
 | `GET/POST /functions/tud-local-admin/pricing` | 读取和修改独立手动单价；POST 携带 `revision/model/rates`，`rates:null` 恢复参考价，版本冲突返回 409 |
 | `GET/POST /functions/tud-local-admin/backup` | GET 提供本机能力与建议恢复目录；POST 的 `action=create\|verify\|restore` 创建、校验或恢复快照，恢复仅接受新目录 |
-| `GET /functions/tud-session-list` | 轻量会话列表；日期/时间和 `sources` 限定统计范围，`q/filterSources/project/model/group/sort/direction` 在完整范围内筛选排序；`page` 从 1 开始，`pageSize=12\|24\|48` 按主会话分页。返回当前页及匹配子树、完整 facets、`pagination`（根总数和匹配会话总数分开），越界页夹到有效范围；摘要行标记 `detailLevel=summary`，不含完整模型、活动和时长详情 |
+| `GET /functions/tud-session-list` | 轻量会话列表；日期/时间和 `sources` 限定统计范围，`q/filterSources/project/model/group/sort/direction` 在完整范围内筛选排序；`page` 从 1 开始，`pageSize=12\|24\|48` 按主会话分页。返回当前页及匹配子树、完整 facets、`pagination`（根总数和匹配会话总数分开），越界页夹到有效范围；摘要行标记 `detailLevel=summary`，包含当前页及关联子树的 `taskSeconds/taskTimingKind`，复用按会话缓存的计时计算；不含完整模型与活动详情 |
 | `GET /functions/tud-session-detail?source=AGENT&sessionId=ID` | 按需计算目标的完整明细及关联用量；可带日期/时间和统计来源 `sources`，保持列表分母；无窗口时查询已采集历史。找不到返回 `session:null`，不扩大指定窗口 |
 | `GET /functions/tud-session-list?format=csv` | 导出完整筛选排序结果，忽略页码；`format=export` 返回同内容的 JSON envelope `{csv}`，供 HTTP/IPC 统一 transport 使用 |
 | `POST /functions/tud-trigger-sync` | 可传 `{ source }`；省略或 `all` 为全量，未知来源返回 400 |

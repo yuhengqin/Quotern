@@ -17,14 +17,16 @@ import { createSessionPageSearch, sessionAttributionKey, type SessionPageSearch,
 import { getDashboardReturnState, rememberDashboardSessionView } from '../lib/dashboard-return-state';
 import { sessionThreads, sessionGroups, sessionIdentity, sessionCsv, sessionBranchRows, filterSessionBranches } from '../lib/session-insights';
 import { SessionInsightDetails, ContextAuditButton } from './SessionInsightDetails';
-import { formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
+import { formatSessionDuration, formatSessionTokens, formatSessionUsd } from '@/lib/session-metric-format';
 import { accountLabel, costLabel, modeLabel, serviceLabel } from '../lib/session-labels';
 import type { DetailRange } from '../lib/session-detail';
 import { SessionPagination } from './SessionPagination';
 import { sessionDisplayIdentity, sessionDisplayTitle, sessionProjectDisplay } from '../lib/session-list-display';
 
 const sessionColumns = 'min-w-0 items-center gap-2 px-1 @3xl/session-list:grid-cols-[minmax(0,2fr)_minmax(14.5rem,1fr)] @3xl/session-list:gap-x-5 @3xl/session-list:px-2';
-const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_6rem] @3xl/session-list:items-center @3xl/session-list:gap-x-4';
+const sessionIdentityColumns = 'min-w-0 flex-1 @3xl/session-list:grid @3xl/session-list:items-center @3xl/session-list:gap-x-4';
+const sessionPreviewIdentityColumns = '@3xl/session-list:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_6rem]';
+const sessionDurationIdentityColumns = '@3xl/session-list:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_6rem_6.5rem]';
 const sessionSortLabels = { recent: 'usage.activity.recent', tokens: 'usage.common.totalTokens', cost: 'usage.common.cost', duration: 'usage.explorer.taskTime' } as const;
 type SessionSorting = Pick<SessionPageSearch, 'sort' | 'direction'> & { onSort(sort: SessionSort): void };
 function age(stamp: string, locale: SupportedLocale) {
@@ -151,8 +153,9 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
   };
   return <section aria-label={t('usage.activity.allSessions')} aria-busy={loading} className="@container/session-browser min-w-0 rounded-2xl border border-separator bg-surface p-4 sm:p-5">
     <div className="flex flex-col gap-3">
-      <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 flex-wrap items-center gap-2">
-        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 flex-1 basis-full @3xl/session-browser:basis-56" value={query} onChange={q => onChange({ q })}>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+      <div role="group" aria-label={t('usage.activity.filters')} className="flex min-w-0 w-full max-w-full flex-wrap items-center gap-2 @3xl/session-browser:w-auto @3xl/session-browser:flex-none">
+        <SearchField aria-label={t('usage.activity.search')} variant="secondary" className="min-w-0 w-full @3xl/session-browser:w-56" value={query} onChange={q => onChange({ q })}>
           <Label className="sr-only">{t('usage.activity.search')}</Label>
           <SearchField.Group className="!h-8 !min-h-8"><SearchField.SearchIcon /><SearchField.Input ref={searchInput} className="!text-xs" placeholder={t('usage.activity.searchPlaceholder')} /><SearchField.ClearButton /></SearchField.Group>
         </SearchField>
@@ -183,6 +186,14 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
         </Autocomplete>
         <Select aria-label={t('usage.common.model')} value={value.model??'all'} onChange={key=>onChange({model:key==='all'?undefined:String(key)})} variant="secondary" className="min-w-0 max-w-60"><Label className="sr-only">{t('usage.common.model')}</Label><Select.Trigger className="!h-8 !min-h-8 !items-center !py-0 !text-xs"><Select.Value className="truncate !text-xs !leading-4"/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox><ListBox.Item id="all" textValue={t('usage.insights.modelAll')}>{t('usage.insights.modelAll')}<ListBox.ItemIndicator/></ListBox.Item>{models.map(model=><ListBox.Item key={model} id={model} textValue={model}><span className="truncate" title={model}>{model}</span><ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
       </div>
+      <div role="group" aria-label={t('usage.activity.viewOptions')} className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+        <Select aria-label={t('usage.insights.groupLabel')} value={value.groupBy??'none'} onChange={key=>onChange({groupBy:key as 'none'|'date'|'project'})} variant="secondary" className="max-w-44"><Label className="sr-only">{t('usage.insights.groupLabel')}</Label><Select.Trigger className="!h-8 !min-h-8 !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4"/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox>{(['none','date','project'] as const).map(mode=><ListBox.Item key={mode} id={mode} textValue={t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}>{t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}<ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
+        <SessionSortControl sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} onChange={onChange} />
+      </div>
+      <div role="group" aria-label={t('usage.activity.listActions')} className="flex min-w-0 max-w-full flex-wrap items-center gap-1 border-l border-separator pl-3">
+        <Button size="sm" variant="ghost" className="!h-8 !min-h-8 !gap-1.5 !px-2 !text-xs" onPress={() => { void exportCsv(); }} isDisabled={exporting || loading}><Download className="size-3.5" aria-hidden />{t('usage.insights.exportCsv')}</Button><ContextAuditButton/>
+      </div>
+      </div>
       {hasFilters && <div role="group" aria-label={t('usage.activity.selectedFilters')} className="flex min-w-0 flex-wrap items-center gap-1">
         {query.trim() && <SessionFilterChip label={t('usage.activity.searchFilter', { query: query.trim() })} onRemove={() => { onChange({ q: '' }); searchInput.current?.focus(); }} />}
         {sources.map(source => <SessionFilterChip key={source} label={`Agent: ${sourceLabel(source)}`} onRemove={() => { onChange({ sources: sources.filter(value => value !== source) }); sourceTrigger.current?.focus(); }} />)}
@@ -190,22 +201,13 @@ export function SessionBrowser({ rows, availableSessions = rows, usage, value, o
         {value.model&&<SessionFilterChip label={value.model} onRemove={()=>onChange({model:undefined})}/>}
         <Button variant="tertiary" size="sm" className="!h-6 !min-h-6 !px-2 !text-[11px]" onPress={() => { onChange({ q: '', sources: [], project: '', model: undefined }); searchInput.current?.focus(); }}>{t('usage.activity.clearFilters')}</Button>
       </div>}
-      <div ref={resultTop} className="flex min-w-0 scroll-mt-4 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div ref={resultTop} className="min-w-0 scroll-mt-4">
         <p role="status" data-session-count className="text-xs tabular-nums text-muted">
           {loading ? t('usage.activity.loading') : <>
             {t('usage.activity.rootSessionCount', { count: totalRoots })}
             {totalSessions > totalRoots && <> · {t('usage.activity.includingRelated', { count: totalSessions })}</>}
           </>}
         </p>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-          <div role="group" aria-label={t('usage.activity.viewOptions')} className="flex min-w-0 flex-wrap items-center gap-2">
-            <Select aria-label={t('usage.insights.groupLabel')} value={value.groupBy??'none'} onChange={key=>onChange({groupBy:key as 'none'|'date'|'project'})} variant="secondary" className="max-w-44"><Label className="sr-only">{t('usage.insights.groupLabel')}</Label><Select.Trigger className="!h-8 !min-h-8 !items-center !py-0 !text-xs"><Select.Value className="!text-xs !leading-4"/><Select.Indicator/></Select.Trigger><FilterSelectPopover><ListBox>{(['none','date','project'] as const).map(mode=><ListBox.Item key={mode} id={mode} textValue={t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}>{t(`usage.insights.${mode==='none'?'groupNone':mode==='date'?'groupDate':'groupProject'}`)}<ListBox.ItemIndicator/></ListBox.Item>)}</ListBox></FilterSelectPopover></Select>
-            <SessionSortControl sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} onChange={onChange} />
-          </div>
-          <div role="group" aria-label={t('usage.activity.listActions')} className="flex items-center gap-1 border-l border-separator pl-3">
-            <Button size="sm" variant="ghost" className="!h-8 !min-h-8 !gap-1.5 !px-2 !text-xs" onPress={() => { void exportCsv(); }} isDisabled={exporting || loading}><Download className="size-3.5" aria-hidden />{t('usage.insights.exportCsv')}</Button><ContextAuditButton/>
-          </div>
-        </div>
       </div>
       {exportError && <p role="status" className="text-xs text-warning">{t('usage.activity.exportFailed')}</p>}
       {filtered.length ? groups.map(group=><section key={group.label}>{group.label&&<h2 className="my-3 break-words text-sm font-medium">{group.label}</h2>}<SessionRows rows={group.sessions} availableSessions={availableSessions} childrenByParent={threads.children} showTokenShare={Boolean(usage)} range={range} sorting={{ sort, direction, onSort: next => onChange({ sort: next, direction: next === sort && direction === 'descending' ? 'ascending' : 'descending' }) }} /></section>) : <p className="py-8 text-center text-sm text-muted">{t('usage.activity.noMatches')}</p>}
@@ -232,8 +234,7 @@ function SessionFilterChip({ label, onRemove }: { label: string; onRemove(): voi
 
 function SessionSortControl({ sorting, onChange }: { sorting: SessionSorting; onChange(patch: Partial<SessionPageSearch>): void }) {
   const { t } = useTranslation();
-  return <>
-    <Select aria-label={t('usage.explorer.sort')} value={`${sorting.sort}:${sorting.direction}`} onChange={key => {
+  return <Select aria-label={t('usage.explorer.sort')} value={`${sorting.sort}:${sorting.direction}`} onChange={key => {
       if (typeof key !== 'string') return;
       const [sort, direction] = key.split(':') as [SessionSort, SessionPageSearch['direction']];
       onChange({ sort, direction });
@@ -249,9 +250,7 @@ function SessionSortControl({ sorting, onChange }: { sorting: SessionSorting; on
           return <ListBox.Item key={`${sort}:${direction}`} id={`${sort}:${direction}`} textValue={label} className="text-xs">{label}<ListBox.ItemIndicator /></ListBox.Item>;
         }))}
       </ListBox></FilterSelectPopover>
-    </Select>
-    <div className="hidden @3xl/session-browser:block"><SessionSortButton label={t('usage.explorer.taskTime')} column="duration" sorting={sorting} /></div>
-  </>;
+    </Select>;
 }
 
 function SessionSortButton({ label, column, sorting }: { label: string; column: SessionSort; sorting: SessionSorting }) {
@@ -278,9 +277,10 @@ function SessionRows({ rows, availableSessions = rows, showTokenShare, sorting, 
   return <div ref={container} className={`${depth === 0 ? '@container/session-list ' : ''}divide-y divide-separator`}>
       {sorting && <div role="group" aria-label={t('usage.explorer.sort')} className="hidden grid-cols-[3rem_minmax(0,1fr)] rounded-lg bg-surface-secondary py-1 text-xs font-medium text-muted @3xl/session-list:grid">
         <span aria-hidden />
-        <div className={`grid ${sessionColumns}`}><div className={sessionIdentityColumns}>
+        <div className={`grid ${sessionColumns}`}><div className={`${sessionIdentityColumns} ${sessionDurationIdentityColumns}`}>
             <span className="pl-[1.875rem]">{t('usage.activity.sessionColumn')}</span><span>{t('usage.explorer.project')}</span>
             <div className="-ml-1"><SessionSortButton label={t('usage.activity.recent')} column="recent" sorting={sorting} /></div>
+            <div className="flex justify-end"><SessionSortButton label={t('usage.explorer.taskTime')} column="duration" sorting={sorting} /></div>
         </div>
         <div className="grid grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] items-center gap-x-4">
           <div className="flex justify-end"><SessionSortButton label="Token" column="tokens" sorting={sorting} /></div>
@@ -307,7 +307,7 @@ function SessionRow({ row, availableSessions, childrenByParent, showTokenShare, 
       {open && <span data-session-expanded-mark aria-hidden className="pointer-events-none absolute inset-y-1 left-[calc(var(--session-depth)*var(--session-step))] w-0.5 rounded-full bg-accent" />}
       {children.length ? <Button data-session-disclosure size="sm" variant="ghost" className={`relative z-10 translate-x-[calc(var(--session-depth)*var(--session-step))] ${identity.shortId ? 'mt-2' : 'mt-1.5'} !h-8 !min-h-8 !w-full !min-w-0 !px-0 !text-xs tabular-nums @3xl/session-list:mt-2 ${open ? 'text-accent' : 'text-muted'}`} aria-expanded={open} aria-controls={childrenId} aria-label={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${title} · ${children.length}`} onPress={() => setOpen(!open)}><span className="flex items-center gap-0.5" title={`${t(open ? 'usage.insights.collapse' : 'usage.insights.expand')} · ${children.length}`}><ChevronRight className={`size-3.5 shrink-0 ${open ? 'rotate-90' : ''}`} aria-hidden /><span>{children.length}</span></span></Button> : <span aria-hidden />}
       <button type="button" data-session-trigger aria-haspopup="dialog" onClick={onOpen} className={`grid min-h-12 w-full cursor-pointer rounded-lg py-1.5 text-left outline-offset-2 ${depth >= 2 ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_auto]'} ${open ? 'hover:bg-accent/10' : 'hover:bg-surface-secondary/60'} focus-visible:outline-2 focus-visible:outline-accent ${sessionColumns}`}>
-        <div className={sessionIdentityColumns}>
+        <div className={`${sessionIdentityColumns} ${showMetricHeaders ? sessionDurationIdentityColumns : sessionPreviewIdentityColumns}`}>
             <div data-session-name className={`flex min-w-0 items-center gap-2 pl-[calc(var(--session-depth)*var(--session-step))] ${children.length ? 'min-h-8' : ''} @3xl/session-list:min-h-0 @3xl/session-list:gap-2.5`}>
               <ProviderIcon provider={row.source} size={20} />
               <div className="relative min-w-0 flex-1 overflow-hidden" title={`${title}${identity.role ? ` · ${t('usage.detail.agentRole')}: ${identity.role}` : ''} · ${sourceLabel(row.source)} · ${row.sessionId}`}>
@@ -323,6 +323,10 @@ function SessionRow({ row, availableSessions, childrenByParent, showTokenShare, 
               <span aria-hidden className="shrink-0 @3xl/session-list:hidden">·</span>
               <time data-session-activity className="shrink-0 whitespace-nowrap" dateTime={row.lastActivityAt} title={new Date(row.lastActivityAt).toLocaleString(locale)}>{age(row.lastActivityAt, locale)}</time>
             </p>
+            {showMetricHeaders && <p data-session-duration className={`${depth >= 2 ? 'pl-[calc(var(--session-depth)*var(--session-step))] @3xl/session-list:pl-0' : ''} mt-1 text-xs tabular-nums text-muted @3xl/session-list:mt-0 @3xl/session-list:text-right`}>
+              <span className="@3xl/session-list:sr-only">{t('usage.explorer.taskTime')}: </span>
+              {row.taskSeconds != null && Number.isFinite(row.taskSeconds) && (row.taskTimingKind === 'estimated' || row.taskTimingKind === 'mixed') ? '≈ ' : ''}{formatSessionDuration(row.taskSeconds ?? null)}
+            </p>}
         </div>
         <div className={`${depth >= 2 ? 'flex flex-wrap items-baseline justify-between gap-x-3 pl-[calc(var(--session-depth)*var(--session-step))] @3xl/session-list:pl-0' : ''} min-w-0 text-right text-sm tabular-nums @3xl/session-list:grid @3xl/session-list:grid-cols-[minmax(7.5rem,1.2fr)_minmax(6.5rem,1fr)] @3xl/session-list:items-center @3xl/session-list:gap-x-4`}>
           <p data-session-tokens className="whitespace-nowrap font-medium">{row.tokens === null ? t('usage.activity.usageNotRecorded') : <>{formatSessionTokens(row.tokens)}<span className={showMetricHeaders ? '@3xl/session-list:sr-only' : undefined}> Token</span></>}</p>

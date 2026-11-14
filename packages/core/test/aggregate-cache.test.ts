@@ -47,6 +47,38 @@ test('touchedLocalDates collects unique local dates', () => {
   assert.ok(dates.length >= 1);
 });
 
+test('a price rebuild groups history once rather than rescanning all days for each date', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-agg-linear-prices-'));
+  try {
+    let timestampReads = 0;
+    const rows: QueueBucket[] = [];
+    for (let day = 1; day <= 40; day++) for (let bucket = 0; bucket < 30; bucket++) {
+      const value = `${addLocalDays(localDateNow(), -day)}T04:00:00.000Z`;
+      const row = makeRow(value, 10);
+      Object.defineProperty(row, 'hour_start', { enumerable: true, get: () => { timestampReads++; return value; } });
+      rows.push(row);
+    }
+    const cache = new AggregateCache(dir);
+    await cache.rebuildFromRows(rows);
+    assert.equal(cache.sealedDayCount(), 40);
+    assert.ok(timestampReads < rows.length * 20, `history revisited ${timestampReads} timestamps for ${rows.length} rows`);
+    assert.equal(cache.getDaily(rows, 90, '1970-01-01').days.reduce((sum, day) => sum + day.tokens, 0), 12000);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('a newer empty rebuild wins over a cold historical rebuild already reading disk', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tud-agg-rebuild-generation-'));
+  try {
+    const rows = [makeRow(`${addLocalDays(localDateNow(), -1)}T04:00:00.000Z`, 100)];
+    await new AggregateCache(dir).rebuildFromRows(rows);
+    const cache = new AggregateCache(dir);
+    await Promise.all([cache.rebuildFromRows(rows), cache.rebuildFromRows([])]);
+    assert.equal(cache.sealedDayCount(), 0);
+    const saved = JSON.parse(await readFile(join(dir, 'cache/daily-sealed.json'), 'utf8'));
+    assert.deepEqual(saved.days, {});
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test('historical reads stay complete while a pricing invalidation awaits recalculation', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'tud-agg-price-pending-'));
   try {

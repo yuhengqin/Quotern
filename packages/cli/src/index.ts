@@ -107,17 +107,19 @@ async function startPricingOverlayRefresh(
 ): Promise<void> {
   pricingRefreshStop?.();
   pricingRefreshStop = null;
-  const { url } = resolvePricingRefreshConfig({
+  const { url, ttlMs } = resolvePricingRefreshConfig({
     url: config.pricing?.url,
     ttlMs: config.pricing?.ttlMs,
   });
   const handle = startPricingRefresh({
     url: url ?? '',
+    ttlMs,
+    periodic: runtimeRole !== 'observer',
     dataDir: dir,
     firstFetchTimeoutMs: DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
-    onUpdate: () => {
+    onUpdate: (_status, change) => {
       const current = runtime;
-      if (!current) return;
+      if (!current || !change.ratesChanged) return;
       void current.aggregateCache
         .rebuildFromRows(current.bucketStore.getRows())
         .catch((err) => {

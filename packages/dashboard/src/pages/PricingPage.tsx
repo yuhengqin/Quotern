@@ -19,6 +19,7 @@ import { formatPricingReleaseDate } from '../lib/pricing-display';
 import { fetchModelBreakdown, fetchPricingCatalog, type ModelBreakdownRow } from '../lib/api';
 import type { PricingCatalogResponse } from '../lib/pricing-data';
 import { DATA_SYNCED_EVENT } from '../lib/shell-events';
+import { subscribeAutomaticRefresh } from '../lib/dashboard-refresh';
 import { filterPricingCatalog, formatContextWindow } from '../lib/pricing-filters';
 import { filterAndSortPricingGroups, getPrimaryPricingVariant, groupPricingCatalog } from '../lib/pricing-groups';
 import {
@@ -100,8 +101,11 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
       }).finally(() => { if (!cancelled && request === sequence) setLoading(false); });
     };
     refresh();
+    const stopAutomatic = subscribeAutomaticRefresh(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, { readOnly: isDemoMode(), intervalMs: 60_000 });
     window.addEventListener(DATA_SYNCED_EVENT, refresh);
-    return () => { cancelled = true; clearTimeout(pendingRefresh); window.removeEventListener(DATA_SYNCED_EVENT, refresh); };
+    return () => { cancelled = true; stopAutomatic(); clearTimeout(pendingRefresh); window.removeEventListener(DATA_SYNCED_EVENT, refresh); };
   }, [loadCatalog, retry]);
   useEffect(() => {
     let cancelled = false;
@@ -211,7 +215,12 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
         <HelpPopup title={t('pricing.summary.dataHeading')} showTitle={false} trigger={open => <Button onPress={open} variant="ghost" size="sm" className="!h-6 !min-h-6 !gap-1 !px-1 !text-[11px] text-muted"><Info className="size-3" aria-hidden />{t('pricing.summary.dataInfo')}</Button>}>
           <p>{t('pricing.summary.countDetails', { visible: groups.length, total: modelGroups.length, channels: channelCount })}</p>
           <p className="text-muted">{t(catalog.source === 'bundled' ? 'pricing.summary.bundled' : 'pricing.summary.published')} · {t('pricing.summary.tableDate', { kind: tableDateKind, date: dateLabel })}</p>
-          <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
+          {catalog.priceSources?.includes('models.dev') ? <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
+            : !catalog.priceSources?.length && <p className="text-muted">{t('pricing.provenance.unknown')}</p>}
+          {catalog.priceSources?.includes('litellm') && <p className="text-muted"><a className="underline underline-offset-2" href="https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json" target="_blank" rel="noreferrer">LiteLLM</a> · {t('pricing.provenance.secondary')}</p>}
+          {catalog.checkedAt && <p className="text-muted">{t('pricing.provenance.checked', { date: new Date(catalog.checkedAt).toLocaleString(locale, { hour12: false }) })}</p>}
+          {catalog.syncReport && <p className="text-muted">{t('pricing.provenance.report', catalog.syncReport)}</p>}
+          {catalog.syncReport?.failedSources.length ? <p className="text-warning">{t('pricing.provenance.failed', { sources: catalog.syncReport.failedSources.join(' / ') })}</p> : null}
           <p className="text-muted">{t('pricing.summary.providerMeaning')}</p>
           <p className="text-muted">{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
           {sessionModels?.length && <p className="text-muted">{t('usage.detail.referencePrices')}</p>}

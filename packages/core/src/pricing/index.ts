@@ -5,7 +5,8 @@ import { getManualPricing, applyManualPricing, loadManualPricing, manualPricingP
 export * from './manual-pricing.js';
 import { isDeepStrictEqual } from 'node:util';
 import { EnvHttpProxyAgent } from 'undici';
-import { mergeModelsDevPricing, MODELS_DEV_URL } from './models-dev.mjs';
+import { MODELS_DEV_URL } from './models-dev.mjs';
+import { loadPricingSources, pricingComputationData, pricingPublicationData } from './pricing-sources.mjs';
 import type { QueueBucket } from '../types.js';
 import { builtinRequestRules, priceRequest, tokenCostItem, TOKEN_FIELDS, validRequestRules, REQUEST_PRICING_REVISION, type TokenCostItem } from './request-pricing.js';
 export * from './request-pricing.js';
@@ -87,7 +88,8 @@ let fingerprintState: PricingSnapshot | null = null, fingerprint = '';
 export function getPricingFingerprint(): string {
   const next = getPricingSnapshot();
   if (!fingerprintState || next.builtin !== fingerprintState.builtin || next.overlay !== fingerprintState.overlay || next.manual !== fingerprintState.manual) {
-    fingerprintState = next; fingerprint = createHash('sha256').update(JSON.stringify({ ...next, requestPricingRevision: REQUEST_PRICING_REVISION })).digest('hex');
+    fingerprintState = next; fingerprint = createHash('sha256').update(JSON.stringify({ builtin: pricingComputationData(next.builtin),
+      overlay: pricingComputationData(next.overlay), manual: next.manual, requestPricingRevision: REQUEST_PRICING_REVISION })).digest('hex');
   }
   return fingerprint;
 }
@@ -100,16 +102,11 @@ export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
 
 let pricingRefreshUrl: string | null = null;
 let pricingUpdatedAt: string | null = null;
+let pricingCheckedAt: string | null = null;
+let pricingDiskWrites: Promise<void> = Promise.resolve();
 let pricingRefreshStop: (() => void) | null = null;
 let pricingRefreshController: AbortController | null = null;
-/** Last applied overlay JSON; skip onUpdate/rebuild when the remote body is identical. */
-let lastOverlayFingerprint: string | null = null;
-
-function overlayFingerprint(data: PricingData): string {
-  return JSON.stringify(data);
-}
-
-export const DEFAULT_PRICING_TTL_MS = 3_600_000;
+export const DEFAULT_PRICING_TTL_MS = 24 * 3_600_000;
 /** Desktop / CLI wait this long for the first overlay fetch before opening. */
 export const DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS = 3_000;
 
@@ -118,14 +115,17 @@ export interface PricingStatus {
   refreshing: boolean;
   url: string | null;
   updatedAt: string | null;
+  checkedAt: string | null;
 }
 
 export interface StartPricingRefreshOptions {
   url: string;
-  /** @deprecated Overlay is fetched once at startup; no periodic refresh. */
+  /** Revalidate after this many ms; startup still performs its initial fetch. */
   ttlMs?: number;
+  /** Observers follow the owner's disk changes without a second periodic fetch. */
+  periodic?: boolean;
   fetchImpl?: typeof fetch;
-  onUpdate?: (status: PricingStatus) => void;
+  onUpdate?: (status: PricingStatus, change: { ratesChanged: boolean }) => void;
   onError?: (err: unknown) => void;
   /** Persist overlay under this data dir (`pricing-overlay.json`). */
   dataDir?: string;
@@ -139,6 +139,7 @@ export interface StartPricingRefreshOptions {
 /** Stop function; `.ready` settles after the optional first-fetch wait. */
 export type PricingRefreshHandle = (() => void) & {
   ready: Promise<boolean>;
+  refreshIfStale(): Promise<boolean>;
 };
 
 function toModelPricing(rates: ModelPricingRates | null): ModelPricing {
@@ -254,6 +255,10 @@ export function validatePricingData(raw: unknown): { ok: true; data: PricingData
   }
 
   const data: PricingData = { exact };
+  if (obj.automatic_rule_sources !== undefined) {
+    if (!Array.isArray(obj.automatic_rule_sources) || obj.automatic_rule_sources.some(value => value !== 'litellm')) return { ok: false, error: 'invalid automatic_rule_sources' };
+    data.automatic_rule_sources = [...new Set(obj.automatic_rule_sources)] as Array<'litellm'>;
+  }
   if (obj.request_rules !== undefined) {
     if (!validRequestRules(obj.request_rules)) return { ok: false, error: 'invalid request_rules' };
     data.request_rules = obj.request_rules;
@@ -265,7 +270,7 @@ export function validatePricingData(raw: unknown): { ok: true; data: PricingData
   if (fuzzy) data.fuzzy = fuzzy;
   if (sourceAlias) data.sourceAlias = sourceAlias;
   if (defaultRates) data.default = defaultRates;
-  for (const field of ['model_metadata', 'subscription_models'] as const) {
+  for (const field of ['model_metadata', 'subscription_models', 'price_metadata'] as const) {
     if (obj[field] === undefined) continue;
     const metadata = obj[field];
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return { ok: false, error: `${field} must be an object` };
@@ -274,6 +279,15 @@ export function validatePricingData(raw: unknown): { ok: true; data: PricingData
     }
     data[field] = metadata as NonNullable<PricingData[typeof field]>;
   }
+  for (const info of Object.values(data.price_metadata ?? {})) {
+    if (info.source !== undefined && !['models.dev', 'litellm', 'manual'].includes(info.source)
+      || info.status !== undefined && !['current', 'carried'].includes(info.status)
+      || info.last_verified_at !== undefined && (typeof info.last_verified_at !== 'string' || !Number.isFinite(Date.parse(info.last_verified_at)))
+      || info.supplemental_source !== undefined && info.supplemental_source !== 'litellm'
+      || info.supplemental_fields !== undefined && (!Array.isArray(info.supplemental_fields) || info.supplemental_fields.some(key => !['input', 'output', 'cache_read', 'cache_write'].includes(key)))) {
+      return { ok: false, error: 'invalid price_metadata' };
+    }
+  }
 
   return { ok: true, data };
 }
@@ -281,8 +295,9 @@ export function validatePricingData(raw: unknown): { ok: true; data: PricingData
 /** Replace (or clear) the in-memory remote overlay. Does not touch builtin. */
 export function applyRemotePricingOverlay(data: PricingData | null): void {
   remoteOverlay = data;
-  lastOverlayFingerprint = data ? overlayFingerprint(data) : null;
   pricingUpdatedAt = data ? new Date().toISOString() : null;
+  const checkedAt = data?._meta?.checked_at;
+  pricingCheckedAt = typeof checkedAt === 'string' && Number.isFinite(Date.parse(checkedAt)) ? checkedAt : null;
 }
 
 /** Load a previously saved overlay from `dataDir`. Invalid/missing files are ignored. */
@@ -304,13 +319,18 @@ export function loadCachedPricingOverlay(dataDir: string): boolean {
 export async function saveCachedPricingOverlay(
   dataDir: string,
   data: PricingData,
+  isCurrent: () => boolean = () => true,
 ): Promise<void> {
-  const target = pricingOverlayPath(dataDir);
-  const temporary = `${target}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, `${JSON.stringify(data)}\n`, 'utf8');
-    await rename(temporary, target);
-  } finally { await unlink(temporary).catch(() => {}); }
+  const save = pricingDiskWrites.catch(() => {}).then(async () => {
+    if (!isCurrent()) return;
+    const target = pricingOverlayPath(dataDir), temporary = `${target}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, `${JSON.stringify(data)}\n`, 'utf8');
+      if (isCurrent()) await rename(temporary, target);
+    } finally { await unlink(temporary).catch(() => {}); }
+  });
+  pricingDiskWrites = save;
+  await save;
 }
 
 export function getPricingStatus(): PricingStatus {
@@ -319,6 +339,7 @@ export function getPricingStatus(): PricingStatus {
     refreshing: pricingRefreshController != null && !pricingRefreshController.signal.aborted,
     url: pricingRefreshUrl,
     updatedAt: pricingUpdatedAt,
+    checkedAt: pricingCheckedAt,
   };
 }
 
@@ -332,12 +353,30 @@ export function getRemotePricingOverlay(): PricingData | null {
   return remoteOverlay;
 }
 
+let tableRulesCache: { builtin: PricingData; overlay: PricingData | null; rules: NonNullable<PricingData['request_rules']> } | null = null;
+function tableRequestRules() {
+  if (tableRulesCache?.builtin === builtinPricing && tableRulesCache.overlay === remoteOverlay) return tableRulesCache.rules;
+  const replaced = new Set(remoteOverlay?.automatic_rule_sources ?? []);
+  const all = [...(builtinPricing.request_rules ?? []).filter(rule => !rule.origin || !replaced.has(rule.origin)), ...(remoteOverlay?.request_rules ?? [])];
+  const seen = new Set<string>();
+  const rules = all.reverse().filter(rule => {
+    const key = JSON.stringify(rule);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  }).reverse();
+  tableRulesCache = { builtin: builtinPricing, overlay: remoteOverlay, rules };
+  return rules;
+}
+
 /** Full display/conversion snapshot; cost matching continues to use layered lookup. */
 export function getReferencePricingData(): PricingData {
   if (!remoteOverlay) return builtinPricing;
   return {
     ...builtinPricing, ...remoteOverlay,
     exact: { ...builtinPricing.exact, ...remoteOverlay.exact },
+    request_rules: tableRequestRules(),
+    automatic_rule_sources: [...new Set([...(builtinPricing.automatic_rule_sources ?? []), ...(remoteOverlay.automatic_rule_sources ?? [])])],
+    price_metadata: { ...builtinPricing.price_metadata, ...remoteOverlay.price_metadata },
     model_metadata: { ...builtinPricing.model_metadata, ...remoteOverlay.model_metadata },
     subscription_models: { ...builtinPricing.subscription_models, ...remoteOverlay.subscription_models },
     alias: { ...builtinPricing.alias, ...remoteOverlay.alias },
@@ -350,7 +389,8 @@ export function getReferencePricingData(): PricingData {
 export function getEffectivePricingData(): PricingData {
   const reference = getReferencePricingData(), manual = getManualPricing().models;
   if (!Object.keys(manual).length) return reference;
-  return { ...reference, exact: { ...reference.exact, ...Object.fromEntries(Object.keys(manual).map(model => [model, getModelPricingRates(model)!])) } };
+  return { ...reference, exact: { ...reference.exact, ...Object.fromEntries(Object.keys(manual).map(model => [model, getModelPricingRates(model)!])) },
+    price_metadata: { ...reference.price_metadata, ...Object.fromEntries(Object.keys(manual).map(model => [model, { source: 'manual' as const }])) } };
 }
 
 /** Test helper: clear overlay and cancel any pending refresh. */
@@ -362,7 +402,7 @@ export function resetPricingRuntime(): void {
   applyManualPricing({ version: 1, models: {} });
   pricingRefreshUrl = null;
   pricingUpdatedAt = null;
-  lastOverlayFingerprint = null;
+  pricingCheckedAt = null;
 }
 
 async function fetchAndApplyOverlay(
@@ -371,40 +411,37 @@ async function fetchAndApplyOverlay(
   dataDir?: string,
   signal?: AbortSignal,
   useProxy = false,
-): Promise<boolean> {
+): Promise<{ changed: boolean; ratesChanged: boolean }> {
   const dispatcher = useProxy ? new EnvHttpProxyAgent() : undefined;
   try {
-    const res = await fetchImpl(url, {
-      headers: { Accept: 'application/json' }, signal,
-      ...(dispatcher ? { dispatcher } : {}),
-    } as RequestInit);
-    if (!res.ok) {
-      await res.body?.cancel();
-      throw new Error(`pricing fetch HTTP ${res.status}`);
-    }
-    const raw: unknown = await res.json();
     const requested = new URL(url), upstream = new URL(MODELS_DEV_URL);
     const isModelsDev = requested.origin === upstream.origin && requested.pathname === upstream.pathname;
-    const converted = isModelsDev ? mergeModelsDevPricing(getReferencePricingData(), raw) : raw;
+    const fetchSource: typeof fetch = (input, options) => fetchImpl(input, { ...options, ...(dispatcher ? { dispatcher } : {}) } as RequestInit);
+    let converted: unknown;
+    if (isModelsDev) converted = await loadPricingSources(getReferencePricingData(), fetchSource, signal);
+    else {
+      const res = await fetchSource(url, { headers: { Accept: 'application/json' }, signal });
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`pricing fetch HTTP ${res.status}`); }
+      converted = await res.json();
+    }
     const validated = validatePricingData(converted);
     if (!validated.ok) throw new Error(validated.error);
     signal?.throwIfAborted();
-    if (isModelsDev && remoteOverlay && isDeepStrictEqual(
-      { ...validated.data, _meta: undefined }, { ...remoteOverlay, _meta: undefined },
-    )) return false;
-    if (overlayFingerprint(validated.data) === lastOverlayFingerprint) return false;
+    const changed = !isDeepStrictEqual(pricingPublicationData(validated.data), pricingPublicationData(remoteOverlay));
+    const before = getPricingFingerprint();
+    validated.data._meta = { ...validated.data._meta, checked_at: new Date().toISOString() };
     applyRemotePricingOverlay(validated.data);
+    const ratesChanged = before !== getPricingFingerprint();
     if (dataDir) {
-      try { await saveCachedPricingOverlay(dataDir, validated.data); }
+      try { await saveCachedPricingOverlay(dataDir, validated.data, () => !signal?.aborted); }
       catch { /* A disk write failure must not drop valid in-memory prices. */ }
     }
-    return true;
+    return { changed, ratesChanged };
   } finally { await dispatcher?.close(); }
 }
 
 /**
- * Fetch the remote pricing overlay once at startup. No periodic refresh —
- * the next process start loads the disk cache then pulls again.
+ * Fetch at startup, then revalidate stale prices while the runtime is alive.
  * Failures keep the previous overlay (or builtin-only). Never throws to caller.
  * Returns a stop() function; `ready` waits for the optional first-fetch timeout.
  */
@@ -414,26 +451,41 @@ export function startPricingRefresh(
   pricingRefreshStop?.();
   pricingRefreshStop = null;
   if (opts.dataDir) loadCachedPricingOverlay(opts.dataDir);
+  let stopped = false;
   const manualFile = opts.dataDir ? manualPricingPath(opts.dataDir) : null;
   const onManualChange = () => {
-    try { if (opts.dataDir && loadManualPricing(opts.dataDir)) opts.onUpdate?.(getPricingStatus()); }
+    try { if (!stopped && opts.dataDir && loadManualPricing(opts.dataDir)) opts.onUpdate?.(getPricingStatus(), { ratesChanged: true }); }
     catch (error) { opts.onError?.(error); }
   };
   if (manualFile) watchFile(manualFile, { interval: 1000, persistent: false }, onManualChange);
-  const stopManualWatch = () => { if (manualFile) unwatchFile(manualFile, onManualChange); };
+  const overlayFile = opts.dataDir ? pricingOverlayPath(opts.dataDir) : null;
+  const onOverlayChange = () => {
+    if (stopped || !opts.dataDir) return;
+    const before = getPricingFingerprint(), publication = pricingPublicationData(remoteOverlay);
+    if (loadCachedPricingOverlay(opts.dataDir) && !isDeepStrictEqual(publication, pricingPublicationData(remoteOverlay))) {
+      opts.onUpdate?.(getPricingStatus(), { ratesChanged: before !== getPricingFingerprint() });
+    }
+  };
+  if (overlayFile) watchFile(overlayFile, { interval: 1000, persistent: false }, onOverlayChange);
+  const stopWatches = () => {
+    if (manualFile) unwatchFile(manualFile, onManualChange);
+    if (overlayFile) unwatchFile(overlayFile, onOverlayChange);
+  };
   const url = opts.url.trim();
   pricingRefreshUrl = url || null;
   if (!url) {
-    const noop = stopManualWatch as PricingRefreshHandle;
+    const noop = (() => { stopped = true; stopWatches(); }) as PricingRefreshHandle;
     noop.ready = Promise.resolve(getPricingStatus().hasOverlay);
+    noop.refreshIfStale = () => Promise.resolve(false);
     pricingRefreshStop = noop;
     return noop;
   }
 
-  const controller = new AbortController();
-  pricingRefreshController = controller;
-  const networkTimeout = setTimeout(() => controller.abort(new Error('pricing fetch timed out')), 30_000);
-  networkTimeout.unref?.();
+  const ttlMs = opts.ttlMs && Number.isFinite(opts.ttlMs) && opts.ttlMs > 0 ? opts.ttlMs : DEFAULT_PRICING_TTL_MS;
+  let inFlight: Promise<boolean> | null = null, controller: AbortController | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+  let lastSuccess: number | null = null, retryAt = 0;
   const fetchImpl = opts.fetchImpl ?? fetch;
   const firstFetchTimeoutMs =
     opts.firstFetchTimeoutMs != null &&
@@ -442,19 +494,41 @@ export function startPricingRefresh(
       ? opts.firstFetchTimeoutMs
       : 0;
 
-  const first = (async () => {
-    try {
-      const changed = await fetchAndApplyOverlay(url, fetchImpl, opts.dataDir, controller.signal, !opts.fetchImpl);
-      if (changed && !controller.signal.aborted) opts.onUpdate?.(getPricingStatus());
-      return true;
-    } catch (err) {
-      if (!controller.signal.aborted || controller.signal.reason?.message === 'pricing fetch timed out') opts.onError?.(err);
-      return false;
-    } finally {
-      clearTimeout(networkTimeout);
-      if (pricingRefreshController === controller) pricingRefreshController = null;
-    }
-  })();
+  const schedule = () => {
+    clearTimeout(timer);
+    if (stopped || opts.periodic === false) return;
+    const due = Math.max(retryAt, lastSuccess === null ? Date.now() : lastSuccess + ttlMs);
+    timer = setTimeout(() => { void refreshIfStale(); }, Math.max(1, due - Date.now()));
+    timer.unref?.();
+  };
+  const refreshIfStale = (force = false): Promise<boolean> => {
+    if (stopped) return Promise.resolve(false);
+    if (inFlight) return inFlight;
+    if (!force && (Date.now() < retryAt || lastSuccess !== null && Date.now() - lastSuccess < ttlMs)) return Promise.resolve(false);
+    const active = new AbortController(); controller = active; pricingRefreshController = active;
+    const networkTimeout = setTimeout(() => active.abort(new Error('pricing fetch timed out')), 30_000);
+    requestTimeout = networkTimeout;
+    networkTimeout.unref?.();
+    const job = (async () => {
+      try {
+        const change = await fetchAndApplyOverlay(url, fetchImpl, opts.dataDir, active.signal, !opts.fetchImpl);
+        if (stopped || active.signal.aborted) return false;
+        lastSuccess = Date.now(); retryAt = 0; pricingCheckedAt = new Date(lastSuccess).toISOString();
+        if (change.changed) opts.onUpdate?.(getPricingStatus(), { ratesChanged: change.ratesChanged });
+        return true;
+      } catch (err) {
+        retryAt = Date.now() + 3_600_000;
+        if (!stopped && (!active.signal.aborted || active.signal.reason?.message === 'pricing fetch timed out')) opts.onError?.(err);
+        return false;
+      } finally {
+        clearTimeout(networkTimeout);
+        if (pricingRefreshController === active) pricingRefreshController = null;
+      }
+    })().finally(() => { if (inFlight === job) inFlight = null; schedule(); });
+    inFlight = job;
+    return job;
+  };
+  const first = refreshIfStale(true);
   let waitTimer: ReturnType<typeof setTimeout> | undefined;
   const ready =
     firstFetchTimeoutMs > 0
@@ -467,11 +541,11 @@ export function startPricingRefresh(
       : Promise.resolve(getPricingStatus().hasOverlay);
 
   const stop = (() => {
-    stopManualWatch();
-    controller.abort();
-    clearTimeout(networkTimeout);
+    stopped = true; stopWatches(); clearTimeout(timer); clearTimeout(requestTimeout);
+    controller?.abort();
   }) as PricingRefreshHandle;
   stop.ready = ready;
+  stop.refreshIfStale = () => refreshIfStale();
   pricingRefreshStop = stop;
   return stop;
 }
@@ -620,7 +694,7 @@ export function explainRowCost(row: QueueBucket): RowCostExplanation {
 function requestAwareCost(row: QueueBucket) {
   const match = currentModelMatch(row.model, row.source);
   const base = match.value ?? {};
-  const rules = [...builtinRequestRules(match.matchedModel ?? '', row.source, base), ...(builtinPricing.request_rules ?? []), ...(remoteOverlay?.request_rules ?? [])]
+  const rules = [...builtinRequestRules(match.matchedModel ?? '', row.source, base), ...tableRequestRules()]
     .filter(rule => rule.source === row.source && (rule.model === match.matchedModel || rule.model === row.model));
   const remainder = { ...row, pricing_requests: undefined };
   let cost = 0, unpricedTokens = 0;

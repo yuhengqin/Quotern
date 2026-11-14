@@ -42,9 +42,17 @@ export function CopyPricingId({ model, label, query = '' }: { model: string; lab
   </span>;
 }
 
-function CallingIds({ models, query }: { models: string[]; query: string }) {
+function CallingIds({ models, query, rows }: { models: string[]; query: string; rows?: PricingCatalogRow[] }) {
+  const { t, i18n } = useTranslation();
   return <div className="space-y-2">{models.map(model => <div key={model} className="flex min-w-0 items-start gap-2">
-    <code className="min-w-0 flex-1 select-text break-all text-[11px] leading-5"><PricingHighlight text={model} query={query} /></code>
+    <div className="min-w-0 flex-1"><code className="select-text break-all text-[11px] leading-5"><PricingHighlight text={model} query={query} /></code>
+      {rows && (() => { const row = rows.find(item => item.model === model); return <div className="mt-1 space-y-1 text-xs text-muted">
+        <p>{row?.priceSource ? t('pricing.provenance.source', { source: row.priceSource === 'manual' ? t('pricing.provenance.manual') : row.priceSource === 'litellm' ? 'LiteLLM' : 'models.dev' }) : t('pricing.provenance.unknown')}</p>
+        {row?.priceVerifiedAt && <p>{t('pricing.provenance.verified', { date: new Date(row.priceVerifiedAt).toLocaleString(i18n.language, { hour12: false }) })}</p>}
+        {row?.priceSupplementalFields?.length ? <p>{t('pricing.provenance.supplement')}</p> : null}
+        {row?.priceStatus === 'carried' && <p className="text-foreground">{t('pricing.provenance.carriedNote')}</p>}
+      </div>; })()}
+    </div>
     <CopyPricingId model={model} />
   </div>)}</div>;
 }
@@ -100,9 +108,11 @@ export function PricingChannelDetails({ name, variant, currency, exchangeRate, q
   const regions = variant.regions.map(region => t(pricingRegionMessageKeys[region] ?? region)).join(' / ');
   const channelLabel = `${regions} ${subscription ? t('pricing.list.subscription') : 'API'}`.trim();
   const context = formatPricingContext(variant.row.contextWindow, i18n.language);
+  const carried = variant.entries.some(row => row.priceStatus === 'carried');
   return <Popover>
     <Button size="sm" variant="ghost" className="!h-6 !min-h-6 !min-w-0 shrink-0 !rounded-md !px-1 !text-[11px] text-muted" aria-label={t('pricing.details.channelAria', { name, channel: channelLabel, context, model: variant.row.model })}>
       {t('pricing.details.channelDetails')}
+      {carried && <span className="ml-1 rounded bg-warning/15 px-1 text-foreground">{t('pricing.provenance.carried')}</span>}
     </Button>
     <Popover.Content placement="bottom start" className="w-96 max-w-[calc(100vw-2rem)]">
       <Popover.Dialog className="space-y-3 p-3">
@@ -113,7 +123,7 @@ export function PricingChannelDetails({ name, variant, currency, exchangeRate, q
         </dl>}
         <div className="space-y-2 border-t border-border/60 pt-2">
           <p className="text-[11px] text-muted">{t('pricing.metric.callingId')}</p>
-          <CallingIds models={variant.entries.map(entry => entry.model)} query={query} />
+          <CallingIds models={variant.entries.map(entry => entry.model)} query={query} rows={subscription ? undefined : variant.entries} />
         </div>
       </Popover.Dialog>
     </Popover.Content>

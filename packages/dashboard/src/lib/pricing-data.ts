@@ -1,5 +1,5 @@
 import type { PricingData } from 'quotern-core';
-import type { PricingModelMetadata } from 'quotern-core/pricing-matcher';
+import type { PricingModelMetadata, PriceMetadata } from 'quotern-core/pricing-matcher';
 import { isModelReleaseDate } from 'quotern-core/pricing-matcher';
 import bundledPricing from 'quotern-core/pricing-data' with { type: 'json' };
 
@@ -16,11 +16,18 @@ export interface PricingCatalogRow {
   contextWindow?: number;
   featured?: boolean;
   usageTokens?: number;
+  priceSource?: PriceMetadata['source'];
+  priceStatus?: PriceMetadata['status'];
+  priceVerifiedAt?: string;
+  priceSupplementalFields?: PriceMetadata['supplemental_fields'];
 }
 
 export interface PricingCatalogResponse {
-  /** Only a pending runtime startup fetch needs a follow-up local read. */
+  /** Pending startup or background validation needs a follow-up local read. */
   refreshing?: boolean;
+  checkedAt?: string;
+  priceSources?: Array<'models.dev' | 'litellm'>;
+  syncReport?: { added: number; changed: number; carried: number; conflicts: number; largeChanges: number; failedSources: string[] };
   units: string;
   generatedAt: string | null;
   updatedAt: string | null;
@@ -91,6 +98,12 @@ export function pricingDataToCatalog(
   updatedAt: string | null,
 ): PricingCatalogResponse {
   const generatedAt = data._meta?.generated_at;
+  const checkedAt = data._meta?.checked_at;
+  const sources = data._meta?.sources;
+  const validTime = (value: unknown): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value));
+  const sourceNames = ['models.dev', 'litellm'] as const;
+  const report = data._meta?.sync_report as Record<string, unknown> | undefined;
+  const count = (key: string) => typeof report?.[key] === 'number' && Number.isSafeInteger(report[key]) && report[key] >= 0 ? report[key] as number : 0;
   const projectMetadata = (metadata?: PricingModelMetadata) => {
     const contextWindow = metadata?.context_window;
     return {
@@ -117,8 +130,14 @@ export function pricingDataToCatalog(
     generatedAt: typeof generatedAt === 'string' && Number.isFinite(Date.parse(generatedAt)) ? generatedAt : null,
     updatedAt,
     source,
+    ...(validTime(checkedAt) ? { checkedAt } : {}),
+    ...(Array.isArray(sources) ? { priceSources: sourceNames.filter(name => sources.includes(name)) }
+      : data._meta?.source === 'https://models.dev/catalog.json' ? { priceSources: ['models.dev' as const] } : {}),
+    ...(report && typeof report === 'object' ? { syncReport: { added: count('added'), changed: count('changed'), carried: count('carried'), conflicts: count('conflicts'), largeChanges: count('large_changes'),
+      failedSources: Array.isArray(report.failed_sources) ? sourceNames.filter(name => (report.failed_sources as unknown[]).includes(name)) : [] } } : {}),
     models: [...Object.entries(data.exact).filter(([model]) => !replacedKimiIds.has(model) && !(model in (data.subscription_models ?? {}))).map(([model, rates]) => {
       const metadata = data.model_metadata?.[model];
+      const evidence = data.price_metadata?.[model];
       return {
         model,
         ...projectMetadata(metadata),
@@ -126,6 +145,10 @@ export function pricingDataToCatalog(
         output: rates.output ?? null,
         cacheRead: rates.cache_read ?? null,
         cacheWrite: rates.cache_write ?? null,
+        ...(evidence?.source && ['models.dev', 'litellm', 'manual'].includes(evidence.source) ? { priceSource: evidence.source } : {}),
+        ...(evidence?.status && ['current', 'carried'].includes(evidence.status) ? { priceStatus: evidence.status } : {}),
+        ...(validTime(evidence?.last_verified_at) ? { priceVerifiedAt: evidence!.last_verified_at } : {}),
+        ...(Array.isArray(evidence?.supplemental_fields) ? { priceSupplementalFields: evidence.supplemental_fields.filter(field => ['input', 'output', 'cache_read', 'cache_write'].includes(field)) } : {}),
       };
     }), ...subscriptions].sort((a, b) => a.model.localeCompare(b.model)),
     ...((data.alias || data.sourceAlias) ? { matching: {

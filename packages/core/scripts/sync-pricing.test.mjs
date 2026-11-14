@@ -16,6 +16,7 @@ const catalog = { openai: { models: {
 const initialPricing = {
   _meta: { units: 'usd_per_million_tokens', generated_at: '2026-10-14T12:34:56.000Z', note: 'Previous sync' },
   exact: { 'openai/gpt-fixture': { input: 1, output: 2 } },
+  price_metadata: { 'openai/gpt-fixture': { source: 'models.dev', status: 'current', last_verified_at: '2026-10-14T12:34:56.000Z' } },
 };
 
 async function listen(server, t) {
@@ -44,7 +45,7 @@ async function fixture(t, pricing = initialPricing, upstreamCatalog = catalog, m
   for (const name of ['sync-pricing.mjs', 'pricing-metadata.mjs']) {
     await copyFile(join(scriptsDir, name), join(root, 'scripts', name));
   }
-  for (const name of ['models-dev.mjs', 'model-metadata.mjs']) {
+  for (const name of ['models-dev.mjs', 'model-metadata.mjs', 'litellm.mjs', 'pricing-sources.mjs']) {
     await copyFile(join(scriptsDir, '..', 'src', 'pricing', name), join(root, 'src', 'pricing', name));
   }
   const pricingPath = join(root, 'src', 'pricing', 'pricing.json');
@@ -105,7 +106,8 @@ test('uses the configured HTTP proxy without NODE_USE_ENV_PROXY', async t => {
     HTTP_PROXY: `http://127.0.0.1:${proxyPort}`,
   });
   assert.deepEqual(result.exact['openai/gpt-fixture'], { input: 1, output: 2 });
-  assert.deepEqual(targets, [`pricing.invalid:${current.port}`]);
+  assert.ok(targets.length >= 1);
+  assert.ok(targets.every(target => target === `pricing.invalid:${current.port}`));
 });
 
 test('honors NO_PROXY when an HTTP proxy is configured', async t => {

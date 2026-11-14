@@ -28,6 +28,8 @@ Desktop 已运行时，另开 `quotern start` 会作为 observer 提供浏览器
 
 ## Hook 与后台轮询
 
+价格重验证由 Core 独立句柄调度，默认 24h，与采集退避和 watchdog 分开。Desktop 在所有平台的 resume 事件中调用轻量过期检查，不重启 runtime、不启动采集；计时器与 resume 共用同一在途请求。停止/恢复会清理并替换句柄。实际变价后的历史重建先按日期分组，分组和逐日计算之间让出事件循环，并用重建代次拒绝旧快照；冷加载共享在途读取，持久化串行，后到的清空/重建不能被旧读盘恢复。只有当前 runtime 的完成回调可发布更新。自动检查仅修改来源/核实时间时不重建费用。
+
 可选 Agent 行为 Hook 与现有采集 Hook 分开管理；配置、交接、Claude 插件和真实请求的边界见 [Agent 集成](agent-integrations.md)。`/functions/tud-agent` 要求本机请求，写操作还需要运行实例的动作 token；演示模式不注册此路由。自动开窗复用成功额度观测，但必须由当前 runtime owner 执行，开发隔离时禁用。
 
 `/functions/tud-agent/activity` 只读返回有界的会话元数据观测；自动开窗等待原因与最近请求结果由 Agent 状态一起返回。账号提醒、历史范围、离线 statusline 与活动入口的语义和验收见 [额度体验](quota-experience.md)。请求完成不等于额度窗口已确认开启，工具结果不等于任务成功。
@@ -73,6 +75,8 @@ Core 在一次洞察分析中共享派发索引；同范围在途构建与已完
 3. 性能相关修改使用代表性历史数据或足够规模的合成数据。覆盖冷加载、重复相同查询、至少一轮受影响的周期刷新、聚焦/同步后重验证，并在加载期间操作设置或菜单。对照改前改后结果、主进程采样与窗口响应；测试夹具的小数据集不能单独证明大历史下流畅。
 4. 按变更覆盖缓存失效、标题删除、价格更新、附加账号及查询期间账号切换；进程层覆盖启动共享、超时/崩溃、停止中请求、等待冷启动后才恢复的旧请求和退出回收。会话/进程相关回归分别见 [Core 查询测试](../packages/core/test/session-query-api.test.ts)、[归属测试](../packages/core/test/runtime-pid.test.ts)、[分析宿主测试](../apps/desktop/src/main/session-analysis-host.test.ts) 和 [runtime 生命周期测试](../apps/desktop/src/main/local-runtime-lifecycle.test.ts)。
 5. 交付时记录测试与实际运行证据各自覆盖的范围；构建和单测不能替代 Electron 实测。私有原始 profile、日志和合成产物留在所属 `.quotern-dev/`，文档只保留脱敏结论及可重定位线索；按服务归属规则退出本次实例。安装包、多屏或其他系统未实测时明确标注范围。
+
+价格专项验收：两端构建后运行 `node apps/desktop/scripts/run-pricing-sources-smoke.mjs [全新输出目录]`。脚本使用独立 Electron/profile、合成历史和本地 HTTP/IPC，覆盖来源/核实日期/旧价与同步摘要的四语言、键盘关闭、窄屏，以及实际价格变化后 30,000 桶/100 日的重算和主进程心跳；不连接现有服务或读取个人会话。系统真实休眠/恢复和其他平台需要另行实测，不能由夹具推断。
 
 反复出现的问题属于不同机制，排查时核对对应修复是否仍在实际执行路径中：
 

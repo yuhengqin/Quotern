@@ -6,6 +6,7 @@ import {
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 
 import {
   aggregateDaily,
@@ -267,8 +268,12 @@ export class AggregateCache {
   private days = new Map<string, SealedDayEntry>();
   private sealedAsOf: string | null = null;
   private loaded = false;
+  private loading: Promise<void> | null = null;
+  private loadGeneration = 0;
+  private persisting: Promise<void> = Promise.resolve();
   private pricingFingerprint = getPricingFingerprint();
   private dirty = false;
+  private rebuildGeneration = 0;
   private readonly timeZone: string;
 
   constructor(
@@ -280,26 +285,36 @@ export class AggregateCache {
 
   async ensureLoaded(): Promise<void> {
     const pricing = getPricingFingerprint();
-    if (this.pricingFingerprint !== pricing) { this.pricingFingerprint = pricing; this.days.clear(); this.sealedAsOf = null; this.loaded = false; }
-    if (this.loaded) return;
-    this.loaded = true;
-    const path = sealedDailyCachePath(this.dataDir);
-    if (!existsSync(path)) return;
-    try {
-      const raw = JSON.parse(await readFile(path, 'utf8')) as SealedCacheFile;
-      if (raw.version !== CACHE_VERSION || raw.timeZone !== this.timeZone || raw.pricingFingerprint !== this.pricingFingerprint) return;
-      this.sealedAsOf = raw.sealedAsOf ?? null;
-      this.days = new Map(Object.entries(raw.days ?? {}));
-    } catch {
-      this.days.clear();
-      this.sealedAsOf = null;
+    if (this.pricingFingerprint !== pricing) {
+      this.pricingFingerprint = pricing; this.days.clear(); this.sealedAsOf = null; this.loaded = false;
+      this.loadGeneration++; this.loading = null;
     }
+    if (this.loaded) return;
+    if (this.loading) return this.loading;
+    const generation = ++this.loadGeneration;
+    const active = () => generation === this.loadGeneration && pricing === getPricingFingerprint();
+    const load = (async () => {
+      const path = sealedDailyCachePath(this.dataDir);
+      if (!existsSync(path)) return;
+      try {
+        const raw = JSON.parse(await readFile(path, 'utf8')) as SealedCacheFile;
+        if (!active() || raw.version !== CACHE_VERSION || raw.timeZone !== this.timeZone || raw.pricingFingerprint !== pricing) return;
+        this.sealedAsOf = raw.sealedAsOf ?? null;
+        this.days = new Map(Object.entries(raw.days ?? {}));
+      } catch {
+        if (active()) { this.days.clear(); this.sealedAsOf = null; }
+      }
+    })().finally(() => {
+      if (active()) { this.loaded = true; this.loading = null; }
+    });
+    this.loading = load;
+    return load;
   }
 
   private async persist(): Promise<void> {
     if (!this.dirty) return;
     const path = sealedDailyCachePath(this.dataDir);
-    await mkdir(dirname(path), { recursive: true });
+    const generation = this.rebuildGeneration;
     const payload: SealedCacheFile = {
       pricingFingerprint: this.pricingFingerprint,
       version: CACHE_VERSION,
@@ -307,12 +322,22 @@ export class AggregateCache {
       sealedAsOf: this.sealedAsOf ?? localDateNow(this.timeZone),
       days: Object.fromEntries(this.days.entries()),
     };
-    await writeFile(path, `${JSON.stringify(payload)}\n`, 'utf8');
-    this.dirty = false;
+    const body = `${JSON.stringify(payload)}\n`;
+    const save = this.persisting.catch(() => {}).then(async () => {
+      if (generation !== this.rebuildGeneration) return;
+      await mkdir(dirname(path), { recursive: true });
+      if (generation !== this.rebuildGeneration) return;
+      await writeFile(path, body, 'utf8');
+      if (generation === this.rebuildGeneration) this.dirty = false;
+    });
+    this.persisting = save;
+    await save;
   }
 
   /** Drop sealed cache (e.g. after wiping queue). Next ensure will rebuild. */
   async clear(): Promise<void> {
+    this.rebuildGeneration++;
+    this.loadGeneration++; this.loading = null;
     this.days.clear();
     this.sealedAsOf = null;
     this.dirty = true;
@@ -325,18 +350,31 @@ export class AggregateCache {
    * Used on cold start when the cache file is missing or after full reload.
    */
   async rebuildFromRows(rows: QueueBucket[]): Promise<void> {
+    const generation = ++this.rebuildGeneration;
     await this.ensureLoaded();
+    const pricing = getPricingFingerprint();
+    const obsolete = () => generation !== this.rebuildGeneration || pricing !== getPricingFingerprint();
+    if (obsolete()) return;
     const today = localDateNow(this.timeZone);
-    const dates = new Set<string>();
-    for (const row of rows) {
+    const byDate = new Map<string, QueueBucket[]>();
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index]!;
       const { date } = localDateAndHour(row.hour_start, this.timeZone);
-      if (date < today) dates.add(date);
+      if (date < today) {
+        let group = byDate.get(date);
+        if (!group) { group = []; byDate.set(date, group); }
+        group.push(row);
+      }
+      if (index % 512 === 511) { await yieldToEventLoop(); if (obsolete()) return; }
     }
-    this.days.clear();
-    for (const date of dates) {
-      const entry = buildSealedDay(rows, date, this.timeZone);
-      if (entry) this.days.set(date, entry);
+    const next = new Map<string, SealedDayEntry>();
+    for (const [date, group] of byDate) {
+      const entry = buildSealedDay(group, date, this.timeZone);
+      if (entry) next.set(date, entry);
+      await yieldToEventLoop();
+      if (obsolete()) return;
     }
+    this.days = next;
     this.sealedAsOf = today;
     this.dirty = true;
     await this.persist();
@@ -351,6 +389,7 @@ export class AggregateCache {
     touchedBuckets: QueueBucket[] = [],
     reconcileHistory = false,
   ): Promise<void> {
+    this.rebuildGeneration++;
     await this.ensureLoaded();
     const today = localDateNow(this.timeZone);
 

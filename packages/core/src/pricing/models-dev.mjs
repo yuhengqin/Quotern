@@ -86,7 +86,15 @@ export function mergeModelsDevPricing(current, catalog, generatedAt = new Date()
       const key = `${provider}/${modelId}`;
       if (SUBSCRIPTION_PROVIDERS.has(provider)) { subscriptionKeys[key] = {}; continue; }
       if (!model.cost || model.cost.input === undefined || model.cost.output === undefined) continue;
-      fresh[key] = toRates(model.cost);
+      const rates = toRates(model.cost), previous = current.exact?.[key];
+      // An omitted optional field is not a free rate. Keep a known value only
+      // when the source still publishes the same input/output price pair.
+      if (previous?.input === rates.input && previous?.output === rates.output) {
+        for (const field of ['cache_read', 'cache_write']) {
+          if (rates[field] === undefined && validRate(previous[field])) rates[field] = previous[field];
+        }
+      }
+      fresh[key] = rates;
     }
   }
   if (!Object.keys(fresh).length) throw new Error('models.dev catalog contains no supported text prices');

@@ -28,3 +28,18 @@ it('replaces historical Kimi Code catalog estimates without changing cost rates'
   assert.deepEqual(result.models.map(row => row.model), ['kimi-code-plan-cn/kimi-for-coding']);
   assert.equal(data.exact['moonshotai/kimi-for-coding'].input, 0.6);
 });
+
+it('projects price provenance and bounded check counts without inventing legacy verification', () => {
+  const result = pricingDataToCatalog({ exact: { known: { input: 1 }, legacy: { input: 2 } },
+    price_metadata: { known: { source: 'litellm', status: 'carried', last_verified_at: '2026-11-13T01:00:00Z', supplemental_fields: ['cache_read'] } },
+    _meta: { checked_at: '2026-11-14T01:00:00Z', sources: ['models.dev', 'litellm'], sync_report: { added: 2, changed: 3, carried: 1, conflicts: 4, large_changes: 1, failed_sources: ['litellm', 'https://private.invalid/token'] } },
+  }, 'runtime', null);
+  const known = result.models.find(row => row.model === 'known')!;
+  assert.equal(known.priceSource, 'litellm');
+  assert.equal(known.priceStatus, 'carried');
+  assert.equal(known.priceVerifiedAt, '2026-11-13T01:00:00Z');
+  assert.equal(result.models.find(row => row.model === 'legacy')?.priceVerifiedAt, undefined);
+  assert.equal(result.checkedAt, '2026-11-14T01:00:00Z');
+  assert.deepEqual(result.syncReport?.failedSources, ['litellm']);
+  assert.equal(result.syncReport?.conflicts, 4);
+});

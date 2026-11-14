@@ -61,6 +61,7 @@ import {
   onLocalRuntimeSynced,
   pokeSyncOnForeground,
   resumeLocalRuntimeWatchdog,
+  refreshLocalPricingIfStale,
   setLocalRuntimeQuitting,
   startLocalRuntime,
   stopLocalRuntime,
@@ -706,11 +707,12 @@ void acquireDesktopInstanceLock().then((gotLock) => {
       disposeTrayUsageSync = onLocalRuntimeSynced(() => {
         void refreshTrayUsage();
       });
-      onPowerResumeListener = () => {
-        void refreshTrayUsage();
-      };
-      powerMonitor.on('resume', onPowerResumeListener);
     }
+    onPowerResumeListener = () => {
+      void refreshLocalPricingIfStale();
+      if (process.platform === 'darwin') void refreshTrayUsage();
+    };
+    powerMonitor.on('resume', onPowerResumeListener);
 
     // Cached updates can finish immediately. Start updating only after runtime
     // and windows are ready, so startup cannot restart services during install.

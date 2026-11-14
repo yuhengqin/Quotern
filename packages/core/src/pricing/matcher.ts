@@ -17,6 +17,9 @@ export interface PricingModelMetadata {
 }
 
 export interface PricingData {
+  /** This table replaces earlier automatic rules for each declared source. */
+  automatic_rule_sources?: Array<'litellm'>;
+  price_metadata?: Record<string, PriceMetadata>;
   request_rules?: import('./request-pricing.js').RequestPricingRule[];
   _meta?: Record<string, unknown>;
   exact: Record<string, ModelPricingRates>;
@@ -28,6 +31,14 @@ export interface PricingData {
   sourceAlias?: Record<string, Record<string, string>>;
   /** Used when exact/alias/fuzzy all miss (stacked lookup applies remote then builtin). */
   default?: ModelPricingRates;
+}
+
+export interface PriceMetadata {
+  source?: 'models.dev' | 'litellm' | 'manual';
+  status?: 'current' | 'carried';
+  last_verified_at?: string;
+  supplemental_source?: 'litellm';
+  supplemental_fields?: Array<keyof ModelPricingRates>;
 }
 
 export interface LookupPricingOptions {

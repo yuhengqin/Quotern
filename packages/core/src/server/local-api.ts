@@ -142,9 +142,9 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
 
   app.get('/functions/tud-pricing', (c) => {
     c.header('Cache-Control', 'no-store');
-    const { hasOverlay, updatedAt, refreshing } = getPricingStatus();
+    const { hasOverlay, updatedAt, refreshing, checkedAt } = getPricingStatus();
     // Custom source URLs can embed credentials; the panel needs only table state.
-    return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt: deps.demo?.exportedAt ?? updatedAt, refreshing: deps.demo ? false : refreshing } }));
+    return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt: deps.demo?.exportedAt ?? updatedAt, checkedAt, refreshing: deps.demo ? false : refreshing } }));
   });
 
   app.get('/functions/tud-quota-history', async c => {

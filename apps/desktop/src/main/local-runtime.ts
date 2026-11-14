@@ -38,6 +38,7 @@ import {
   type CorruptConfigRecovery,
   type SyncResult,
   type TudConfig,
+  type PricingRefreshHandle,
   localDateNow,
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
@@ -74,7 +75,7 @@ const LOCAL_API_READY_WAIT_MS = 20_000;
 let runtime: RuntimeState | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let syncWatcherStop: (() => void) | null = null;
-let pricingRefreshStop: (() => void) | null = null;
+let pricingRefreshStop: PricingRefreshHandle | null = null;
 let ownedPid = false;
 let runSyncFn: ((reason: string, source?: string) => Promise<SyncResult[]>) | null =
   null;
@@ -107,17 +108,20 @@ async function startPricingOverlayRefresh(
 ): Promise<void> {
   pricingRefreshStop?.();
   pricingRefreshStop = null;
-  const { url } = resolvePricingRefreshConfig({
+  const { url, ttlMs } = resolvePricingRefreshConfig({
     url: config.pricing?.url,
     ttlMs: config.pricing?.ttlMs,
   });
   const handle = startPricingRefresh({
     url: url ?? '',
+    ttlMs,
     dataDir: dir,
     firstFetchTimeoutMs: DEFAULT_PRICING_FIRST_FETCH_TIMEOUT_MS,
-    onUpdate: () => {
+    onUpdate: (_status, change) => {
       const current = runtime;
-      if (!current) return;
+      if (!current || runtimeStopping || quitting) return;
+      if (!change.ratesChanged) { publishDataSynced(); return; }
+      const generation = runtimeRequestGeneration;
       void measureCpuPhase(
         syncLogPath(dir),
         'pricing_rebuild',
@@ -125,7 +129,7 @@ async function startPricingOverlayRefresh(
         () => current.aggregateCache.rebuildFromRows(current.bucketStore.getRows()),
       )
         .then(() => {
-          publishDataSynced();
+          if (runtime === current && generation === runtimeRequestGeneration && !runtimeStopping && !quitting) publishDataSynced();
         })
         .catch((err) => {
           console.warn(
@@ -142,9 +146,15 @@ async function startPricingOverlayRefresh(
     },
   });
   pricingRefreshStop = handle;
-  if (url) console.log(`[tud-desktop] pricing overlay: ${url} (startup fetch)`);
+  if (url) console.log(`[tud-desktop] pricing overlay: ${url} (startup + periodic revalidation)`);
   else console.log('[tud-desktop] pricing: cached overlay / bundled prices (no remote source configured)');
   await handle.ready;
+}
+
+/** Resume only checks expiration; it neither restarts runtime nor initiates collection. */
+export function refreshLocalPricingIfStale(): Promise<boolean> {
+  if (!runtime || runtimeStopping || quitting || !pricingRefreshStop) return Promise.resolve(false);
+  return pricingRefreshStop.refreshIfStale();
 }
 
 async function refreshRuntimeFromDisk(opts?: { strict?: boolean }): Promise<void> {

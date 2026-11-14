@@ -1,0 +1,43 @@
+/* Shared by Dashboard and Desktop. Reference: WeKnora Tooltip / sandbox Popup. */
+.app-tooltip {
+  max-width: min(340px, calc(100vw - 24px));
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #242424;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  box-shadow: inset 0 0 0 0.5px #5e5e5e;
+}
+.app-tooltip .text-muted { color: rgb(255 255 255 / 75%); }
+.app-tooltip [data-slot="overlay-arrow"] { fill: #242424; }
+
+.help-popup {
+  width: max-content;
+  max-width: min(356px, calc(100vw - 24px));
+  max-height: min(448px, calc(100dvh - 24px));
+  padding: 4px 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: 6px;
+  background: var(--overlay);
+  color: var(--overlay-foreground);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  outline: none;
+  box-shadow: 0 3px 14px 2px rgb(0 0 0 / 5%), 0 8px 10px 1px rgb(0 0 0 / 6%), 0 5px 5px -3px rgb(0 0 0 / 10%), inset 0 0 0 0.5px var(--border);
+}
+.help-popup__title {
+  margin: 0 0 4px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+.help-popup__content { color: var(--muted); }
+.help-popup__content > p + p { margin-top: 4px; }
+.help-popup__content > p:first-child { margin-top: 0; }

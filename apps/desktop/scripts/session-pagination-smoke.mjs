@@ -18,6 +18,7 @@ const workspace = path.resolve(desktop, '../..');
 const output = path.resolve(process.argv.slice(2).find(arg => !arg.startsWith('--')) ?? path.join(workspace, `.quotern-dev/session-pagination-ui-${Date.now()}-${process.pid}`));
 const dashboardOnly = process.argv.includes('--dashboard-fixes-only');
 const heatmapOnly = process.argv.includes('--heatmap-legend-only');
+const helpOnly = process.argv.includes('--help-hover-only');
 const closeBands = process.argv.includes('--heatmap-close-bands');
 assert.ok(!existsSync(output), 'Use a fresh acceptance directory');
 await mkdir(path.join(output, 'profile'), { recursive: true });
@@ -46,7 +47,7 @@ const timingEvents = [
   { source: 'claude', sessionId: 'fixture-74', id: 'task-start', kind: 'user', timestamp: '2026-10-25T04:02:00Z' },
   { source: 'claude', sessionId: 'fixture-74', id: 'task-end', kind: 'activity', timestamp: '2026-10-25T04:14:00Z' },
 ];
-if (dashboardOnly || heatmapOnly) {
+if (dashboardOnly || heatmapOnly || helpOnly) {
   const bucket = (source, model, project, tokens, reportedCost) => ({
     source, model, project, hour_start: '2026-10-25T03:00:00Z', input_tokens: tokens,
     output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0,
@@ -526,7 +527,7 @@ async function exerciseHeatmapHelpScrolling(window, client, mode, help, dialog) 
   await client.evaluate(`${dialog}.querySelector('summary').focus(); true`);
   await client.key('Enter');
   await until(() => client.evaluate(`${dialog}.scrollHeight > ${dialog}.clientHeight + 10`), mode + ' expanded help has scrollable content');
-  assert.equal(await client.evaluate(`(()=>{const r=${dialog}.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})()`), true, mode + ' scrollable help stays inside the short viewport');
+  await until(() => client.evaluate(`(()=>{const r=${dialog}.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})()`), mode + ' scrollable help settles inside the short viewport');
   const inner = await client.evaluate(`(()=>{const el=${dialog},r=el.getBoundingClientRect();el.scrollTop=0;return {point:{x:r.left+r.width/2,y:r.top+r.height/2},pageTop:${page}.scrollTop}})()`);
   await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-internal-scroll.png`));
   await wheel(inner.point, 160);
@@ -624,6 +625,56 @@ async function exerciseHeatmapLegend(window, client, mode) {
   checks.push(mode + '-heatmap-legend-help-keyboard-focus-units-equal-thresholds-wide-narrow-themes');
 }
 
+async function exerciseHelpHover(window, client, mode) {
+  const help = label => `document.querySelector('button[aria-label=${JSON.stringify(label)}]')`;
+  const popup = 'document.querySelector("[role=dialog]")';
+  const hover = async expression => {
+    await client.evaluate(`(${expression}).scrollIntoView({block:'center'}); true`);
+    await client.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+    const point = await client.evaluate(`(()=>{const r=(${expression}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+    // A real pointer crosses the page before entering a new trigger. This also
+    // restores pointer modality after Escape before the pointerenter event fires.
+    if (expression !== popup) await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5, button: 'none', buttons: 0, pointerType: 'mouse' });
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, button: 'none', buttons: 0, pointerType: 'mouse' });
+  };
+  await until(() => client.evaluate(`Boolean(${help('总 Token 构成说明')})`), mode + ' overview ready');
+  for (const [width, theme] of [[1120, 'light'], [375, 'light'], [1120, 'dark']]) {
+    await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await client.evaluate(`document.documentElement.classList.remove('light','dark');document.documentElement.classList.add('${theme}');document.documentElement.dataset.theme='${theme}';true`);
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 });
+    const focusedBefore = await client.evaluate('document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName');
+    await hover(help('总 Token 构成说明'));
+    await until(() => client.evaluate(`${popup}?.innerText.includes('统计依据')`), mode + ' hovering shows complete token help');
+    assert.equal(await client.evaluate('document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName'), focusedBefore, 'hover never moves keyboard focus');
+    const bounds = await client.evaluate(`(()=>{const r=${popup}.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}})()`);
+    assert.ok(bounds.left >= 0 && bounds.right <= width && bounds.top >= 0 && bounds.bottom <= 900, 'rich help fits the viewport');
+    await hover(popup);
+    await wait(350);
+    assert.equal(await client.evaluate(`Boolean(${popup})`), true, 'pointer can move into rich help');
+    await captureSettled(window, path.join(output, `${mode}-help-${theme}-${width}.png`));
+    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 });
+    await until(() => client.evaluate(`!${popup}`), 'leaving rich help closes it');
+  }
+  await hover(help('任务执行时长说明'));
+  await until(() => client.evaluate(`${popup}?.innerText.includes('估算')`), 'session help opens on hover');
+  await client.key('Escape');
+  await until(() => client.evaluate(`!${popup}`), 'Escape dismisses hover help');
+  await hover(help('预估费用说明'));
+  await until(() => client.evaluate(`Boolean(${popup}?.querySelector('a[href*="pricing"]'))`), 'hover retains the pricing link');
+  await client.key('Escape');
+  await until(() => client.evaluate(`!${popup}`), 'cost help closes');
+  await hover(help('同步数据'));
+  await until(() => client.evaluate('Boolean(document.querySelector(".app-tooltip"))'), 'short tooltip opens');
+  const skin = await client.evaluate('(()=>{const el=document.querySelector(".app-tooltip"),s=getComputedStyle(el);return {background:s.backgroundColor,color:s.color,arrow:!!el.querySelector("[data-slot=tooltip-arrow]")}})()');
+  assert.equal(skin.background, 'rgb(36, 36, 36)');
+  assert.equal(skin.color, 'rgb(255, 255, 255)');
+  assert.equal(skin.arrow, true);
+  await captureSettled(window, path.join(output, `${mode}-short-tooltip.png`));
+  await client.key('Escape');
+  assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
+  checks.push(mode + '-rich-help-hover-complete-transfer-dismiss-focus-viewport-themes-short-tooltip');
+}
+
 async function main() {
   await mkdir(output, { recursive: true });
   server = createServer(async (req, res) => {
@@ -636,9 +687,10 @@ async function main() {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } }); windows.push(browser);
-  await browser.loadURL(`http://127.0.0.1:${server.address().port}/${dashboardOnly || heatmapOnly ? 'dashboard' : 'sessions?page=4'}`);
+  await browser.loadURL(`http://127.0.0.1:${server.address().port}/${dashboardOnly || heatmapOnly || helpOnly ? 'dashboard' : 'sessions?page=4'}`);
   const browserClient = await connect(browser);
-  if (heatmapOnly) await exerciseHeatmapLegend(browser, browserClient, 'browser');
+  if (helpOnly) await exerciseHelpHover(browser, browserClient, 'browser');
+  else if (heatmapOnly) await exerciseHeatmapLegend(browser, browserClient, 'browser');
   else if (dashboardOnly) await exerciseDashboardFixes(browser, browserClient, 'browser');
   else { await exercise(browser, browserClient, 'browser'); await exerciseCompactFilters(browser, browserClient, 'browser'); }
   browser.destroy();
@@ -659,9 +711,10 @@ async function main() {
   ipcMain.handle('quota:get', () => ({ providers: [], preferences: DEFAULT_QUOTA_PREFERENCES, notice: null }));
   ipcMain.handle('share-backgrounds:request', (_event, request) => { assert.deepEqual(request, { operation: 'legacy' }); return []; });
   const window = new BrowserWindow({ width: 1120, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
-  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: dashboardOnly || heatmapOnly ? '/dashboard' : '/sessions?page=4' });
+  await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: dashboardOnly || heatmapOnly || helpOnly ? '/dashboard' : '/sessions?page=4' });
   const desktopClient = await connect(window);
-  if (heatmapOnly) await exerciseHeatmapLegend(window, desktopClient, 'desktop');
+  if (helpOnly) await exerciseHelpHover(window, desktopClient, 'desktop');
+  else if (heatmapOnly) await exerciseHeatmapLegend(window, desktopClient, 'desktop');
   else if (dashboardOnly) await exerciseDashboardFixes(window, desktopClient, 'desktop');
   else { await exercise(window, desktopClient, 'desktop'); await exerciseCompactFilters(window, desktopClient, 'desktop'); }
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2));

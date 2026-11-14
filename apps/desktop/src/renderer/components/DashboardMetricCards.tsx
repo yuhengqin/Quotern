@@ -1,5 +1,6 @@
 import { CircleQuestion } from '@gravity-ui/icons';
-import { Button, Card, Chip, Tooltip } from '@heroui/react';
+import { Card, Chip } from '@heroui/react';
+import { HelpPopover } from '@/components/HelpPopover';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { formatTokens, formatTokensExact, formatUsd } from '@/lib/format';
@@ -88,24 +89,7 @@ function TokenFormatHelp() {
   const { t } = useTranslation();
   const eastAsian = getTokenUnitMode() === 'localized' && usesEastAsianTokenUnits();
   return (
-    <Tooltip closeDelay={80} delay={100}>
-      <Button
-        aria-label={t('usage.metric.formatHelpAria')}
-        className="h-5 min-h-5 w-5 min-w-5 rounded-full p-0 text-muted"
-        isIconOnly
-        size="sm"
-        variant="ghost"
-      >
-        <CircleQuestion className="h-3.5 w-3.5" />
-      </Button>
-      <Tooltip.Content
-        className="max-w-64 p-3"
-        placement="top"
-        showArrow
-      >
-        <p className="text-xs font-semibold text-foreground">
-          {t('usage.metric.formatHelp')}
-        </p>
+    <HelpPopover title={t('usage.metric.formatHelp')} ariaLabel={t('usage.metric.formatHelpAria')} icon={<CircleQuestion className="h-3.5 w-3.5" />}>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
           {eastAsian ? (
             <>
@@ -134,8 +118,7 @@ function TokenFormatHelp() {
             ? t('usage.metric.localizedPrecision')
             : t('usage.metric.internationalPrecision')}
         </p>
-      </Tooltip.Content>
-    </Tooltip>
+    </HelpPopover>
   );
 }
 

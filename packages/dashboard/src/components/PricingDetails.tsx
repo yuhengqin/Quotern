@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
-import { Button, Popover, Tooltip } from '@heroui/react';
+import { Button, Popover } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { useTranslation } from 'quotern-i18n/react';
 import { pricingRegionMessageKeys } from '../i18n/pricing-messages';
 import type { PricingCurrency } from '../lib/pricing-currency';

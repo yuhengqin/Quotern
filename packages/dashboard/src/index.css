@@ -2,6 +2,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 @import "./components/app-toast.css";
+@import "./components/help-overlays.css";
 
 :root {
   --source-muse: #7570bd;

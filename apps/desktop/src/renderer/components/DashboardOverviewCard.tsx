@@ -1,6 +1,6 @@
-import { memo, useId, useMemo, useState, type ReactNode } from 'react';
-import { CircleHelp } from 'lucide-react';
-import { Button, Card, Chip, Popover, Skeleton, Tooltip } from '@heroui/react';
+import { memo, useId, useMemo, type ReactNode } from 'react';
+import { Card, Chip, Skeleton } from '@heroui/react';
+import { HelpPopover } from '@/components/HelpPopover';
 import { useTranslation } from 'quotern-i18n/react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
@@ -270,42 +270,13 @@ function MetricHelpLabel({
   panel: ReactNode;
   details?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
     <div className="flex min-w-0 items-center gap-0.5">
-      <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">
-        {label}
-      </p>
-      <Popover isOpen={open} onOpenChange={setOpen}>
-        <Tooltip closeDelay={80} delay={120} isDisabled={open}>
-          <Button
-            aria-label={ariaLabel}
-            className="size-4 min-h-4 min-w-4 shrink-0 p-0 text-muted data-[hovered]:bg-transparent data-[hovered]:text-foreground"
-            isIconOnly
-            size="sm"
-            variant="ghost"
-          >
-            <CircleHelp aria-hidden className="size-3.5" />
-          </Button>
-          <Tooltip.Content
-            className="rounded-xl border-0 bg-overlay p-3 text-overlay-foreground shadow-surface"
-            placement="bottom"
-          >
-            {panel}
-          </Tooltip.Content>
-        </Tooltip>
-        <Popover.Content
-          className="rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
-          placement="bottom"
-        >
-          <Popover.Dialog className="max-h-[calc(100dvh-3rem)] max-w-[calc(100vw-2rem)] overflow-y-auto p-3 outline-none">
-            <Popover.Heading className="sr-only">{heading}</Popover.Heading>
-            {panel}
-            {details}
-          </Popover.Dialog>
-        </Popover.Content>
-      </Popover>
+      <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">{label}</p>
+      <HelpPopover title={heading} ariaLabel={ariaLabel} triggerClassName="size-4 min-h-4 min-w-4">
+        {panel}
+        {details}
+      </HelpPopover>
     </div>
   );
 }
@@ -356,7 +327,6 @@ function CacheHitRateHelpPanel() {
   const { t } = useTranslation();
   return (
     <div className="grid max-w-56 gap-1.5 text-xs">
-      <p className="font-medium text-foreground">{t('usage.overview.cacheHitHeading')}</p>
       <p className="leading-4 text-muted">
         {t('usage.overview.cacheFormula')}
       </p>
@@ -387,7 +357,6 @@ function TokenBreakdownPanel({
 
   return (
     <div className="grid min-w-44 gap-1.5 text-xs">
-      <p className="font-medium text-foreground">{t('usage.overview.breakdownHeading')}</p>
       <BreakdownRow label={t('usage.common.input')} value={input} />
       <BreakdownRow label={t('usage.common.output')} value={output} />
       <div className="grid gap-1">

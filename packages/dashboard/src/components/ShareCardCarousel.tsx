@@ -1,4 +1,5 @@
-import { Button, Tooltip } from '@heroui/react';
+import { Button } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { ChevronLeft, ChevronRight, Crop, ImagePlus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import {

@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Modal, ToggleButton, ToggleButtonGroup, Tooltip } from '@heroui/react';
+import { Button, Modal, ToggleButton, ToggleButtonGroup } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { ArrowLeft, ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SupportedLocale } from 'quotern-i18n';

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Button, Card, Modal, Tooltip } from '@heroui/react';
+import { Button, Card, Modal } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SupportedLocale } from 'quotern-i18n';
 import { UNSAFE_PortalProvider } from 'react-aria/PortalProvider';

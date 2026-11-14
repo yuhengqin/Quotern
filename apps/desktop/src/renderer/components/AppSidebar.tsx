@@ -6,7 +6,7 @@ import {
   Pin,
   PinSlash,
 } from '@gravity-ui/icons';
-import { Tooltip } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'quotern-i18n/react';
 import { isCliBackend, triggerSync } from '@/lib/api';

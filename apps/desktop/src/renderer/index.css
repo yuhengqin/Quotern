@@ -7,6 +7,8 @@
 @source "../../../../packages/dashboard/src/components/PerformanceTrend.tsx";
 @import "@heroui/styles";
 @import "../../../../packages/dashboard/src/components/app-toast.css";
+@import "../../../../packages/dashboard/src/components/help-overlays.css";
+@source "../../../../packages/dashboard/src/components/Tooltip.tsx";
 @source "../../../../packages/dashboard/src/components/ThemePreferenceControl.tsx";
 @source "../../../../packages/dashboard/src/components/chrome-action-styles.ts";
 @source "../../../../packages/dashboard/src/components/FilterMenu.tsx";

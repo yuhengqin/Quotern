@@ -1,47 +1,81 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Popover, Tooltip } from '@heroui/react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Button, Popover } from '@heroui/react';
+import { PreviewTrigger } from 'react-aria-components';
 import { CircleHelp } from 'lucide-react';
 import { useInteractOutside } from 'react-aria';
 import { useTranslation } from 'quotern-i18n/react';
+import { cn } from '@/lib/utils';
+import { isTopmostPopover } from '../lib/overlay-dismiss';
 
-/** Supplementary explanations stay beside the result, available by keyboard or click. */
-export function HelpPopover({ title, children }: { title: string; children: ReactNode }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+/** Rich help opens on interest, without moving focus or blocking the page. */
+export function HelpPopup({ title, children, trigger, isOpen, onOpenChange }: {
+  title: string;
+  children: ReactNode;
+  trigger: ReactNode | ((open: () => void) => ReactNode);
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = isOpen ?? localOpen;
+  const changeOpen = useCallback((next: boolean) => {
+    setLocalOpen(next);
+    onOpenChange?.(next);
+  }, [onOpenChange]);
+  const anchorRef = useRef<HTMLSpanElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  // React Aria's non-modal popover permits page scrolling but needs explicit
-  // outside-click dismissal for a standalone help button.
+  const headingId = useId();
   useInteractOutside({
     ref: contentRef,
     isDisabled: !open,
     onInteractOutside: event => {
-      if (!triggerRef.current || !event.composedPath().includes(triggerRef.current)) setOpen(false);
+      if (!anchorRef.current?.contains(event.target as Node)) changeOpen(false);
     },
   });
   useEffect(() => {
     if (!open) return;
-    const ownerDocument = triggerRef.current?.ownerDocument;
-    // Help has no keyboard input to preserve: close on ancestor scroll even
-    // during React Aria's viewport-resize grace period. Internal scroll stays open.
+    const ownerDocument = anchorRef.current?.ownerDocument;
     const onScroll = (event: Event) => {
-      const trigger = triggerRef.current;
-      if (trigger && event.target instanceof Node && event.target.contains(trigger)) setOpen(false);
+      const anchor = anchorRef.current;
+      if (anchor && event.target instanceof Node && event.target.contains(anchor)) changeOpen(false);
+    };
+    // Hover does not move focus, so Escape may originate outside this overlay.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !isTopmostPopover(contentRef.current)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (contentRef.current?.contains(ownerDocument?.activeElement ?? null)) {
+        anchorRef.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+      }
+      changeOpen(false);
     };
     ownerDocument?.addEventListener('scroll', onScroll, true);
-    return () => ownerDocument?.removeEventListener('scroll', onScroll, true);
-  }, [open]);
-  const label = t('usage.session.helpAria', { label: title });
-  return <Popover isOpen={open} onOpenChange={setOpen}>
-    <Tooltip delay={400} isDisabled={open}>
-      <Button ref={triggerRef} aria-label={label} isIconOnly size="sm" variant="ghost" className="size-5 min-h-5 min-w-5 shrink-0 p-0 text-muted data-[hovered]:text-foreground"><CircleHelp aria-hidden className="size-3.5" /></Button>
-      <Tooltip.Content>{label}</Tooltip.Content>
-    </Tooltip>
-    <Popover.Content ref={contentRef} isNonModal shouldSkipAnimation maxHeight={448} placement="bottom start" className="flex w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface">
-      <Popover.Dialog className="min-h-0 space-y-3 overflow-y-auto overscroll-contain p-4 text-xs leading-5 outline-none">
-        <Popover.Heading className="font-semibold">{title}</Popover.Heading>
-        {children}
-      </Popover.Dialog>
-    </Popover.Content>
-  </Popover>;
+    ownerDocument?.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      ownerDocument?.removeEventListener('scroll', onScroll, true);
+      ownerDocument?.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open, changeOpen]);
+  return <span ref={anchorRef} className="inline-flex shrink-0 align-middle">
+    <PreviewTrigger delay={150} closeDelay={150} isOpen={open} onOpenChange={changeOpen}>
+      {typeof trigger === 'function' ? trigger(() => changeOpen(true)) : trigger}
+      <Popover.Content ref={contentRef} isNonModal shouldSkipAnimation maxHeight={448} placement="bottom start" offset={8} aria-labelledby={headingId} className="help-popup">
+        <h2 id={headingId} className="help-popup__title">{title}</h2>
+        <div className="help-popup__content">{children}</div>
+      </Popover.Content>
+    </PreviewTrigger>
+  </span>;
+}
+
+export function HelpPopover({ title, children, ariaLabel, icon, triggerClassName }: {
+  title: string;
+  children: ReactNode;
+  ariaLabel?: string;
+  icon?: ReactNode;
+  triggerClassName?: string;
+}) {
+  const { t } = useTranslation();
+  const label = ariaLabel ?? t('usage.session.helpAria', { label: title });
+  return <HelpPopup title={title} trigger={open => <Button aria-label={label} onPress={open} isIconOnly size="sm" variant="ghost" className={cn('size-5 min-h-5 min-w-5 shrink-0 cursor-help p-0 text-muted data-[hovered]:bg-transparent data-[hovered]:text-accent', triggerClassName)}>
+    {icon ?? <CircleHelp aria-hidden className="size-3.5" />}
+  </Button>}>{children}</HelpPopup>;
 }

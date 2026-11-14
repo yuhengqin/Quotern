@@ -1,7 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
-import { Autocomplete, Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, Tooltip, useFilter } from '@heroui/react';
+import { Autocomplete, Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, useFilter } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { ArrowDown, ArrowUp, ChevronRight, ChevronUp, Download, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';

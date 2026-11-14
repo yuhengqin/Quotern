@@ -11,6 +11,7 @@ import { shouldShowUsageTotal, visibleServiceTiers } from '../lib/session-detail
 import type { PricingModelSelection } from '../lib/pricing-selection';
 import { formatPricingDisplayRate } from '../lib/pricing-display';
 import { HelpPopover } from './HelpPopover';
+import { isTopmostPopover } from '../lib/overlay-dismiss';
 
 export type DetailFormat = {
   tokens(value: number | null | undefined): string;
@@ -48,10 +49,10 @@ function PricingRate({ group, format }: { group: DetailPricingGroup; format: Det
       if (trigger.current && event.target instanceof Node && event.target.contains(trigger.current)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented || !isTopmostPopover(content.current)) return;
       // The outer Modal also owns Escape/focus restoration. Close only this
       // non-modal layer and restore its exact trigger after that layer unmounts.
-      event.preventDefault(); event.stopPropagation();
+      event.preventDefault(); event.stopImmediatePropagation();
       setOpen(false);
       requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
     };

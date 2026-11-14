@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Calendar } from '@gravity-ui/icons';
-import { Button, DateField, Label, Popover, RangeCalendar, Tooltip } from '@heroui/react';
+import { Button, DateField, Label, Popover, RangeCalendar } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { CalendarDate, parseDate } from '@internationalized/date';
 import { I18nProvider } from 'react-aria';
 import { useTranslation } from 'quotern-i18n/react';

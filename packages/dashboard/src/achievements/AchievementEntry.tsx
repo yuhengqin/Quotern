@@ -1,6 +1,6 @@
 import type { ComponentPropsWithRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Tooltip } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { Award, ArrowUpRight } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { useAchievements } from './AchievementProvider';

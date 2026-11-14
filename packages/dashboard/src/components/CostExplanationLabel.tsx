@@ -1,6 +1,5 @@
-import { Button, Popover } from '@heroui/react';
 import { Link } from '@tanstack/react-router';
-import { CircleHelp } from 'lucide-react';
+import { HelpPopover } from './HelpPopover';
 import { useTranslation } from 'quotern-i18n/react';
 import type { UsageReport } from 'quotern-core';
 import { formatTokens, formatUsd } from '@/lib/format';
@@ -19,13 +18,7 @@ export function CostExplanationLabel({ report, loading, error }: {
   return (
     <div className="flex min-w-0 items-center gap-0.5">
       <p className="truncate text-xs font-medium leading-5 text-muted">{t('usage.common.estimatedCost')}</p>
-      <Popover>
-        <Button aria-label={t('usage.cost.helpAria')} className="size-4 min-h-4 min-w-4 shrink-0 p-0 text-muted" isIconOnly size="sm" variant="ghost">
-          <CircleHelp aria-hidden className="size-3.5" />
-        </Button>
-        <Popover.Content className="max-w-[calc(100vw-2rem)] rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface" placement="bottom">
-          <Popover.Dialog className="max-h-[calc(100dvh-3rem)] w-80 max-w-full overflow-y-auto p-4 outline-none">
-            <Popover.Heading className="text-sm font-semibold">{t('usage.cost.notBill')}</Popover.Heading>
+      <HelpPopover title={t('usage.cost.notBill')} ariaLabel={t('usage.cost.helpAria')} triggerClassName="size-4 min-h-4 min-w-4">
             <p className="mt-2 text-xs leading-5 text-muted">{t(explanation && explanation.reportedCostUsd > 0 ? 'usage.cost.reportedAndEstimated' : 'usage.cost.estimatedOnly')}</p>
             <p className="mt-2 text-xs leading-5 text-muted">{t('usage.cost.subscriptionNote')}</p>
             {!explanation ? (
@@ -53,9 +46,7 @@ export function CostExplanationLabel({ report, loading, error }: {
               </div>
             )}
             <Link to="/pricing" search={{ q: '' }} target="_blank" rel="noopener" className="mt-3 inline-block rounded text-xs text-muted underline underline-offset-4 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">{t('usage.cost.viewPrices')}</Link>
-          </Popover.Dialog>
-        </Popover.Content>
-      </Popover>
+      </HelpPopover>
     </div>
   );
 }

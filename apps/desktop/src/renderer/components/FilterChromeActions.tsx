@@ -1,7 +1,8 @@
 import { useState, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Activity, CircleDollarSign, History as RotateCcwClock, RefreshCw, Settings, Share2 } from 'lucide-react';
-import { Button, Tooltip } from '@heroui/react';
+import { Button } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { useTranslation } from 'quotern-i18n/react';
 import { AchievementEntry } from '../achievements/AchievementEntry';
 import { AutoUpdateAction } from '@/components/AutoUpdateAction';

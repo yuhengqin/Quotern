@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button, Card, Label, ListBox, Modal, Select, Tabs, Tooltip } from '@heroui/react';
+import { Button, Card, Label, ListBox, Modal, Select, Tabs } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { Maximize2 } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { Area, Bar, CartesianGrid, ComposedChart, XAxis, YAxis } from 'recharts';

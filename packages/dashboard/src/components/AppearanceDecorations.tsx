@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Button, Tooltip } from '@heroui/react';
+import { Button } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { Pause } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { hasAppearanceDecoration, type AppearanceBridge, type AppearanceStyle, type DecoratedAppearanceStyle } from '../../../../apps/desktop/src/shared/appearance';

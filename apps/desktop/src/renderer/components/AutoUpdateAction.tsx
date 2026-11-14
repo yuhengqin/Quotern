@@ -111,9 +111,10 @@ export function AutoUpdateAction({ className }: { className: string }) {
       </button>
       {tipOpen ? (
         <div
-          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-max max-w-64 -translate-x-1/2 rounded-md bg-foreground px-2.5 py-1.5 text-[11px] leading-snug text-background shadow-md"
+          className="app-tooltip pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-max -translate-x-1/2"
           role="tooltip"
         >
+          <svg aria-hidden width="8" height="4" viewBox="0 0 8 4" className="absolute bottom-full left-1/2 -translate-x-1/2"><path d="M0 4L4 0L8 4Z" fill="#242424" /></svg>
           {tip}
         </div>
       ) : null}

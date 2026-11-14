@@ -1,5 +1,6 @@
 import { MoonIcon, SunIcon, SunMoonIcon } from 'lucide-react';
-import { Button, Tooltip } from '@heroui/react';
+import { Button } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { useTranslation } from 'quotern-i18n/react';
 import type { ThemeMode } from '@/lib/theme';
 import { useTheme } from '@/hooks/useTheme';

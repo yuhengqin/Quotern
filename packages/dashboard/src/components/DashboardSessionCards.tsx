@@ -1,5 +1,5 @@
-import { CircleHelp } from 'lucide-react';
-import { Card, Popover, Skeleton } from '@heroui/react';
+import { Card, Skeleton } from '@heroui/react';
+import { HelpPopover } from '@/components/HelpPopover';
 import { useTranslation } from 'quotern-i18n/react';
 import type { SessionMetrics } from 'quotern-core';
 import { formatSessionDuration, sessionMetricValue } from '@/lib/session-metric-format';
@@ -37,20 +37,12 @@ export function DashboardSessionCards({ metrics, loading = false, error = false 
             <Card.Content className="flex h-full flex-col justify-between p-0">
               <div className="flex items-center gap-0.5">
                 <p className="text-xs font-medium leading-5 text-muted">{label}</p>
-                <Popover>
-                  <Popover.Trigger aria-label={t('usage.session.helpAria', { label })} className="flex size-4 min-w-4 items-center justify-center rounded-full text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2">
-                    <CircleHelp aria-hidden className="size-3.5" />
-                  </Popover.Trigger>
-                  <Popover.Content placement="bottom" className="max-w-80 rounded-xl border-0 bg-overlay p-0 text-overlay-foreground shadow-surface">
-                    <Popover.Dialog className="p-3 outline-none">
-                      <Popover.Heading className="mb-1 text-xs font-semibold">{label}</Popover.Heading>
+                <HelpPopover title={label} triggerClassName="size-4 min-h-4 min-w-4">
                       <p className="text-xs leading-relaxed">{t(card.helpKey)}</p>
                       {task && estimatedSources ? <p className="mt-2 text-xs text-muted">{t('usage.session.estimatedSources', { sources: estimatedSources })}</p> : null}
                       {task && missingTaskSources ? <p className="mt-2 text-xs text-muted">{t('usage.session.missingTaskSources', { sources: missingTaskSources })}</p> : null}
                       {!task && partial ? <p className="mt-2 text-xs text-muted">{t('usage.session.missingSources', { sources: missing })}</p> : null}
-                    </Popover.Dialog>
-                  </Popover.Content>
-                </Popover>
+                </HelpPopover>
               </div>
               <div>
                 {loading && !metrics ? (

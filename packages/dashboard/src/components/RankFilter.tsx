@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LogoGithub } from '@gravity-ui/icons';
-import { Button, Label, ListBox, Select, Tabs, Tooltip } from '@heroui/react';
+import { Button, Label, ListBox, Select, Tabs } from '@heroui/react';
+import { Tooltip } from '@/components/Tooltip';
 import { Share2 } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { ProviderIcon } from '@/components/ProviderIcon';

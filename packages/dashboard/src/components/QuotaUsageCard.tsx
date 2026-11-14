@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Card, Chip, Label, ListBox, Modal, ProgressBar, Select, Tabs, Tooltip } from '@heroui/react';
+import { Button, Card, Chip, Label, ListBox, Modal, ProgressBar, Select, Tabs } from '@heroui/react';
+import { HelpPopup } from './HelpPopover';
 import { Button as AriaButton } from 'react-aria-components';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaDetail, localizeQuotaPaceDescription, localizeQuotaPaceLabel, localizeQuotaValueText, localizeQuotaWindowLabel } from 'quotern-i18n/quota';
@@ -353,38 +354,31 @@ function QuotaServiceStatusLink({ label, status, service, onOpen, iconOnly = fal
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const [open, setOpen] = useState(false);
-  return <Tooltip isOpen={open} onOpenChange={setOpen}>
-    <Button size="sm" variant="tertiary" isIconOnly={iconOnly}
+  return <HelpPopup title={t('usage.quota.overallStatus', { status: service.label })} isOpen={open} onOpenChange={setOpen} trigger={<Button size="sm" variant="tertiary" isIconOnly={iconOnly}
       data-quota-action
       className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm text-xs text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent ${iconOnly ? 'size-6 min-w-6 p-0' : 'h-auto min-h-6 w-fit px-0'}`}
       aria-label={t('usage.quota.statusAria', { provider: label, status: service.label })}
-      onHoverStart={() => setOpen(true)} onHoverEnd={() => setOpen(false)}
-      onFocus={event => { if (event.target.matches(':focus-visible')) setOpen(true); }} onBlur={() => setOpen(false)}
       onPress={() => { setOpen(false); onOpen(); }}>
       <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${service.dotClassName}`} />
       {!iconOnly && <><span>{service.label}</span><span aria-hidden="true">↗</span></>}
-    </Button>
-    <Tooltip.Content className="max-w-64 text-xs">
+    </Button>}>
       <div className="flex flex-col gap-1">
-        <p>{t('usage.quota.overallStatus', { status: service.label })}</p>
         <p className="text-muted">{t('usage.quota.statusNote')}</p>
         {status.stale && <p className="text-muted">{t('usage.quota.statusStale')}</p>}
         <p className="text-muted">{status.checkedAt ? t('usage.quota.checkedAt', { date: new Date(status.checkedAt * 1000).toLocaleString(locale) }) : t('usage.quota.noStatus')}</p>
       </div>
-    </Tooltip.Content>
-  </Tooltip>;
+  </HelpPopup>;
 }
 
 function QuotaResetTime({ text, absolute, dateMode, onToggle, saving }: { text: string; absolute?: string; dateMode: boolean; onToggle?: () => void; saving?: boolean }) {
   const { t } = useTranslation();
   const action = t(dateMode ? 'usage.quota.timeToCountdown' : 'usage.quota.timeToDate');
   if (!onToggle) return <span className="text-xs tabular-nums text-muted" title={absolute}>{text}</span>;
-  return <Tooltip>
-    <AriaButton type="button" data-quota-action data-quota-reset-time aria-label={`${text} · ${action}`} aria-disabled={saving} aria-busy={saving}
+  return <HelpPopup title={absolute ?? text} trigger={<AriaButton type="button" data-quota-action data-quota-reset-time aria-label={`${text} · ${action}`} aria-disabled={saving} aria-busy={saving}
       className="relative min-h-6 w-fit max-w-full cursor-pointer rounded-sm text-left text-xs tabular-nums text-muted underline decoration-dotted underline-offset-4 transition-colors hover:text-foreground hover:decoration-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-disabled:cursor-wait motion-reduce:transition-none"
-      onPress={() => { if (!saving) onToggle(); }}>{text}</AriaButton>
-    <Tooltip.Content className="max-w-64 text-xs"><p>{absolute}</p><p>{action}</p></Tooltip.Content>
-  </Tooltip>;
+      onPress={() => { if (!saving) onToggle(); }}>{text}</AriaButton>}>
+    <p>{action}</p>
+  </HelpPopup>;
 }
 
 function QuotaCommonResetTime({ at, now, dateMode, onToggle, saving }: { at: number; now: Date; dateMode: boolean; onToggle?: () => void; saving?: boolean }) {

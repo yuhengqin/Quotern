@@ -165,6 +165,13 @@ async function checkPricingTiers(client, label) {
   await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]') && document.activeElement?.dataset.pricingRate==='input' && Boolean(${dialog})`), 'rate Escape restores trigger without closing session');
   await client.click(trigger);
   await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'mouse opens rate tiers');
+  const contextHelp = 'document.querySelector("[data-model-pricing] button[aria-haspopup=dialog]")';
+  const contextPoint = await client.evaluate(`(()=>{const r=(${contextHelp}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...contextPoint, button: 'none', buttons: 0, pointerType: 'mouse' });
+  await until(() => client.evaluate('Boolean(document.querySelector(".help-popup"))'), 'hover help above open pricing tiers');
+  await client.key('Escape');
+  await until(() => client.evaluate('!document.querySelector(".help-popup")'), 'Escape dismisses only the newest help');
+  assert.equal(await client.evaluate('Boolean(document.querySelector("[data-pricing-tiers]"))'), true, 'Escape preserves the underlying pricing layer');
   await client.click(`${dialog}.querySelector('.modal__header')`);
   await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]')`), 'outside click closes rate tiers');
   await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
@@ -180,6 +187,10 @@ async function checkPricingTiers(client, label) {
   await client.evaluate(`(() => { const body=${dialog}.querySelector('.modal__body'); body.scrollTop=body.scrollTop>0?0:40; })()`);
   await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]')`), 'ancestor scrolling dismisses rate tiers');
   await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 400, deviceScaleFactor: 1, mobile: false });
+  if (await client.evaluate('Boolean(document.querySelector(".help-popup"))')) {
+    await client.key('Escape');
+    await until(() => client.evaluate('!document.querySelector(".help-popup")'), 'dismiss the hover hint before the short-viewport rate action');
+  }
   await client.click(trigger);
   await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'short viewport rate tiers');
   const point = await client.evaluate(`(() => { const p=document.querySelector('[data-pricing-tiers]'),r=p.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,scrollable:p.scrollHeight>p.clientHeight+1}; })()`);

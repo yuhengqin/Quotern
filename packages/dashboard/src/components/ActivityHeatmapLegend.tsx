@@ -24,7 +24,7 @@ export function ActivityHeatmapLegend({
       <div data-heatmap-legend className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-muted">
         <div className="inline-flex items-center gap-1">
           <span>{title}</span>
-          <HelpPopover title={t('usage.heatmap.legendHelpTitle')}>
+          <HelpPopover title={t('usage.heatmap.legendHelpTitle')} showTitle>
             <div className="flex items-center gap-3">
               <span aria-hidden="true" className="size-3 shrink-0 rounded-[3px] border border-foreground/10" style={{ background: colors[0] }} />
               <span>{t('usage.heatmap.noRecordedUsage')}</span>

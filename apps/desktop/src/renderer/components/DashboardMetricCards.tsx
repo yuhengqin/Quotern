@@ -89,7 +89,7 @@ function TokenFormatHelp() {
   const { t } = useTranslation();
   const eastAsian = getTokenUnitMode() === 'localized' && usesEastAsianTokenUnits();
   return (
-    <HelpPopover title={t('usage.metric.formatHelp')} ariaLabel={t('usage.metric.formatHelpAria')} icon={<CircleQuestion className="h-3.5 w-3.5" />}>
+    <HelpPopover title={t('usage.metric.formatHelp')} showTitle ariaLabel={t('usage.metric.formatHelpAria')} icon={<CircleQuestion className="h-3.5 w-3.5" />}>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
           {eastAsian ? (
             <>

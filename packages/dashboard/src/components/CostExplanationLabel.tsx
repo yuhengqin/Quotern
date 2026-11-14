@@ -18,7 +18,7 @@ export function CostExplanationLabel({ report, loading, error }: {
   return (
     <div className="flex min-w-0 items-center gap-0.5">
       <p className="truncate text-xs font-medium leading-5 text-muted">{t('usage.common.estimatedCost')}</p>
-      <HelpPopover title={t('usage.cost.notBill')} ariaLabel={t('usage.cost.helpAria')} triggerClassName="size-4 min-h-4 min-w-4">
+      <HelpPopover title={t('usage.cost.notBill')} showTitle ariaLabel={t('usage.cost.helpAria')} triggerClassName="size-4 min-h-4 min-w-4">
             <p className="mt-2 text-xs leading-5 text-muted">{t(explanation && explanation.reportedCostUsd > 0 ? 'usage.cost.reportedAndEstimated' : 'usage.cost.estimatedOnly')}</p>
             <p className="mt-2 text-xs leading-5 text-muted">{t('usage.cost.subscriptionNote')}</p>
             {!explanation ? (

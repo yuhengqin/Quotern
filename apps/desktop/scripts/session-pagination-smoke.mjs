@@ -645,6 +645,13 @@ async function exerciseHelpHover(window, client, mode) {
     const focusedBefore = await client.evaluate('document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName');
     await hover(help('总 Token 构成说明'));
     await until(() => client.evaluate(`${popup}?.innerText.includes('统计依据')`), mode + ' hovering shows complete token help');
+    const plainHelp = await client.evaluate(`(()=>{const el=${popup},s=getComputedStyle(el),body=el.querySelector('.help-popup__content');return {heading:!!el.querySelector('h2'),name:el.getAttribute('aria-label'),background:s.backgroundColor,color:getComputedStyle(body).color,fontSize:getComputedStyle(body).fontSize,muted:getComputedStyle(el.querySelector('.text-muted')).color}})()`);
+    assert.equal(plainHelp.heading, false, 'repeated token heading is omitted');
+    assert.equal(plainHelp.name, '总 Token 构成', 'titleless help retains its accessible name');
+    assert.equal(plainHelp.background, 'rgb(36, 36, 36)');
+    assert.equal(plainHelp.color, 'rgb(255, 255, 255)');
+    assert.equal(plainHelp.fontSize, '14px');
+    assert.equal(plainHelp.muted, 'rgba(255, 255, 255, 0.8)', 'nested muted text stays readable on the dark surface');
     assert.equal(await client.evaluate('document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName'), focusedBefore, 'hover never moves keyboard focus');
     const bounds = await client.evaluate(`(()=>{const r=${popup}.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}})()`);
     assert.ok(bounds.left >= 0 && bounds.right <= width && bounds.top >= 0 && bounds.bottom <= 900, 'rich help fits the viewport');
@@ -657,12 +664,19 @@ async function exerciseHelpHover(window, client, mode) {
   }
   await hover(help('任务执行时长说明'));
   await until(() => client.evaluate(`${popup}?.innerText.includes('估算')`), 'session help opens on hover');
+  assert.equal(await client.evaluate(`Boolean(${popup}?.querySelector('h2'))`), false, 'session help goes directly to the explanation');
+  await captureSettled(window, path.join(output, `${mode}-session-help.png`));
   await client.key('Escape');
   await until(() => client.evaluate(`!${popup}`), 'Escape dismisses hover help');
   await hover(help('预估费用说明'));
   await until(() => client.evaluate(`Boolean(${popup}?.querySelector('a[href*="pricing"]'))`), 'hover retains the pricing link');
+  assert.equal(await client.evaluate(`${popup}?.querySelector('h2')?.textContent`), '预估金额并非实际账单', 'informative cost warning is retained');
   await client.key('Escape');
   await until(() => client.evaluate(`!${popup}`), 'cost help closes');
+  await hover(help('缓存命中率说明'));
+  await until(() => client.evaluate(`${popup}?.querySelector('h2')?.textContent === '缓存命中率'`), 'input token help retains its formula heading');
+  await client.key('Escape');
+  await until(() => client.evaluate(`!${popup}`), 'cache formula help closes');
   await hover(help('同步数据'));
   await until(() => client.evaluate('Boolean(document.querySelector(".app-tooltip"))'), 'short tooltip opens');
   const skin = await client.evaluate('(()=>{const el=document.querySelector(".app-tooltip"),s=getComputedStyle(el);return {background:s.backgroundColor,color:s.color,arrow:!!el.querySelector("[data-slot=tooltip-arrow]")}})()');

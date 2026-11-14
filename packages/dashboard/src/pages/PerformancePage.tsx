@@ -47,7 +47,7 @@ export function PerformancePage() {
   const groupLabel = (group: PerformanceGroup) => t(`insights.${group === 'source' ? 'agent' : group}`);
   const count = (n: number) => t('insights.samples', { count: n });
   return <div className="min-w-0 space-y-5 pb-6">
-    <header><BackToUsageLink /><div className="flex items-center gap-2"><Activity className="size-6 text-accent" aria-hidden /><h1 className="text-2xl font-semibold tracking-tight">{t('insights.performance')}</h1><HelpPopover title={t('insights.basis')}><p>{t('insights.performanceHelp')}</p></HelpPopover></div></header>
+    <header><BackToUsageLink /><div className="flex items-center gap-2"><Activity className="size-6 text-accent" aria-hidden /><h1 className="text-2xl font-semibold tracking-tight">{t('insights.performance')}</h1><HelpPopover title={t('insights.basis')} showTitle><p>{t('insights.performanceHelp')}</p></HelpPopover></div></header>
     <div className="flex flex-wrap items-end gap-3">
       <InsightSelect label={t('insights.period')} value={String(search.days)} options={[1, 7, 30, 90].map(days => ({ id: String(days), label: t('insights.days', { count: days }) }))} onChange={days => update({ days: Number(days) })} />
       <InsightSelect label={t('insights.agent')} value={search.source} options={facets(data?.facets.sources ?? (search.source ? [search.source] : []), sourceLabel)} onChange={source => update({ source })} />

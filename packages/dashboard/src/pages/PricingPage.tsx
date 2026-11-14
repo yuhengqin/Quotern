@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Xmark } from '@gravity-ui/icons';
 import { Check, Columns2, Info } from 'lucide-react';
-import { Button, Label, ListBox, Popover, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
+import { Button, Label, ListBox, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { registerMessages } from 'quotern-i18n';
 import { PricingList } from '../components/PricingList';
@@ -28,7 +28,7 @@ import {
 } from '../lib/pricing-catalog';
 import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingComparison } from '../lib/pricing-workbench';
 import { filterSessionPricingGroups, parsePricingSearch } from '../lib/pricing-selection';
-import { HelpPopover } from '../components/HelpPopover';
+import { HelpPopover, HelpPopup } from '../components/HelpPopover';
 import { ManualPricingEditor } from '../components/ManualPricingEditor';
 import { isDemoMode } from '@/lib/demo-runtime';
 
@@ -203,25 +203,19 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
       </div>}
       {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
         <span role="status" aria-live="polite">{t('pricing.summary.count', { count: groups.length })}</span>
-        {sessionFilter.unmatched.length > 0 && <span className="inline-flex items-center gap-1">{t('usage.detail.unmatchedModels', { count: sessionFilter.unmatched.length })}<HelpPopover title={t('usage.detail.sessionModels')}><p>{t('usage.detail.unmatchedNote')}</p><ul className="space-y-1">{sessionFilter.unmatched.map(item => <li key={JSON.stringify(item)} className="break-all">{item.model} · {item.source}</li>)}</ul></HelpPopover></span>}
+        {sessionFilter.unmatched.length > 0 && <span className="inline-flex items-center gap-1">{t('usage.detail.unmatchedModels', { count: sessionFilter.unmatched.length })}<HelpPopover title={t('usage.detail.sessionModels')} showTitle><p>{t('usage.detail.unmatchedNote')}</p><ul className="space-y-1">{sessionFilter.unmatched.map(item => <li key={JSON.stringify(item)} className="break-all">{item.model} · {item.source}</li>)}</ul></HelpPopover></span>}
         {sort.column === 'usage' && <span>{t(usageStatus === 'loading' ? 'pricing.summary.usageLoadingSort' : usageStatus === 'error' ? 'pricing.summary.usageErrorSort' : hasUsage ? 'pricing.summary.usageSort' : 'pricing.summary.noUsageSort')}</span>}
         {sort.column === 'latest' && <span>{t('pricing.summary.latestSort')}</span>}
         {usageStatus !== 'ready' && sort.column !== 'usage' && <span>{t(usageStatus === 'error' ? 'pricing.summary.usageError' : 'pricing.summary.usageLoading')}</span>}
         <span title={dateLabel}>{t('pricing.summary.tableDate', { kind: tableDateKind, date: shortDateLabel })}</span>
-        <Popover>
-          <Button variant="ghost" size="sm" className="!h-6 !min-h-6 !gap-1 !px-1 !text-[11px] text-muted"><Info className="size-3" aria-hidden />{t('pricing.summary.dataInfo')}</Button>
-          <Popover.Content placement="bottom start" className="max-w-80">
-            <Popover.Dialog className="space-y-2 p-3 text-xs">
-              <Popover.Heading>{t('pricing.summary.dataHeading')}</Popover.Heading>
-              <p>{t('pricing.summary.countDetails', { visible: groups.length, total: modelGroups.length, channels: channelCount })}</p>
-              <p className="text-muted">{t(catalog.source === 'bundled' ? 'pricing.summary.bundled' : 'pricing.summary.published')} · {t('pricing.summary.tableDate', { kind: tableDateKind, date: dateLabel })}</p>
-              <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
-              <p className="text-muted">{t('pricing.summary.providerMeaning')}</p>
-              <p className="text-muted">{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
-              {sessionModels?.length && <p className="text-muted">{t('usage.detail.referencePrices')}</p>}
-            </Popover.Dialog>
-          </Popover.Content>
-        </Popover>
+        <HelpPopup title={t('pricing.summary.dataHeading')} showTitle={false} trigger={open => <Button onPress={open} variant="ghost" size="sm" className="!h-6 !min-h-6 !gap-1 !px-1 !text-[11px] text-muted"><Info className="size-3" aria-hidden />{t('pricing.summary.dataInfo')}</Button>}>
+          <p>{t('pricing.summary.countDetails', { visible: groups.length, total: modelGroups.length, channels: channelCount })}</p>
+          <p className="text-muted">{t(catalog.source === 'bundled' ? 'pricing.summary.bundled' : 'pricing.summary.published')} · {t('pricing.summary.tableDate', { kind: tableDateKind, date: dateLabel })}</p>
+          <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
+          <p className="text-muted">{t('pricing.summary.providerMeaning')}</p>
+          <p className="text-muted">{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
+          {sessionModels?.length && <p className="text-muted">{t('usage.detail.referencePrices')}</p>}
+        </HelpPopup>
       </div>}
       {estimateEnabled && <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-[11px] text-muted" aria-label={t('pricing.calculator.settings')}>
         <span><PricingScenarioSummary scenario={scenario} withPrefix /></span><Button size="sm" variant="ghost" isIconOnly aria-label={t('pricing.calculator.close')} className="!size-6 !min-h-6 !min-w-6 !p-0" onPress={() => setEstimateEnabled(false)}><Xmark className="size-3" /></Button>

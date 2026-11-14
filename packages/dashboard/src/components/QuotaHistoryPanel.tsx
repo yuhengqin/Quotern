@@ -37,7 +37,7 @@ export function QuotaHistoryPanel({ providerId, providerType = providerId, refre
   const segments = data && selectedWindow && bounds ? quotaHistorySegments([range ? selectedWindow : { ...selectedWindow, cycles: cycle ? [cycle] : [] }, ...(compared ? [compared] : [])], bounds.from, bounds.to) : [];
   const chartRows = (() => { const rows = new Map<number, Record<string, number>>(); for (const segment of segments) for (const sample of segment.samples) { const row = rows.get(sample.at) ?? { at: sample.at }; row[segment.key] = sample.usedPercent; rows.set(sample.at, row); } return [...rows.values()].sort((a, b) => a.at - b.at); })();
   return <section className="min-w-0 space-y-4">
-    <div className="flex items-center gap-2"><h2 className="text-lg font-semibold">{t('history.title')}</h2><HelpPopover title={t('insights.basis')}><p>{t('history.help')}</p></HelpPopover></div>
+    <div className="flex items-center gap-2"><h2 className="text-lg font-semibold">{t('history.title')}</h2><HelpPopover title={t('insights.basis')} showTitle><p>{t('history.help')}</p></HelpPopover></div>
     {error ? <div className="space-y-2" role="status"><p className="text-sm text-danger">{t('insights.error')}</p><Button size="sm" variant="secondary" onPress={() => setRetry(value => value + 1)}>{t('insights.retry')}</Button></div>
       : !data ? <p role="status" className="text-sm text-muted">{t('insights.loading')}</p>
         : !cycle ? <p role="status" className="text-sm text-muted">{t('history.empty')}</p> : <>

@@ -288,7 +288,7 @@ function SessionDetailContent({ row, fallbackTitle, range, showTokenShare, navig
         </div>
         <section aria-label={t('usage.detail.summary')} className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1"><h2 className="font-semibold">{t('usage.detail.usageCosts')}</h2>{detail.hasDescendants && <HelpPopover title={t('usage.detail.usageScope')}><p>{t('usage.detail.threadNote')}</p></HelpPopover>}</div>
+            <div className="flex items-center gap-1"><h2 className="font-semibold">{t('usage.detail.usageCosts')}</h2>{detail.hasDescendants && <HelpPopover title={t('usage.detail.usageScope')} showTitle><p>{t('usage.detail.threadNote')}</p></HelpPopover>}</div>
             {detail.hasDescendants && <div className="flex w-full min-w-0 items-center gap-1 sm:w-auto">{detail.threadAvailable ? <ToggleButtonGroup size="sm" className="min-w-0 flex-1 items-stretch sm:flex-none" selectionMode="single" disallowEmptySelection selectedKeys={[detail.scope]} aria-label={t('usage.detail.usageScope')} onSelectionChange={keys => { setScope(keys.has('thread') ? 'thread' : 'own'); setFeedback(''); }}>
               <ToggleButton id="own" className="h-auto min-h-9 min-w-0 flex-1 whitespace-normal py-1 sm:min-h-8 sm:flex-none">{t('usage.detail.scopeOwn')}</ToggleButton><ToggleButton id="thread" className="h-auto min-h-9 min-w-0 flex-1 whitespace-normal py-1 sm:min-h-8 sm:flex-none"><ToggleButtonGroup.Separator />{t('usage.detail.thread')}</ToggleButton>
             </ToggleButtonGroup> : <span className="text-xs text-muted">{scopeLabel}</span>}

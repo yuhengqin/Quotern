@@ -114,7 +114,7 @@ function Editor({ initialModel, catalog, currency, exchangeRate }: Props) {
     finally { setBusy(false); }
   };
   return <form ref={form} noValidate onSubmit={event => { event.preventDefault(); void save(); }} className="space-y-4">
-    <div className="flex items-center gap-2"><p className="text-sm text-muted">{t('admin.unit')}</p><HelpPopover title={t('admin.pricing')}><p>{t('admin.priceHelp')}</p></HelpPopover></div>
+    <div className="flex items-center gap-2"><p className="text-sm text-muted">{t('admin.unit')}</p><HelpPopover title={t('admin.pricing')} showTitle><p>{t('admin.priceHelp')}</p></HelpPopover></div>
     {!state && !readError && <p role="status" className="text-sm text-muted">{t('insights.loading')}</p>}
     {state && <>
       <ComboBox name="model" allowsCustomValue menuTrigger="input" inputValue={model} onInputChange={select} value={options.some(row => row.id === model) ? model : null} onChange={key => { if (key !== null) select(String(key)); }} items={options} isDisabled={savingDisabled} isInvalid={Boolean(errors.model)} validationBehavior="aria">

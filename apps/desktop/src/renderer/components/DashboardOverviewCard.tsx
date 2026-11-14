@@ -260,12 +260,14 @@ function cacheHitRateFromSummary(summary: DashboardUsageSummary): number | null 
 function MetricHelpLabel({
   ariaLabel,
   heading,
+  showTitle,
   label,
   panel,
   details,
 }: {
   ariaLabel: string;
   heading: string;
+  showTitle?: boolean;
   label: string;
   panel: ReactNode;
   details?: ReactNode;
@@ -273,7 +275,7 @@ function MetricHelpLabel({
   return (
     <div className="flex min-w-0 items-center gap-0.5">
       <p className="min-w-0 truncate text-xs font-medium leading-5 text-muted">{label}</p>
-      <HelpPopover title={heading} ariaLabel={ariaLabel} triggerClassName="size-4 min-h-4 min-w-4">
+      <HelpPopover title={heading} showTitle={showTitle} ariaLabel={ariaLabel} triggerClassName="size-4 min-h-4 min-w-4">
         {panel}
         {details}
       </HelpPopover>
@@ -317,6 +319,7 @@ function InputTokenLabel() {
     <MetricHelpLabel
       ariaLabel={t('usage.overview.cacheHelpAria')}
       heading={t('usage.overview.cacheHitHeading')}
+      showTitle
       label={t('usage.common.inputTokens')}
       panel={<CacheHitRateHelpPanel />}
     />

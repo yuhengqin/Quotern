@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown } from '@gravity-ui/icons';
-import { Button, DateField, Label, Popover, RangeCalendar } from '@heroui/react';
+import { Calendar } from '@gravity-ui/icons';
+import { Button, DateField, Label, Popover, RangeCalendar, Tooltip } from '@heroui/react';
 import { CalendarDate, parseDate } from '@internationalized/date';
 import { I18nProvider } from 'react-aria';
 import { useTranslation } from 'quotern-i18n/react';
@@ -31,20 +31,24 @@ export function DashboardDateRangePicker({ value, initialDays, disabled, onChang
     }
     setOpen(next);
   };
+  const label = value ? t('usage.filter.customRangeValue', { range: formatDashboardDateRange(value) }) : t('usage.filter.customRange');
 
   return (
     <Popover isOpen={open} onOpenChange={changeOpen}>
-      <Button
-        aria-label={value ? t('usage.filter.customRangeValue', { range: formatDashboardDateRange(value) }) : t('usage.filter.customRange')}
-        aria-pressed={Boolean(value)}
-        className={`!h-6 !min-h-6 !min-w-0 gap-1 rounded-full px-3 text-xs font-normal transition-none! ${value ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
-        isDisabled={disabled}
-        size="sm"
-        variant="ghost"
-      >
-        {t('usage.filter.custom')}
-        <ChevronDown className="size-3" />
-      </Button>
+      <Tooltip delay={400} isDisabled={open || disabled}>
+        <Button
+          aria-label={label}
+          aria-pressed={Boolean(value)}
+          className={`!h-6 !min-h-6 !w-8 !min-w-8 shrink-0 rounded-full p-0 transition-none! ${value ? '!bg-accent !text-accent-foreground' : '!bg-transparent text-muted hover:text-foreground'}`}
+          isDisabled={disabled}
+          isIconOnly
+          size="sm"
+          variant="ghost"
+        >
+          <Calendar aria-hidden className="size-4" />
+        </Button>
+        <Tooltip.Content placement="bottom">{label}</Tooltip.Content>
+      </Tooltip>
       <Popover.Content className="!w-[560px] max-w-[calc(100vw-24px)] rounded-2xl border border-border bg-overlay p-0 shadow-surface" placement="bottom start" offset={8}>
         <Popover.Dialog aria-label={t('usage.filter.customRange')} className="p-4 outline-none">
           <I18nProvider locale={locale}>

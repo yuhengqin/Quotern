@@ -163,8 +163,8 @@ Windows 横幅超时不等于用户已处理：保留通知中心条目的点击
 | --- | --- | --- |
 | 总览 Agent 多选 | [DashboardFilter.ToolChannelSelect](../packages/dashboard/src/components/DashboardFilter.tsx)，总览及 ShareActivityModal 使用 | 空数组表示全部。Desktop 总览/托盘使用自己的 DashboardFilter；共享分享弹窗使用 Dashboard 版本 |
 | 热力图 Agent 多选 | [PlatformFilterSelect](../packages/dashboard/src/components/PlatformFilterSelect.tsx)，ActivityHeatmap 使用 | `value` 是具体选中集合；`[]` 表示无结果，全选可由 `applyPlatformFilterChange` 折叠成 `null`。与总览 Agent 不可混用空选语义 |
-| 用量日期范围 | [DashboardDateRangePicker](../packages/dashboard/src/components/DashboardDateRangePicker.tsx)，DashboardFilter 使用 | 绑定统计时区、DashboardDateRange 和回看天数限制；Desktop 直接 re-export |
-| 时间范围快捷选择 | [DashboardTimeRangeControl](../packages/dashboard/src/components/DashboardTimeRangeControl.tsx)，DashboardFilter 与 SessionsPage 使用 | “今天 / 1D / 7D / 30D / 90D / 自定义”的共享外观、选中态与日期选择器；调用者负责查询范围。会话页显式选择 1D 后复用滚动时间 hook，切换时间保留列表筛选并重置页码；两端直接引用同一组件，Desktop 登记 CSS `@source` |
+| 用量日期范围 | [DashboardDateRangePicker](../packages/dashboard/src/components/DashboardDateRangePicker.tsx)，DashboardTimeRangeControl 使用 | 以日历图标打开自定义日期，保留本地化可访问名称、Tooltip 和选中态；已选日期范围显示在时间控件旁。绑定统计时区、DashboardDateRange 和回看天数限制；Desktop 直接 re-export |
+| 时间范围快捷选择 | [DashboardTimeRangeControl](../packages/dashboard/src/components/DashboardTimeRangeControl.tsx)，DashboardFilter 与 SessionsPage 使用 | “今天 / 1D / 7D / 30D / 90D / 日历图标”的共享外观、选中态与日期选择器；调用者负责查询范围。会话页显式选择 1D 后复用滚动时间 hook，切换时间保留列表筛选并重置页码；两端直接引用同一组件，Desktop 登记 CSS `@source` |
 | 初次加载/范围刷新 | [DashboardLoadingSkeleton](../packages/dashboard/src/components/DashboardLoadingSkeleton.tsx)、[DashboardRangeSyncOverlay](../packages/dashboard/src/components/DashboardRangeSyncOverlay.tsx)，DashboardPage 使用 | 骨架匹配当前总览槽位；刷新遮罩需要定位父级。两端有独立副本，Desktop 另用于托盘 |
 | 来源占比条 | [SourceProgress](../packages/dashboard/src/components/SourceProgress.tsx)，AgentShareCard 使用 | 来源品牌色及百分比语义，两端各有副本 |
 | 会话预览与归属 | [SessionActivityPanel](../packages/dashboard/src/components/SessionActivityPanel.tsx)，DashboardPage 使用 | 总览预览最近 6 条和用量归属；“查看全部”及关联入口带入当前范围，进入会话页；Desktop 直接 re-export |

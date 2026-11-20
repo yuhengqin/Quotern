@@ -28,6 +28,7 @@ const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string
 };
 const DETAILS_HINT_DELAY_MS = 800;
 const QUOTA_SEGMENTS = 12;
+const QUOTA_ACCENT = 'var(--quota-accent, light-dark(color-mix(in srgb, var(--color-accent) 78%, black), color-mix(in srgb, var(--color-accent) 90%, white)))';
 
 function clock(at: number, locale: SupportedLocale) { return new Date(at * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }); }
 function queryDate(at: number, locale: SupportedLocale, now = new Date()) {
@@ -410,7 +411,7 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
   const value = window.valueText ? localizeQuotaValueText(locale, window.valueText) : t('usage.quota.remaining', { percent: Math.round(remaining) });
   const color = window.usedPercent >= 90 ? 'light-dark(#c32232, #ff6974)'
     : window.usedPercent >= 70 ? 'light-dark(#a55200, #ffb347)'
-      : 'light-dark(#00783f, #35e48b)';
+      : QUOTA_ACCENT;
   const expiry = window.timeKind === 'expiry';
   const resetText = !reset ? null : dateMode ? `${reset} ${t(expiry ? 'usage.quota.expiry' : 'usage.quota.reset')}`
     : window.resetsAt! <= now.getTime() / 1000 ? (expiry ? t('usage.quota.expiredAt') : reset)
@@ -432,7 +433,7 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
           {Array.from({ length: QUOTA_SEGMENTS }, (_, index) => {
             const fill = Math.max(0, Math.min(100, remaining * QUOTA_SEGMENTS - index * 100));
             return <span key={index} data-quota-segment aria-hidden="true" className="h-full overflow-hidden rounded-full bg-foreground/10">
-              <span className="block h-full rounded-full bg-current motion-safe:transition-[width,background-color] motion-safe:duration-300" style={{ width: `${fill}%` }} />
+              <span className="block h-full rounded-full bg-current motion-safe:transition-[width] motion-safe:duration-300" style={{ width: `${fill}%` }} />
             </span>;
           })}
           {marker !== null && <span data-quota-pace-marker aria-hidden="true" className="pointer-events-none absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded bg-foreground ring-1 ring-background" style={{ left: `${marker}%` }} />}

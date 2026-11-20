@@ -158,6 +158,33 @@ const MATERIALS: Partial<Record<AppearanceStyle, string>> = {
   world_cup: `repeating-linear-gradient(90deg, transparent 0 48px, ${soft(4)} 48px 96px)`,
 };
 
+function rgbChannels(hex: string): number[] {
+  return [1, 3, 5].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
+}
+
+function luminance(rgb: number[]): number {
+  const linear = rgb.map(channel => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function readableQuotaAccent(accent: string, surfaces: string[], mode: ColorMode): string {
+  const channels = rgbChannels(accent);
+  const backgrounds = surfaces.map(surface => luminance(rgbChannels(surface)));
+  const endpoint = mode === 'dark' ? 255 : 0;
+  for (let percent = 0; percent <= 100; percent++) {
+    const shade = channels.map(channel => Math.round(channel + (endpoint - channel) * percent / 100));
+    const light = luminance(shade);
+    // Leave a little room for the accent-tinted hover and focused backgrounds.
+    if (backgrounds.every(background => (Math.max(light, background) + 0.05) / (Math.min(light, background) + 0.05) >= 5)) {
+      return percent === 0 ? accent : `#${shade.map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+    }
+  }
+  return accent;
+}
+
 /** Default returns no tokens: leave the shipped HeroUI/default styles untouched. */
 export function resolveAppearanceTokens(preferences: AppearancePreferences, mode: ColorMode): Tokens {
   const { style, palette } = preferences;
@@ -211,6 +238,11 @@ export function resolveAppearanceTokens(preferences: AppearancePreferences, mode
     tokens['--focus'] = tokens['--accent'];
     tokens['--accent-soft'] = 'color-mix(in srgb, var(--accent) 14%, transparent)';
     tokens['--accent-soft-foreground'] = tokens['--accent'];
+  }
+  if (style !== 'default' || tokens['--accent']) {
+    const surfaces = mode === 'light' ? ['#efeff0', '#ffffff'] : ['#222227', '#18181b'];
+    tokens['--quota-accent'] = readableQuotaAccent(tokens['--accent'] ?? '#0485f7',
+      [tokens['--surface-secondary'] ?? surfaces[0], tokens['--overlay'] ?? surfaces[1]], mode);
   }
   return tokens;
 }

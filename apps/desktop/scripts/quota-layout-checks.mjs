@@ -39,14 +39,10 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       const value = row.querySelector('[data-quota-window-value]'), reset = row.querySelector('[data-quota-reset-time]');
       const valueRect = value.getBoundingClientRect(), resetRect = reset.getBoundingClientRect();
       const valueColor = getComputedStyle(value).color;
-      const pixel = document.createElement('canvas').getContext('2d');
-      pixel.fillStyle = valueColor;
-      pixel.fillRect(0, 0, 1, 1);
-      const [red, green, blue] = pixel.getImageData(0, 0, 1, 1).data;
       const segments = [...bar.querySelectorAll('[data-quota-segment]')];
       const description = (bar.getAttribute('aria-describedby') ?? '').split(/\\s+/).map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
       return { value: value.textContent.trim(), segmentCounts: [...card.querySelectorAll('[role=progressbar]')].map(el => el.querySelectorAll('[data-quota-segment]').length), widths: segments.map(segment => segment.firstElementChild?.style.width ?? ''),
-        valueColor, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null, isGreen: green > red && green > blue,
+        valueColor, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null,
         marker: Boolean(bar.querySelector('[data-quota-pace-marker]')), description,
         valueRect: { right: valueRect.right, top: valueRect.top, bottom: valueRect.bottom }, resetRect: { left: resetRect.left, top: resetRect.top, bottom: resetRect.bottom } };
     })()`);
@@ -60,9 +56,49 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       assert.ok(Math.abs(parseFloat(width) - expected) < 0.01, mode + ' segment ' + (index + 1) + ' fill');
     }
     assert.equal(fiveHour.valueColor, fiveHour.fillColor, mode + ' remaining value and filled segments share a color');
-    assert.ok(fiveHour.isGreen, mode + ' healthy remaining quota uses green');
     assert.ok(fiveHour.marker && fiveHour.description, mode + ' pace marker retains its accessible description');
     assert.ok(fiveHour.resetRect.left >= fiveHour.valueRect.right && fiveHour.resetRect.top < fiveHour.valueRect.bottom && fiveHour.resetRect.bottom > fiveHour.valueRect.top, mode + ' reset is to the right of and aligned with remaining quota');
+    const colors = () => client.evaluate(`(() => {
+      const read = (card, remaining) => {
+        const bar = [...card.querySelectorAll('[role=progressbar]')].find(el => el.getAttribute('aria-valuenow') === remaining);
+        let row = bar?.parentElement;
+        while (row && !(row.querySelector('[data-quota-window-value]') && row.querySelectorAll('[role=progressbar]').length === 1)) row = row.parentElement;
+        const value = row?.querySelector('[data-quota-window-value]'), fill = bar?.querySelector('[data-quota-segment] > *');
+        return value && fill ? { value: getComputedStyle(value).color, fill: getComputedStyle(fill).backgroundColor } : null;
+      };
+      return [read(${item(a)}, '76'), read(${item(a)}, '8'), read(${item(b)}, '22')];
+    })()`);
+    const openSettings = async () => {
+      window.show(); window.focus();
+      await until(() => client.evaluate('document.visibilityState === "visible"'), mode + ' settings window visible');
+      await client.evaluate(`window.dispatchEvent(new CustomEvent('tud:open-settings', { detail: ${mode === 'desktop' ? "{tab:'appearance'}" : '{}'} })); true`);
+      await until(() => client.evaluate('Boolean(document.querySelector("input[name=accent-palette]"))'), mode + ' accent palette selector');
+    };
+    const selectPalette = async palette => {
+      await client.click(`document.querySelector('input[name="accent-palette"][value="${palette}"]').closest('label')`);
+      await until(() => client.evaluate(`document.documentElement.dataset.palette === ${JSON.stringify(palette)}`), mode + ' palette ' + palette);
+    };
+    const closeSettings = async () => {
+      window.show(); window.focus();
+      await client.key('Escape');
+      await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), mode + ' settings close');
+    };
+    const originalPalette = await client.evaluate('document.documentElement.dataset.palette');
+    await openSettings();
+    if (originalPalette === 'violet') await selectPalette('theme');
+    await until(async () => (await colors()).every(color => color && color.value === color.fill), mode + ' baseline quota colors settle');
+    const beforeAccent = await colors();
+    assert.ok(beforeAccent.every(Boolean), mode + ' normal and warning quota colors are available');
+    for (const color of beforeAccent) assert.equal(color.value, color.fill, mode + ' quota number and fill share a color');
+    assert.notEqual(beforeAccent[1].value, beforeAccent[2].value, mode + ' warning thresholds have distinct colors');
+    await selectPalette('violet');
+    await until(async () => { const current = await colors(); return current[0] && current[0].value !== beforeAccent[0].value && current[0].value === current[0].fill; }, mode + ' normal quota follows violet accent');
+    const violetAccent = await colors();
+    for (const color of violetAccent) assert.equal(color.value, color.fill, mode + ' violet quota number and fill share a color');
+    assert.deepEqual(violetAccent.slice(1), beforeAccent.slice(1), mode + ' warning colors stay unchanged with violet accent');
+    await closeSettings();
+    await shot(client, `${mode}-quota-accent-violet`);
+    await openSettings(); await selectPalette(originalPalette); await closeSettings();
     assert.equal(await client.evaluate(`${item(b)}.querySelectorAll('[data-quota-reset-time]').length`), 1, mode + ' shows one action for a shared reset');
     assert.match(await client.evaluate(`${item(b)}.querySelector('[data-quota-common-reset]').textContent`), /统一重置/, mode + ' identifies a shared countdown');
     for (const [id, count] of [[a, original.resetCredits], [c, 0]]) {

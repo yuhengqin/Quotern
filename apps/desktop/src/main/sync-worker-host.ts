@@ -1,6 +1,6 @@
-/** Main owns UI/state; each sync utilityProcess owns only its own requests. */
-import { utilityProcess, type UtilityProcess } from 'electron';
-import syncWorkerPath from './sync-worker?modulePath';
+/** Main owns UI/state; each sync worker owns only its own requests. */
+import { fork, type ChildProcess } from 'node:child_process';
+import { join } from 'node:path';
 import type { SyncResult } from 'quotern-core';
 import type { SyncWorkerRequest, SyncWorkerResponse } from './sync-worker-protocol';
 
@@ -9,7 +9,7 @@ const SYNC_TIMEOUT_MS = 10 * 60_000;
 const EXIT_TIMEOUT_MS = 5_000;
 type Waiter = { resolve: (results: SyncResult[]) => void; reject: (err: Error) => void };
 interface WorkerInstance {
-  process: UtilityProcess;
+  process: ChildProcess;
   pid?: number;
   ready: boolean;
   expectedExit: boolean;
@@ -54,7 +54,7 @@ function terminate(instance: WorkerInstance, error: Error): Promise<void> {
   instance.terminalError = error;
   instance.rejectReady?.(error);
   if (!instance.exited) {
-    try { instance.process.postMessage({ type: 'stop' } satisfies SyncWorkerRequest); } catch { /* may already be gone */ }
+    try { instance.process.send({ type: 'stop' } satisfies SyncWorkerRequest, () => {}); } catch { /* may already be gone */ }
     try { instance.process.kill(); } catch { /* exit confirmation below remains required */ }
   }
   instance.terminating = waitForExit(instance).catch(err => {
@@ -95,7 +95,7 @@ export function startSyncWorker(dataDir: string): Promise<boolean> {
     try {
       if (child) await terminate(child, new Error('sync worker replaced'));
       if (stopping || generation !== token) return false;
-      const spawned = utilityProcess.fork(syncWorkerPath, [], { serviceName: 'Quotern Sync', stdio: 'pipe' });
+      const spawned = fork(join(__dirname, 'sync-worker.cjs'), [], { execArgv: [], silent: true, serialization: 'advanced' });
       let resolveExit!: () => void;
       const exit = new Promise<void>(resolve => { resolveExit = resolve; });
       instance = { process: spawned, pid: spawned.pid, ready: false, expectedExit: false, exited: false, exit, resolveExit, pending: new Map() };
@@ -105,10 +105,11 @@ export function startSyncWorker(dataDir: string): Promise<boolean> {
       spawned.stdout?.on('data', (buffer: Buffer) => process.stdout.write('[tud-sync-worker] ' + buffer.toString()));
       spawned.stderr?.on('data', (buffer: Buffer) => process.stderr.write('[tud-sync-worker] ' + buffer.toString()));
       spawned.on('message', data => handleMessage(active, data));
-      spawned.on('error', (type, location) => {
-        console.error('[tud-desktop] sync worker fatal error:', { pid: active.pid, type, location });
+      spawned.on('error', error => {
+        console.error('[tud-desktop] sync worker fatal error:', { pid: active.pid, error });
+        void terminate(active, error).catch(err => console.error('[tud-desktop] sync worker termination failed:', err));
       });
-      spawned.on('exit', code => {
+      const onExit = (code: number | null) => {
         if (active.exited) return;
         active.exited = true;
         active.ready = false;
@@ -129,7 +130,9 @@ export function startSyncWorker(dataDir: string): Promise<boolean> {
             if (!stopping && generation === token && lastDataDir === dir && !child && !starting) void startSyncWorker(dir);
           }, 500);
         }
-      });
+      };
+      spawned.on('exit', onExit);
+      spawned.on('close', onExit);
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => { clearTimeout(timer); spawned.removeListener('message', onReady); active.rejectReady = undefined; };
         const fail = (error: Error) => { cleanup(); reject(error); };
@@ -141,14 +144,14 @@ export function startSyncWorker(dataDir: string): Promise<boolean> {
         const timer = setTimeout(() => fail(new Error('sync worker ready timeout')), START_TIMEOUT_MS);
         active.rejectReady = fail;
         spawned.on('message', onReady);
-        try { spawned.postMessage({ type: 'init', dataDir } satisfies SyncWorkerRequest); }
+        try { spawned.send({ type: 'init', dataDir } satisfies SyncWorkerRequest, error => { if (error) fail(error); }); }
         catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
       });
       if (child !== active || stopping || generation !== token) return false;
-      console.log('[tud-desktop] sync utilityProcess ready pid=' + (active.pid ?? '?'));
+      console.log('[tud-desktop] sync worker ready pid=' + (active.pid ?? '?'));
       return true;
     } catch (error) {
-      if (!stopping && generation === token) console.warn('[tud-desktop] sync utilityProcess failed to start:', error instanceof Error ? error.message : error);
+      if (!stopping && generation === token) console.warn('[tud-desktop] sync worker failed to start:', error instanceof Error ? error.message : error);
       if (instance && child === instance && !instance.exited) {
         // Do not fall back to a second writer unless this process has really exited.
         await terminate(instance, error instanceof Error ? error : new Error(String(error)));
@@ -164,7 +167,10 @@ export function startSyncWorker(dataDir: string): Promise<boolean> {
 
 export function invalidateSyncWorkerCursors(): void {
   if (!child?.ready || child.expectedExit) return;
-  try { child.process.postMessage({ type: 'invalidateCursors' } satisfies SyncWorkerRequest); } catch { /* next worker reloads disk cursors */ }
+  const active = child;
+  const fail = (error: Error) => { void terminate(active, error).catch(err => console.error('[tud-desktop] sync worker termination failed:', err)); };
+  try { active.process.send({ type: 'invalidateCursors' } satisfies SyncWorkerRequest, error => { if (error) fail(error); }); }
+  catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
 }
 
 export async function stopSyncWorker(): Promise<void> {
@@ -195,10 +201,12 @@ export async function runSyncViaWorker(reason: string, source?: string): Promise
       resolve: results => { clearTimeout(timer); resolve(results); },
       reject: error => { clearTimeout(timer); reject(error); },
     });
-    try { active.process.postMessage({ type: 'runSync', id, reason, source } satisfies SyncWorkerRequest); }
-    catch (error) {
+    const fail = (error: unknown) => {
+      if (!active.pending.has(id)) return;
       active.pending.delete(id); clearTimeout(timer);
       reject(error instanceof Error ? error : new Error(String(error)));
-    }
+    };
+    try { active.process.send({ type: 'runSync', id, reason, source } satisfies SyncWorkerRequest, error => { if (error) fail(error); }); }
+    catch (error) { fail(error); }
   });
 }

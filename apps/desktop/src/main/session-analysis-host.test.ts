@@ -7,9 +7,13 @@ import { transformSync } from 'esbuild';
 import type { AnalysisContext, AnalysisRequest } from './session-analysis-protocol.js';
 
 class Child extends EventEmitter {
-  stdout = new EventEmitter(); stderr = new EventEmitter(); pid = 500; killed = false; failSend = false;
+  stdout = new EventEmitter(); stderr = new EventEmitter(); pid = 500; killed = false; failSend = false; failSendAsync = false;
   messages: AnalysisRequest[] = [];
-  postMessage(message: AnalysisRequest) { if (this.failSend) throw new Error('send failed'); this.messages.push(message); this.emit('sent', message); }
+  send(message: AnalysisRequest, callback: (error: Error | null) => void) {
+    if (this.failSend) throw new Error('send failed');
+    if (this.failSendAsync) { queueMicrotask(() => callback(new Error('send failed asynchronously'))); return false; }
+    this.messages.push(message); this.emit('sent', message); queueMicrotask(() => callback(null)); return true;
+  }
   kill() { this.killed = true; queueMicrotask(() => this.emit('exit', 0)); return true; }
   ready() { this.emit('message', { type: 'ready', pid: this.pid }); }
 }
@@ -20,9 +24,12 @@ function loadHost(t: TestContext) {
   const children: Child[] = [];
   const code = transformSync(readFileSync(join(__dirname, '../../src/main/session-analysis-host.ts'), 'utf8'), { loader: 'ts', format: 'cjs', target: 'node22' }).code;
   const module = { exports: {} };
-  new Function('require', 'module', 'exports', 'console', code)((id: string) => id === 'electron' ? { utilityProcess: { fork: () => {
+  new Function('require', 'module', 'exports', 'console', '__dirname', code)((id: string) => id === 'node:child_process' ? { fork: (path: string, args: string[], options: unknown) => {
+    assert.equal(path, join(__dirname, 'session-analysis-worker.cjs'));
+    assert.deepEqual(args, []);
+    assert.deepEqual(options, { execArgv: [], silent: true, serialization: 'advanced' });
     const child = new Child(); child.pid += children.length; children.push(child); return child;
-  } } } : id.includes('?modulePath') ? 'worker.js' : require(id), module, module.exports, { log() {}, warn() {}, error() {} });
+  } } : require(id), module, module.exports, { log() {}, warn() {}, error() {} }, __dirname);
   const host = module.exports as { runSessionAnalysisRequest(url: string, init: undefined, snapshot: AnalysisContext): Promise<{ status: number; body: unknown }>; stopSessionAnalysisWorker(): Promise<void> };
   t.after(() => host.stopSessionAnalysisWorker());
   return { host, children };
@@ -75,4 +82,21 @@ test('a failed send does not mark an unsent snapshot as applied', async t => {
   const request = children[0]!.messages[0]!;
   assert.deepEqual(request.snapshot.rows, []);
   children[0]!.emit('message', { type: 'result', id: request.id, result: { status: 200, body: null } }); await next;
+});
+
+test('an asynchronous send failure terminates the worker and rejects pending work', async t => {
+  const { host, children } = loadHost(t);
+  const pending = host.runSessionAnalysisRequest(url, undefined, context());
+  children[0]!.failSendAsync = true; children[0]!.ready();
+  await assert.rejects(pending, /send failed asynchronously/);
+  assert.equal(children[0]!.killed, true);
+});
+
+test('a spawn failure followed by close settles startup', async t => {
+  const { host, children } = loadHost(t);
+  const pending = host.runSessionAnalysisRequest(url, undefined, context());
+  children[0]!.kill = () => false;
+  children[0]!.emit('error', new Error('spawn failed'));
+  children[0]!.emit('close', null);
+  await assert.rejects(pending, /worker failed/);
 });

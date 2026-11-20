@@ -12,10 +12,14 @@ class Child extends EventEmitter {
   messages: Array<{ type: string; id?: number }> = [];
   killed = false;
   failSend = false;
-  postMessage(message: { type: string; id?: number }) {
+  failSendAsync = false;
+  send(message: { type: string; id?: number }, callback: (error: Error | null) => void) {
     if (this.failSend) throw new Error('send failed');
+    if (this.failSendAsync) { queueMicrotask(() => callback(new Error('send failed asynchronously'))); return false; }
     this.messages.push(message);
     this.emit('sent', message);
+    queueMicrotask(() => callback(null));
+    return true;
   }
   kill() { this.killed = true; queueMicrotask(() => this.emit('exit', 0)); return true; }
   ready() { this.emit('message', { type: 'ready', pid: this.pid }); }
@@ -27,12 +31,15 @@ function loadHost(t: TestContext) {
   const source = readFileSync(join(__dirname, '../../src/main/sync-worker-host.ts'), 'utf8');
   const code = transformSync(source, { loader: 'ts', format: 'cjs', target: 'node22' }).code;
   const module = { exports: {} };
-  const electron = { utilityProcess: { fork: () => {
+  const childProcess = { fork: (path: string, args: string[], options: unknown) => {
+    assert.equal(path, join(__dirname, 'sync-worker.cjs'));
+    assert.deepEqual(args, []);
+    assert.deepEqual(options, { execArgv: [], silent: true, serialization: 'advanced' });
     const child = new Child(); child.pid += children.length; children.push(child); return child;
-  } } };
-  new Function('require', 'module', 'exports', 'console', code)(
-    (id: string) => id === 'electron' ? electron : id.includes('?modulePath') ? 'worker.js' : require(id),
-    module, module.exports, { log: () => {}, warn: (...args: unknown[]) => logs.push(args.join(' ')), error: (...args: unknown[]) => logs.push(args.join(' ')) },
+  } };
+  new Function('require', 'module', 'exports', 'console', '__dirname', code)(
+    (id: string) => id === 'node:child_process' ? childProcess : require(id),
+    module, module.exports, { log: () => {}, warn: (...args: unknown[]) => logs.push(args.join(' ')), error: (...args: unknown[]) => logs.push(args.join(' ')) }, __dirname,
   );
   const host = module.exports as {
     startSyncWorker(dir: string): Promise<boolean>;
@@ -112,6 +119,22 @@ test('a failed send rejects immediately without retaining a pending request', as
   const id = children[0].messages.at(-1)!.id;
   children[0].emit('message', { type: 'syncDone', id, results: [] });
   assert.deepEqual(await request, []);
+});
+
+test('an asynchronous send failure rejects the pending request', async (t) => {
+  const { host, children } = loadHost(t);
+  const start = host.startSyncWorker('data'); children[0].ready(); await start;
+  children[0].failSendAsync = true;
+  await assert.rejects(host.runSyncViaWorker('poll'), /send failed asynchronously/);
+});
+
+test('a spawn failure followed by close settles startup', async (t) => {
+  const { host, children } = loadHost(t);
+  const start = host.startSyncWorker('data');
+  children[0].kill = () => false;
+  children[0].emit('error', new Error('spawn failed'));
+  children[0].emit('close', null);
+  assert.equal(await start, false);
 });
 
 test('automatic restart does not replace a worker already being initialized by a request', async (t) => {

@@ -7,7 +7,7 @@ import { integrationStatus, setIntegrationInstalled } from '../agent/install.js'
 import { prepareHandoff, saveHandoff } from '../agent/handoff.js';
 import { prepareClaudePlugin } from '../agent/plugin.js';
 import { validSessionActionTarget } from '../session-resume.js';
-import { readWindowStartStatus } from '../agent/window-start.js';
+import { readWindowStartStatus } from '../agent/window-start-status.js';
 import type { QuotaState } from '../quota/shared/quota.js';
 import { readAgentActivities } from '../agent/activity.js';
 

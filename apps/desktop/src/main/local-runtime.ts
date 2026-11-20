@@ -42,7 +42,7 @@ import {
   localDateNow,
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
-import { getQuotaRuntimeState, getQuotaBackupDirectory } from './quota-runtime';
+import { getQuotaRuntimeState, getQuotaBackupDirectory } from './runtime-quota';
 import { createRecoverableSync } from './sync-recovery';
 import { runSessionAnalysisRequest, stopSessionAnalysisWorker } from './session-analysis-host';
 import { isSessionAnalysisRequest } from './session-analysis-protocol';

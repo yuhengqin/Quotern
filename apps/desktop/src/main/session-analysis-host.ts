@@ -1,9 +1,9 @@
-import { utilityProcess, type UtilityProcess } from 'electron';
-import workerPath from './session-analysis-worker?modulePath';
+import { fork, type ChildProcess } from 'node:child_process';
+import { join } from 'node:path';
 import { isSessionAnalysisRequest, type AnalysisContext, type AnalysisRequest, type AnalysisRequestInit, type AnalysisResponse, type AnalysisResult } from './session-analysis-protocol';
 
 interface Instance {
-  process: UtilityProcess;
+  process: ChildProcess;
   dataDir: string;
   ready: Promise<void>;
   rejectReady(error: Error): void;
@@ -40,7 +40,7 @@ function terminate(instance: Instance, error: Error): Promise<void> {
 }
 
 function start(dataDir: string): Instance {
-  const child = utilityProcess.fork(workerPath, [], { serviceName: 'Quotern Session Analysis', stdio: 'pipe' });
+  const child = fork(join(__dirname, 'session-analysis-worker.cjs'), [], { execArgv: [], silent: true, serialization: 'advanced' });
   let resolveReady!: () => void, rejectReady!: (error: Error) => void, resolveExit!: () => void;
   const ready = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
   const exit = new Promise<void>(resolve => { resolveExit = resolve; });
@@ -54,7 +54,7 @@ function start(dataDir: string): Instance {
     if (active !== instance || instance.closing || instance.exited) return;
     const message = data as AnalysisResponse;
     if (message?.type === 'ready') {
-      console.log(`[tud-desktop] session analysis utilityProcess ready pid=${message.pid}`);
+      console.log(`[tud-desktop] session analysis worker ready pid=${message.pid}`);
       resolveReady(); return;
     }
     if (message?.type !== 'result' && message?.type !== 'error') return;
@@ -64,12 +64,15 @@ function start(dataDir: string): Instance {
     instance.pending.delete(message.id); waiter.resolve(message.result);
   });
   child.on('error', () => { void terminate(instance, new Error('session analysis worker failed')).catch(console.error); });
-  child.on('exit', code => {
+  const onExit = (code: number | null) => {
+    if (instance.exited) return;
     instance.exited = true;
     const error = new Error(`session analysis worker exited (${code ?? 'null'})`);
     rejectReady(error); rejectPending(instance, error); resolveExit();
     if (active === instance) active = null;
-  });
+  };
+  child.on('exit', onExit);
+  child.on('close', onExit);
   return instance;
 }
 
@@ -93,7 +96,9 @@ export async function runSessionAnalysisRequest(url: string, init: AnalysisReque
     const timer = setTimeout(() => { void terminate(instance, new Error('session analysis timed out')).catch(console.error); }, 30000);
     instance.pending.set(id, { resolve: result => { clearTimeout(timer); resolve(result); }, reject: error => { clearTimeout(timer); reject(error); } });
     try {
-      instance.process.postMessage(message);
+      instance.process.send(message, error => {
+        if (error) void terminate(instance, error).catch(console.error);
+      });
       instance.bucketRevision = context.bucketRevision; instance.collectSince = context.collectSince; instance.pricingFingerprint = context.pricingFingerprint;
     } catch (error) {
       instance.pending.delete(id); clearTimeout(timer); reject(error);

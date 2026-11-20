@@ -5,13 +5,14 @@ import { measureCpuPhase, syncLogPath } from 'quotern-core';
 
 restoreNativeTrapHandler();
 process.title = 'tud-session-analysis';
-interface ParentPort { on(event: 'message', listener: (event: { data: AnalysisRequest }) => void): void; postMessage(message: AnalysisResponse): void }
-const parent = (process as unknown as { parentPort?: ParentPort }).parentPort;
-if (!parent) throw new Error('session analysis requires process.parentPort');
+if (!process.send) throw new Error('session analysis requires process IPC');
+const post = (message: AnalysisResponse) => process.send!(message);
 const service = new SessionAnalysisService();
 let queue = Promise.resolve();
 // A request sees one coherent bucket/config/pricing snapshot, even across awaits.
-parent.on('message', ({ data }) => {
+process.on('disconnect', () => process.exit(0));
+process.on('message', (message) => {
+  const data = message as AnalysisRequest;
   if (data?.type !== 'request') return;
   queue = queue.then(async () => {
     try {
@@ -19,9 +20,9 @@ parent.on('message', ({ data }) => {
       const result = await measureCpuPhase(syncLogPath(data.snapshot.dataDir), 'session_query', details, async () => {
         const response = await service.request(data); details.status = response.status; return response;
       });
-      parent.postMessage({ type: 'result', id: data.id, result });
+      post({ type: 'result', id: data.id, result });
     }
-    catch (error) { parent.postMessage({ type: 'error', id: data.id, error: error instanceof Error ? error.message : String(error) }); }
+    catch (error) { post({ type: 'error', id: data.id, error: error instanceof Error ? error.message : String(error) }); }
   });
 });
-parent.postMessage({ type: 'ready', pid: process.pid });
+post({ type: 'ready', pid: process.pid });

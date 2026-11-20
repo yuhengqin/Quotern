@@ -268,6 +268,36 @@ test('argsMatchRuntimeKind does not treat IDE hosts in this repo as desktop or c
   );
 });
 
+test('argsMatchRuntimeKind recognizes only the embedded desktop Node entry', () => {
+  for (const command of [
+    '/opt/quotern-node /repo/apps/desktop/out/sidecar/quotern-desktop-runtime.cjs --port 123',
+    '"/Applications/Quotern App.app/Contents/Resources/node/quotern-node" "/Applications/Quotern App.app/Contents/Resources/node/quotern-desktop-runtime.cjs"',
+    '/Applications/Quotern App.app/Contents/Resources/node/quotern-node /Applications/Quotern App.app/Contents/Resources/node/quotern-desktop-runtime.cjs',
+    String.raw`"C:\Program Files\Quotern\node\quotern-node.exe" "C:\Program Files\Quotern\node\quotern-desktop-runtime.cjs"`,
+    String.raw`C:\Program Files\Quotern\node\quotern-node.exe C:\Program Files\Quotern\node\quotern-desktop-runtime.cjs`,
+    '"/opt/quotern-node" "/home/me/My Workspace/apps/desktop/out/sidecar/quotern-desktop-runtime.cjs"',
+  ]) {
+    assert.equal(argsMatchRuntimeKind(command, 'desktop'), true, command);
+    assert.equal(argsMatchRuntimeKind(command, 'cli'), false, command);
+  }
+  for (const command of [
+    '/usr/bin/node /repo/apps/desktop/out/sidecar/quotern-desktop-runtime.cjs',
+    '/opt/quotern-node -e /repo/apps/desktop/out/sidecar/quotern-desktop-runtime.cjs',
+    '/opt/quotern-node --require /repo/node/quotern-desktop-runtime.cjs',
+    '/repo/electron/apps/desktop/quotern-node -e /repo/node/quotern-desktop-runtime.cjs',
+    '/opt/quotern-node /repo/worker.cjs /repo/node/quotern-desktop-runtime.cjs',
+    '/opt/quotern-node /repo/worker /repo/apps/desktop/out/sidecar/quotern-desktop-runtime.cjs',
+    '/repo/node/quotern-node /repo/node/worker /repo/node/quotern-desktop-runtime.cjs',
+    '/opt/quotern-node apps/desktop/out/sidecar/quotern-desktop-runtime.cjs',
+    '/opt/quotern-node /repo/node/worker.cjs',
+    '/opt/quotern-node /repo/node/quotern-desktop-runtime.cjs.map',
+    '/opt/quotern-node /repo/node/quotern-desktop-runtime.cjs/other',
+  ]) {
+    assert.equal(argsMatchRuntimeKind(command, 'desktop'), false, command);
+    assert.equal(argsMatchRuntimeKind(command, 'cli'), false, command);
+  }
+});
+
 test('stopPid refuses to signal the current process', async () => {
   assert.equal(await stopPid(process.pid), false);
   assert.equal(await stopPid(0), true);

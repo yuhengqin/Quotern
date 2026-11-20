@@ -1,14 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { readRuntimeOwner } from '../runtime-pid.js';
 import { findSessionExecutable } from '../session-actions.js';
 import { CODEX_WINDOW_CONFIG, verifyWindowIdentity, windowCommand, stopWindowProcess } from './window-identity.js';
 import { guiCliEnvironment } from '../quota/readers/cli-runtime.js';
-import { quotaWindowPeriodSeconds, type QuotaState } from '../quota/shared/quota.js';
+import type { QuotaState } from '../quota/shared/quota.js';
 import { agentDirectory, agentTransaction, readAgentJson, readAgentPreferences, writeAgentJson } from './preferences.js';
+import { windowCandidate, type WindowMemory } from './window-start-status.js';
+
+export { readWindowStartStatus, type WindowStartReason } from './window-start-status.js';
 
 export const WINDOW_START_PROMPT = 'Reply with OK only. Do not use tools.';
 export const windowStartArguments = (provider: 'claude' | 'codex') => provider === 'claude'
@@ -40,33 +42,6 @@ async function prepareWindowStart(provider: 'claude' | 'codex', accountRef: stri
       child.once('close', code => finish(code === 0 ? undefined : new Error('AGENT_REQUEST_FAILED')));
     }) };
   } catch { await dispose(); return null; }
-}
-interface WindowMemory { known: Record<string, { reset: number; at: number }>; attempted: Record<string, { at: number; outcome: 'attempted' | 'completed' | 'uncertain' }>; blocked?: Partial<Record<'claude' | 'codex', number>> }
-export type WindowStartReason = 'disabled' | 'isolated' | 'owner' | 'reading' | 'identity' | 'window' | 'reset' | 'waiting-reset' | 'baseline' | 'in-use' | 'already-attempted' | 'eligible' | 'verification';
-function windowCandidate(state: QuotaState | null, provider: 'claude' | 'codex', memory: WindowMemory, stamp: number) {
-  const p = state?.providers.find(item => item.id === provider);
-  if (!p || p.status !== 'ready' || p.stale || p.refreshing || p.diagnostic?.code || p.fetchedAt === null || p.fetchedAt > stamp + 60 || p.fetchedAt < stamp - 900) return { reason: 'reading' as WindowStartReason };
-  if (p.provenance?.source !== 'native' || !p.provenance.identityVerified || !p.provenance.accountRef) return { reason: 'identity' as WindowStartReason };
-  const windows = p.windows.filter(w => quotaWindowPeriodSeconds(w) === 18000 && !w.id.startsWith('feature:') && w.timeKind !== 'expiry' && !w.balance);
-  if (windows.length !== 1) return { reason: 'window' as WindowStartReason };
-  const window = windows[0]!, reset = window.resetsAt;
-  if (reset === null || !Number.isFinite(reset)) return { reason: 'reset' as WindowStartReason };
-  const key = createHash('sha256').update(provider + ':' + p.provenance.accountRef).digest('hex'), attempt = `${key}:${reset}`;
-  const previous = memory.known[key];
-  const reason: WindowStartReason = reset > stamp && reset < stamp + 21600 ? 'waiting-reset'
-    : memory.attempted[attempt] ? 'already-attempted' : window.usedPercent !== 0 ? 'in-use'
-    : !previous || previous.reset !== reset || previous.at >= reset || reset > stamp || stamp - reset > 3600 || p.fetchedAt < reset ? 'baseline' : 'eligible';
-  return { reason, p, key, reset, attempt };
-}
-export async function readWindowStartStatus(dataDir: string, state: QuotaState | null, now = Date.now() / 1000) {
-  const prefs = await readAgentPreferences(dataDir), memory = await readAgentJson<WindowMemory>(join(agentDirectory(dataDir), 'window-start.json'), { known: {}, attempted: {} });
-  const owner = await readRuntimeOwner(dataDir);
-  return (['claude', 'codex'] as const).map(provider => {
-    const result = windowCandidate(state, provider, memory, now);
-    const last = result.key ? Object.entries(memory.attempted).filter(([key]) => key.startsWith(result.key! + ':')).map(([, value]) => value).sort((a, b) => b.at - a.at)[0] ?? null : null;
-    const reason: WindowStartReason = !prefs[`${provider}WindowStart`] ? 'disabled' : process.env.QUOTERN_DEV_ISOLATED === '1' ? 'isolated' : owner?.pid !== process.pid ? 'owner' : result.reason === 'eligible' && (memory.blocked?.[provider] ?? 0) > now - 900 ? 'verification' : result.reason;
-    return { provider, reason, last: last ? { at: last.at, outcome: last.outcome } : null };
-  });
 }
 export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop', dependencies: {
   now?: () => number; isOwner?: () => Promise<boolean>; execute?: (provider: 'claude' | 'codex') => Promise<void>; isolated?: boolean;

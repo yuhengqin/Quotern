@@ -224,9 +224,27 @@ function readLaunchToken(command: string, script = false): { value: string; rest
   const windowsExecutable = /^[a-z]:\/[^\r\n]*?\.(?:exe|cmd)(?=\s|$)/.exec(text);
   const macExecutable = /^[^\s]*\/quotern\.app\/contents\/macos\/quotern(?=\s|$)/.exec(text);
   const macNodeExecutable = /^[^\s]*\/library\/application support\/[^\s]*\/node(?=\s|$)/.exec(text);
-  const match = windowsExecutable ?? macExecutable ?? macNodeExecutable ?? /^\S+/.exec(text);
+  const macEmbeddedNode = /^\/applications\/(?:[^\s]|\s+(?!\/))+?\.app\/contents\/resources\/node\/quotern-node(?=\s|$)/.exec(text);
+  const match = windowsExecutable ?? macExecutable ?? macNodeExecutable ?? macEmbeddedNode ?? /^\S+/.exec(text);
   if (!match) return null;
   return { value: match[0], rest: text.slice(match[0].length) };
+}
+
+/** The embedded executable and its first script together identify the Tauri owner. */
+function looksLikeEmbeddedDesktopRuntime(args: string): boolean {
+  const executable = readLaunchToken(args.toLowerCase().replace(/\\/g, '/'));
+  if (!executable || !/(?:^|\/)quotern-node(?:\.exe)?$/.test(executable.value)) return false;
+
+  const text = executable.rest.trimStart();
+  // For an unquoted installed path with spaces, the bundled script is next to
+  // the executable. Matching that exact path avoids consuming later arguments.
+  const bundledScript = `${executable.value.slice(0, executable.value.lastIndexOf('/') + 1)}quotern-desktop-runtime.cjs`;
+  const entry = readLaunchToken(text, true);
+  const script = text.startsWith(bundledScript) && /^(?:\s|$)/.test(text.slice(bundledScript.length))
+    ? bundledScript
+    : entry?.value;
+  return Boolean(script && /^(?:\/|[a-z]:\/)/.test(script)
+    && /(?:\/apps\/desktop\/out\/sidecar|\/node)\/quotern-desktop-runtime\.cjs$/.test(script));
 }
 
 /** Only inspect the executable and a Node/Electron entry, never arbitrary file arguments. */
@@ -243,6 +261,10 @@ function runtimeLaunchCommand(args: string): string {
 }
 
 export function argsMatchRuntimeKind(args: string, kind: RuntimeKind): boolean {
+  const executable = readLaunchToken(args.toLowerCase().replace(/\\/g, '/'));
+  if (executable && /(?:^|\/)quotern-node(?:\.exe)?$/.test(executable.value)) {
+    return kind === 'desktop' && looksLikeEmbeddedDesktopRuntime(args);
+  }
   const lower = runtimeLaunchCommand(args);
   if (kind === 'desktop') {
     // Dev servers are siblings of Electron under electron-vite; never treat them

@@ -13,6 +13,7 @@ import { createQuotaShortcut } from './quota-shortcut';
 import { QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET, QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut } from '../shared/quota-desktop';
 import type { QuotaNavigationTarget } from '../shared/quota-navigation';
 import { quotaNotice, serviceNotice } from './notifications/quota-notices';
+import { bindRuntimeQuota } from './runtime-quota';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
@@ -38,6 +39,7 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
     },
   });
   activeManager = manager;
+  const unbindQuota = bindRuntimeQuota({ getState: getQuotaRuntimeState, directory: getQuotaBackupDirectory() });
   shortcut.setEnabled(manager.getState().preferences.quotaShortcut === true, manager.getState().preferences.quotaShortcutAccelerator);
   for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET]) ipcMain.removeHandler(channel);
   ipcMain.handle(QUOTA_GET, () => { const state = manager.getState(); void manager.refresh('interaction'); return state; });
@@ -95,6 +97,7 @@ export async function initializeQuotaRuntime(options: { onChanged(state: QuotaSt
     dispose: () => {
       disposed = true;
       shortcut.dispose();
+      unbindQuota();
       manager.dispose(); if (activeManager === manager) activeManager = null;
       for (const [event, listener] of listeners) (powerMonitor as NodeJS.EventEmitter).removeListener(event, listener);
       for (const channel of [QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, QUOTA_TEST_NOTIFICATION, QUOTA_SHORTCUT_GET]) ipcMain.removeHandler(channel);

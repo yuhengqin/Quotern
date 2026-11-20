@@ -47,7 +47,7 @@ test('a failed worker stop cannot masquerade as an active runtime during update 
     };
     if (id === './session-analysis-protocol') return require('./session-analysis-protocol.js');
     if (id === './evict-cli-autostart') return { evictCliAutostart: noOp };
-    if (id === './quota-runtime') return {
+    if (id === './runtime-quota') return {
       getQuotaRuntimeState: () => null,
       getQuotaBackupDirectory: () => 'fixture/quota',
     };
@@ -114,7 +114,7 @@ test('an analysis request waiting for cold startup cannot start a process after 
     if (id === './session-analysis-host') return { runSessionAnalysisRequest: async () => { analysisRequests++; return { status: 200, body: null }; }, stopSessionAnalysisWorker: noOp };
     if (id === './session-analysis-protocol') return require('./session-analysis-protocol.js');
     if (id === './evict-cli-autostart') return { evictCliAutostart: noOp };
-    if (id === './quota-runtime') return { getQuotaRuntimeState: () => null, getQuotaBackupDirectory: () => 'fixture/quota' };
+    if (id === './runtime-quota') return { getQuotaRuntimeState: () => null, getQuotaBackupDirectory: () => 'fixture/quota' };
     if (id === './sync-recovery') return require('./sync-recovery.js');
     return require(id);
   }, module, module.exports, { log() {}, warn() {}, error() {} });

@@ -1,5 +1,5 @@
 /**
- * Electron utilityProcess entry: parsers / local sync live here so the
+ * Child process entry: parsers / local sync live here so the
  * main process event loop (IPC + window) is not blocked by JSONL / SQLite.
  */
 import { Worker } from 'node:worker_threads';
@@ -55,14 +55,8 @@ setInterval(() => {
   }
 }
 
-interface ParentPort {
-  on(event: 'message', listener: (event: { data: unknown }) => void): void;
-  postMessage(message: unknown): void;
-}
-
-const parentPort = (process as unknown as { parentPort?: ParentPort }).parentPort;
-if (!parentPort) {
-  process.stderr.write('[tud-sync-worker] missing process.parentPort; exiting\n');
+if (!process.send) {
+  process.stderr.write('[tud-sync-worker] missing process IPC; exiting\n');
   process.exit(1);
 }
 
@@ -82,11 +76,12 @@ function reportFailure(phase: string, error: unknown): void {
 process.on('uncaughtExceptionMonitor', error => reportFailure('uncaughtException', error));
 
 function post(msg: SyncWorkerResponse): void {
-  parentPort!.postMessage(msg);
+  process.send!(msg);
 }
 
-parentPort.on('message', (event) => {
-  void handle(event.data as SyncWorkerRequest).catch(error => {
+process.on('disconnect', () => process.exit(0));
+process.on('message', (message) => {
+  void handle(message as SyncWorkerRequest).catch(error => {
     reportFailure('message-handler', error);
     process.exit(1);
   });

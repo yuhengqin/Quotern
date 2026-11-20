@@ -125,7 +125,9 @@ try {
   });
   await check('native-menu-cancel-clears-helper-input-capture', async () => {
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")'); assert.equal(await fish.evaluate('window.__dshPetDebug.inputBusy'), true);
-    await close(fishInspector); await until(() => fish.evaluate('!window.__dshPetDebug.inputBusy && !window.__dshPetDebug.menuOpen'), 'helper input release');
+    await fish.evaluate('void window.petBridge.closeContextMenu(); true');
+    await until(async () => !(await tree(fishInspector)).length, 'helper dismissed the Win32 menu');
+    await until(() => fish.evaluate('!window.__dshPetDebug.inputBusy && !window.__dshPetDebug.menuOpen'), 'helper input release');
   });
   await check('renderer-leave-and-blur-do-not-dismiss-native-submenus', async () => {
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")');

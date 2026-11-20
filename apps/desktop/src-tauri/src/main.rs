@@ -201,6 +201,13 @@ async fn desktop_request(
     channel: String,
     args: Vec<Value>,
 ) -> Result<Value, String> {
+    // The local-only capability and the fish window's navigation rule bind this
+    // operation to Quotern. A URL query would wait on the modal menu's UI thread.
+    #[cfg(windows)]
+    if window.label() == "dsh-pet" && channel == "dsh:context-menu-close" && args.is_empty() {
+        pet_window::cancel_menu(&app)?;
+        return Ok(Value::Null);
+    }
     if !local_url(&app, &window.url().map_err(|e| e.to_string())?)
         || args.len() > 8
         || channel.len() > 96
@@ -292,10 +299,8 @@ async fn desktop_request(
         return pet_menu(&app, &window, value).await;
     }
     let native = match ch {
+        #[cfg(not(windows))]
         "dsh:context-menu-close" => {
-            #[cfg(windows)]
-            pet_window::cancel_menu(&app)?;
-            #[cfg(not(windows))]
             state.pet_menu.lock().unwrap().take();
             return Ok(Value::Null);
         }

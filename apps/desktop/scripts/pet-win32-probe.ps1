@@ -43,6 +43,30 @@ public static class PetProbe {
     public static IntPtr Menu(IntPtr window) {
         IntPtr result;SendMessageTimeout(window,0x1e1,IntPtr.Zero,IntPtr.Zero,2,500,out result);return result;
     }
+    public static IntPtr Popup(int pid, IntPtr expectedMenu) {
+        var popups = new Dictionary<IntPtr, IntPtr>();
+        var children = new HashSet<IntPtr>();
+        EnumWindows(delegate(IntPtr w, IntPtr unused) {
+            int owner; GetWindowThreadProcessId(w, out owner);
+            if (owner != pid || !IsWindowVisible(w)) return true;
+            var name = new StringBuilder(64);
+            GetClassName(w, name, name.Capacity);
+            if (name.ToString() != "#32768") return true;
+            var menu = Menu(w);
+            if (menu == IntPtr.Zero) return true;
+            popups[menu] = w;
+            int count = GetMenuItemCount(menu);
+            for (int i = 0; i < count; i++) children.Add(GetSubMenu(menu, i));
+            return true;
+        }, IntPtr.Zero);
+        if (expectedMenu != IntPtr.Zero) {
+            IntPtr match;
+            return popups.TryGetValue(expectedMenu, out match) ? match : IntPtr.Zero;
+        }
+        // A highlighted submenu can already be visible when the next probe attaches.
+        foreach (var pair in popups) if (!children.Contains(pair.Key)) return pair.Value;
+        return IntPtr.Zero;
+    }
 }
 '@
 [void][PetProbe]::SetProcessDPIAware()
@@ -57,7 +81,7 @@ function Get-MenuTree([IntPtr]$Menu) {
         [pscustomobject]@{label=[PetProbe]::Label($Menu, $i); checked=[bool]($flags -band 8); enabled=!($flags -band 3); separator=($sub -eq [IntPtr]::Zero -and [bool]($flags -band 0x800)); children=$children }
     }
 }
-$popup = [PetProbe]::Find($HostProcessId, '', '#32768')
+$popup = [PetProbe]::Popup($HostProcessId, [IntPtr]::Zero)
 if ($Action -eq 'tree') {
     if ($popup -eq [IntPtr]::Zero) { 'null'; exit 0 }
     $menu = [PetProbe]::Menu($popup)
@@ -71,7 +95,8 @@ if ($Action -eq 'tree') {
     $indices = $ItemPath.Split('.')
     foreach ($index in $indices) {
         $menu = [PetProbe]::Menu($popup)
-        if ([int]$index -lt 0 -or [int]$index -ge [PetProbe]::GetMenuItemCount($menu)) { throw 'Invalid native menu index' }
+        $count = [PetProbe]::GetMenuItemCount($menu)
+        if ([int]$index -lt 0 -or [int]$index -ge $count) { throw "Native menu path $ItemPath requested index $index in a menu of $count items" }
         [void][PetProbe]::PostMessage($popup,0x1e5,[int]$index,0)
         Start-Sleep -Milliseconds 50
         $next = [PetProbe]::GetSubMenu($menu,[int]$index)
@@ -80,10 +105,10 @@ if ($Action -eq 'tree') {
         if ($next -ne [IntPtr]::Zero) {
             for ($n=0; $n -lt 60; $n++) {
                 Start-Sleep -Milliseconds 20
-                $popup = [PetProbe]::Find($HostProcessId, '', '#32768')
-                if ($popup -ne [IntPtr]::Zero -and [PetProbe]::Menu($popup) -eq $next) { break }
+                $popup = [PetProbe]::Popup($HostProcessId, $next)
+                if ($popup -ne [IntPtr]::Zero) { break }
             }
-            if ([PetProbe]::Menu($popup) -ne $next) { throw 'Native submenu did not open' }
+            if ($popup -eq [IntPtr]::Zero) { throw 'Native submenu did not open' }
         }
     }
 } elseif ($Action -eq 'input') {

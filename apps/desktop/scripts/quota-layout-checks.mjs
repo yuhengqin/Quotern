@@ -10,6 +10,9 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
   const initial = [a, b, c, ...states];
   quota.providers = [copy(a, 'Codex'), copy(b, 'Cursor', 'cursor'), { ...copy(c, 'Codex · 研究用账号名称'), resetCredits: 0 },
     ...states.map((id, index) => ({ ...copy(id, ['Claude', 'Gemini CLI', 'ZCode', 'Antigravity'][index], ['claude', 'gemini', 'zcode', 'antigravity'][index]), windows: [], details: [], resetCredits: null, status: 'expired', planLabel: null }))];
+  quota.providers[0].windows.find(window => window.id === 'five-hour').usedPercent = 24;
+  quota.providers[0].analyses['five-hour'] = { paceDifference: 20, etaAt: null, trend: [], paceBasis: 'uniform' };
+  quota.providers[1].windows[1].resetsAt = quota.providers[1].windows[0].resetsAt;
   quota.preferences = { ...saved.preferences, providerOrder: ['temporarily-hidden', ...initial], compact: false };
   const textButton = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
   const item = id => `document.querySelector('[data-quota-layout-item="${id}"]')`;
@@ -25,6 +28,36 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
   const reload = async () => { await window.loadURL(window.webContents.getURL()); await until(() => client.evaluate(`document.querySelectorAll("[data-quota-layout-item]").length === ${initial.length}`), mode + ' layout loaded'); };
   try {
     publish(); await reload(); await expectOrder(initial);
+    const fiveHour = await client.evaluate(`(() => {
+      const card = ${item(a)};
+      const bar = [...card.querySelectorAll('[role=progressbar]')].find(el => el.getAttribute('aria-valuenow') === '76');
+      if (!bar) return null;
+      let row = bar.parentElement;
+      while (row && !(row.querySelector('[data-quota-window-value]') && row.querySelector('[data-quota-reset-time]') && row.querySelectorAll('[role=progressbar]').length === 1)) row = row.parentElement;
+      if (!row) return null;
+      const value = row.querySelector('[data-quota-window-value]'), reset = row.querySelector('[data-quota-reset-time]');
+      const valueRect = value.getBoundingClientRect(), resetRect = reset.getBoundingClientRect();
+      const segments = [...bar.querySelectorAll('[data-quota-segment]')];
+      const description = (bar.getAttribute('aria-describedby') ?? '').split(/\\s+/).map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
+      return { value: value.textContent.trim(), segmentCounts: [...card.querySelectorAll('[role=progressbar]')].map(el => el.querySelectorAll('[data-quota-segment]').length), widths: segments.map(segment => segment.firstElementChild?.style.width ?? ''),
+        valueColor: getComputedStyle(value).color, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null,
+        marker: Boolean(bar.querySelector('[data-quota-pace-marker]')), description,
+        valueRect: { right: valueRect.right, top: valueRect.top, bottom: valueRect.bottom }, resetRect: { left: resetRect.left, top: resetRect.top, bottom: resetRect.bottom } };
+    })()`);
+    assert.ok(fiveHour, mode + ' 5h row contains its value and reset action');
+    assert.equal(fiveHour.value, '剩余 76%', mode + ' displays remaining quota');
+    assert.deepEqual(fiveHour.segmentCounts, [12, 12], mode + ' renders 12 segments in each quota bar');
+    assert.equal(fiveHour.widths.length, 12, mode + ' renders 12 quota segments');
+    for (const [index, width] of fiveHour.widths.entries()) {
+      const expected = index < 9 ? 100 : index === 9 ? 12 : 0;
+      assert.match(width, /^(?:\d+(?:\.\d+)?|\.\d+)%$/, mode + ' segment width is an inline percentage');
+      assert.ok(Math.abs(parseFloat(width) - expected) < 0.01, mode + ' segment ' + (index + 1) + ' fill');
+    }
+    assert.equal(fiveHour.valueColor, fiveHour.fillColor, mode + ' remaining value and filled segments share a color');
+    assert.ok(fiveHour.marker && fiveHour.description, mode + ' pace marker retains its accessible description');
+    assert.ok(fiveHour.resetRect.left >= fiveHour.valueRect.right && fiveHour.resetRect.top < fiveHour.valueRect.bottom && fiveHour.resetRect.bottom > fiveHour.valueRect.top, mode + ' reset is to the right of and aligned with remaining quota');
+    assert.equal(await client.evaluate(`${item(b)}.querySelectorAll('[data-quota-reset-time]').length`), 1, mode + ' shows one action for a shared reset');
+    assert.match(await client.evaluate(`${item(b)}.querySelector('[data-quota-common-reset]').textContent`), /统一重置/, mode + ' identifies a shared countdown');
     for (const [id, count] of [[a, original.resetCredits], [c, 0]]) {
       const badge = `${item(id)}.querySelector('[data-quota-reset-credits]')`;
       assert.equal(await client.evaluate(`${badge}?.textContent`), `x${count}`, mode + ' displays the known reset card count');

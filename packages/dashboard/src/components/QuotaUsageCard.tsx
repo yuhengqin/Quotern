@@ -27,6 +27,7 @@ const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string
   unknown: { dotClassName: 'bg-gray-500 dark:bg-gray-400' },
 };
 const DETAILS_HINT_DELAY_MS = 800;
+const QUOTA_SEGMENTS = 12;
 
 function clock(at: number, locale: SupportedLocale) { return new Date(at * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }); }
 function queryDate(at: number, locale: SupportedLocale, now = new Date()) {
@@ -232,6 +233,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
     hideHint();
     void apply({ resetTimeMode: dateMode ? 'countdown' : 'date' });
   } : undefined;
+  const sharedReset = commonReset === null ? null : <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} onToggle={toggleResetTime} saving={saving} />;
   return <>
     <Card data-quota-card={provider.id} data-quota-compact={compact} data-quota-status-row={grouped} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] data-[quota-compact=true]:self-start data-[quota-status-row=true]:rounded-xl data-[quota-status-row=true]:shadow-none hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant={grouped ? 'transparent' : 'secondary'}
       onPointerEnter={event => {
@@ -274,10 +276,9 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       {proof?.identityVerified && proof.accountRef && <p className="text-xs text-muted">{t('usage.profiles.accountId', { id: proof.accountRef.slice(0, 8) })}</p>}
       {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">{t('usage.quota.ompRecord', { date: provider.provenance.observedAt ? queryDate(provider.provenance.observedAt, locale) : t('usage.quota.timeUnknown') })}{provider.provenance.identityVerified ? '' : ` · ${t('usage.quota.identityUnverified')}`}</p>}
       {hasReading && <div className={`flex flex-col ${preferences.compact ? 'gap-1.5' : 'gap-3'}`}>
-        {windows.slice(0, summaryOnly ? 1 : 3).map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} />)}
+        {windows.slice(0, summaryOnly ? 1 : 3).map((window, index) => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} sharedReset={index === 0 ? sharedReset : null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} />)}
         {(!summaryOnly || !windows.length) && details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
       </div>}
-      {commonReset !== null && <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} onToggle={toggleResetTime} saving={saving} />}
       {summaryOnly && risk && risk.id !== primary?.id && risk.usedPercent >= 70 && <p className="text-xs text-warning">{localizeQuotaWindowLabel(locale, providerType, risk)} · {t('usage.quota.remaining', { percent: Math.round(100 - risk.usedPercent) })}</p>}
       {summary && (!summaryOnly || summary.warning) && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={t('usage.quota.summaryTitle', { window: summary.label, description: summary.description ?? summary.text })}>
         {!summary.warning && summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
@@ -322,9 +323,8 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
                       {sortQuotaWindows(provider.windows).map(window => <ListBox.Item key={window.id} id={`window:${window.id}`} textValue={localizeQuotaWindowLabel(locale, providerType, window)}><span className="whitespace-normal break-words">{localizeQuotaWindowLabel(locale, providerType, window)}</span><ListBox.ItemIndicator /></ListBox.Item>)}
                     </ListBox></FilterSelectPopover>
                   </Select>}
-                  {commonReset !== null && <QuotaCommonResetTime at={commonReset} now={now} dateMode={dateMode} onToggle={toggleResetTime} saving={saving} />}
                   <div className="flex flex-col gap-5">
-                    {windows.map(window => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} detailed highlighted={activeTarget?.windowId === window.id} />)}
+                    {windows.map((window, index) => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} sharedReset={index === 0 ? sharedReset : null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} detailed highlighted={activeTarget?.windowId === window.id} />)}
                     {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
                   </div>
                   {(message || error) && <p role="status" className="text-sm text-muted">{errorMessage ?? message}</p>}
@@ -383,7 +383,7 @@ function QuotaResetTime({ text, absolute, dateMode, onToggle, saving }: { text: 
   const action = t(dateMode ? 'usage.quota.timeToCountdown' : 'usage.quota.timeToDate');
   if (!onToggle) return <span className="text-xs tabular-nums text-muted" title={absolute}>{text}</span>;
   return <HelpPopup title={absolute ?? text} trigger={<AriaButton type="button" data-quota-action data-quota-reset-time aria-label={`${text} · ${action}`} aria-disabled={saving} aria-busy={saving}
-      className="relative min-h-6 w-fit max-w-full cursor-pointer rounded-sm text-left text-xs tabular-nums text-muted underline decoration-dotted underline-offset-4 transition-colors hover:text-foreground hover:decoration-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-disabled:cursor-wait motion-reduce:transition-none"
+      className="relative min-h-6 w-fit max-w-full cursor-pointer rounded-sm text-end text-xs tabular-nums text-muted underline decoration-dotted underline-offset-4 transition-colors hover:text-foreground hover:decoration-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent aria-disabled:cursor-wait motion-reduce:transition-none"
       onPress={() => { if (!saving) onToggle(); }}>{text}</AriaButton>}>
     <p>{action}</p>
   </HelpPopup>;
@@ -393,11 +393,11 @@ function QuotaCommonResetTime({ at, now, dateMode, onToggle, saving }: { at: num
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const time = dateMode ? formatSubscriptionResetTime(at, now, false, locale) : formatSubscriptionCountdown(at, now, locale);
-  const text = !dateMode && at <= now.getTime() / 1000 ? time : t(dateMode ? 'usage.quota.commonReset' : 'usage.quota.resetsIn', { time });
-  return <p data-quota-common-reset><QuotaResetTime text={text!} absolute={formatSubscriptionResetTime(at, now, true, locale) ?? undefined} dateMode={dateMode} onToggle={onToggle} saving={saving} /></p>;
+  const text = !dateMode && at <= now.getTime() / 1000 ? time : t(dateMode ? 'usage.quota.commonReset' : 'usage.quota.commonResetsIn', { time });
+  return <span data-quota-common-reset><QuotaResetTime text={text!} absolute={formatSubscriptionResetTime(at, now, true, locale) ?? undefined} dateMode={dateMode} onToggle={onToggle} saving={saving} /></span>;
 }
 
-function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, highlighted = false, hideReset = false, now, dateMode, onToggleResetTime, saving }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; highlighted?: boolean; hideReset?: boolean; now: Date; dateMode: boolean; onToggleResetTime?: () => void; saving?: boolean }) {
+function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, highlighted = false, hideReset = false, sharedReset, now, dateMode, onToggleResetTime, saving }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; highlighted?: boolean; hideReset?: boolean; sharedReset?: ReactNode; now: Date; dateMode: boolean; onToggleResetTime?: () => void; saving?: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const label = localizeQuotaWindowLabel(locale, providerId, window);
@@ -406,20 +406,38 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
   const markerId = useId();
   const markerText = marker === null ? undefined : t('usage.quota.paceMarker', { percent: Math.round(marker) });
   const paceText = analysis ? localizeQuotaPaceLabel(locale, analysis) : null;
-  const valueText = window.valueText ? localizeQuotaValueText(locale, window.valueText) : null;
-  const color = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
+  const remaining = 100 - window.usedPercent;
+  const value = window.valueText ? localizeQuotaValueText(locale, window.valueText) : t('usage.quota.remaining', { percent: Math.round(remaining) });
+  const tone = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
+  const color = `color-mix(in oklab, ${tone} 50%, var(--color-foreground))`;
+  const expiry = window.timeKind === 'expiry';
+  const resetText = !reset ? null : dateMode ? `${reset} ${t(expiry ? 'usage.quota.expiry' : 'usage.quota.reset')}`
+    : window.resetsAt! <= now.getTime() / 1000 ? (expiry ? t('usage.quota.expiredAt') : reset)
+      : t(expiry ? 'usage.quota.expiresIn' : 'usage.quota.resetsIn', { time: reset });
+  const resetControl = sharedReset ?? (resetText && <QuotaResetTime text={resetText}
+    absolute={formatSubscriptionResetTime(window.resetsAt, now, true, locale) ?? undefined}
+    dateMode={dateMode} onToggle={onToggleResetTime} saving={saving} />);
   return <div data-quota-window={detailed ? window.id : undefined} tabIndex={detailed ? -1 : undefined} className={`flex min-w-0 flex-col gap-1 rounded-md outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent ${highlighted ? 'bg-accent/5 ring-2 ring-accent/40' : ''}`}>
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
-      <span className="min-w-0 break-words text-muted">{label}</span>
-      <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">{valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs">
+      <div className="min-w-0 max-w-full break-words text-muted">
+        {label}<span aria-hidden="true"> · </span><span data-quota-window-value className="whitespace-nowrap font-semibold tabular-nums" style={{ color }}>{value}</span>
+      </div>
+      {resetControl && <div className="ml-auto min-w-0 max-w-full text-end">{resetControl}</div>}
     </div>
     <div className="flex min-w-0 items-center gap-3">
-      <ProgressBar aria-label={`${label}: ${valueText ?? t('usage.quota.remaining', { percent: Math.round(100 - window.usedPercent) })}`} aria-describedby={markerText ? markerId : undefined} className="min-w-0 flex-1" value={100 - window.usedPercent} size="sm"
-        style={{ gap: 0, gridTemplateAreas: '"track"', gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto' }}>
-        <ProgressBar.Track className="relative h-1.5 overflow-visible rounded-full bg-surface-secondary" title={markerText}><ProgressBar.Fill className="rounded-full" style={{ backgroundColor: color }} />{marker !== null && <span data-quota-pace-marker aria-hidden="true" className="absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded bg-foreground ring-1 ring-background" style={{ left: `${marker}%` }} />}</ProgressBar.Track>
+      <ProgressBar aria-label={`${label}: ${value}`} aria-describedby={markerText ? markerId : undefined} className="min-w-0 flex-1" value={remaining} size="sm"
+        style={{ color, gap: 0, gridTemplateAreas: '"track"', gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto' }}>
+        <ProgressBar.Track className="relative grid h-1.5 grid-cols-12 gap-0.5 overflow-visible rounded-none bg-transparent" title={markerText}>
+          {Array.from({ length: QUOTA_SEGMENTS }, (_, index) => {
+            const fill = Math.max(0, Math.min(100, remaining * QUOTA_SEGMENTS - index * 100));
+            return <span key={index} data-quota-segment aria-hidden="true" className="h-full overflow-hidden rounded-full bg-foreground/10">
+              <span className="block h-full rounded-full bg-current motion-safe:transition-[width,background-color] motion-safe:duration-300" style={{ width: `${fill}%` }} />
+            </span>;
+          })}
+          {marker !== null && <span data-quota-pace-marker aria-hidden="true" className="pointer-events-none absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded bg-foreground ring-1 ring-background" style={{ left: `${marker}%` }} />}
+        </ProgressBar.Track>
       </ProgressBar>
     </div>
-    {reset && <QuotaResetTime text={!dateMode && window.resetsAt! <= now.getTime() / 1000 ? window.timeKind === 'expiry' ? t('usage.quota.expiredAt') : reset : dateMode ? `${reset} ${t(window.timeKind === 'expiry' ? 'usage.quota.expiry' : 'usage.quota.reset')}` : t(window.timeKind === 'expiry' ? 'usage.quota.expiresIn' : 'usage.quota.resetsIn', { time: reset })} absolute={formatSubscriptionResetTime(window.resetsAt, now, true, locale) ?? undefined} dateMode={dateMode} onToggle={onToggleResetTime} saving={saving} />}
     {markerText && <span id={markerId} className="sr-only">{markerText}</span>}
     {detailed && window.used !== undefined && window.limit !== undefined && <p className="text-[10px] text-muted">{window.used.toLocaleString(locale)} / {window.limit.toLocaleString(locale)} {window.unit === 'requests' ? t('usage.quota.requestUnit') : window.unit === 'credits' ? t('usage.quota.creditUnit') : 'Token'}</p>}
     {detailed && !stale && paceText && <p className="text-[11px] text-muted" title={localizeQuotaPaceDescription(locale, window, analysis!) ?? undefined}>{paceText}</p>}

@@ -715,6 +715,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.quota.checkedAt': ['上次检查 {{date}}', 'Last checked {{date}}', '最終確認：{{date}}', '마지막 확인: {{date}}'],
   'usage.quota.noStatus': ['尚未取得有效状态', 'No valid status yet', '有効な状態をまだ取得していません', '유효한 상태를 아직 가져오지 못했습니다'],
   'usage.quota.commonReset': ['统一重置：{{time}}', 'Resets together: {{time}}', '一括リセット：{{time}}', '동시 재설정: {{time}}'],
+  'usage.quota.commonResetsIn': ['{{time}}后统一重置', 'Resets together in {{time}}', '{{time}}後に一括リセット', '{{time}} 후 동시 재설정'],
   'usage.quota.expiry': ['到期', 'Expires', '期限', '만료'],
   'usage.quota.reset': ['重置', 'Resets', 'リセット', '재설정'],
   'usage.quota.remaining': ['剩余 {{percent}}%', '{{percent}}% remaining', '残り {{percent}}%', '{{percent}}% 남음'],

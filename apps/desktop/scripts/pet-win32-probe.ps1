@@ -52,7 +52,9 @@ function Get-MenuTree([IntPtr]$Menu) {
     for ($i = 0; $i -lt [PetProbe]::GetMenuItemCount($Menu); $i++) {
         $flags = [PetProbe]::GetMenuState($Menu, $i, 0x400)
         $sub = [PetProbe]::GetSubMenu($Menu, $i)
-        [pscustomobject]@{label=[PetProbe]::Label($Menu, $i); checked=[bool]($flags -band 8); enabled=!($flags -band 3); separator=[bool]($flags -band 0x800); children=if ($sub -ne [IntPtr]::Zero) { ,@(Get-MenuTree $sub) } }
+        $children = $null
+        if ($sub -ne [IntPtr]::Zero) { $children = @(Get-MenuTree $sub) }
+        [pscustomobject]@{label=[PetProbe]::Label($Menu, $i); checked=[bool]($flags -band 8); enabled=!($flags -band 3); separator=($sub -eq [IntPtr]::Zero -and [bool]($flags -band 0x800)); children=$children }
     }
 }
 $popup = [PetProbe]::Find($HostProcessId, '', '#32768')

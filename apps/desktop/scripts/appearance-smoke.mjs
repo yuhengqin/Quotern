@@ -239,6 +239,7 @@ async function main() {
   await settings(native, true); await select(native, 'theme-preference', 'light'); await select(native, 'accent-palette', 'theme'); await select(native, 'appearance-style', 'default'); await closeSettings(native);
   await until(async () => (await snapshot(popup)).style === 'default', 'tray restores default');
   for (const [client, original] of [[native, originalNative], [popup, originalTray]]) {
+    await until(async () => (await snapshot(client)).cardBackground === original.cardBackground, 'default card background transition settles');
     const restored = await snapshot(client);
     for (const key of ['background', 'foreground', 'font', 'radius', 'cardBackground', 'text']) assert.equal(restored[key], original[key], 'native default restores ' + key);
   }

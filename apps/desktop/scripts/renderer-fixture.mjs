@@ -193,10 +193,19 @@ export class FixtureWindow extends EventEmitter {
   minimize(){return this.setWindowState('minimized');}
   destroy(){this.destroyed=true;windows.delete(this);for(const child of this.references)child.destroy();void this.page?.close().catch(()=>{});}
   close(){this.destroy();}
-  showInactive(){this.visible=true;this.emit('show');}
+  setPageVisibility(visible) {
+    if (this.desktop || !this.page || this.page.isClosed()) return;
+    // Headless browser windows stay visible to Chromium even when minimized.
+    return this.page.evaluate(shown => {
+      Object.defineProperty(document,'visibilityState',{value:shown?'visible':'hidden',configurable:true});
+      Object.defineProperty(document,'hidden',{value:!shown,configurable:true});
+      document.dispatchEvent(new Event('visibilitychange'));
+    },visible);
+  }
+  showInactive(){this.visible=true;this.emit('show');return this.setPageVisibility(true);}
   show(){this.showInactive();return this.focus();}
   focus(){for(const win of windows){if(win!==this && win.focused){win.focused=false;win.emit('blur');}}this.focused=true;this.emit('focus');return this.page?.bringToFront();}
   isFocused(){return !!this.focused;}
-  hide(){this.visible=false;this.focused=false;this.emit('hide');}
+  hide(){this.visible=false;this.focused=false;this.emit('hide');return this.setPageVisibility(false);}
   isVisible(){return this.visible&&!this.isDestroyed();}
 }

@@ -40,7 +40,15 @@ try {
   const summary=await client.evaluate("window.tud.api.request('/functions/tud-usage-summary')");
   assert.equal(summary.status,200);
   const work=performance.now();
-  const timings=await client.evaluate(`(async()=>{const start=performance.now();let delays=[],prev=start,running=true;function sample(t){if(!running)return;delays.push(t-prev);prev=t;requestAnimationFrame(sample)}requestAnimationFrame(sample);const replies=await Promise.all([...Array.from({length:10},()=>window.tud.api.request('/functions/tud-session-list?limit=10')),window.tud.api.request('/functions/tud-usage-summary'),window.tud.api.request('/functions/tud-trigger-sync',{method:'POST'}),new Promise(r=>setTimeout(r,1200))]);running=false;return {status:replies.slice(0,12).map(r=>r.status),syncOk:replies[11].body.data?.ok,frames:delays.length,maxMs:Math.max(...delays.slice(1))}})()`);
+  const requests=client.evaluate(`(async()=>{const start=performance.now();let delays=[],prev=start,running=true;function sample(t){if(!running)return;delays.push(t-prev);prev=t;requestAnimationFrame(sample)}requestAnimationFrame(sample);const replies=await Promise.all([...Array.from({length:10},()=>window.tud.api.request('/functions/tud-session-list?limit=10')),window.tud.api.request('/functions/tud-usage-summary'),window.tud.api.request('/functions/tud-trigger-sync',{method:'POST'}),new Promise(r=>setTimeout(r,1200))]);running=false;return {status:replies.slice(0,12).map(r=>r.status),syncOk:replies[11].body.data?.ok,frames:delays.length,maxMs:Math.max(...delays.slice(1))}})()`);
+  const settings = ['设置','Settings','設定','설정'].map(label=>'button[aria-label="'+label+'"]').join(',');
+  const interaction = async () => {
+    await client.click(`document.querySelector(${JSON.stringify(settings)})`);
+    await until(()=>client.evaluate('Boolean(document.querySelector("[role=dialog]"))'),'settings opened during load');
+    await client.key('Escape');
+    await until(()=>client.evaluate('!document.querySelector("[role=dialog]")'),'settings closed during load');
+  };
+  const [timings]=await Promise.all([requests,interaction()]);
   assert.deepEqual(timings.status,Array(12).fill(200));assert.equal(timings.syncOk,true);assert.ok(timings.frames>0);
   await client.evaluate("window.tud.pet.select({kind:'builtin',character:'doro'})");
   await client.evaluate('window.tud.pet.setEnabled(true)');

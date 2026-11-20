@@ -89,9 +89,9 @@ export async function checkAppearanceMotion({ web, peer, native, popup, mainWind
   await allowMotion(hidden);
   await until(() => hidden.evaluate('document.documentElement.dataset.appearance === "matrix"'), 'initial hidden renderer reads opted-in style');
   await wait(150); assert.equal(await count(hidden), 0, 'initial show:false never mounts decorative graphics');
-  assert.equal(await hidden.evaluate('document.visibilityState'), 'visible', 'native bridge covers the Electron initial-hidden exception');
+  assert.equal(await hidden.evaluate('document.visibilityState'), 'visible', 'native visibility takes precedence over the document state');
   hidden.window.showInactive(); await until(async () => await count(hidden) === 1, 'new window show starts graphics'); hidden.window.destroy();
-  // Browser storage, real page visibility, a second tab and durable reload.
+  // Exercise browser storage, the Page Visibility event, cross-tab changes and reload.
   await web.call('Network.enable'); await web.call('Network.setBlockedURLs', { urls: ['*AppearanceArtwork*'] });
   web.window.showInactive(); await settings(web, false); await select(web, 'appearance-style', 'matrix'); await toggle(web, true); await closeSettings(web);
   await until(() => web.evaluate('Boolean(document.querySelector("[data-appearance-artwork-error]"))'), 'optional chunk failure stays within decoration boundary');
@@ -102,8 +102,8 @@ export async function checkAppearanceMotion({ web, peer, native, popup, mainWind
   peer.window.showInactive();
   await until(async () => await count(web) === 1 && await count(peer) === 1, 'browser preference reaches a second tab');
   web.window.webContents.setBackgroundThrottling(true);
-  web.window.hide(); await until(async () => await count(web) === 0, 'browser page hidden stops effects');
-  web.window.showInactive(); await until(async () => await count(web) === 1, 'browser page show resumes');
+  await web.window.hide(); await until(async () => await count(web) === 0, 'browser page hidden stops effects');
+  await web.window.showInactive(); await until(async () => await count(web) === 1, 'browser page show resumes');
   await web.window.reload(); await until(async () => await count(web) === 1, 'browser reload restores opt-in');
   await web.click('document.querySelector("[data-appearance-pause]")');
   await until(async () => await count(web) === 0 && await count(peer) === 0, 'visible pause action saves and reaches peer');

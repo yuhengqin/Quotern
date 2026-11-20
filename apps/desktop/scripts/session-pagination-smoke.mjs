@@ -65,7 +65,7 @@ if (dashboardOnly || heatmapOnly || helpOnly) {
 const facts = buildAchievementFacts([], [], [], new Date(referenceTime));
 const achievementSnapshot = evaluateAchievements(facts);
 if (heatmapOnly) achievementSnapshot.summary.activeDays = 1;
-const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-10-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: {} }, overlay: null },
+const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-10-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: { 'openai/pricing-fixture': { input: 1, output: 2 }, 'anthropic/pricing-fixture': { input: 2, output: 3 } } }, overlay: null },
   history: { messages, observations, timingEvents, evidence, titles, codexParents: [], missingSources: [] },
   achievements: { ...achievementSnapshot, earned: [], preferences: { showcaseIds: [], celebrationsEnabled: false }, unreadIds: [], coverage: { fromDate: '2026-10-01', asOfDate: '2026-10-25', timeZone: 'Asia/Shanghai', missingSessionSources: [], projectSources: [] } } };
 const hono = createLocalApiApp({ dataDir: path.join(output, 'must-not-create'), bucketStore, demo, getConfig: () => ({ deviceId: 'fixture', statsSince: demo.collectSince, localCollectSince: demo.collectSince }) });
@@ -474,7 +474,7 @@ async function exerciseCompactFilters(window, client, mode) {
     await until(() => client.evaluate('Boolean(document.querySelector("[aria-label=价格筛选条件] .autocomplete__trigger"))'), mode + ' pricing filters');
     await assertSelectTextFits(client, allPickers, mode + ' pricing filters ' + width);
     const providerFilter = 'document.querySelector("[aria-label=价格筛选条件] .autocomplete__trigger")';
-    await client.click(providerFilter);
+    await client.click(`(${providerFilter}).querySelector('button')`);
     await until(() => client.evaluate('Boolean(document.querySelector("[role=option]"))'), mode + ' provider options');
     await client.click('document.querySelector("[role=option]")');
     await client.key('Escape');

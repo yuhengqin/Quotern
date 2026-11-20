@@ -20,12 +20,12 @@ try {
   page = await probe.connect(target => target.url.includes('tauri.localhost') && !target.url.includes('/dsh/') && !target.url.includes('pet.html'));
   const ev = page.evaluate;
   const section = `document.querySelector('[data-pet-settings="dsh"]')`;
-  const petSection = `(${section}).closest('section')`;
+  const petSection = `(${section})?.closest('section')`;
   const petTile = name => `[...(${petSection}).querySelectorAll('button[aria-pressed]')].find(el=>el.textContent.includes(${JSON.stringify(name)}))`;
-  const group = key => `[...(${section}).querySelectorAll('details')].find(el=>el.querySelector('summary')?.textContent===${JSON.stringify(text(key))})`;
+  const group = key => `[...(${section}).querySelectorAll('details,section[aria-label]')].find(el=>(el.querySelector('summary')?.textContent ?? el.getAttribute('aria-label'))===${JSON.stringify(text(key))})`;
   const button = (key, within = section, index = 0) => `[...(${within}).querySelectorAll('button')].filter(el=>el.textContent.trim()===${JSON.stringify(text(key))})[${index}]`;
   const field = (key, index = 0, within = section) => `[...(${within}).querySelectorAll('label')].filter(el=>el.childNodes[0]?.textContent===${JSON.stringify(text(key))} || el.textContent.trim()===${JSON.stringify(text(key))})[${index}]?.querySelector('input,select,textarea')`;
-  const sizeButtons = () => `[...(${section}).querySelectorAll('[role="group"] button[aria-pressed]')]`;
+  const sizeButtons = () => `[...(${petSection}).querySelectorAll(':scope > [role="group"] button[aria-pressed]')]`;
   const state = () => ev('window.tud.dshPet.getState()');
   const idle = async () => {
     for (let i = 0; i < 150; i++) { if (await ev(`!!(${petSection})?.querySelector('input[role="switch"]') && !(${petSection}).querySelector('input[role="switch"]').disabled && (${section}).getAttribute('aria-busy')!=='true'`)) return; await wait(100); }
@@ -52,7 +52,7 @@ try {
   for (let i = 0; i < 100; i++) { try { if (await state()) break; } catch {} await wait(100); }
   const defaults = (await state()).config.main;
   for (let i=0; i<100; i++) {
-    await ev(`window.dispatchEvent(new CustomEvent('tud:open-settings',{detail:{tab:'app'}})); true;`);
+    await ev(`window.dispatchEvent(new CustomEvent('tud:open-settings',{detail:{tab:'pet'}})); true;`);
     await wait(100);
     if (await ev(`!!(${section})`)) break;
   }
@@ -60,7 +60,7 @@ try {
   await page.click(petTile(text('title')));
   await check('unified-pet-settings-and-view-state', async () => {
     assert.equal(await ev(`(${petSection}).querySelectorAll('h3').length`), 1, 'one desktop pet card');
-    assert.equal(await ev(`(${section}).querySelectorAll('section').length`), 0, 'companion settings are embedded');
+    assert.deepEqual(await ev(`[...(${section}).querySelectorAll(':scope > section')].map(el=>el.getAttribute('aria-label'))`), [text('controls'),text('instances')]);
     const before = await state(), builtinBefore = await ev('window.tud.pet.getState()');
     await page.click(petTile('Clawd'));
     assert.equal(await ev(`(${section}).checkVisibility()`), false);
@@ -71,7 +71,7 @@ try {
     assert.equal((await state()).enabled, before.enabled, 'view selection must not toggle the companion');
     assert.equal((await ev('window.tud.pet.getState()')).settings.visible, builtinBefore.settings.visible, 'view selection must not toggle the built-in pet');
   });
-  for (const key of ['instances','behavior','controls','activity','advanced']) {
+  for (const key of ['behavior','activity','advanced']) {
     await check(`fold:${key}`, async () => {
       const summary = `(${group(key)}).querySelector('summary')`;
       assert.equal(await ev(`(${group(key)}).open`), false);
@@ -84,11 +84,12 @@ try {
   }
   await check('single-companion-settings', async () => {
     assert.equal((await state()).config.main.pets.length, 1);
-    assert.equal(await ev(`(${group('instances')}).querySelectorAll('button').length`), 3, 'only three size preset buttons');
+    assert.equal(await ev(`${sizeButtons()}.length`), 3, 'shared small, medium and large presets');
     assert.equal(await ev(`(${section}).textContent.includes('多宠物碰撞')`), false);
   });
   await check('name-blur-save', async () => { await edit('name','界面审计宠物'); assert.equal((await state()).config.main.pets[0].name,'界面审计宠物'); });
   await check('size-presets', async () => {
+    await ev('window.tud.pet.select({kind:"dsh"})');
     const buttons = sizeButtons();
     assert.equal(await ev(`${buttons}.length`), 3, 'three size presets');
     for (const [index, width] of [204,264,364].entries()) {
@@ -159,13 +160,18 @@ try {
     for(let i=0;i<100;i++){reopened=(await probe.pages()).find(target=>target.url.includes('/dsh/index.html')&&target.id!==previous);if(reopened)break;await wait(100);}
     assert.ok(reopened,'retry opens a new fish window');
   });
-  const readPetState=async()=>JSON.parse((await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:'/state'})`)).body);
-  await check('manual-quota', async () => { await click(button('balance',group('controls'))); assert.equal(await ev(`(${section}).querySelector('[role="alert"]')?.textContent??''`),''); });
-  await check('manual-single-target', async () => { assert.equal((await state()).config.main.pets.length,1); assert.equal(await ev(`(${group('controls')}).querySelectorAll('select').length`),1,'only the animation selector remains'); });
-  await check('manual-animation', async () => {
-    const target=(await state()).config.main.pets[0].id, before=(await readPetState()).pets[target]?.anim?.counter??0;
-    const animation=await ev(`(${field('animation')}).options[1].value`); await select('animation',animation); await click(button('play',group('controls')));
-    assert.ok((await readPetState()).pets[target].anim.counter>before);
+  await check('companion-quota-and-preview-controls', async () => {
+    const balance=await ev(`window.tud.dshPet.dispatch({type:'request',method:'POST',path:'/balance'})`);
+    assert.equal(balance.status,200);
+    assert.equal(JSON.parse(balance.body).ok,true);
+    assert.equal((await state()).config.main.pets.length,1);
+    const controls = `(${group('controls')}).querySelectorAll('button[aria-pressed]')`;
+    assert.equal(await ev(`${controls}.length`),6);
+    const old=await ev(`(${group('controls')}).querySelector('video').src`);
+    await click(`[...${controls}].find(el=>el.getAttribute('aria-pressed')==='false')`);
+    for(let i=0;i<80;i++){if(await ev(`(${group('controls')}).querySelector('video')?.readyState>=2`))break;await wait(100);}
+    assert.notEqual(await ev(`(${group('controls')}).querySelector('video').currentSrc`),old);
+    assert.ok(await ev(`(${group('controls')}).querySelector('video').readyState>=2`));
   });
   await check('disable-before-advanced', async () => { await click(`(${petSection}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'disabled'); });
   await check('load-jsonc', async () => { await click(button('loadConfig')); assert.ok((await ev(`(${section}).querySelector('textarea[name="jsonc"]').value`)).includes((await state()).config.main.pets[0].name)); });

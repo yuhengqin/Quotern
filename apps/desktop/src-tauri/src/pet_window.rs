@@ -20,6 +20,8 @@ struct Input {
 pub struct Pets {
     builtin: Mutex<Input>,
     fish: Mutex<Input>,
+    #[cfg(windows)]
+    menu_owner: Mutex<Option<isize>>,
     expected_fish_close: Mutex<Option<Arc<std::sync::atomic::AtomicBool>>>,
 }
 fn event(app: &AppHandle, label: &str, channel: &str, value: Value) {
@@ -355,6 +357,95 @@ async fn watch_fish_webview(window: &tauri::WebviewWindow) -> Result<(), String>
         })
         .map_err(|e| e.to_string())?;
     rx.await.map_err(|e| e.to_string())?
+}
+
+#[cfg(windows)]
+pub fn cancel_menu(app: &AppHandle) -> Result<(), String> {
+    use windows::Win32::{
+        Foundation::{HWND, LPARAM, WPARAM},
+        UI::WindowsAndMessaging::{PostMessageW, WM_CANCELMODE},
+    };
+    if let Some(raw) = *app.state::<Pets>().menu_owner.lock().unwrap() {
+        unsafe {
+            PostMessageW(
+                Some(HWND(raw as *mut _)),
+                WM_CANCELMODE,
+                WPARAM(0),
+                LPARAM(0),
+            )
+        }
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+pub async fn choose_menu(
+    window: &tauri::WebviewWindow,
+    menu: tauri::menu::Menu<tauri::Wry>,
+    rows: Vec<Value>,
+) -> Result<Option<String>, String> {
+    use tauri::menu::ContextMenu;
+    use windows::Win32::{
+        Foundation::POINT,
+        UI::WindowsAndMessaging::{
+            GetCursorPos, GetMenuItemID, GetSubMenu, SetForegroundWindow, TrackPopupMenu, HMENU,
+            TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+        },
+    };
+    fn selected_id(menu: HMENU, rows: &[Value], selected: u32) -> Option<String> {
+        for (index, row) in rows.iter().enumerate() {
+            let index = index as i32;
+            if let Some(children) = row["submenu"].as_array() {
+                let child = unsafe { GetSubMenu(menu, index) };
+                if !child.is_invalid() {
+                    if let Some(id) = selected_id(child, children, selected) {
+                        return Some(id);
+                    }
+                }
+            } else if unsafe { GetMenuItemID(menu, index) } == selected {
+                return row["id"].as_str().map(str::to_owned);
+            }
+        }
+        None
+    }
+    let handle = window.clone();
+    let (send, recv) = tokio::sync::oneshot::channel();
+    window
+        .run_on_main_thread(move || {
+            // Read the returned command directly. Cancel and select are both definitive
+            // before releasing the menu or resolving the renderer's pending request.
+            let result = (|| -> Result<Option<String>, String> {
+                let hwnd = handle.hwnd().map_err(|e| e.to_string())?;
+                let popup = HMENU(menu.hpopupmenu().map_err(|e| e.to_string())? as *mut _);
+                let mut point = POINT::default();
+                unsafe {
+                    GetCursorPos(&mut point).map_err(|e| e.to_string())?;
+                    let _ = SetForegroundWindow(hwnd);
+                    let pets = handle.state::<Pets>();
+                    *pets.menu_owner.lock().unwrap() = Some(hwnd.0 as isize);
+                    let selected = TrackPopupMenu(
+                        popup,
+                        TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON,
+                        point.x,
+                        point.y,
+                        None,
+                        hwnd,
+                        None,
+                    )
+                    .0 as u32;
+                    *pets.menu_owner.lock().unwrap() = None;
+                    Ok(if selected == 0 {
+                        None
+                    } else {
+                        selected_id(popup, &rows, selected)
+                    })
+                }
+            })();
+            let _ = send.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+    recv.await.map_err(|e| e.to_string())?
 }
 
 pub async fn set_window(

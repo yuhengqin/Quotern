@@ -293,6 +293,9 @@ async fn desktop_request(
     }
     let native = match ch {
         "dsh:context-menu-close" => {
+            #[cfg(windows)]
+            pet_window::cancel_menu(&app)?;
+            #[cfg(not(windows))]
             state.pet_menu.lock().unwrap().take();
             return Ok(Value::Null);
         }
@@ -573,32 +576,38 @@ async fn pet_menu(app: &AppHandle, window: &WebviewWindow, tree: &Value) -> Resu
         menu.append(&item(app, row, &prefix).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
     }
-    let (send, recv) = tokio::sync::oneshot::channel();
-    *state.pet_menu.lock().unwrap() = Some((prefix.clone(), send));
-    window.popup_menu(&menu).map_err(|e| e.to_string())?;
-    // On Windows and macOS the platform popup returns when it is dismissed.
-    // Queue cleanup after any menu selection already dispatched on the UI thread.
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        let app_handle = app.clone();
-        let menu_prefix = prefix.clone();
-        app.run_on_main_thread(move || {
-            let state = app_handle.state::<HostState>();
+    #[cfg(windows)]
+    let selected = pet_window::choose_menu(window, menu, rows.clone()).await?;
+    #[cfg(not(windows))]
+    let selected = {
+        let (send, recv) = tokio::sync::oneshot::channel();
+        *state.pet_menu.lock().unwrap() = Some((prefix.clone(), send));
+        window.popup_menu(&menu).map_err(|e| e.to_string())?;
+        // On Windows and macOS the platform popup returns when it is dismissed.
+        // Queue cleanup after any menu selection already dispatched on the UI thread.
+        #[cfg(target_os = "macos")]
+        {
+            let app_handle = app.clone();
+            let menu_prefix = prefix.clone();
+            app.run_on_main_thread(move || {
+                let state = app_handle.state::<HostState>();
+                let mut slot = state.pet_menu.lock().unwrap();
+                if slot.as_ref().is_some_and(|s| s.0 == menu_prefix) {
+                    slot.take();
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        }
+        let selected = tokio::time::timeout(std::time::Duration::from_secs(90), recv).await;
+        {
             let mut slot = state.pet_menu.lock().unwrap();
-            if slot.as_ref().is_some_and(|s| s.0 == menu_prefix) {
+            if slot.as_ref().is_some_and(|s| s.0 == prefix) {
                 slot.take();
             }
-        })
-        .map_err(|e| e.to_string())?;
-    }
-    let selected = tokio::time::timeout(std::time::Duration::from_secs(90), recv).await;
-    {
-        let mut slot = state.pet_menu.lock().unwrap();
-        if slot.as_ref().is_some_and(|s| s.0 == prefix) {
-            slot.take();
         }
-    }
-    if let Ok(Ok(id)) = selected {
+        selected.ok().and_then(Result::ok)
+    };
+    if let Some(id) = selected {
         if let Some(row) = find(rows, &id) {
             if let Some(local) = row.get("local") {
                 return Ok(json!({"local":local}));

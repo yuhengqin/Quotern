@@ -34,7 +34,10 @@ const option = label => `[...document.querySelectorAll('[role="option"]')].find(
 const dialog = 'document.querySelectorAll("[role=dialog]")';
 const route = async hash => { await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash }); };
 const snapshot = async name => { await client.screenshot(path.join(output, `${name}.png`)); };
-const fits = async () => assert.equal(await client.evaluate('document.documentElement.scrollWidth <= innerWidth+1'), true, 'page must fit the viewport');
+const fits = async () => {
+  const layout = await client.evaluate('({ width:innerWidth, scroll:document.documentElement.scrollWidth })');
+  assert.ok(layout.scroll <= layout.width + 1, 'page must fit the viewport '+JSON.stringify(layout));
+};
 
 async function seed() {
   const dataDir = path.join(output, 'data'), quotaDir = path.join(output, 'profile/quota');
@@ -241,7 +244,11 @@ async function main() {
     await route('/performance');
     await until(() => client.evaluate(`document.querySelector('h1')?.textContent === ${JSON.stringify(heading)}`), `localized performance ${value}`);
     assert.ok(!/\binsights\.[a-z]/.test(await body()));
-    if (value === 'en') { window.setSize(390, 780); await wait(150); await fits(); await snapshot('desktop-performance-english-narrow'); window.setSize(1000, 920); }
+    if (value === 'en') {
+      await window.setSize(390, 780);
+      await until(() => client.evaluate('innerWidth === 390 && [...document.querySelectorAll(".recharts-wrapper")].every(el => el.getBoundingClientRect().width <= innerWidth)'), 'responsive chart sizes settle at 390px');
+      await fits(); await snapshot('desktop-performance-english-narrow'); await window.setSize(1000, 920);
+    }
   }
   checks.push('desktop-token-unit-preference-and-four-locales');
 

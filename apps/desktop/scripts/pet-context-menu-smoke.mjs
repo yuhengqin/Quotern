@@ -34,7 +34,7 @@ const choose = async (native,id) => {
   const row=find(await tree(native)); assert.ok(row?.enabled, 'enabled native menu item '+id);
   await native('choose',row.path); await wait(80);
 };
-const check = async (name, fn) => { try {await fn();checks.push({name,ok:true});} catch(error){checks.push({name,ok:false,error:String(error)});throw error;} };
+const check = async (name, fn) => { try {await fn();checks.push({name,ok:true});} catch(error){checks.push({name,ok:false,error:String(error)});throw Error(name,{cause:error});} };
 const selection = () => main.evaluate('window.tud.pet.getSelection()');
 const connectBuiltin = async () => {
   builtin = await probe.connect(p=>p.url.includes('/pet.html'));
@@ -147,10 +147,10 @@ try {
     assert.equal((await tree(fishInspector)).find(i => i.id === 'open').label, openLabel); await close(fishInspector);
   });
   for (const theme of ['dark', 'light']) await check(`native-theme:${theme}`, async () => {
-    await main.evaluate(`window.tud.setThemeMode(${JSON.stringify(theme)});true`); await wait(100);
+    await main.evaluate(`window.tud.setThemeMode(${JSON.stringify(theme)})`);
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")');
-    assert.equal(await main.evaluate("window.tud.getTheme().then(s=>s.resolved)"), theme);
     await close(fishInspector);
+    assert.equal(await main.evaluate("window.tud.getTheme().then(s=>s.resolved)"), theme);
   });
   await hold('dsh', fish, fishInspector, 'document.querySelector(".pet-hit")');
   await check('dsh-hide-restores-same-pet-and-size', async () => {
@@ -170,8 +170,9 @@ try {
   console.error(error); process.exitCode = 1;
   if (!checks.some(c => !c.ok)) checks.push({ name: 'runner', ok: false, error: error.stack ?? String(error) });
 } finally {
+  if (process.exitCode) await Promise.allSettled([inspector('close'),fishInspector('close')]);
+  await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: checks.length > 0 && checks.every(c => c.ok), checks }, null, 2));
   await probe.close();
   await mkdir(output, { recursive: true });
-  await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: checks.length > 0 && checks.every(c => c.ok), checks }, null, 2));
   console.log(`Pet menu evidence: ${output}`);
 }

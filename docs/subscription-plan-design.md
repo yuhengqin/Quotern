@@ -1,8 +1,8 @@
 # 订阅数据获取与接口注意事项
 
-订阅额度由 Core 读取器在 CLI 或 Desktop 主进程中读取，网页及 renderer 只接收展示快照。本机 Token 统计与订阅余额分别计算；有历史用量不代表当前 Agent 已登录，有套餐名也不代表一定能取得额度。
+CLI 使用 Core 订阅读取器。Tauri Desktop 通过 Node 辅助进程的 `official-providers.ts` 提供用户主动授权的官方 CLI、API 和官方用量入口。网页及桌面 WebView 接收展示快照。本机 Token 统计与订阅余额分别计算。
 
-当前网页面板、主窗口、托盘与宠物通过各自宿主的统一后台额度管理器消费上述 reader。动态窗口、通知、历史分析、刷新策略及偏好路径见 [订阅额度管理](quota-management.md)。旧的逐来源 IPC 继续保留兼容用途。
+以下来源实现与逐项协议描述记录 CLI 读取器。桌面卡片通过 `quota.getState`、`authorize`、`disconnect` 和 `refresh` 使用官方接入，实际可见信息以提供方授权返回的数据为准。动态窗口、通知、历史分析、刷新策略及偏好路径见 [订阅额度管理](quota-management.md)。
 
 ## 数据流与职责
 

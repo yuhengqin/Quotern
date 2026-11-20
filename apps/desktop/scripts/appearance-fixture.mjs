@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { FixtureWindow as BrowserWindow, fixtureIpc as ipcMain } from './renderer-fixture.mjs';
 
 /** Complete appearance bridge for existing UI suites; disk behavior has its own suite. */
 export function registerAppearanceFixture() {

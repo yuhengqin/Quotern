@@ -15,7 +15,7 @@ test('adds GUI-safe Node locations ahead of Finder PATH without removing it', {
 });
 
 
-import { createCodexSubscriptionReader, mapCodexUsage, parseCodexCredentials } from './codex-subscription';
+import { createCodexSubscriptionReader, mapCodexUsage, parseCodexCredentials } from 'quotern-core/quota/readers/codex-subscription';
 const jwt = (data: object) => `header.${Buffer.from(JSON.stringify(data)).toString('base64url')}.signature`;
 const auth = (account = 'one', expiry = 2000000000) => JSON.stringify({
   auth_mode: 'chatgpt', tokens: { account_id: account, access_token: jwt({ exp: expiry }), id_token: jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'fallback', chatgpt_plan_type: 'plus' } }) },

@@ -19,7 +19,9 @@ async function archiveHash(file) {
 
 function included(file) {
   const parts = file.replaceAll('\\', '/').split('/');
-  return !isAbsolute(file) && !parts.includes('..') && !parts.some(part => OMIT.has(part))
+  const tauriGenerated = parts[0] === 'apps' && parts[1] === 'desktop' && parts[2] === 'src-tauri'
+    && ['target', 'binaries', 'gen'].includes(parts[3]);
+  return !isAbsolute(file) && !parts.includes('..') && !parts.some(part => OMIT.has(part) || part.startsWith('dist-test-')) && !tauriGenerated
     && !/\.tsbuildinfo$|\.log$|^\.env(?:\..+)?\.local$/.test(basename(file));
 }
 
@@ -149,7 +151,8 @@ export async function checkSourceArchive({ root = ROOT, mode = 'ref', ref = 'HEA
   const workspaceLinks = await verifyWorkspaceLinks(source);
   await pnpm(['build'], source, env);
   await pnpm(['--filter', 'quotern-desktop', 'typecheck'], source, env);
-  const outputs = ['packages/core/dist/index.js', 'packages/i18n/dist/index.js', 'packages/dashboard/dist/index.html', 'packages/cli/dist/dashboard/index.html', 'apps/desktop/out/main/bootstrap.js', 'apps/desktop/out/renderer/index.html', 'apps/desktop/out/dsh-pet/runtime/main.js', 'apps/desktop/out/native-runtime/sharp/package.json'];
+  const executableSuffix = process.platform === 'win32' ? '.exe' : '';
+  const outputs = ['packages/core/dist/index.js', 'packages/i18n/dist/index.js', 'packages/dashboard/dist/index.html', 'packages/cli/dist/dashboard/index.html', 'apps/desktop/out/renderer/index.html', 'apps/desktop/out/sidecar/quotern-desktop-runtime.cjs', 'apps/desktop/out/sidecar/sync-worker.cjs', 'apps/desktop/out/sidecar/session-analysis-worker.cjs', 'apps/desktop/out/sidecar/node_modules/sharp/package.json', 'apps/desktop/out/sidecar/dsh-pet/host.cjs', `apps/desktop/src-tauri/target/release/Quotern${executableSuffix}`, `apps/desktop/src-tauri/target/release/quotern-node${executableSuffix}`];
   for (const file of outputs) if (!(await stat(join(source, file))).isFile()) throw new Error(`Missing archive build output: ${file}`);
   // Dependencies may use the global store; local workspace packages must remain inside source.
   await verifyWorkspaceLinks(source);

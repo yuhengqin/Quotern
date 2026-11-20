@@ -278,7 +278,7 @@ quotern usage models --source codex,claude --days 30 --json --compact
 
 统计数据保存在 `~/.quotern/`，包含 Token 数值、来源、模型和项目归属等信息。解析器读取 Agent 日志或数据库后保存统计桶；配置中还保存本机设备标识等运行信息。
 
-部分来源需要读取 Agent 登录状态以获取账单或订阅额度；价格目录和桌面更新也会访问各自的服务。订阅凭据由主进程处理，界面接收展示快照。数据流与文件用途见[架构注意事项](./docs/architecture-notes.md)。
+桌面额度卡由用户主动连接官方客户端或 API，也可以直接打开官方用量页。授权在当前桌面会话有效。CLI 的读取器使用提供服务的机器上的配置。价格目录和桌面更新会访问各自的服务。数据流见[架构注意事项](./docs/architecture-notes.md)。
 
 用量数据在本机完成解析、聚合与查询，桌面端和 CLI 面板读取同一套本地统计。首次使用无需注册 Quotern 账号；供应商额度等在线读数仍需要对应服务可访问。
 
@@ -292,32 +292,13 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 本地开发使用 `corepack pnpm dev:desktop` 或 `corepack pnpm dev:cli`。启动前请阅读 [worktree 开发规范](./docs/worktree-development.md)，实际面板地址以启动输出为准。
 
-<details>
-<summary>Electron 下载缓慢时配置镜像</summary>
-
-Electron 二进制默认从 GitHub Releases 下载，国内网络可能会超时。可在安装前设置镜像环境变量：
-
-```bash
-# Git Bash / macOS / Linux
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-```powershell
-# PowerShell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-</details>
+Desktop 使用 Tauri 2 和内置 Node 运行时；源码构建需要 Rust 和目标平台的 Tauri 构建依赖。
 
 ## 🤝 贡献指南
 
 源码按 Desktop / CLI / 浏览器面板协作。分支规范与本地启动见 [Contributing Guide](./CONTRIBUTING.md)。
 
-- [Desktop](./CONTRIBUTING.md#desktop) — Electron 桌面端
+- [Desktop](./CONTRIBUTING.md#desktop) — Tauri 桌面端
 - [CLI](./CONTRIBUTING.md#cli) — 命令行与本地面板
 - [Dashboard](./CONTRIBUTING.md#dashboard-开发) — CLI 浏览器面板
 

@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import type { App } from 'electron';
 import type { SupportedLocale } from 'quotern-i18n';
 import type { DesktopNotice, NotificationAction } from '../../shared/notifications.js';
 import { notificationText } from '../../shared/notification-messages.js';
@@ -25,19 +24,20 @@ export function registerWindowsNotificationIdentity(appId: string, iconPath: str
 }
 
 export async function createWindowsNotifications(options: {
-  app: Pick<App, 'setAsDefaultProtocolClient' | 'removeAsDefaultProtocolClient'>;
-  appId: string; iconPath: string; temporary: boolean; entry?: string;
+  appId: string; iconPath: string; temporary: boolean; hostExecutable: string;
   onAction(id: string, action: NotificationAction): boolean;
 }) {
   const identity = registerWindowsNotificationIdentity(options.appId, options.iconPath, options.temporary);
   const scheme = options.appId === 'dev.quotern.desktop' ? 'quotern-notice' : `quotern-notice-${createHash('sha256').update(options.appId).digest('hex').slice(0, 16)}`;
   const bridge = await createNotificationActivation(scheme, options.onAction).catch(error => { identity.dispose(); throw error; });
-  // The portable launcher survives its temporary extraction directory.
-  const executable = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
-  // A trailing backslash would escape Electron's closing quote in the Windows command line.
-  const args = [...(options.entry ? [path.resolve(options.entry)] : []), NOTIFICATION_ACTIVATION_FLAG, bridge.pipe];
+  const key = 'HKCU\\Software\\Classes\\' + scheme;
+  const commandKey = key + '\\shell\\open\\command';
+  const command = `"${options.hostExecutable}" ${NOTIFICATION_ACTIVATION_FLAG} "${bridge.pipe}" "%1"`;
+  const registry = (args: string[]) => execFileSync('reg.exe', args, { windowsHide:true, timeout:5000, encoding:'utf8', stdio:['ignore','pipe','pipe'] });
   try {
-    if (!options.app.setAsDefaultProtocolClient(scheme, executable, args)) throw new Error('Notification action protocol registration failed');
+    registry(['add',key,'/ve','/d','URL:Quotern notification','/f']);
+    registry(['add',key,'/v','URL Protocol','/d','','/f']);
+    registry(['add',commandKey,'/ve','/d',command,'/f']);
   } catch (error) { bridge.dispose(); identity.dispose(); throw error; }
   return {
     scheme,
@@ -46,8 +46,9 @@ export async function createWindowsNotifications(options: {
     },
     dispose() {
       bridge.dispose();
-      // Electron checks that this exact executable + arguments still owns the scheme.
-      options.app.removeAsDefaultProtocolClient(scheme, executable, args);
+      try {
+        if (registry(['query',commandKey,'/ve']).trimEnd().endsWith(command)) registry(['delete',key,'/f']);
+      } catch { /* Another running version may already have released the protocol. */ }
       identity.dispose();
     },
   };

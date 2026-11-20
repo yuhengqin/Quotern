@@ -14,7 +14,7 @@ pnpm dev:cli
 # 实际 API / Vite 地址见启动输出；默认端口占用时选择空闲端口
 ```
 
-桌面开发使用 `pnpm dev:desktop`。CLI 托管构建产物时使用 `pnpm start:cli`，该命令先构建 Core / Dashboard / CLI，再启动服务；它不提供浏览器页面 HMR。Electron 下载镜像配置见 [CONTRIBUTING.md](../CONTRIBUTING.md#安装依赖的注意事项)。
+桌面开发使用 `pnpm dev:desktop`。CLI 托管构建产物时使用 `pnpm start:cli`，该命令先构建 Core / Dashboard / CLI，再启动服务；它不提供浏览器页面 HMR。Desktop 使用 Tauri 2 和内置 Node，源码构建需要 Rust 和目标平台的 Tauri 构建依赖。
 
 ## 修改范围
 
@@ -36,7 +36,7 @@ pnpm --filter quotern-desktop typecheck
 pnpm -r --if-present test
 ```
 
-根命令 `pnpm test` 等价于先 `pnpm build` 再跑各包测试。Desktop 的 `electron-vite build` 不负责完整类型检查，不能代替单独的 `typecheck`。CI 使用 Node 22，并在 Ubuntu、macOS、Windows 上分别运行。
+根命令 `pnpm test` 包含发布、开发运行时等检查、构建及各包测试。Desktop 构建不能代替单独的 `typecheck`；CI 还运行 Tauri 的 Cargo 测试，使用 Node 22，并在 Ubuntu、macOS、Windows 上分别运行。
 
 只验证相关包时，先构建依赖；例如：
 
@@ -57,8 +57,8 @@ pnpm --filter quotern-desktop test
 | 配置 | 核对入口 |
 | --- | --- |
 | 包名、npm 发布范围、repository / homepage | 根和各包 `package.json` |
-| 应用标识、产品名称、签名与 GitHub 发布目标 | `apps/desktop/electron-builder.yml` |
-| 更新与发布目标 | `apps/desktop/electron-builder.yml`，构建生成 `app-update.yml` |
+| 应用标识、产品名称与打包配置 | `apps/desktop/src-tauri/tauri.conf.json` |
+| 签名、更新与发布目标 | `apps/desktop/src-tauri/src/updates.rs`、`.github/workflows/release-desktop.yml`、[RELEASE.md](../RELEASE.md) |
 | 网页下载地址 | `packages/dashboard/src/lib/downloads.ts` |
 | 价格覆盖表默认地址 | `packages/core/src/pricing/baked-defaults.ts` |
 | 静态资源路径 | `packages/dashboard/vite.config.ts`、环境变量示例 |
@@ -79,9 +79,9 @@ pnpm --filter quotern-desktop test
 
 新后台服务使用 macOS `dev.quotern.cli`、Windows `quotern` 计划任务和 Linux `quotern.service`。注册或停止时一并清理旧名称的自启项；Desktop 接管时也会清理新旧 macOS / Windows CLI 自启项。桌面 `appId` 为 `dev.quotern.desktop`，Windows NSIS GUID 保持原安装身份，便于升级。
 
-统计仍保存在 `~/.quotern/`。设备身份路径的回退规则见[架构注意事项](./architecture-notes.md)。桌面启动会复用已有旧 userData，以保留主题、托盘设置、浏览器存储及更新恢复标记；新安装使用新名称。旧标识仅用于升级兼容及历史发布记录。
+统计仍保存在 `~/.quotern/`。设备身份路径的回退规则见[架构注意事项](./architecture-notes.md)。桌面配置目录在首选目录没有已有偏好而另一名称的目录存在偏好时回退到后者；旧标识也保留用于升级兼容及历史发布记录。浏览器存储和其他旧数据的迁移须分别核验。
 
-源码、下载与发布目标统一为 `yuhengqin/Quotern`。桌面更新读取随安装包生成的 GitHub 配置及 Release 附件；源码不维护静态更新清单。私有仓库更新凭据由客户端环境提供，说明见 [Desktop 自动更新发布](../apps/desktop/README.md#自动更新发布)。
+源码、下载与发布目标统一为 `yuhengqin/Quotern`。Tauri 更新器读取 GitHub Release 中对应平台和架构的更新 JSON，私有仓库凭据由客户端环境提供；签名、兼容旧版的清单及平台验收见 [Desktop 统一构建与验收](../RELEASE.md#desktop-统一构建与验收)。
 
 ## 界面与文档用词
 

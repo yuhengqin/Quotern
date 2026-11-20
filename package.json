@@ -71,8 +71,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild",
-      "electron"
+      "esbuild"
     ]
   },
   "devDependencies": {

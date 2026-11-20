@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain } from './renderer-fixture.mjs';
 import { createLocalApiApp, createHttpServer, listenServer, BucketStore } from '../../../packages/core/dist/index.js';
 import { registerAccountLaunchApi } from '../../../packages/core/dist/server/account-launch-api.js';
 import { registerBillingApi } from '../../../packages/core/dist/server/billing-api.js';
@@ -218,7 +218,7 @@ async function main() {
   ipcMain.handle('tud:api-request', async (_event, route, init) => { const response = await desktopData.api.request(new URL(route, 'http://tud.local').href, init); return { status: response.status, body: await response.json() }; });
   ipcMain.handle('quota:get', () => desktopData.quota); ipcMain.handle('share-backgrounds:request', () => []);
   ipcMain.handle('quota:set', (_event, patch) => desktopData.saveQuota(patch));
-  const window = new BrowserWindow({ width: 1280, height: 900, show: false, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
+  const window = new BrowserWindow({ width: 1280, height: 900, show: false, desktop: true, webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
   await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/dashboard' }); await exercise(window, await connect(window), 'desktop', desktopData);
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: true, checks }, null, 2)); console.log(JSON.stringify({ ok: true, checks, output }));
 }

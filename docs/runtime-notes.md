@@ -44,7 +44,7 @@ Claude / Codex Hook 写入 `notify.signal`，常驻进程监听后调度同步�
 
 ## 采集 worker 与卡死恢复
 
-Desktop 主进程维护窗口、IPC、BucketStore 和 local-api，通常把同步及 queue IO 交给 utilityProcess。worker 启动失败时可以回退到主进程同步；该分支仍能工作，但不具备进程隔离带来的响应性优势。
+Tauri 原生宿主管理窗口；Node sidecar 维护 BucketStore 和内存 local-api，并由捆绑 Node fork 同步 worker。worker 启动失败时的 sidecar 同步回退不具备进程隔离带来的响应性优势。
 
 [sync-worker.ts](../apps/desktop/src/main/sync-worker.ts) 在独立 worker thread 中维护看门狗。同步进程每 30 秒喂活，连续 5 分钟无法调度时终止该进程，由宿主恢复。把超时器放在已经卡死的事件循环内不能解决这个问题。
 
@@ -58,25 +58,25 @@ worker 的启动请求合并，每代进程仅处理自己的消息与等待请�
 
 ### 会话分析与窗口响应
 
-Desktop 的 `/functions/tud-session-activity`、`tud-session-list`、`tud-session-detail`、`tud-performance`、`tud-usage-sessions` 仅 GET 经独立分析 utilityProcess 执行。该进程复用同一 Core local-api，按顺序应用主进程当前 BucketStore、有效采集起点、配置、分层价格和账号标签快照，再处理查询。桶与价格只在版本变化时重传；session-only 写入仍经磁盘快照版本检查发现，不依赖 bucket revision。
+Desktop 的 `/functions/tud-session-activity`、`tud-session-list`、`tud-session-detail`、`tud-performance`、`tud-usage-sessions` 仅 GET 经捆绑 Node fork 的独立分析进程执行。该进程复用同一 Core local-api，按顺序应用 sidecar 当前 BucketStore、有效采集起点、配置、分层价格和账号标签快照，再处理查询。桶与价格只在版本变化时重传；session-only 写入仍经磁盘快照版本检查发现，不依赖 bucket revision。
 
 Core 在一次洞察分析中共享派发索引；同范围在途构建与已完成 hydration 复用，返回对象单独复制，防止 API 筛选、调用方修改和账号标签污染缓存。范围、桶、历史或价格变化后失效；会话标题与账号标签继续读取当前值。
 
 历史缓存以内部弱引用关联来源代次；来源替换、删除、损坏或成功写入后，释放所有引用旧代次的历史组合与查询范围。桶、采集起点或价格变更也释放旧范围。容量淘汰只取消缓存资格，不使本次已读数据无效；连续版本变化最多在同一查询内重读三次，仍无法取得有效快照时返回 `503` / `SESSION_HISTORY_CHANGED` 标准 JSON 错误，下一次请求可以恢复。不能在同 key 的 pending 查询中重新等待自身。
 
-分析进程按需启动，启动最多等待 15 秒、单次请求最多 30 秒；故障/超时拒绝所属请求并回收，后续请求可重建，绝不静默回退主进程分析。停止 runtime 同时回收同步与分析进程。安装包 `asarUnpack` 必须同时包含两种 worker chunk。诊断时对比主进程与 `session analysis utilityProcess ready pid=...` 的 PID；`logs/sync.log` 中 `cpu_phase/session_query` 的 `role=session-analysis`、route、status、wallMs 与 cpuMs 标识真实查询耗时，不能把它误认作主进程阻塞。
+分析进程按需启动，启动最多等待 15 秒、单次请求最多 30 秒；故障/超时拒绝所属请求并回收，后续请求可重建，绝不静默回退 sidecar 分析。停止 runtime 同时回收同步与分析进程。诊断时按 PID 区分 Tauri 宿主、Node sidecar、同步与分析进程；`logs/sync.log` 中 `cpu_phase/session_query` 的 `role=session-analysis`、route、status、wallMs 与 cpuMs 标识真实查询耗时。
 
 ## 卡顿排查与回归验收
 
 架构边界以 [Desktop 响应性约束](architecture-notes.md#desktop-响应性约束) 为准；此处保留可执行的排查顺序和历史线索。
 
-1. 记录实际启动入口、checkout/commit、数据目录及各进程 PID。先区分接口等待、renderer 长任务、Electron 主进程阻塞和 Windows 原生输入问题；CLI 网页流畅只能说明另一条执行路径仍可交互。
+1. 记录实际启动入口、checkout/commit、数据目录及各进程 PID。先区分接口等待、renderer 长任务、Tauri 宿主或 Node sidecar 阻塞和 Windows 原生输入问题；CLI 网页流畅只能说明另一条执行路径仍可交互。
 2. 结合操作时间、CPU profile 和日志定位热点。按 PID 区分主进程、采集与分析进程，不仅依赖日志的 `role` 字段：历史采集日志中的 `role=main` 也可能属于采集子进程。记录最长连续任务和对应调用链，避免把整个异步请求的 wallMs 当成窗口线程阻塞时间。
 3. 性能相关修改使用代表性历史数据或足够规模的合成数据。覆盖冷加载、重复相同查询、至少一轮受影响的周期刷新、聚焦/同步后重验证，并在加载期间操作设置或菜单。对照改前改后结果、主进程采样与窗口响应；测试夹具的小数据集不能单独证明大历史下流畅。
 4. 按变更覆盖缓存失效、标题删除、价格更新、附加账号及查询期间账号切换；进程层覆盖启动共享、超时/崩溃、停止中请求、等待冷启动后才恢复的旧请求和退出回收。会话/进程相关回归分别见 [Core 查询测试](../packages/core/test/session-query-api.test.ts)、[归属测试](../packages/core/test/runtime-pid.test.ts)、[分析宿主测试](../apps/desktop/src/main/session-analysis-host.test.ts) 和 [runtime 生命周期测试](../apps/desktop/src/main/local-runtime-lifecycle.test.ts)。
-5. 交付时记录测试与实际运行证据各自覆盖的范围；构建和单测不能替代 Electron 实测。私有原始 profile、日志和合成产物留在所属 `.quotern-dev/`，文档只保留脱敏结论及可重定位线索；按服务归属规则退出本次实例。安装包、多屏或其他系统未实测时明确标注范围。
+5. 交付时记录测试与实际运行证据各自覆盖的范围；构建和单测不能替代 Tauri Desktop 实测。可运行 `node apps/desktop/scripts/tauri-webview-smoke.mjs [built host]` 检查真实 WebView 和基础桥接，但不能以小夹具代替代表性数据验收。私有原始 profile、日志和合成产物留在所属隔离目录，文档只保留脱敏结论及可重定位线索；按服务归属规则退出本次实例。安装包、多屏或其他系统未实测时明确标注范围。
 
-价格专项验收：两端构建后运行 `node apps/desktop/scripts/run-pricing-sources-smoke.mjs [全新输出目录]`。脚本使用独立 Electron/profile、合成历史和本地 HTTP/IPC，覆盖来源/核实日期/旧价与同步摘要的四语言、键盘关闭、窄屏，以及实际价格变化后 30,000 桶/100 日的重算和主进程心跳；不连接现有服务或读取个人会话。系统真实休眠/恢复和其他平台需要另行实测，不能由夹具推断。
+价格专项的旧 Electron 脚本 `node apps/desktop/scripts/run-pricing-sources-smoke.mjs [全新输出目录]` 使用合成历史及 30,000 桶/100 日的重算夹具；其结果不代表当前 Tauri Desktop 通过。对应变更仍需以不低于该数据规模的真实宿主验收，覆盖来源、核实日期、旧价、四语言、键盘、窄屏和重算时响应性；系统真实休眠/恢复及其他平台另行实测。
 
 反复出现的问题属于不同机制，排查时核对对应修复是否仍在实际执行路径中：
 
@@ -86,27 +86,17 @@ Core 在一次洞察分析中共享派发索引；同范围在途构建与已完
 | 2026-10-21 `168da1eb` | 采集 worker 的并发启动、旧代事件、退出确认与磁盘恢复；采集隔离存在不代表所有 API 计算都已离开主进程。 |
 | 2026-11-13 `5abdb300` | 逐会话全量证据扫描、重复洞察计算、主进程重查询及周期性同步 PowerShell 探测；设计与当次 Windows 45 秒采样证据见 [响应性修复记录](superpowers/specs/2026-11-13-desktop-responsiveness-design.md#windows-验收记录2026-11-13)。 |
 
-## 窗口与 IPC 初始化
+## 窗口与桥接初始化
 
-托盘面板按托盘图标定位，固定显示额度摘要，失焦或按 Escape 时隐藏。Electron userData 下 `tray-panel.json` 中旧版固定状态、停放坐标和「摘要／完整」偏好均被忽略。仅使用本实例的窗口与状态。
+Tauri 宿主 `apps/desktop/src-tauri/src/main.rs` 管理窗口；renderer 通过 `src/preload/index.ts` 和 `tauri-transport.ts` 与 Node sidecar 通信。验证启动、关闭与恢复时按实际宿主和进程分别记录，不以旧 Electron 窗口测试代替。
 
-主窗口关闭后销毁 BrowserWindow 和 renderer，应用继续驻留托盘；用户再次打开时重建窗口。静默登录启动只影响第一次显示，后续明确的打开请求应正常显示窗口。
+## 发版与更新
 
-窗口、local-api 与更新 IPC 必须在首次页面访问前注册。初始化期间的打开请求由 [main-window-launcher.ts](../apps/desktop/src/main/main-window-launcher.ts) 排队，显式打开优先于静默意图，并发请求合并。macOS 的 Dock 显示需要等待异步操作完成。证据：[窗口启动测试](../apps/desktop/src/main/main-window-launcher.test.ts)。
-
-## 自动更新与失败恢复
-
-正式安装版发现较新版本后自动下载，并在下载完成后尝试安装。Windows portable 只检查和提示新版本，用户手动获取便携包，不下载 feed 中的 NSIS 安装程序。开发模式不启动自动更新。
-
-每次安装尝试都有独立标识。30 秒退出 watchdog 在停止 runtime 之前启动；失败后恢复 runtime、heartbeat 和窗口，并保留已下载包供一次点击重试。旧尝试迟到的完成结果不得触发新尝试安装，恢复过程与重试串行。
-
-退出被取消时保留更新 IPC 和 watchdog；永久清理放在 `will-quit`。electron-updater 6.x 的安装 latch 在恢复后需要重置，否则重试可能被当成重复安装而忽略。
-
-证据：[auto-update.ts](../apps/desktop/src/main/auto-update.ts)、[自动更新测试](../apps/desktop/src/main/auto-update.test.ts)。发布步骤见 [Desktop README](../apps/desktop/README.md#自动更新发布)，历史实机记录见[自动更新验证](../apps/desktop/docs/auto-update-validation.md)，其中旧版本结果不代表当前包已完成实机验收。
+使用根 `package.json` 的 `release:desktop` 命令并遵循 [RELEASE.md](../RELEASE.md) 的发版步骤；旧 Electron 更新实现及验收记录不能证明当前 Tauri 更新能力。各平台安装包和更新流程须独立验证。
 
 ## 宠物导入与失败日志
 
-Windows Desktop 的宠物下载使用 Electron `net.fetch`，遵循默认 session 的系统代理/PAC 配置；不使用 Node 全局 `fetch`。请求不携带 session 凭据、不使用缓存，超时覆盖响应流读取，压缩包与解压后文件继续受大小和目录校验限制。
+旧版 Windows Desktop 的宠物下载曾使用 Electron `net.fetch` 和系统代理；迁移后应核对当前下载路径。请求不得携带会话凭据，超时应覆盖响应流读取，压缩包与解压后文件继续受大小和目录校验限制。
 
 内置角色 ID 保留给内置实现。ZIP、链接和本地 Codex 导入遇到 ID 冲突时，使用 `原ID-imported-内容摘要` 形式的独立 ID（必要时截短原 ID 并加序号），不覆盖原目录或修改 Codex 的源文件。相同内容重复导入会复用已安装角色，保留原有的预览、应用和移除行为。
 
@@ -124,7 +114,7 @@ Windows Desktop 的宠物下载使用 Electron `net.fetch`，遵循默认 sessio
 
 使用步骤和容量边界见 [CLI 本地备份与恢复](../CLI.md#本地备份与恢复)。数据事务锁覆盖采集、配置/游标和相关状态写入；快照还进行前后内容及成员清单检查，发现非协作写入则失败。该互斥不提供任意崩溃点的跨文件回滚保证。备份创建不重置游标，也不自动获取其他进程的所有权。
 
-恢复先校验全部成员，再独占创建目标，写入期间保留 `.backup-restore-incomplete`。中途失败的目录不能用于运行，应保留原备份及源数据，改用另一个新目标重试。正式采用恢复结果时，退出 Desktop 与 CLI，保留当前数据目录备份后再切换；不要覆盖正在运行的数据。Desktop 快照中的 `desktop/quota` 属于 Electron `userData/quota`，不会因为更换统计目录而自动生效，需在应用退出后单独还原到对应 `userData`。普通 CLI 快照不包含统计目录之外的 Desktop 额度设置。
+恢复先校验全部成员，再独占创建目标，写入期间保留 `.backup-restore-incomplete`。中途失败的目录不能用于运行，应保留原备份及源数据，改用另一个新目标重试。正式采用恢复结果时，退出 Desktop 与 CLI，保留当前数据目录备份后再切换；不要覆盖正在运行的数据。Desktop 快照中的 `desktop/quota` 属于 Desktop profile，切换统计目录时需核对目标 profile 的恢复行为。普通 CLI 快照不包含统计目录之外的 Desktop 额度设置。
 
 本机面板的校验预览显示文件类别、有限的来源列表及实际用量桶首末时间（UTC），不代表期间每一天都有数据。保护恢复使用 `restore-protected` 动作，在当前统计目录 `backups/before-restore-*.json` 原子发布保护快照后才创建恢复目标。保护失败不会开始恢复；保护成功、恢复失败的响应仍返回保护路径。保护文件不自动清理，也不嵌套进入后续备份。旧 `restore` 动作保持原语义；同一运行端拒绝并行备份操作（409/BACKUP_BUSY）。新目录仅有所选备份内容，不与当前数据合并，不自动切换实例。
 
@@ -135,7 +125,7 @@ Windows Desktop 的宠物下载使用 Electron `net.fetch`，遵循默认 sessio
 1. 退出 Desktop，停止 CLI；如曾注册旧名称的自启服务，先用原版本的 `service stop` 撤销它。迁移过程中保持应用关闭。
 2. 备份当前统计数据，并确认正式统计目录为 `~/.quotern/`。
 3. 将原设备身份目录完整复制到新目录：Windows 为 `%APPDATA%/quotern`，其他平台为 `$XDG_CONFIG_HOME/quotern`，未设置时为 `~/.config/quotern`；使用目录覆盖变量时改为 `QUOTERN_CONFIG_HOME`。确认 `device-id` 与 `~/.quotern/config.json` 中的 `deviceId` 一致。
-4. 如有 Desktop 设置，将原 Electron `userData` 整个目录复制到新版本的配置目录。正式安装通常为 `appData/Quotern`，仓库开发版为 `appData/quotern-desktop`；`appData` 在 macOS 为 `~/Library/Application Support`，Windows 为 `%APPDATA%`，Linux 为 `$XDG_CONFIG_HOME` 或 `~/.config`。需保留 `desktop-prefs.json`、`auto-update.json`、`Local Storage`、数据库及其他会话文件。
+4. 如有旧 Desktop 设置，先备份原 Electron `userData`。Tauri profile 和 WebView 存储的迁移兼容性须先核对，不能假设直接复制 Chromium 存储即可生效或安全合并。
 5. 启动 Quotern，核对设备身份、统计数据和设置。如需自启，用 `quotern service start` 重新注册。
 
 仓库提供通用的显式复制工具，可对设备身份或 Desktop 配置目录分别执行：
@@ -150,8 +140,8 @@ node scripts/migrate-state.mjs --from "/原状态目录" --to "/Quotern状态目
 
 按账号启动、Quotern 默认账号与自动 Claude 换号，以及独立的实际消费连接见 [账号启动与费用](account-launch-billing.md)。默认选择保存在 `account-launch/preferences.json`，运行端注册监控目录来源到同目录的 `sources.json`；账单私有凭据与缓存保存在 `billing-private/`，不参与普通数据备份。新本地动作接口为 `/functions/tud-account-launch` 与 `/functions/tud-claude-billing`，要求真实 loopback Host/来源和运行实例操作 token。
 
-GUI 启动环境的 PATH 可能缺少 Node 或 Agent CLI。Claude reader 使用 [cli-runtime.ts](../apps/desktop/src/main/cli-runtime.ts) 补齐运行环境，在临时目录以受限参数执行 `/usage`；Codex reader 直接读取本机登录状态并请求额度，不以 Codex CLI 是否存在作为前提。
+Desktop 额度访问需用户明确同意，授权只属于当前应用会话；不导入其他应用的登录凭据。不支持授权读取的服务提供官方用量页。
 
-CLI 的 Node 额度及服务状态请求通过 `quotaNodeFetch` 显式使用 `HTTP_PROXY` / `HTTPS_PROXY`（也支持小写形式），遵守 `NO_PROXY`，无需设置 `NODE_USE_ENV_PROXY`；localhost 和回环 IP 始终直连，避免将本机 language server 请求交给代理。仅配置系统代理而没有环境代理变量时，Node 请求仍按原行为直连。Desktop 为 Codex 额度及服务状态注入独立 Electron session 网络，继续沿用系统代理及已有网络恢复流程。
+CLI 的 Node 额度及服务状态请求通过 `quotaNodeFetch` 显式使用 `HTTP_PROXY` / `HTTPS_PROXY`（也支持小写形式），遵守 `NO_PROXY`，无需设置 `NODE_USE_ENV_PROXY`；localhost 和回环 IP 始终直连，避免将本机 language server 请求交给代理。仅配置系统代理而没有环境代理变量时，Node 请求仍按原行为直连。Desktop 的额度和服务状态网络行为应按当前 sidecar 实现核对。
 
 同一账号的临时失败可以保留最近读数，退出、认证失败或账号变化应清除不再匹配的快照。并发请求返回时再次检查身份或 generation，避免把前一账号的结果发布到当前界面。具体字段和订阅来源差异见[订阅数据说明](./subscription-plan-design.md)，不要假设所有 reader 都有相同缓存与状态枚举。

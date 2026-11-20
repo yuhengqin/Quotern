@@ -7,7 +7,7 @@ export const QUOTA_REPORT_MAX_AGE = 1800;
 const statuses = ['ready', 'unavailable', 'temporarily-unavailable', 'not-signed-in', 'expired', 'access-denied', 'unsupported-account', 'custom-provider', 'not-installed'];
 export interface QuotaReportWindow {
   id: string; kind: 'percentage' | 'balance'; usedPercent: number | null;
-  balance: { currency: 'CNY'; remaining: number | null } | null;
+  balance: { currency: 'CNY' | 'USD'; remaining: number | null } | null;
   resetsAt: number | null; timeKind: 'reset' | 'expiry'; periodSeconds: number | null; stale: boolean;
   forecast: { etaAt: number | null; paceDifference: number | null; paceBasis: 'uniform' | 'workdays' | 'automatic' } | null;
 }
@@ -90,7 +90,7 @@ export function projectQuotaReport(state: QuotaState, runtime: QuotaRuntimeSourc
         const forecast = !monetary && !stale && !expired && p.status === 'ready' && periodSeconds && w.analysisEligible !== false && a
           ? { etaAt: stamp(a.etaAt), paceDifference: number(a.paceDifference) ? a.paceDifference : null, paceBasis: a.paceBasis } : null;
         return { id: w.id, kind: monetary ? 'balance' : 'percentage', usedPercent: monetary ? null : Math.max(0, Math.min(100, w.usedPercent)),
-          balance: monetary ? { currency: 'CNY', remaining: number(w.balance?.remaining) && w.balance!.remaining! >= 0 ? w.balance!.remaining! : null } : null,
+          balance: monetary ? { currency: w.balance?.currency ?? 'CNY', remaining: number(w.balance?.remaining) && w.balance!.remaining! >= 0 ? w.balance!.remaining! : null } : null,
           resetsAt: stamp(w.resetsAt), timeKind: w.timeKind === 'expiry' ? 'expiry' : 'reset', periodSeconds,
           stale: stale || expired, forecast };
       }) });
@@ -123,7 +123,7 @@ export function parseQuotaReport(value: unknown, runtime: QuotaRuntimeSource, no
         const kind = enumValue(w.kind, ['percentage', 'balance']);
         if (!windowId(w.id) || (kind === 'percentage' ? !number(w.usedPercent) || w.usedPercent < 0 || w.usedPercent > 100 : w.usedPercent !== null)) throw new Error('invalid quota snapshot');
         const balanceValue = kind === 'balance' ? record(w.balance) : null;
-        const balance = balanceValue ? { currency: enumValue(balanceValue.currency, ['CNY']), remaining: nullableNumber(balanceValue.remaining) } : null;
+        const balance = balanceValue ? { currency: enumValue(balanceValue.currency, ['CNY', 'USD']), remaining: nullableNumber(balanceValue.remaining) } : null;
         if (balance?.remaining !== null && balance?.remaining !== undefined && balance.remaining < 0) throw new Error('invalid quota snapshot');
         const resetsAt = nullableStamp(w.resetsAt), periodSeconds = nullableNumber(w.periodSeconds);
         if (periodSeconds !== null && (periodSeconds <= 0 || periodSeconds > 10 * 366 * 86400)) throw new Error('invalid quota snapshot');

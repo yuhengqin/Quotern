@@ -55,18 +55,7 @@ async function prepareNativeRuntime({ appDirectory = path.resolve(__dirname, '..
   console.log(`Prepared native decoder runtime for ${platform}-${arch} (${staged.size} packages)`);
 }
 
-/** Each target owns its staging directory, including when builder packs architectures concurrently. */
-async function beforePack(context) {
-  const platform = context.electronPlatformName;
-  const arch = { 1: 'x64', 3: 'arm64' }[context.arch];
-  if (!arch) throw new Error(`Unsupported Sharp packaging architecture: ${context.arch}`);
-  const os = { win32: 'win', darwin: 'mac', linux: 'linux' }[platform];
-  const appDirectory = context.packager.info.appDir;
-  await prepareNativeRuntime({ appDirectory, platform, arch, outputDirectory: path.join(appDirectory, 'out/native-runtime', `${os}-${arch}`) });
-}
-
-module.exports = beforePack;
-module.exports.sharpTargetPackages = sharpTargetPackages;
+module.exports = { prepareNativeRuntime, sharpTargetPackages };
 
 if (require.main === module) {
   const { values } = parseArgs({ options: { platform: { type: 'string' }, arch: { type: 'string' } } });

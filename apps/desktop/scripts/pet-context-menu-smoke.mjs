@@ -1,77 +1,62 @@
-// Real Desktop main/preload/renderers + real helper, private profiles and owned processes.
+// Windows acceptance using native menus from this test's private Tauri process.
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectPage, launchProbe, unusedPort, wait } from './desktop-cdp.mjs';
+import { launchProbe, wait } from './desktop-cdp.mjs';
+import { defaultHost, eventually as until, ownedPetWindow } from './native-pet-probe.mjs';
+import { NATIVE_MESSAGES } from '../src/main/native-messages.ts';
 
-const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const output = path.resolve(process.argv[2] ?? path.join(desktop, '.quotern-dev', `pet-menu-ui-${Date.now()}`));
-const executable = createRequire(import.meta.url)('electron');
-const mainPort = await unusedPort(), fishPort = await unusedPort(), fishInspectorPort = await unusedPort();
-const probe = await launchProbe(executable, output, { args: [desktop, `--inspect=127.0.0.1:${mainPort}`] });
-const clients = [], checks = [];
-let main, inspector, builtin, fish, fishInspector;
-const until = async (read, label, attempts = 150) => {
-  let last;
-  for (let i = 0; i < attempts; i++) { try { last = await read(); if (last) return last; } catch (error) { last = error.message; } await wait(100); }
-  throw Error(`Timed out: ${label} (${JSON.stringify(last)})`);
+const desktop = fileURLToPath(new URL('../',import.meta.url));
+const output = path.resolve(process.argv[2] || path.join(desktop, '../../.quotern-dev', 'native-menu-'+Date.now()));
+const probe = await launchProbe(process.argv[3] || defaultHost, output, { webview2:true });
+const checks = [];
+let main, builtin, fish, catalog;
+const inspector = ownedPetWindow(probe,'builtin'), fishInspector = ownedPetWindow(probe,'dsh');
+const keys = { open:'native.pet.openMain',sync:'native.tray.sync',sizes:'native.pet.size',characters:'native.pet.character',settings:'native.pet.settings',hide:'native.pet.hide',balance:'native.pet.balance',actions:'native.pet.actions','size:small':'native.pet.small','size:medium':'native.pet.medium','size:large':'native.pet.large','character:dsh':'native.tray.dshPets' };
+function identify(rows, path = [], parent = '') {
+  return rows.map((item,index) => {
+    const route=[...path,index];
+    const known = Object.entries(keys).find(([,key]) => Object.values(NATIVE_MESSAGES).some(messages=>messages[key]===item.label));
+    const character = parent==='characters' && catalog.find(p => p.displayName===item.label);
+    const id = item.separator ? 'separator:'+route.join('.') : character ? 'character:builtin:'+character.id : known?.[0] || 'item:'+route.join('.');
+    return {...item,id,path:route.join('.'),children:item.children?identify(item.children,route,id):undefined};
+  });
+}
+const tree = async native => identify(await native('tree') || []);
+const close = async native => { await native('close'); await wait(100); };
+const open = async (page, native, selector) => {
+  await page.click(selector,'right');
+  await until(async () => (await tree(native)).length,'owned Win32 menu');
 };
-const connect = async port => {
-  const target = await until(async () => (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json())[0], `inspector ${port}`);
-  const client = await connectPage(target); clients.push(client); return client;
+const choose = async (native,id) => {
+  function find(items) { for(const row of items){if(row.id===id)return row;const child=row.children&&find(row.children);if(child)return child;} }
+  const row=find(await tree(native)); assert.ok(row?.enabled, 'enabled native menu item '+id);
+  await native('choose',row.path); await wait(80);
 };
-const installMenuAudit = async client => client.evaluate(`(()=>{
-  const e=process.getBuiltinModule('module').createRequire(process.execPath)('electron');
-  if(!globalThis.__menuAudit){globalThis.__menuAudit={menu:null,win:null,open:false};const original=e.Menu.prototype.popup;
-    e.Menu.prototype.popup=function(options){__menuAudit.menu=this;__menuAudit.win=options.window;__menuAudit.open=true;return original.call(this,{...options,callback:()=>{__menuAudit.open=false;options.callback?.();}});};}
-  return true;
-})()`);
-const tree = client => client.evaluate(`(()=>{const walk=m=>m.items.map(i=>({id:i.id,label:i.label,checked:i.checked,enabled:i.enabled,children:i.submenu?walk(i.submenu):undefined}));return walk(__menuAudit.menu);})()`);
-const close = async client => { await client.evaluate('globalThis.__menuAudit?.menu?.closePopup();true'); await wait(100); };
-const open = async (page, client, selector) => {
-  await close(client);
-  await page.click(selector, 'right');
-  await until(() => client.evaluate('Boolean(__menuAudit.open)'), 'native menu opens');
-};
-const choose = async (client, id) => {
-  await client.evaluate(`(()=>{const m=__menuAudit.menu,i=m.getMenuItemById(${JSON.stringify(id)});if(!i||!i.enabled)throw Error('Missing enabled command');i.click(i,__menuAudit.win,{});m.closePopup();return true;})()`);
-  await wait(150);
-};
-const check = async (name, fn) => {
-  try { await fn(); checks.push({ name, ok: true }); }
-  catch (error) { checks.push({ name, ok: false, error: error.stack ?? String(error) }); throw error; }
-  console.log(JSON.stringify(checks.at(-1)));
-};
+const check = async (name, fn) => { try {await fn();checks.push({name,ok:true});} catch(error){checks.push({name,ok:false,error:String(error)});throw error;} };
 const selection = () => main.evaluate('window.tud.pet.getSelection()');
 const connectBuiltin = async () => {
-  builtin = await probe.connect(p => /\/pet\.html(?:\?|$)/.test(p.url));
-  await until(() => builtin.evaluate('Boolean(document.querySelector("#pet-root svg"))'), 'builtin sprite');
+  builtin = await probe.connect(p=>p.url.includes('/pet.html'));
+  await until(()=>builtin.evaluate('Boolean(document.querySelector("#pet-root svg"))'),'builtin sprite');
 };
 const connectFish = async () => {
-  const target = await until(async () => (await (await fetch(`http://127.0.0.1:${fishPort}/json/list`)).json()).find(p => p.type === 'page' && p.url.includes('petIndex=')), 'helper renderer');
-  fish = await connectPage(target); clients.push(fish);
-  await until(() => fish.evaluate('Boolean(window.__dshPetDebug?.configOk && document.querySelector(".pet-hit"))'), 'helper config');
-  fishInspector = await connect(fishInspectorPort); await installMenuAudit(fishInspector);
+  fish = await probe.connect(p=>p.url.includes('/dsh/index.html'));
+  await until(()=>fish.evaluate('Boolean(window.__dshPetDebug?.configOk && document.querySelector(".pet-hit"))'),'fish sprite');
 };
 const selectedPreview = name => main.evaluate(`Boolean([...document.querySelectorAll('button[aria-pressed="true"]')].find(b=>b.textContent.includes(${JSON.stringify(name)})))`);
-const preview = async name => main.click(`[...document.querySelectorAll('button[aria-pressed]')].find(b=>b.textContent.trim()===${JSON.stringify(name)})`);
-const hold = async (kind, page, client, selector) => {
-  if (process.env.QUOTERN_PET_MENU_VISUAL !== '1') return;
-  await open(page, client, selector);
-  await client.evaluate(`__menuAudit.win.setTitle('Quotern menu verification ${kind}');true`);
-  await writeFile(path.join(output, 'visual-stage.json'), JSON.stringify({ kind, output, awaiting: `continue-${kind}` }));
-  console.log(`Visual stage: ${kind} (${output})`);
-  await until(async () => { try { await access(path.join(output, `continue-${kind}`)); return true; } catch { return false; } }, `visual ${kind}`, 6000);
-  await close(client);
+const preview = name => main.click(`[...document.querySelectorAll('button[aria-pressed]')].find(b=>b.textContent.trim()===${JSON.stringify(name)})`);
+const hold = async (kind,page,native,selector) => {
+  if(process.env.QUOTERN_PET_MENU_VISUAL!=='1') return;
+  await open(page,native,selector);
+  await writeFile(path.join(output,'visual-stage.json'),JSON.stringify({kind,output,awaiting:'continue-'+kind}));
+  await until(()=>access(path.join(output,'continue-'+kind)).then(()=>true,()=>false),'visual inspection',600000);
+  await close(native);
 };
-
 try {
-  main = await probe.connect(p => !p.url.includes('pet.html') && !p.url.includes('petIndex='));
-  await until(() => main.evaluate('Boolean(window.tud?.pet && document.querySelector("main"))'), 'Desktop app');
-  inspector = await connect(mainPort); await installMenuAudit(inspector);
-  await inspector.evaluate(`(()=>{const cp=process.getBuiltinModule('child_process'),original=cp.spawn;cp.spawn=function(exe,args,options){if(args?.includes('--quotern-dsh-pet-helper'))args=[...args,'--remote-debugging-port=${fishPort}','--inspect=127.0.0.1:${fishInspectorPort}'];return original.call(this,exe,args,options);};process.getBuiltinModule('module').syncBuiltinESMExports();return true;})()`);
+  main=await probe.connect(p=>p.url.includes('tauri.localhost'));
+  await until(()=>main.evaluate('Boolean(window.tud?.pet)'),'desktop bridge');
+  catalog=await main.evaluate('window.tud.pet.getState().then(s=>s.catalog)');
   await main.evaluate('window.tud.setLocalePreference("zh-CN")');
   await main.evaluate('window.tud.pet.select({kind:"builtin",character:"clawd"}).then(()=>window.tud.pet.setEnabled(true))');
   await connectBuiltin();
@@ -105,6 +90,7 @@ try {
     await open(builtin, inspector, 'document.querySelector("#pet-root svg")'); await choose(inspector, 'hide');
     await until(async () => !(await selection()).enabled, 'builtin hidden');
     await main.evaluate('window.tud.pet.setEnabled(true)'); assert.equal((await selection()).currentKind, 'builtin');
+    await connectBuiltin();
     assert.equal(await main.evaluate('window.tud.pet.getState().then(s=>s.settings.character)'), 'clawd');
   });
   await hold('builtin', builtin, inspector, 'document.querySelector("#pet-root svg")');
@@ -144,7 +130,7 @@ try {
   await check('renderer-leave-and-blur-do-not-dismiss-native-submenus', async () => {
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")');
     await fish.evaluate('window.dispatchEvent(new Event("mouseleave"));window.dispatchEvent(new Event("blur"));true');
-    assert.equal(await fishInspector.evaluate('__menuAudit.open'), true);
+    assert.ok((await tree(fishInspector)).length);
     assert.equal(await fish.evaluate('window.__dshPetDebug.menuOpen && window.__dshPetDebug.inputBusy'), true);
     await close(fishInspector);
     await until(() => fish.evaluate('!window.__dshPetDebug.inputBusy'), 'native menu cancellation after renderer leave');
@@ -163,7 +149,7 @@ try {
   for (const theme of ['dark', 'light']) await check(`native-theme:${theme}`, async () => {
     await main.evaluate(`window.tud.setThemeMode(${JSON.stringify(theme)});true`); await wait(100);
     await open(fish, fishInspector, 'document.querySelector(".pet-hit")');
-    assert.equal(await fishInspector.evaluate("process.getBuiltinModule('module').createRequire(process.execPath)('electron').nativeTheme.themeSource"), theme);
+    assert.equal(await main.evaluate("window.tud.getTheme().then(s=>s.resolved)"), theme);
     await close(fishInspector);
   });
   await hold('dsh', fish, fishInspector, 'document.querySelector(".pet-hit")');
@@ -184,7 +170,6 @@ try {
   console.error(error); process.exitCode = 1;
   if (!checks.some(c => !c.ok)) checks.push({ name: 'runner', ok: false, error: error.stack ?? String(error) });
 } finally {
-  for (const client of clients) client.close();
   await probe.close();
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, 'result.json'), JSON.stringify({ ok: checks.length > 0 && checks.every(c => c.ok), checks }, null, 2));

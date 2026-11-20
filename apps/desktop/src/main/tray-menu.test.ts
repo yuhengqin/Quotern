@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { MenuItem, MenuItemConstructorOptions } from 'electron';
-import { buildTrayMenuTemplate, type TrayMenuOptions } from './tray-menu.js';
+import { buildTrayMenuTemplate, type TrayMenuOptions, type TrayMenuItem } from './tray-menu.js';
 
 function fixture() {
   const state = { autostart: false, pet: true };
@@ -23,9 +22,9 @@ function fixture() {
   return { state, errors, actions, options };
 }
 
-async function click(item: MenuItemConstructorOptions, checked?: boolean) {
-  const nativeItem = { checked, enabled: true } as MenuItem;
-  await item.click?.(nativeItem, undefined, {} as Electron.KeyboardEvent);
+async function click(item: TrayMenuItem, checked = false) {
+  const nativeItem = { checked, enabled: true };
+  await item.click?.(nativeItem);
   return nativeItem;
 }
 

@@ -2,19 +2,17 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
-import { gunzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import yaml from 'js-yaml';
 import { assertMacosProof, macosReleasePolicy } from './macos-release-policy.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const readJson = async file => JSON.parse(await readFile(file, 'utf8'));
-const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
 
 export function releaseLayout(version, platform, macosMode = 'signed') {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`Invalid release version: ${version}`);
@@ -38,11 +36,20 @@ export async function hashFile(file, algorithm = 'sha512', encoding = 'base64') 
 }
 
 async function buildBlockmap(file, output) {
-  // Use the locked builder's blockmap implementation so updater chunking stays compatible.
-  const builder = createRequire(require.resolve('electron-builder/package.json'));
-  const lib = createRequire(builder.resolve('app-builder-lib/package.json'));
-  const { buildBlockMap } = lib('./out/targets/blockmap/blockmap.js');
-  return buildBlockMap(file, 'gzip', output);
+  // Older installs consume v2 block maps during their first upgrade to Tauri.
+  // Unmatched blocks are downloaded in full. The feed authenticates the final file hash.
+  const sizes = [], checksums = [];
+  const hash = createHash('sha512');
+  let size = 0;
+  for await (const block of createReadStream(file, { highWaterMark: 64 * 1024 })) {
+    sizes.push(block.length);
+    checksums.push(createHash('sha256').update(block).digest('base64'));
+    hash.update(block);
+    size += block.length;
+  }
+  const map = { version: '2', files: [{ name: 'file', offset: 0, checksums, sizes }] };
+  await writeFile(output, gzipSync(JSON.stringify(map)));
+  return { size, sha512: hash.digest('base64') };
 }
 
 async function requiredFile(dir, name) {
@@ -54,7 +61,32 @@ async function requiredFile(dir, name) {
 }
 
 function isMacUpdaterFile(name) {
-  return /-mac\.yml$/.test(name) || /^Quotern-.*-mac-.*\.(zip|dmg)\.blockmap$/.test(name);
+  return /-mac\.yml$/.test(name) || /^Quotern-.*-mac-.*(?:\.(zip|dmg)\.blockmap|\.app\.tar\.gz(?:\.sig)?)$/.test(name) || /^tauri-darwin-.*\.json$/.test(name);
+}
+
+// A stock Tauri updater verifies this signature before exposing downloaded bytes.
+// Only include feeds for builds that carry the matching public key.
+async function nativeFeeds({dir,platform,version,macosMode}, write) {
+  const mac = platform === 'mac';
+  if (mac && macosMode === 'adhoc') return [];
+  const archs = [['x64','x86_64'],['arm64','aarch64']];
+  const records = archs.map(([arch,cpu])=>{
+    const asset = mac ? `Quotern-${version}-mac-${arch}.app.tar.gz` : `Quotern-${version}-win-${arch}-setup.exe`;
+    return {asset, signature:asset+'.sig', feed:`tauri-${mac?'darwin':'windows'}-${cpu}.json`};
+  });
+  const existing = new Set(await readdir(dir));
+  if (!records.some(r=>existing.has(r.signature)||existing.has(r.feed)||mac&&existing.has(r.asset))) return [];
+  const result=[];
+  for(const {asset,signature,feed} of records){
+    await requiredFile(dir,asset);
+    const encoded=(await readFile(join(dir,signature),'utf8')).trim();
+    if(!/^[a-zA-Z0-9+/]+=*$/.test(encoded) || !Buffer.from(encoded,'base64').toString('utf8').startsWith('untrusted comment:')) throw Error('Invalid Tauri update signature: '+asset);
+    const expected={version,url:`https://github.com/yuhengqin/Quotern/releases/download/v${version}/${asset}`,signature:encoded};
+    if(write) await writeFile(join(dir,feed),JSON.stringify(expected,null,2)+'\n');
+    else if(!isDeepStrictEqual(await readJson(join(dir,feed)),expected)) throw Error('Signed updater feed does not match its archive: '+asset);
+    result.push(...(mac?[asset]:[]),signature,feed);
+  }
+  return result;
 }
 
 export async function refreshMetadata({ dir, platform, version, macosMode = 'signed' }) {
@@ -73,6 +105,7 @@ export async function refreshMetadata({ dir, platform, version, macosMode = 'sig
   }
   const metadata = yaml.dump({ version, files, path: files[0].url, sha512: files[0].sha512, releaseDate: new Date().toISOString() });
   for (const name of layout.metadataFiles) await writeFile(join(dir, name), metadata);
+  await nativeFeeds({dir,platform,version,macosMode}, true);
 }
 
 async function checkMacProof(dir, version, commit, downloads, mode) {
@@ -129,6 +162,7 @@ export async function verifyPlatform({ dir, platform, version, commit, macosMode
   }
   if (platform === 'mac') await checkMacProof(dir, version, commit, layout.downloads, macosMode);
   const names = [...layout.downloads, ...layout.updates.map(name => `${name}.blockmap`), ...layout.metadataFiles, ...(platform === 'mac' ? ['macos-verification.json'] : [])];
+  names.push(...await nativeFeeds({dir,platform,version,macosMode},false));
   const manifest = { schemaVersion: 1, platform, version, commit, ...(platform === 'mac' ? { macosMode, updatePolicy: macosReleasePolicy(macosMode).updatePolicy } : {}), files: await Promise.all(names.map(name => requiredFile(dir, name))) };
   if (writeManifest) await writeFile(join(dir, `${platform}-artifacts.json`), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;

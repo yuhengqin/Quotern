@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain } from './renderer-fixture.mjs';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -112,14 +112,13 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const httpOrigin = `http://127.0.0.1:${server.address().port}`;
   const languages = [
-    ['zh-CN', '渠道详情', '最近核实', '数据说明', '来源差异'],
-    ['en', 'Channel details', 'Last verified', 'About the data', 'source differences'],
-    ['ja', 'チャネル詳細', '最終確認', 'データについて', '出典差異'],
-    ['ko', '채널 상세 정보', '마지막 확인', '데이터 안내', '출처 차이'],
+    ['zh-CN', '渠道详情', '最近核实', '价格数据说明', '来源差异'],
+    ['en', 'Channel details', 'Last verified', 'About pricing data', 'source differences'],
+    ['ja', 'チャネル詳細', '最終確認', '料金データについて', '出典差異'],
+    ['ko', '채널 상세 정보', '마지막 확인', '가격 데이터 안내', '출처 차이'],
   ];
   for (const transport of ['ipc', 'http']) {
-    const window = new BrowserWindow({ width: 1120, height: 900, show: true, webPreferences: {
-      ...(transport === 'ipc' ? { preload: path.join(desktop, 'out/preload/index.js') } : {}),
+    const window = new BrowserWindow({ width: 1120, height: 900, show: true, desktop: transport === 'ipc', webPreferences: {
       contextIsolation: true, sandbox: true, backgroundThrottling: false,
     } });
     windows.push(window);
@@ -141,7 +140,7 @@ try {
       await client.key('Escape');
       await until(() => client.evaluate(`document.querySelectorAll('[role=dialog]').length === 0`), 'channel closes with Escape');
       await until(() => client.evaluate(`document.activeElement?.textContent.includes(${JSON.stringify(details)})`), 'channel focus restored');
-      await client.click(button(about));
+      await client.click(`document.querySelector('button[aria-label="${about}"]')`);
       await until(async () => (await body(client)).includes(differences) && (await body(client)).includes('LiteLLM'), 'sync summary');
       await client.key('Escape');
       checks.push(`${transport}-${language}-source-freshness-carried-summary-keyboard`);
@@ -162,14 +161,14 @@ try {
       const before = performance.now();
       const refresh = refreshHandle.refreshIfStale();
       await until(() => rebuilds > 0, 'changed-price history rebuild begins');
-      await client.click(button(languages.at(-1)[3]));
+      await client.click(`document.querySelector('button[aria-label="${languages.at(-1)[3]}"]')`);
       await refresh; await rebuildPromise;
       await client.key('Escape'); clearInterval(heartbeat); lag.disable();
       assert.equal(cache.getUsageSummary(rows, config.statsSince).totalCostUsd, 600);
       assert.ok(maxGap < 500, `main event loop heartbeat gap ${maxGap}ms`);
       const measurements = { rows: rows.length, days: 100, rebuilds, durationMs: performance.now() - before, maxHeartbeatGapMs: maxGap, eventLoopMaxMs: lag.max / 1e6 };
       await writeFile(path.join(output, 'responsiveness.json'), JSON.stringify(measurements, null, 2));
-      checks.push('electron-30000-rows-100-days-changed-prices-recomputed-during-real-popover-interaction');
+      checks.push('desktop-30000-rows-100-days-changed-prices-recomputed-during-real-popover-interaction');
     } else {
       futureRate = 3;
       await refreshHandle.refreshIfStale(); await rebuildPromise;

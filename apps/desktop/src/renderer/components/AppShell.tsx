@@ -29,7 +29,6 @@ import { ShareSnapshotProvider } from '../../../../../packages/dashboard/src/hoo
 import { AchievementProvider } from '../../../../../packages/dashboard/src/achievements/AchievementProvider';
 import { AchievementOverlays } from '../../../../../packages/dashboard/src/achievements/AchievementOverlays';
 import { updateAchievements } from '@/lib/api';
-import { TITLEBAR_HEIGHT } from '../../shared/window-chrome';
 import { parseSessionPageSearch } from '../../../../../packages/dashboard/src/lib/session-page';
 
 /** Root shell: filter chrome actions + nested route outlet. */
@@ -132,17 +131,18 @@ export function AppShell() {
         <AutoUpdateNotice toastQueue={toastQueue} />
       {/* Fixed title chrome: transparent until scrolled, then frosted; always draggable. */}
       <div
+        data-tauri-drag-region
         className={`desktop-window-drag-region fixed inset-x-0 top-0 z-50 flex items-stretch transition-[background-color,backdrop-filter] duration-200 ${
           hasScrolled
             ? 'bg-white/35 backdrop-blur-xl dark:bg-black/30'
             : 'bg-transparent'
         }`}
       >
-        <div className="min-w-0 flex-1" />
+        <div data-tauri-drag-region className="min-w-0 flex-1" />
         <WindowTitleControls />
       </div>
       {/* Reserve layout space matching the fixed title strip. */}
-      <div className="shrink-0" style={{ height: TITLEBAR_HEIGHT }} aria-hidden="true" />
+      <div className="shrink-0" style={{ height: 'var(--desktop-titlebar-height)' }} aria-hidden="true" />
       <div className="relative flex-1">
         {/* <aside
           className="fixed top-1/2 z-30 hidden -translate-x-full -translate-y-1/2 min-[1488px]:block"

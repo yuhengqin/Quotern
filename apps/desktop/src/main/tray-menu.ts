@@ -1,6 +1,13 @@
-import type { MenuItemConstructorOptions } from 'electron';
 import type { SupportedLocale } from 'quotern-i18n';
 import { nativeText } from './native-messages.js';
+
+export interface TrayMenuItem {
+  id?: string;
+  type?: 'checkbox' | 'separator';
+  label?: string;
+  checked?: boolean;
+  click?(item: {checked: boolean; enabled: boolean}): void | Promise<void>;
+}
 
 export interface TrayMenuOptions {
   getLocale(): SupportedLocale;
@@ -22,7 +29,7 @@ function checkbox(
   checked: boolean,
   save: (enabled: boolean) => Promise<unknown>,
   onError: TrayMenuOptions['onError'],
-): MenuItemConstructorOptions {
+): TrayMenuItem {
   return {
     id, label, type: 'checkbox', checked,
     click: async item => {
@@ -41,7 +48,7 @@ function checkbox(
 }
 
 /** Read preferences on every opening, including changes made in Settings. */
-export async function buildTrayMenuTemplate(options: TrayMenuOptions): Promise<MenuItemConstructorOptions[]> {
+export async function buildTrayMenuTemplate(options: TrayMenuOptions): Promise<TrayMenuItem[]> {
   const autostart = await options.getAutostart();
   const locale = options.getLocale();
   return [

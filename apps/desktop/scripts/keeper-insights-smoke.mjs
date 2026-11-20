@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain } from './renderer-fixture.mjs';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 let createLocalApiApp, BucketStore, applyRemotePricingOverlay, createAggregateCache, verifyDataBackup, DEFAULT_QUOTA_PREFERENCES;
@@ -101,7 +101,7 @@ async function main() {
   ipcMain.handle('tray-usage-mode:get', () => 'both');
   ipcMain.handle('quota:get', () => quota);
   ipcMain.handle('quota:refresh', () => quota);
-  window = new BrowserWindow({ width: 1100, height: 920, show: true, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+  window = new BrowserWindow({ width: 1100, height: 920, show: true, desktop: true, webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false } });
   window.webContents.session.on('will-download', (_event, item) => { const file = path.join(output, 'downloaded-backup.json'); item.setSavePath(file); item.once('done', (_event, state) => { if (state === 'completed') downloaded = file; }); });
   await route('/performance');
   let target;

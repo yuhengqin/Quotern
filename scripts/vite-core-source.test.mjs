@@ -47,9 +47,18 @@ async function fixture(t, desktop) {
   await writeFile(join(page, 'entry.ts'), "export * from './core-entries.ts';\n");
   await writeFile(join(page, 'core-entries.ts'), entry);
   await cp(join(source, relative, 'package.json'), join(frontend, 'package.json'));
-  const configName = desktop ? 'electron.vite.config.ts' : 'vite.config.ts';
+  const configName = 'vite.config.ts';
   await cp(join(source, relative, configName), join(frontend, configName));
-  for (const dependency of ['vite', '@vitejs/plugin-react', '@tanstack/router-plugin', '@tailwindcss/vite', '@fontsource-variable/jetbrains-mono', ...(desktop ? ['electron-vite'] : [])]) {
+  if (desktop) {
+    await mkdir(join(frontend, 'scripts'), { recursive: true });
+    await cp(join(source, relative, 'scripts/tauri-pet-assets.mjs'), join(frontend, 'scripts/tauri-pet-assets.mjs'));
+    const petWeb = join(frontend, 'out/tauri-pet-web');
+    await mkdir(petWeb, { recursive: true });
+    for (const file of ['index.html', 'shared-core.js', 'constants.js', 'sprite.js', 'events.js', 'controls.js', 'interactions.js', 'renderer.js', 'native-bridge.js']) {
+      await writeFile(join(petWeb, file), `fixture ${file}`);
+    }
+  }
+  for (const dependency of ['vite', '@vitejs/plugin-react', '@tanstack/router-plugin', '@tailwindcss/vite', '@fontsource-variable/jetbrains-mono']) {
     const target = join(frontend, 'node_modules', dependency);
     await mkdir(dirname(target), { recursive: true });
     await symlink(await realpath(join(source, relative, 'node_modules', dependency)), target, process.platform === 'win32' ? 'junction' : 'dir');
@@ -58,7 +67,7 @@ async function fixture(t, desktop) {
   async function config(command) {
     const loaded = await loadConfigFromFile({ command, mode: command === 'serve' ? 'development' : 'production' }, join(frontend, configName));
     assert.ok(loaded);
-    const frontendConfig = desktop ? loaded.config.renderer : loaded.config;
+    const frontendConfig = loaded.config;
     return {
       ...frontendConfig,
       // These fixtures exercise module resolution and have no application routes.

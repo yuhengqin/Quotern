@@ -1,3 +1,5 @@
+import { desktopBridgeReady } from './tauri-bridge';
+
 let previousState = null;
 
 function sameContent(left, right) {
@@ -51,6 +53,7 @@ function applyState(state) {
 }
 
 async function bootstrap() {
+  await desktopBridgeReady;
   if (window.tud?.pet) {
     window.tud.pet.onState(applyState);
     window.tud.pet.onEvent(({ type, detail }) => {

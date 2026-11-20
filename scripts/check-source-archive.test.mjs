@@ -44,6 +44,10 @@ test('working-tree validation includes new and modified source while rejecting o
     await mkdir(join(root, directory));
     await writeFile(join(root, directory, 'stale.js'), 'stale');
   }
+  for (const directory of ['apps/desktop/src-tauri/target', 'apps/desktop/src-tauri/binaries', 'apps/desktop/src-tauri/gen', 'apps/desktop/dist-test-renderer', 'packages/example/target']) {
+    await mkdir(join(root, directory), { recursive: true });
+    await writeFile(join(root, directory, 'fixture.txt'), 'fixture');
+  }
   const archive = join(temporary, 'source.tar');
   await makeSourceArchive({ root, archive, mode: 'working-tree' });
   const source = join(temporary, 'source');
@@ -52,6 +56,18 @@ test('working-tree validation includes new and modified source while rejecting o
   assert.equal(await readFile(join(source, 'new-script.mjs'), 'utf8'), 'console.log("new");');
   await assertCleanSource(source);
   for (const directory of ['node_modules', 'out', '.quotern-dev']) await assert.rejects(access(join(source, directory)));
+  for (const directory of ['apps/desktop/src-tauri/target', 'apps/desktop/src-tauri/binaries', 'apps/desktop/src-tauri/gen', 'apps/desktop/dist-test-renderer']) await assert.rejects(access(join(source, directory)));
+  assert.equal(await readFile(join(source, 'packages/example/target/fixture.txt'), 'utf8'), 'fixture');
+});
+
+test('initial source checks reject Tauri generated paths and dist-test variants', async t => {
+  const { temporary } = await repository(t);
+  const source = join(temporary, 'source');
+  for (const directory of ['apps/desktop/src-tauri/target', 'apps/desktop/src-tauri/binaries', 'apps/desktop/src-tauri/gen', 'apps/desktop/dist-test-renderer']) {
+    await mkdir(join(source, directory), { recursive: true });
+    await assert.rejects(assertCleanSource(source), /old build output/i);
+    await rm(join(source, directory), { recursive: true });
+  }
 });
 
 test('initial source checks reject tracked build output instead of treating it as a fresh build', async t => {

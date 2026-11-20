@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -24,7 +24,7 @@ async function fixture(t) {
   t.after(() => rm(app, { recursive: true, force: true }));
   await mkdir(path.join(app, 'scripts'));
   await cp(script, path.join(app, 'scripts/prepare-native-runtime.cjs'));
-  await cp(new URL('./after-pack.cjs', import.meta.url), path.join(app, 'scripts/after-pack.cjs'));
+  await cp(new URL('./build-sidecar.mjs', import.meta.url), path.join(app, 'scripts/build-sidecar.mjs'));
   await writeFile(path.join(app, 'package.json'), '{}');
   async function pkg(name, manifest = {}, files = {}) {
     const root = path.join(app, 'node_modules', name);
@@ -86,45 +86,45 @@ for (const missing of ['@img/sharp-darwin-arm64', '@img/sharp-libvips-darwin-arm
   });
 }
 
-test('beforePack stages x64 and arm64 independently without deleting the other target', async t => {
+test('prepareNativeRuntime stages x64 and arm64 independently without deleting the other target', async t => {
   const app = await fixture(t);
-  const beforePack = require(path.join(app, 'scripts/prepare-native-runtime.cjs'));
-  await Promise.all([1, 3].map(arch => beforePack({ packager: { info: { appDir: app } }, electronPlatformName: 'win32', arch })));
+  const { prepareNativeRuntime } = require(path.join(app, 'scripts/prepare-native-runtime.cjs'));
+  const prepare = arch => prepareNativeRuntime({ appDirectory: app, platform: 'win32', arch, outputDirectory: path.join(app, `out/native-runtime/win-${arch}`) });
+  await Promise.all(['x64', 'arm64'].map(prepare));
   assert.deepEqual(await packagesAt(path.join(app, 'out/native-runtime/win-x64')), [...common, '@img/sharp-win32-x64'].sort());
   assert.deepEqual(await packagesAt(path.join(app, 'out/native-runtime/win-arm64')), [...common, '@img/sharp-win32-arm64'].sort());
-  await beforePack({ packager: { info: { appDir: app } }, electronPlatformName: 'win32', arch: 1 });
+  await prepare('x64');
   assert.deepEqual(await packagesAt(path.join(app, 'out/native-runtime/win-arm64')), [...common, '@img/sharp-win32-arm64'].sort());
 });
 
-test('afterPack rejects a foreign architecture even when the correct native binding is present', async t => {
-  const app = await fixture(t);
-  const output = path.join(app, 'packaged/resources/app.asar.unpacked/node_modules');
-  await mkdir(output, { recursive: true });
-  for (const name of [...common, '@img/sharp-win32-x64', '@img/sharp-win32-arm64']) {
-    await cp(path.join(app, 'node_modules', name), path.join(output, name), { recursive: true });
-  }
-  const afterPack = require(path.join(app, 'scripts/after-pack.cjs'));
-  await assert.rejects(afterPack({ appOutDir: path.join(app, 'packaged'), electronPlatformName: 'win32', arch: 1 }), /sharp-win32-arm64/);
-});
-
-test('the builder unpack filter matches staged source files before their node_modules mapping', async t => {
-  const app = await fixture(t);
-  const beforePack = require(path.join(app, 'scripts/prepare-native-runtime.cjs'));
-  const builderRequire = createRequire(require.resolve('electron-builder'));
-  const libraryRequire = createRequire(builderRequire.resolve('app-builder-lib'));
-  const { getFileMatchers } = libraryRequire('./fileMatcher');
-  const { load } = createRequire(new URL('../../../package.json', import.meta.url))('js-yaml');
-  const config = load(await readFile(new URL('../electron-builder.yml', import.meta.url), 'utf8'));
-  for (const [platform, arch, os, selected] of targets.filter(([platform]) => platform !== 'linux')) {
-    await beforePack({ packager: { info: { appDir: app } }, electronPlatformName: platform, arch: arch === 'x64' ? 1 : 3 });
-    const [matcher] = getFileMatchers(config, 'asarUnpack', path.join(app, 'resources/app'), {
-      defaultSrc: app, globalOutDir: path.join(app, 'release'), customBuildOptions: {},
-      macroExpander: value => value.replaceAll('${os}', os).replaceAll('${arch}', arch),
+for (const [platform, arch, , selected] of targets.filter(([platform]) => platform !== 'linux')) {
+  test(`build-sidecar stages ${platform}-${arch} for Node without an ABI rebuild`, async t => {
+    const app = await fixture(t);
+    const esbuild = path.join(app, 'node_modules/esbuild');
+    await mkdir(path.join(app, 'resources'), { recursive: true });
+    await writeFile(path.join(app, 'resources/icon.png'), 'fixture notification icon');
+    await writeFile(path.join(app, 'resources/node-LICENSE.txt'), 'fixture Node license');
+    await writeFile(path.join(app, 'THIRD_PARTY_NOTICES.md'), 'fixture notices');
+    await mkdir(esbuild, { recursive: true });
+    await writeFile(path.join(esbuild, 'package.json'), '{"name":"esbuild","type":"module","exports":"./index.mjs"}');
+    await writeFile(path.join(esbuild, 'index.mjs'), `import { writeFile } from 'node:fs/promises';
+      export async function build(options) { await writeFile(process.env.FIXTURE_BUILD_OPTIONS, JSON.stringify(options)); }`);
+    const preload = path.join(app, 'reject-child-process.cjs');
+    await writeFile(preload, `const child = require('node:child_process');
+      for (const name of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync', 'fork'])
+        child[name] = () => { throw new Error('Unexpected ABI rebuild or child process'); };
+      require('node:module').syncBuiltinESMExports();`);
+    const optionsFile = path.join(app, 'build-options.json');
+    await run(process.execPath, ['--require', preload, path.join(app, 'scripts/build-sidecar.mjs')], {
+      env: { ...process.env, TAURI_ENV_PLATFORM: platform === 'win32' ? 'windows' : 'macos', QUOTERN_TARGET_ARCH: arch, FIXTURE_BUILD_OPTIONS: optionsFile },
     });
-    const unpack = matcher.createFilter();
-    for (const relative of ['sharp/package.json', `${selected[0]}/lib/sharp.node`]) {
-      const source = path.join(app, `out/native-runtime/${os}-${arch}`, relative);
-      assert.equal(unpack(source, await stat(source)), true, `builder must unpack the original staged source: ${relative}`);
-    }
-  }
-});
+    const output = path.join(app, 'out/sidecar/node_modules');
+    assert.deepEqual(await packagesAt(output), [...common, ...selected].sort());
+    assert.equal(await readFile(path.join(output, selected[0], 'lib/sharp.node'), 'utf8'), 'native binding');
+    const options = JSON.parse(await readFile(optionsFile, 'utf8'));
+    assert.equal(options.platform, 'node');
+    assert.equal(options.target, 'node24');
+    assert.deepEqual(options.external, ['sharp']);
+    assert.equal(options.outdir, path.join(app, 'out/sidecar'));
+  });
+}

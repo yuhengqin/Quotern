@@ -281,7 +281,7 @@ quotern usage models --source codex,claude --days 30 --json --compact
 
 통계 데이터는 `~/.quotern/`에 저장되며 토큰 수치, 소스, 모델 및 프로젝트 소속 정보 등을 포함합니다. 파서는 Agent 로그나 데이터베이스를 읽어 통계 버킷에 저장합니다. 설정에는 이 컴퓨터의 장치 식별자와 기타 실행 정보도 저장됩니다.
 
-일부 소스는 청구 정보나 구독 할당량을 가져오기 위해 Agent 로그인 상태를 읽어야 합니다. 가격 카탈로그 및 데스크톱 업데이트도 각각의 서비스에 접속합니다. 구독 자격 증명은 메인 프로세스에서 처리하고, UI에는 표시용 스냅샷을 전달합니다. 데이터 흐름과 파일 용도는 [아키텍처 참고사항](./docs/architecture-notes.md)을 참조하세요.
+데스크톱 할당량 카드에서 현재 세션에 한해 공식 클라이언트나 API 연결을 승인하거나 제공자의 사용량 페이지를 열 수 있습니다. CLI는 대시보드를 제공하는 컴퓨터의 설정을 사용합니다. 가격 카탈로그와 데스크톱 업데이트는 각 서비스에 접속합니다. [아키텍처 참고사항](./docs/architecture-notes.md)
 
 사용량 데이터는 이 컴퓨터에서 파싱, 집계 및 조회되며 데스크톱 클라이언트와 CLI 대시보드는 같은 로컬 통계를 읽습니다. 처음 사용할 때 Quotern 계정을 만들 필요가 없습니다. 공급자 할당량 등의 온라인 수치를 읽으려면 해당 서비스에 접속할 수 있어야 합니다.
 
@@ -295,32 +295,13 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 로컬 개발은 `corepack pnpm dev:desktop` 또는 `corepack pnpm dev:cli`로 시작합니다. 시작 전에 [worktree 개발 규칙](./docs/worktree-development.md)을 읽고, 실제 대시보드 주소는 실행 출력에서 확인하세요.
 
-<details>
-<summary>Electron 다운로드가 느릴 때 미러 설정</summary>
-
-Electron 바이너리는 기본적으로 GitHub Releases에서 다운로드하므로 중국 내 네트워크에서는 시간 초과가 발생할 수 있습니다. 설치 전에 미러 환경 변수를 설정할 수 있습니다.
-
-```bash
-# Git Bash / macOS / Linux
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-```powershell
-# PowerShell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-</details>
+Desktop은 Tauri 2와 내장 Node 런타임을 사용합니다. 소스에서 빌드하려면 Rust와 대상 플랫폼의 Tauri 빌드 의존성이 필요합니다.
 
 ## 🤝 기여 안내
 
 소스 코드는 Desktop / CLI / 브라우저 대시보드 단위로 협업합니다. 브랜치 규칙 및 로컬 실행 방법은 [Contributing Guide](./CONTRIBUTING.md)를 참조하세요.
 
-- [Desktop](./CONTRIBUTING.md#desktop) — Electron 데스크톱 클라이언트
+- [Desktop](./CONTRIBUTING.md#desktop) — Tauri 데스크톱 클라이언트
 - [CLI](./CONTRIBUTING.md#cli) — 명령줄 및 로컬 대시보드
 - [Dashboard](./CONTRIBUTING.md#dashboard-开发) — CLI 브라우저 대시보드
 

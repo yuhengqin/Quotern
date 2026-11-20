@@ -2,9 +2,11 @@
 
 Date: 2026-09-07. Scope: PR #84 / issue #83 review changes. The recorded results below belong to that revision and its presentation follow-ups; they are not a test report for the current source tree.
 
-## Expected behavior
+The current desktop uses Tauri 2 and a bundled Node runtime. Its updater checks and downloads signed updates when enabled; installation is a separate action. Debug builds, Windows portable builds, and macOS ad-hoc builds use the manual update path. See [RELEASE.md](../../../RELEASE.md#desktop-统一构建与验收) for current release requirements. The historical Electron checks and native results below do not establish Tauri update behavior or platform acceptance.
 
-- A newer release downloads automatically for installed builds (`autoDownload = true`). Current Windows portable builds check for updates but require a manual portable-package download.
+## Historical expected behavior
+
+- A newer release downloaded automatically for installed builds (`autoDownload = true`); Windows portable builds required a manual portable-package download.
 - Download completion automatically attempts installation and restart.
 - An error or the 30-second exit watchdog restores runtime, heartbeat, window
   close behavior, and the downloaded update's manual restart action.
@@ -43,8 +45,8 @@ git diff --check
 
 The checks passed in the recorded 2026-09-07 run. That run contained 25 tests:
 13 shared UI-state tests and 12 tests of the actual main updater module with
-mocked Electron/updater boundaries. Rerun the commands above for the current
-tree; the test count changes as coverage grows. The recorded tests cover startup
+mocked Electron/updater boundaries. These commands do not recreate the old
+updater tests in the current tree. The recorded tests cover startup
 configuration, automatic install, duplicate requests/events, refusal to install
 an undownloaded release, preparation/native errors, timeout, late completion,
 recovery serialization/failure, download rejection, disposal, and the
@@ -108,7 +110,7 @@ follow-ups did not rerun native installation; updater control flow was unchanged
   operation inside runtime shutdown or startup.
 - Windows/Linux native installation, production notarization/signing identities,
   GitHub release access, and multiple competing production processes still need
-  their own release validation. The BaseUpdater latch currently has automated
+  their own release validation. The BaseUpdater latch had automated
   boundary coverage, not a native Windows installation run.
 - Existing historical lab runs before this review revision are not counted as
   current validation. The low package preserves isolation instrumentation;

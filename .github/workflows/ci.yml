@@ -48,8 +48,9 @@ jobs:
           # 需要 >= 22.6；仓库 engines 声明的 >=20 是给已发布产物的运行时用的。
           node-version: 22
 
-      # 不要设 ELECTRON_SKIP_BINARY_DOWNLOAD：electron/install.js 只判断变量存不存在
-      # （连 =0 都算跳过），而 apps/desktop 的测试要 require('electron') 拿到真实路径。
+      - run: rustup update stable --no-self-update
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
       - name: 安装依赖
         run: corepack pnpm install --frozen-lockfile --prefer-offline
 
@@ -65,7 +66,8 @@ jobs:
       - name: 测试 Vite 开发时 Core 重建
         run: corepack pnpm test:vite-core-source
 
-      # electron-vite 走 esbuild，只剥类型不做类型检查，桌面端的 tsc 要单独跑。
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      # Vite 和 esbuild 单独进行类型检查。
       - name: 类型检查（desktop）
         run: corepack pnpm --filter quotern-desktop typecheck
 

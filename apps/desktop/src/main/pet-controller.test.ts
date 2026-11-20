@@ -1,43 +1,47 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import test from 'node:test';
-import { transformSync } from 'esbuild';
-import { PetCatalogError } from './pet-catalog-errors.js';
-import { PetCatalog } from './pet-catalog.js';
-import { BUILTIN_PETS } from './pet-core.js';
-import { PET_CATALOG_CHANNEL, PET_GET_CHANNEL, PET_STATE_CHANNEL, type PetCatalogRequest, type PetState } from '../shared/pet.js';
+import test, { after } from 'node:test';
+import { build } from 'esbuild';
+import type { desktopPets as desktopPetsType } from '../sidecar/pets.js';
+import type { PetCatalogError as PetCatalogErrorType } from './pet-catalog-errors.js';
+import type { PetCatalogStore as PetCatalogStoreType } from './pet-catalog-store.js';
+import type { BUILTIN_PETS as BUILTIN_PETS_TYPE } from './pet-core.js';
+import type { PetState } from '../shared/pet.js';
+import type { QuotaState } from '../shared/quota.js';
 
-test('catalog IPC persists a sanitized failure before returning its localized message', { skip: process.platform !== 'win32' }, async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-ipc-'));
-  const handlers = new Map<string, (_event: unknown, request: PetCatalogRequest) => Promise<unknown>>();
-  const noop = () => {};
-  const { appendJsonLog } = await import('quotern-core');
-  const source = path.resolve('src/main/pet-controller.ts');
-  const code = transformSync(readFileSync(source, 'utf8'), { loader: 'ts', format: 'cjs', target: 'node22', define: { 'import.meta.url': JSON.stringify(pathToFileURL(source).href) } }).code;
-  const module = { exports: {} };
-  new Function('require', 'module', 'exports', code)((id: string) => {
-    if (id === 'electron') return { app: { getPath: () => root }, BrowserWindow: { getAllWindows: () => [] }, ipcMain: { removeHandler: noop, handle: (channel: string, handler: typeof handlers extends Map<string, infer H> ? H : never) => handlers.set(channel, handler), removeAllListeners: noop, on: noop }, screen: { on: noop, removeListener: noop } };
-    if (id === 'quotern-core') return { appendJsonLog, resolveDataDir: () => root, logsDir: (dir: string) => path.join(dir, 'logs') };
-    if (id === 'quotern-core/timezone') return { localDateNow: () => '2026-10-22' };
-    if (id === './DesktopWindow') return {};
-    if (id === './local-runtime') return { isLocalRuntimeSyncing: () => false, onLocalRuntimeSynced: () => noop, onLocalRuntimeSyncActivity: () => noop, localApiRequest: async () => ({ status: 200, body: { success: true, data: {} } }) };
-    if (id === './pet-catalog') return { PetCatalog: class { list = async () => []; registerAssetProtocol = noop; unregisterAssetProtocol = noop; } };
-    if (id === './pet-pointer') return { createPetCursorSampler: () => ({}) };
-    if (id.startsWith('./') || id.startsWith('../')) return require(`${id}.js`);
-    return require(id);
-  }, module, module.exports);
-  const { PetController } = module.exports as { PetController: new (options: unknown) => { initialize(): Promise<void>; dispose(): void; handleCatalog(request: PetCatalogRequest): Promise<unknown> } };
-  const controller = new PetController({ getDark: () => false, getLocale: () => 'en' });
+const quota = () => ({ providers: [] } as unknown as QuotaState);
+let fixtureRoot: string | undefined;
+const fixture = (async () => {
+  fixtureRoot = await mkdtemp(path.resolve('dist-test/sidecar/pet-catalog-fixture-'));
+  const { prepareDshPet } = await import(pathToFileURL(path.resolve('scripts/prepare-dsh-pet.mjs')).href) as { prepareDshPet(options: { outputRoot: string }): Promise<void> };
+  await prepareDshPet({ outputRoot: path.join(fixtureRoot, 'dsh-pet') });
+  const fixturePath = path.join(fixtureRoot, 'catalog.mjs');
+  const result = await build({
+    stdin: { contents: `export { desktopPets } from './src/sidecar/pets';\nexport { PetCatalogStore } from './src/main/pet-catalog-store';\nexport { PetCatalogError } from './src/main/pet-catalog-errors';\nexport { BUILTIN_PETS } from './src/main/pet-core';`, resolveDir: process.cwd(), loader: 'ts' },
+    bundle: true, platform: 'node', format: 'esm', packages: 'external', write: false,
+    define: { __dirname: JSON.stringify(fixtureRoot) },
+    banner: { js: `import { fileURLToPath as __fixtureFileURLToPath } from 'node:url'; const __filename = __fixtureFileURLToPath(import.meta.url);` },
+  });
+  await writeFile(fixturePath, result.outputFiles[0]!.contents);
+  return import(pathToFileURL(fixturePath).href) as Promise<{
+    desktopPets: typeof desktopPetsType; PetCatalogStore: typeof PetCatalogStoreType;
+    PetCatalogError: typeof PetCatalogErrorType; BUILTIN_PETS: typeof BUILTIN_PETS_TYPE;
+  }>;
+})();
+after(async () => { if (fixtureRoot) await rm(fixtureRoot, { recursive: true, force: true }); });
+
+test('catalog requests persist a sanitized failure before returning its localized message', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-request-'));
+  const { desktopPets, PetCatalogStore, PetCatalogError } = await fixture;
+  const catalog = new PetCatalogStore(path.join(root, 'pets'));
+  const pets = await desktopPets(root, async () => undefined, () => {}, quota, async () => {}, () => 'en', undefined, catalog, root);
   try {
-    await controller.initialize();
-    controller.handleCatalog = async () => { throw new PetCatalogError('PET_DOWNLOAD_NETWORK', 'download', 'Bearer secret-marker', { cause: { code: 'ENOTFOUND' }, petId: 'clawd' }); };
-    const handler = handlers.get(PET_CATALOG_CHANNEL);
-    assert.ok(handler);
-    const result = await handler(null, { action: 'install-url', url: 'https://codex-pets.net/#/pets/clawd?token=secret-marker' }) as { ok: boolean; error: string };
+    catalog.installFromUrl = async () => { throw new PetCatalogError('PET_DOWNLOAD_NETWORK', 'download', 'Bearer secret-marker', { cause: { code: 'ENOTFOUND' }, petId: 'clawd' }); };
+    const result = await pets.request('pet:catalog', [{ action: 'install-url', url: 'https://codex-pets.net/#/pets/clawd?token=secret-marker' }]) as { ok: boolean; error: string };
     assert.equal(result.ok, false);
     assert.match(result.error, /system proxy or network/);
     const log = await readFile(path.join(root, 'logs', 'pet-import.log'), 'utf8');
@@ -46,19 +50,20 @@ test('catalog IPC persists a sanitized failure before returning its localized me
     assert.equal(entry.phase, 'download');
     assert.equal(entry.diagnosticCode, 'ENOTFOUND');
     assert.doesNotMatch(log, /secret-marker|Bearer|https:/);
-    controller.handleCatalog = async () => ({ canceled: true });
-    assert.deepEqual(await handler(null, { action: 'import-zip' }), { ok: true, data: { canceled: true } });
+    assert.deepEqual(await pets.request('pet:catalog', [{ action: 'import-zip' }]), { ok: true, data: { canceled: true } });
     assert.equal(await readFile(path.join(root, 'logs', 'pet-import.log'), 'utf8'), log);
-  } finally { controller.dispose(); await rm(root, { recursive: true, force: true }); }
+  } finally {
+    await pets.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 for (const selected of [false, true]) {
-  test(`catalog IPC removes a ${selected ? 'selected' : 'non-selected'} pet despite state broadcasts during the directory read`, { skip: process.platform !== 'win32' }, async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-remove-ipc-'));
-    const handlers = new Map<string, (_event: unknown, request?: PetCatalogRequest) => Promise<unknown>>();
+  test(`catalog requests remove a ${selected ? 'selected' : 'non-selected'} pet despite state broadcasts during the directory read`, async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-remove-request-'));
+    const { desktopPets, PetCatalogStore, BUILTIN_PETS } = await fixture;
     const broadcasts: PetState[] = [];
-    const noop = () => {};
-    const catalog = new PetCatalog(path.join(root, 'pets'));
+    const catalog = new PetCatalogStore(path.join(root, 'pets'));
     const atlas = readFileSync('src/main/fixtures/pet-atlas-v1.webp');
     const imported = await catalog.installBuffers(Buffer.from(JSON.stringify({ id: 'clawd', displayName: 'Imported Clawd', description: 'Test', spritesheetPath: 'spritesheet.webp' })), atlas);
     const list = catalog.list.bind(catalog);
@@ -66,46 +71,30 @@ for (const selected of [false, true]) {
     let releaseList!: () => void;
     const listStarted = new Promise<void>(resolve => { notifyListStarted = resolve; });
     const continueList = new Promise<void>(resolve => { releaseList = resolve; });
-    catalog.registerAssetProtocol = noop;
-    catalog.unregisterAssetProtocol = noop;
-    const source = path.resolve('src/main/pet-controller.ts');
-    const code = transformSync(readFileSync(source, 'utf8'), { loader: 'ts', format: 'cjs', target: 'node22', define: { 'import.meta.url': JSON.stringify(pathToFileURL(source).href) } }).code;
-    const module = { exports: {} };
-    new Function('require', 'module', 'exports', code)((id: string) => {
-      if (id === 'electron') return { app: { getPath: () => root }, BrowserWindow: { getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: (channel: string, state: PetState) => { if (channel === PET_STATE_CHANNEL) broadcasts.push(structuredClone(state)); } } }] }, ipcMain: { removeHandler: noop, handle: (channel: string, handler: typeof handlers extends Map<string, infer H> ? H : never) => handlers.set(channel, handler), removeAllListeners: noop, on: noop }, screen: { on: noop, removeListener: noop } };
-      if (id === 'quotern-core') return { appendJsonLog: async () => {}, resolveDataDir: () => root, logsDir: (dir: string) => path.join(dir, 'logs') };
-      if (id === 'quotern-core/timezone') return { localDateNow: () => '2026-10-22' };
-      if (id === './DesktopWindow') return {};
-      if (id === './local-runtime') return { isLocalRuntimeSyncing: () => false, onLocalRuntimeSynced: () => noop, onLocalRuntimeSyncActivity: () => noop, localApiRequest: async () => ({ status: 200, body: { success: true, data: {} } }) };
-      if (id === './pet-catalog') return { PetCatalog: class { constructor() { return catalog; } } };
-      if (id === './pet-pointer') return { createPetCursorSampler: () => ({}) };
-      if (id.startsWith('./') || id.startsWith('../')) return require(`${id}.js`);
-      return require(id);
-    }, module, module.exports);
-    const { PetController } = module.exports as { PetController: new (options: unknown) => { initialize(): Promise<void>; dispose(): void; refreshSelection(): void; selectCharacter(id: string): Promise<PetState>; getState(): PetState } };
-    const controller = new PetController({ getDark: () => false, getLocale: () => 'en' });
+    const pets = await desktopPets(root, async () => undefined, (channel, state) => {
+      if (channel === 'pet:state') broadcasts.push(structuredClone(state as PetState));
+    }, quota, async () => {}, () => 'en', undefined, catalog, root);
     try {
-      await controller.initialize();
-      if (selected) await controller.selectCharacter(imported.id);
-      assert.ok(controller.getState().catalog.some(pet => pet.id === imported.id));
+      if (selected) await pets.request('pet:set', [{ character: imported.id }]);
+      assert.ok((await pets.request('pet:get', []) as PetState).catalog.some(pet => pet.id === imported.id));
       catalog.list = async () => {
         const entries = await list();
         notifyListStarted();
         await continueList;
         return entries;
       };
-      const remove = handlers.get(PET_CATALOG_CHANNEL)!(null, { action: 'remove', id: imported.id });
+      const remove = pets.request('pet:catalog', [{ action: 'remove', id: imported.id }]);
       await listStarted;
-      controller.refreshSelection();
+      await pets.request('pet:hover', [true]);
       releaseList();
       const result = await remove as { ok: boolean; data: { catalog: { id: string }[] } };
       assert.equal(result.ok, true);
       assert.ok(!result.data.catalog.some(pet => pet.id === imported.id));
-      const state = await handlers.get(PET_GET_CHANNEL)!(null) as PetState;
+      const state = await pets.request('pet:get', []) as PetState;
       assert.deepEqual(state.catalog.map(pet => pet.id), BUILTIN_PETS.map(pet => pet.id));
       assert.equal(state.settings.character, 'clawd');
       assert.deepEqual(broadcasts.at(-1)?.catalog.map(pet => pet.id), BUILTIN_PETS.map(pet => pet.id));
       if (selected) assert.equal(JSON.parse(await readFile(path.join(root, 'pet-settings.json'), 'utf8')).character, 'clawd');
-    } finally { releaseList(); controller.dispose(); await rm(root, { recursive: true, force: true }); }
+    } finally { releaseList(); await pets.close(); await rm(root, { recursive: true, force: true }); }
   });
 }

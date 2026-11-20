@@ -1,11 +1,11 @@
-// Synthetic data only; independent HTTP, IPC and native tray windows owned by this process.
+// Synthetic data and controlled browser windows validate the renderer; native windows have a separate smoke test.
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain, fixtureImage as nativeImage } from './renderer-fixture.mjs';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 import { exerciseQuotaLayout } from './quota-layout-checks.mjs';
 import { registerAppearanceFixture } from './appearance-fixture.mjs';
@@ -20,6 +20,7 @@ process.env.QUOTERN_DATA_DIR = path.join(output, 'data');
 process.env.QUOTERN_CONFIG_HOME = path.join(output, 'config-home');
 process.env.QUOTERN_DEV_ISOLATED = '1';
 const debugPort = await unusedPort();
+app.commandLine.appendSwitch('lang', 'zh-CN');
 app.commandLine.appendSwitch('remote-debugging-port', String(debugPort));
 app.on('window-all-closed', () => {});
 const windows = [], clients = [], checks = [];
@@ -103,7 +104,7 @@ async function main() {
     copiedImageSize = image.getSize();
     return !image.isEmpty();
   });
-  trayController = await import('../out/main/island-tray-test.mjs');
+  trayController = await import('./renderer-fixture-windows.mjs');
   const trayOptions = { getLocale: () => locale, showMainWindow: () => mainWindow?.show(), getMainWindow: () => mainWindow, openSettings: () => {}, getAutostart: async () => false, setAutostart: async () => {} };
   await writeFile(path.join(output, 'profile/tray-panel.json'), JSON.stringify({ pinned: true, x: -800.3, y: 25.4, mode: 'full' }));
   trayController.createTrayPopover(trayOptions);
@@ -275,8 +276,12 @@ async function main() {
     await client.call('Emulation.clearDeviceMetricsOverride'); await closeDetails(client);
     checks.push(mode + '-quota-focus-service-selection-outage-stale-details-full-analysis-and-detailed-share-download-image-copy');
   }
-  const browser = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
-  browser.webContents.session.on('will-download', (_event, item) => { item.setSavePath(downloadPath); item.once('done', (_event, state) => { if (state === 'completed') downloaded++; }); });
+  const browser = new BrowserWindow({ width: 1120, height: 1000, show: true }); windows.push(browser);
+  const captureDownload = (_event, item) => {
+    item.setSavePath(downloadPath);
+    item.once('done', (_event, state) => { if (state === 'completed') downloaded++; });
+  };
+  browser.webContents.session.on('will-download', captureDownload);
   await browser.loadURL(`http://127.0.0.1:${server.address().port}/dashboard`);
   const layoutOnly = process.argv.includes('--quota-layout-only');
   const runLayout = async (window, mode) => { await exerciseQuotaLayout({ client: await connect(window), window, mode, quota, publish, failNextSave: () => { failPreference = true; }, until, shot }); checks.push(mode + '-quota-layout-draft-cancel-failure-retry-pointer-touch-keyboard-and-details'); };
@@ -287,7 +292,8 @@ async function main() {
   }
   browser.destroy();
   quota.preferences.preferredWindows = {};
-  mainWindow = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(mainWindow);
+  mainWindow = new BrowserWindow({ width: 1120, height: 1000, show: true, desktop: true }); windows.push(mainWindow);
+  mainWindow.webContents.session.on('will-download', captureDownload);
   await mainWindow.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/dashboard' });
   if (layoutOnly) {
     await runLayout(mainWindow, 'desktop');
@@ -377,4 +383,4 @@ void app.whenReady().then(main).catch(async error => {
   await writeFile(path.join(output, 'window-events.json'), JSON.stringify({ events: windowEvents, windows: BrowserWindow.getAllWindows().map(window => ({ id: window.id, visible: window.isVisible(), focused: window.isFocused(), url: window.webContents.getURL() })) }, null, 2));
   for (let n = 0; n < clients.length; n++) try { if (clients[n].window.isDestroyed()) continue; await writeFile(path.join(output, `failure-${n}.txt`), await body(clients[n])); await writeFile(path.join(output, `focus-${n}.json`), JSON.stringify(await clients[n].evaluate('({focused:document.hasFocus(), active:document.activeElement?.tagName, label:document.activeElement?.getAttribute("aria-label"), target:document.activeElement?.dataset.quotaWindow})'))); await shot(clients[n], `failure-${n}`); } catch {}
   process.exitCode = 1;
-}).finally(async () => { for (const client of clients) client.close(); trayController?.disposeTrayPopover(); for (const window of windows) if (!window.isDestroyed()) window.destroy(); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } clearTimeout(deadline); app.exit(process.exitCode ?? 0); });
+}).finally(async () => { for (const client of clients) client.close(); trayController?.destroyTrayPopover(); for (const window of windows) if (!window.isDestroyed()) window.destroy(); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } clearTimeout(deadline); app.exit(process.exitCode ?? 0); });

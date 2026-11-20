@@ -281,7 +281,7 @@ quotern usage models --source codex,claude --days 30 --json --compact
 
 集計データは `~/.quotern/` に保存され、Token 数、ソース、モデル、プロジェクトへの帰属などが含まれます。パーサーは Agent のログまたはデータベースを読み取り、集計バケットを保存します。設定には、このマシンのデバイス ID などの実行情報も保存されます。
 
-一部のソースでは、請求額やサブスクリプション枠を取得するために Agent のログイン状態を読み取る必要があります。価格カタログとデスクトップ更新でも、それぞれのサービスにアクセスします。サブスクリプションの認証情報はメインプロセスが扱い、画面には表示用スナップショットが渡されます。データの流れと各ファイルの用途は[アーキテクチャ上の注意事項](./docs/architecture-notes.md)を参照してください。
+デスクトップの利用枠カードでは、現在のセッションに限り、公式クライアントや API への接続を許可できます。提供元の利用状況ページを開くこともできます。CLI はダッシュボードを提供する端末の設定を利用します。価格情報とアプリの更新は各配信元に問い合わせます。[アーキテクチャの説明](./docs/architecture-notes.md)
 
 利用状況データの解析、集計、照会はローカルで行われます。デスクトップアプリと CLI パネルは同じローカル集計データを読み取ります。初回利用時に Quotern アカウントを登録する必要はありません。プロバイダーの利用枠などオンラインで取得する値は、該当サービスにアクセスできる必要があります。
 
@@ -295,32 +295,13 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 ローカル開発では `corepack pnpm dev:desktop` または `corepack pnpm dev:cli` を使用します。起動前に [worktree 開発規範](./docs/worktree-development.md)を読み、実際のパネル URL は起動時の出力で確認してください。
 
-<details>
-<summary>Electron のダウンロードが遅い場合にミラーを設定する</summary>
-
-Electron バイナリはデフォルトで GitHub Releases からダウンロードされます。中国国内のネットワークではタイムアウトする場合があります。インストール前に、ミラー用の環境変数を設定できます。
-
-```bash
-# Git Bash / macOS / Linux
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-```powershell
-# PowerShell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-</details>
+Desktop は Tauri 2 と同梱の Node ランタイムを使用します。ソースからのビルドには Rust と対象プラットフォームの Tauri ビルド依存関係が必要です。
 
 ## 🤝 貢献ガイド
 
 ソースコードは Desktop / CLI / ブラウザパネルで協力して開発しています。ブランチの規則とローカルでの起動方法は [Contributing Guide](./CONTRIBUTING.md) を参照してください。
 
-- [Desktop](./CONTRIBUTING.md#desktop) — Electron デスクトップアプリ
+- [Desktop](./CONTRIBUTING.md#desktop) — Tauri デスクトップアプリ
 - [CLI](./CONTRIBUTING.md#cli) — コマンドラインとローカルパネル
 - [Dashboard](./CONTRIBUTING.md#dashboard-开发) — CLI のブラウザパネル
 

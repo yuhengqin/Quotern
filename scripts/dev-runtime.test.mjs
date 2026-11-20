@@ -168,16 +168,17 @@ async function startRenderer(t, host) {
   await mkdir(join(root, 'scripts'));
   await cp(join(source, 'scripts/vite-core-source.mjs'), join(root, 'scripts/vite-core-source.mjs'));
   await mkdir(join(desktop, 'src/renderer/routes'), { recursive: true });
-  await cp(join(source, 'apps/desktop/electron.vite.config.ts'), join(desktop, 'electron.vite.config.ts'));
+  await mkdir(join(desktop, 'scripts'));
+  await cp(join(source, 'apps/desktop/scripts/tauri-pet-assets.mjs'), join(desktop, 'scripts/tauri-pet-assets.mjs'));
+  await cp(join(source, 'apps/desktop/vite.config.ts'), join(desktop, 'vite.config.ts'));
   await writeFile(join(desktop, 'package.json'), '{"name":"fixture-renderer","version":"0.0.0","type":"module"}');
   await writeFile(join(desktop, 'src/renderer/index.html'), '<!doctype html><html><body>isolated renderer fixture</body></html>');
   await writeFile(join(desktop, 'src/renderer/routes/__root.tsx'), 'import { createRootRoute } from "@tanstack/react-router"; export const Route = createRootRoute();');
   await symlink(join(source, 'apps/desktop/node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
   await writeFile(join(desktop, 'serve.mjs'), `
-    import { loadConfigFromFile } from 'electron-vite';
-    import { createServer } from 'vite';
+    import { createServer, loadConfigFromFile } from 'vite';
     const { config } = await loadConfigFromFile({ command: 'serve', mode: 'development' });
-    const server = await createServer({ ...config.renderer, configFile: false, cacheDir: '.vite-test', logLevel: 'error' });
+    const server = await createServer({ ...config, configFile: false, cacheDir: '.vite-test', logLevel: 'error' });
     process.once('SIGTERM', () => { void server.close().then(() => process.exit(0)); });
     await server.listen();
     console.log('renderer-ready:' + JSON.stringify(server.httpServer.address()));

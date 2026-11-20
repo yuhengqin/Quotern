@@ -1,20 +1,56 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { EventEmitter } from 'node:events';
 import { mkdtemp, rm, mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import type { ChildProcess } from 'node:child_process';
 import { DshPetController } from './controller.js';
 import { PetActivation } from '../pet-activation.js';
 
+test('native window lifecycle forwards requests without spawning a helper', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-native-'));
+  const opened: Record<string, unknown>[][] = [];
+  let closed = 0;
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'),
+    getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
+    nativeWindow: { open: async pets => { opened.push(pets); }, close: async () => { closed++; } },
+  });
+  const request = { id: 1, method: 'GET', url: '/dsh-pet-7340/config' };
+  try {
+    assert.equal((await controller.handleNativeRequest(request)).status, 503);
+    await controller.dispatch({ type: 'set-enabled', enabled: true });
+    assert.equal(controller.getState().status, 'running');
+    assert.equal(opened.length, 1); assert.equal(opened[0]!.length, 1);
+    assert.equal((await controller.handleNativeRequest(request)).status, 200);
+    assert.equal((await controller.handleNativeRequest({ ...request, url: '/invalid' })).status, 404);
+    await controller.dispatch({ type: 'set-enabled', enabled: false });
+    assert.equal(closed, 1); assert.equal((await controller.handleNativeRequest(request)).status, 503);
+    await controller.pause(); assert.equal(closed, 1);
+  } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('failed native opening is cleaned up once and can be retried', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-native-failure-'));
+  let opened = 0, closed = 0;
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'),
+    getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
+    nativeWindow: { open: async () => { if (++opened === 1) throw new Error('open failed'); }, close: async () => { closed++; } },
+  });
+  try {
+    await controller.dispatch({ type: 'set-enabled', enabled: true });
+    assert.equal(controller.getState().status, 'error'); assert.equal(closed, 1);
+    await controller.dispatch({ type: 'retry' });
+    assert.equal(controller.getState().status, 'running'); assert.equal(opened, 2); assert.equal(closed, 1);
+    await controller.dispatch({ type: 'set-enabled', enabled: false }); assert.equal(closed, 2);
+  } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
+});
+
 test('enabling from settings, tray and startup waits for exclusive activation', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-activation-'));
-  let activated = 0, spawned = 0;
-  const options = { root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'app', packaged: false,
+  let activated = 0, opened = 0;
+  const options = { root, runtimeRoot: path.resolve('out/dsh-pet'),
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
     coordinateVisibility: async <T>(visible: boolean, operation: () => Promise<T>): Promise<T> => { if (visible) activated++; return operation(); },
-    spawn: () => { assert.ok(activated > spawned); spawned++; const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit')); return true; } }); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess; },
+    nativeWindow: { open: async () => { assert.ok(activated > opened); opened++; }, close: async () => {} },
   };
   let controller = new DshPetController(options);
   try {
@@ -30,8 +66,9 @@ test('enabling from settings, tray and startup waits for exclusive activation', 
 
 test('an already disabled companion can be deactivated even when its default config is unreadable', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-broken-config-'));
-  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'app', packaged: false,
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'),
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
+    nativeWindow: { open: async () => {}, close: async () => {} },
   });
   try {
     controller.config.paths.defaultFile = path.join(root, 'missing-default.jsonc');
@@ -43,10 +80,10 @@ test('an already disabled companion can be deactivated even when its default con
 test('rapid enable and disable requests preserve their order through the shared coordinator', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-toggle-order-'));
   const activation = new PetActivation({ builtin: async () => {}, dsh: async () => {} });
-  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'app', packaged: false,
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'),
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
     coordinateVisibility: (visible, operation) => activation.run('dsh', visible, operation),
-    spawn: () => { const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit')); return true; } }); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess; },
+    nativeWindow: { open: async () => {}, close: async () => {} },
   });
   try {
     await Promise.all([controller.dispatch({ type: 'set-enabled', enabled: true }), controller.dispatch({ type: 'set-enabled', enabled: false })]);
@@ -55,22 +92,20 @@ test('rapid enable and disable requests preserve their order through the shared 
     assert.equal(controller.getState().enabled, false);
   } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
 });
-test('disabled by default; serial enable/reload/pause/crash/retry owns one child and isolates helper profile', async () => {
+test('disabled by default; serial enable/reload/pause/resume owns one native window', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-controller-'));
-  const children: Array<EventEmitter & { kill(): boolean }> = [], launches: Array<{ args: readonly string[]; env: NodeJS.ProcessEnv }> = [];
-  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'isolated-app', packaged: false,
+  let opens = 0, active = 0;
+  const controller = new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'),
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {},
-    roots: [], spawn: (_exe, args, options) => { launches.push({ args, env: options.env! }); const child = Object.assign(new EventEmitter(), { pid: 1234, stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit', 0, null)); return true; } }); children.push(child); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess; },
+    roots: [], nativeWindow: { open: async () => { assert.equal(active, 0); active++; opens++; }, close: async () => { assert.equal(active, 1); active--; } },
   });
   try {
-    await controller.initialize(); assert.equal(children.length, 0); assert.equal(controller.getState().enabled, false);
+    await controller.initialize(); assert.equal(opens, 0); assert.equal(controller.getState().enabled, false);
     await Promise.all([controller.dispatch({ type: 'set-enabled', enabled: true }), controller.dispatch({ type: 'set-enabled', enabled: true })]);
-    assert.equal(children.length, 1); assert.equal(controller.getState().status, 'running');
-    assert.ok(launches[0]!.args.includes('--quotern-dsh-pet-helper')); assert.equal(launches[0]!.env.QUOTERN_DSH_USER_DATA, path.join(root, 'helper')); assert.equal(launches[0]!.env.ELECTRON_RUN_AS_NODE, undefined);
-    children[0]!.emit('exit', 7, null); await new Promise(resolve => setTimeout(resolve, 25)); assert.equal(controller.getState().status, 'error'); assert.equal(children.length, 1);
-    await controller.dispatch({ type: 'retry' }); assert.equal(children.length, 2);
+    assert.equal(opens, 1); assert.equal(controller.getState().status, 'running');
+    await controller.dispatch({ type: 'retry' }); assert.equal(opens, 2);
     await controller.pause(); assert.equal(controller.getState().enabled, true); assert.equal(controller.getState().status, 'disabled');
-    await controller.resume(); assert.equal(children.length, 3);
+    await controller.resume(); assert.equal(opens, 3);
     await controller.dispatch({ type: 'set-enabled', enabled: false }); assert.equal(controller.getState().enabled, false);
     await assert.rejects(controller.dispatch({ type: 'unknown' } as never));
   } finally { await controller.dispose(); await rm(root, { recursive: true, force: true }); }
@@ -78,14 +113,10 @@ test('disabled by default; serial enable/reload/pause/crash/retry owns one child
 
 test('one visibility switch stops the subsystem, preserves the web bit and restores its selected pet', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-pet-visibility-'));
-  const children: EventEmitter[] = [];
-  const makeController = () => new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'), executable: 'electron.exe', appPath: 'isolated-app', packaged: false,
+  const windows: Record<string, unknown>[][] = [];
+  const makeController = () => new DshPetController({ root, runtimeRoot: path.resolve('out/dsh-pet'),
     getQuota: () => null, showMainWindow: () => {}, openDirectory: async () => {}, roots: [],
-    spawn: (_exe, _args, options) => {
-      assert.equal(JSON.parse(options.env!.DSH_PET_PETS!).length, 1, 'the helper must receive only one pet');
-      const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: () => { queueMicrotask(() => child.emit('exit', 0, null)); return true; } });
-      children.push(child); queueMicrotask(() => child.emit('spawn')); return child as unknown as ChildProcess;
-    },
+    nativeWindow: { open: async pets => { assert.equal(pets.length, 1); windows.push(pets); }, close: async () => {} },
   });
   let controller = makeController();
   const display = () => (controller.getState().config.main!.pets as Array<{ display: string }>)[0]!.display;
@@ -95,23 +126,23 @@ test('one visibility switch stops the subsystem, preserves the web bit and resto
     const pet = (main.pets as object[])[0]!;
     await controller.dispatch({ type: 'patch-config', patch: { pets: [{ ...pet, display: 'both', whisperEnabled: false }] } });
     await controller.dispatch({ type: 'set-enabled', enabled: true });
-    assert.equal(children.length, 1);
+    assert.equal(windows.length, 1);
     await visible(false);
     assert.equal(display(), 'web'); assert.equal(controller.getState().enabled, false); assert.equal(controller.getState().status, 'disabled');
-    assert.equal(children.length, 1, 'hiding the last pet must create no fallback window');
+    assert.equal(windows.length, 1, 'hiding the last pet must create no fallback window');
     await visible(true);
-    assert.equal(display(), 'both'); assert.equal(children.length, 2);
+    assert.equal(display(), 'both'); assert.equal(windows.length, 2);
     await controller.dispatch({ type: 'patch-config', patch: { pets: [{ ...pet, display: 'desktop', whisperEnabled: false }] } });
     await visible(false); assert.equal(display(), 'none');
     await visible(true); assert.equal(display(), 'desktop');
-    const before = children.length;
-    await visible(true); assert.equal(children.length, before, 'repeating the current visibility does not restart the helper');
+    const before = windows.length;
+    await visible(true); assert.equal(windows.length, before, 'repeating the current visibility does not restart the helper');
     await Promise.all([visible(false), visible(true), visible(false)]);
     assert.equal(display(), 'none', 'rapid toggles are applied in order');
     await controller.dispatch({ type: 'set-enabled', enabled: false });
-    const disabledChildren = children.length;
+    const disabledChildren = windows.length;
     await controller.dispatch({ type: 'patch-pet', petId: 'main', patch: { name: 'One companion' } });
-    assert.equal(controller.getState().enabled, false); assert.equal(children.length, disabledChildren);
+    assert.equal(controller.getState().enabled, false); assert.equal(windows.length, disabledChildren);
     await mkdir(path.join(root, 'pet'), { recursive: true });
     const packFile = path.join(root, 'pet/fish-config.jsonc');
     await writeFile(packFile, JSON.stringify({ pets: [{ ...pet, id: 'fish.extra', display: 'both' }], advancedField: 'keep' }));

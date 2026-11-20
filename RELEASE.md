@@ -95,7 +95,7 @@ corepack pnpm release:desktop:mac:signed # Developer ID 签名、公证与验证
 corepack pnpm release:desktop:win     # 在 Windows 构建与验证；不上传
 ```
 
-Desktop 使用下方统一流程。平台命令只在本地生成产物；`electron-builder.yml` 的 `publish` 保留为运行时更新源配置，不负责直接上传。
+Desktop 使用下方统一流程。平台命令通过 Tauri 打包，只在本地生成和验证产物，不直接上传。
 
 ### 4. 生成与审阅 GitHub Release
 
@@ -107,9 +107,7 @@ Desktop 使用下方统一流程。平台命令只在本地生成产物；`elect
 
 ### 6. 确认自动更新源
 
-Desktop 使用 [electron-builder.yml](./apps/desktop/electron-builder.yml) 的 GitHub `publish` 配置作为发布与运行时更新目标；构建生成的 `app-update.yml` 随安装包分发。
-
-对支持自动更新的产物，检查 GitHub Release 附件中对应平台与通道的更新 yml，确认版本、`files.url`、文件大小、SHA-512 校验和与实际附件一致。macOS ad-hoc 版本仅手动更新，不上传 macOS 更新 yml / blockmap。私有仓库还需验证客户端凭据能读取 Release 和附件。按平台分别验收；Windows 便携版应提示手动下载，不能安装 NSIS 包。具体操作见 [Desktop 自动更新发布](./apps/desktop/README.md#自动更新发布)。
+对支持自动更新的产物，检查 GitHub Release 附件中的 Tauri 更新 JSON、签名及其指向的附件；同时检查兼容旧版客户端的更新 yml，确认版本、`files.url`、文件大小、SHA-512 校验和与实际附件一致。macOS ad-hoc 版本仅手动更新，不上传 macOS 更新清单或 blockmap。私有仓库还需验证客户端凭据能读取 Release 和附件。按平台分别验收；Windows 便携版应提示手动下载，不能安装 NSIS 包。具体操作见 [Desktop 更新验收](./apps/desktop/docs/auto-update-validation.md)。
 
 ## npm 发布与验收
 
@@ -150,17 +148,17 @@ macOS 使用明确的 `macos_signing` 选项：默认 `adhoc`，手动选择 `si
 
 ### macOS ad-hoc 模式
 
-无需 Apple Developer 会员及下表中的 Apple Secrets。脚本创建并清理自有空 keychain，隔离已有证书和签名环境变量，显式采用 `identity=-`，关闭 hardened runtime、公证和 DMG 外壳签名。内部 `.app` 及嵌套原生代码仍需有效的 ad-hoc 签名。
+无需 Apple Developer 会员及下表中的 Apple Secrets。脚本创建并清理自有空 keychain，隔离已有证书和签名环境变量，Tauri 显式采用 ad-hoc 签名身份 `-`。内部 `.app` 及嵌套原生代码仍需有效的 ad-hoc 签名。
 
-验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用：`codesign --verify --deep --strict`、实际 `Signature=adhoc`、嵌套代码签名身份、bundle 版本、Electron / Sharp / libvips 架构和包内 `quoternMacosReleaseMode=adhoc` 标记；DMG 仍执行 `hdiutil verify`。不要求 Gatekeeper 放行或公证装订，也不会在报告中把这些步骤标记为已通过。验证报告明确记录 `mode=adhoc`、`updatePolicy=manual`、`notarized=false`。
+验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用：`codesign --verify --deep --strict`、实际 `Signature=adhoc`、嵌套代码签名身份、bundle 版本、Tauri 程序 / 内置 Node / Sharp / libvips 架构和包内 `release-mode.json` 标记；DMG 仍执行 `hdiutil verify`。不要求 Gatekeeper 放行或公证装订，也不会在报告中把这些步骤标记为已通过。验证报告明确记录 `mode=adhoc`、`updatePolicy=manual`、`notarized=false`。
 
-此模式保留四份 DMG/ZIP 和最终文件哈希，但清理并拒绝 macOS 自动更新 yml / blockmap。应用设置和顶部入口显示手动下载，不请求自动更新服务、不下载或安装更新。正式签名的旧版本、Windows 安装版和 Windows 便携版保持各自原有行为。发布说明应明确该版本未公证、需要手动更新及首次启动限制；可引用 [Apple 的打开应用说明](https://support.apple.com/en-us/102445)。
+此模式保留四份 DMG/ZIP 和最终文件哈希，但清理并拒绝 macOS 自动更新清单和 blockmap。发布说明应明确该版本未公证、需要手动更新及首次启动限制；可引用 [Apple 的打开应用说明](https://support.apple.com/en-us/102445)。
 
 本机复核已有完整目录使用 `corepack pnpm verify:desktop:mac --dir <目录>`。汇总 ad-hoc 产物时使用 `corepack pnpm assemble:desktop --macos-mode adhoc --input <输入目录> --output <新输出目录>`；传错模式会失败。
 
 ### macOS 正式签名和公证
 
-选择 `signed` 模式时，在 GitHub 仓库 Secrets 配置以下内容；该模式的构建验证同样需要凭据，缺失会失败，不会回退 ad-hoc：
+选择 `signed` 模式时，在 GitHub 仓库 Secrets 配置以下内容，并配置仓库变量 `QUOTERN_UPDATER_PUBLIC_KEY` 及 Secret `TAURI_SIGNING_PRIVATE_KEY`（密钥有密码时另配置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）；该模式的构建验证同样需要凭据，缺失会失败，不会回退 ad-hoc：
 
 | Secret | 内容 |
 | --- | --- |
@@ -174,13 +172,13 @@ workflow 将证书导入临时 keychain，将公证凭据存入该 keychain 的 
 
 本机可使用已解锁 keychain 中的证书，并设置 `APPLE_TEAM_ID` 与以下任意一组公证凭据（只选一组）：`APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD`；`APPLE_API_KEY`（文件路径）+ `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`；或 `APPLE_KEYCHAIN_PROFILE`（可另设 `APPLE_KEYCHAIN`）。证书在非默认 keychain 时设置 `CSC_KEYCHAIN`。缺少凭据、临时签名、开发证书或错误团队均不能通过正式验收。
 
-`release:desktop:mac:signed` 一次打包 ARM64 和 x64，保持独立 `.dmg` / `.zip`。应用要求 distribution 签名、hardened runtime 和公证；DMG 也单独签名、公证与装订。验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用，执行 `codesign`、`spctl`、`stapler`，检查 bundle 版本、Electron 与原生解码库的架构，并校验包内 `quoternMacosReleaseMode=signed` 与自动更新策略。失败即停止。Apple 返回已知 submission ID 后，临时等待错误只对该 ID 重试，拒绝结果不重试。
+`release:desktop:mac:signed` 一次打包 ARM64 和 x64，保持独立 `.dmg` / `.zip`。应用要求 Developer ID 签名、hardened runtime 和公证；DMG 也单独签名、公证与装订。验收覆盖原应用、ZIP 解压后的应用和只读挂载 DMG 内的应用，执行 `codesign`、`spctl`、`stapler`，检查 bundle 版本、Tauri 程序、内置 Node 与原生解码库的架构，并校验包内 `release-mode.json` 与自动更新策略。失败即停止。Apple 返回已知 submission ID 后，临时等待错误只对该 ID 重试，拒绝结果不重试。
 
-DMG 装订会修改文件；脚本在全部验收后重建四份 blockmap 和 `latest-mac.yml`，预发布同时生成内容一致的 `beta-mac.yml` 与 `latest-mac.yml`，兼容当前客户端及私有 GitHub provider。Windows 预发布同样保留 `beta.yml` / `latest.yml`。随后校验最终大小、SHA-512，生成绑定文件哈希和 `mode=signed` 的 `macos-verification.json` 与 `mac-artifacts.json`。禁止验收后重新签名、装订或改包而沿用旧清单。已有完整打包目录可用 `corepack pnpm verify:desktop:mac:signed --dir <目录>` 重新执行 Apple 验收；此命令仍需要 macOS 和凭据。汇总 signed 产物时显式传 `--macos-mode signed`。
+DMG 装订会修改文件；脚本在全部验收后重建四份 blockmap 和 `latest-mac.yml`，预发布同时生成内容一致的 `beta-mac.yml` 与 `latest-mac.yml`，供旧客户端使用。Windows 预发布同样保留 `beta.yml` / `latest.yml`。Tauri 更新另使用签名归档与各架构 JSON。随后校验最终大小、SHA-512，生成绑定文件哈希和 `mode=signed` 的 `macos-verification.json` 与 `mac-artifacts.json`。禁止验收后重新签名、装订或改包而沿用旧清单。已有完整打包目录可用 `corepack pnpm verify:desktop:mac:signed --dir <目录>` 重新执行 Apple 验收；此命令仍需要 macOS 和凭据。汇总 signed 产物时显式传 `--macos-mode signed`。
 
 ### Windows 与源码归档
 
-Windows 同时生成 x64 / ARM64 的 NSIS 安装版、便携版，安装器语言和交互沿用现有设置。校验四份 EXE、两份安装版 blockmap、更新清单及哈希，生成 `win-artifacts.json`；便携版不进入安装版自动更新清单。客户端在开始下载前按运行架构筛选安装版，避免私有 GitHub 的无扩展名附件 API URL 让更新库回退选择 x64。Windows 代码签名凭据尚需发布者配置并验收，本次统一流程没有替代 Windows 签名和两种架构的实机安装、启动、升级测试。
+Windows 同时生成 x64 / ARM64 的 NSIS 安装版、便携版。校验四份 EXE、两份安装版 blockmap、更新清单及哈希，生成 `win-artifacts.json`；便携版不进入安装版自动更新清单。配置 `QUOTERN_UPDATER_PUBLIC_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY` 后生成 Tauri 更新签名与各架构 JSON，两个密钥必须同时提供。Windows 代码签名凭据尚需发布者配置并验收，本次统一流程没有替代 Windows 签名和两种架构的实机安装、启动、升级测试。
 
 源码任务对精确 HEAD 执行 `git archive`，在仓库外解压、不带 `.git`，重新安装依赖、检查工作区链接、完整构建并执行 Desktop 类型检查，输出 `source-archive.json`。汇总要求报告中的版本和 commit 与两平台一致。本地 `--working-tree` 模式只做未提交源码验证，其报告不能用于发布汇总。用户构建说明见 [CONTRIBUTING](./CONTRIBUTING.md#从-source-code-归档构建)。GitHub 自动附加的 Source code zip / tar.gz 是 tag 快照，不包含安装包、依赖和 Git 历史；无须额外上传同名源码文件。
 

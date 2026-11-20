@@ -281,7 +281,7 @@ Queries only read local statistics already written to disk. They also work while
 
 Statistics are stored in `~/.quotern/` and include token counts, sources, models, and project attribution. Parsers read Agent logs or databases and save aggregated statistics buckets. Configuration also stores runtime information such as the local device identifier.
 
-Some sources need access to Agent login state to retrieve billing data or subscription quotas. The pricing catalog and desktop updates also contact their respective services. The main process handles subscription credentials; the interface receives display snapshots. See [architecture notes](./docs/architecture-notes.md) for data flows and file purposes.
+Desktop quota cards let you connect an official client or API for the current session, or open the provider’s usage page. CLI readers use configuration on the machine serving the dashboard. Pricing and desktop updates contact their respective services. See the [architecture notes](./docs/architecture-notes.md).
 
 Usage is parsed, aggregated, and queried locally. The desktop app and CLI dashboard read the same set of local statistics. No Quotern account is required to get started; online readings such as provider quotas still require access to the corresponding services.
 
@@ -295,32 +295,13 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 Use `corepack pnpm dev:desktop` or `corepack pnpm dev:cli` for local development. Read the [worktree development rules](./docs/worktree-development.md) before starting. Use the dashboard address printed by the launcher.
 
-<details>
-<summary>Configure mirrors for slow Electron downloads</summary>
-
-Electron binaries are downloaded from GitHub Releases by default, which may time out on networks in mainland China. Set mirror environment variables before installing:
-
-```bash
-# Git Bash / macOS / Linux
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-```powershell
-# PowerShell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-</details>
+Desktop uses Tauri 2 and a bundled Node runtime. Building from source requires Rust and the target platform's Tauri build dependencies.
 
 ## 🤝 Contributing
 
 The repository covers Desktop, CLI, and the browser dashboard. See the [Contributing Guide](./CONTRIBUTING.md) for branch conventions and local startup instructions.
 
-- [Desktop](./CONTRIBUTING.md#desktop) — Electron desktop app
+- [Desktop](./CONTRIBUTING.md#desktop) — Tauri desktop app
 - [CLI](./CONTRIBUTING.md#cli) — Command line and local dashboard
 - [Dashboard](./CONTRIBUTING.md#dashboard-开发) — CLI browser dashboard
 

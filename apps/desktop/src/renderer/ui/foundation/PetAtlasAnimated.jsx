@@ -105,7 +105,7 @@ export function PetAtlasAnimated({
   const style = useMemo(() => ({
     width: size * (192 / 208),
     height: size,
-    backgroundImage: `url(${pet?.assetUrl || `quotern-pet://builtin/pets/${id}/spritesheet.webp`})`,
+    backgroundImage: `url(${petAsset(pet?.assetUrl || `quotern-pet://builtin/pets/${id}/spritesheet.webp`)})`,
     backgroundRepeat: "no-repeat",
     backgroundSize: `800% ${atlasRows * 100}%`,
     backgroundPosition: `${((displayedFrame ?? frame) / 7) * 100}% ${(displayedRow / (atlasRows - 1)) * 100}%`,
@@ -114,3 +114,4 @@ export function PetAtlasAnimated({
 
   return <div aria-hidden="true" className={`pet-atlas-animated ${className}`} style={style} />;
 }
+import { petAsset } from '../../pet-assets';

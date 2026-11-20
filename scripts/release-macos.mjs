@@ -1,23 +1,18 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
+import { copyFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
-import yaml from 'js-yaml';
 import { hashFile, refreshMetadata, releaseLayout, verifyPlatform } from './release-artifacts.mjs';
-import { macosBuilderArgs, macosBuildEnvironment, macosReleasePolicy } from './macos-release-policy.mjs';
+import { macosTauriArgs, macosBuildEnvironment, macosReleasePolicy } from './macos-release-policy.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DESKTOP = join(ROOT, 'apps/desktop');
 const execute = promisify(execFile);
 const pause = ms => new Promise(accept => setTimeout(accept, ms));
-const appRequire = createRequire(join(DESKTOP, 'package.json'));
-const builderRequire = createRequire(appRequire.resolve('electron-builder/package.json'));
-const libRequire = createRequire(builderRequire.resolve('app-builder-lib/package.json'));
 
 // Never print these arguments: the Apple-ID route contains an app-specific password.
 export function appleCredentials(env) {
@@ -98,18 +93,20 @@ async function verifyApp(app, architecture, version, mode, credentials, command)
     assertAdhocIdentity(identity.stderr);
     await verifyNestedAdhocSignatures(app, command);
   }
-  const { extractFile, uncache } = libRequire('@electron/asar');
-  const archive = join(app, 'Contents/Resources/app.asar');
-  uncache(archive);
-  const metadata = JSON.parse(extractFile(archive, 'package.json').toString('utf8'));
-  if (metadata.quoternMacosReleaseMode !== mode || metadata.version !== version) throw new Error('Packaged macOS mode marker/version mismatch');
+  const node = join(app, 'Contents/Resources/node');
+  const metadata = JSON.parse(await readFile(join(node, 'release-mode.json'), 'utf8'));
+  if (metadata.mode !== mode || metadata.version !== version) throw new Error('Packaged macOS mode marker/version mismatch');
+  for (const entry of ['quotern-desktop-runtime.cjs', 'sync-worker.cjs', 'session-analysis-worker.cjs']) {
+    if (!(await stat(join(node, entry))).isFile()) throw new Error(`Missing packaged runtime entry: ${entry}`);
+  }
   const plist = join(app, 'Contents/Info.plist');
   const readPlist = key => command('/usr/libexec/PlistBuddy', ['-c', `Print :${key}`, plist]).then(result => result.stdout.trim());
   if (await readPlist('CFBundleShortVersionString') !== version) throw new Error('App bundle version does not match the release');
   const executable = await readPlist('CFBundleExecutable');
   if (!/^[\w .-]+$/.test(executable)) throw new Error('Unsafe bundle executable name');
   assertArchitecture((await command('lipo', ['-archs', join(app, 'Contents/MacOS', executable)])).stdout, architecture);
-  await verifyNativeArchitecture({ modules: join(app, 'Contents/Resources/app.asar.unpacked/node_modules'), architecture,
+  assertArchitecture((await command('lipo', ['-archs', join(app, 'Contents/MacOS/quotern-node')])).stdout, architecture);
+  await verifyNativeArchitecture({ modules: join(node, 'node_modules'), architecture,
     inspect: async file => (await command('lipo', ['-archs', file])).stdout });
 }
 
@@ -159,11 +156,12 @@ export async function releaseMacos({ dir, skipBuild = false, mode = 'adhoc', arc
   if (process.platform !== 'darwin') throw new Error('macOS release acceptance must run on macOS with Apple command-line tools');
   const credentials = mode === 'signed' ? appleCredentials(process.env) : undefined;
   if (mode === 'signed' && (process.env.CSC_IDENTITY_AUTO_DISCOVERY === 'false' || process.env.CSC_NAME === '-')) throw new Error('Release signing identity may not be disabled or ad hoc');
-  const config = yaml.load(await readFile(join(DESKTOP, 'electron-builder.yml'), 'utf8'));
-  if (config.mac?.forceCodeSigning !== true || config.mac?.type !== 'distribution' || config.mac?.notarize !== true || config.dmg?.sign !== true) throw new Error('Release configuration must require Developer ID signing and notarization');
+  let identity;
   if (mode === 'signed') {
     const identities = (await run('security', ['find-identity', '-v', '-p', 'codesigning', ...(process.env.CSC_KEYCHAIN ? [process.env.CSC_KEYCHAIN] : [])])).stdout;
-    if (!identities.split('\n').some(line => line.includes('Developer ID Application:') && line.includes(`(${credentials.teamId})`))) throw new Error('No valid Developer ID Application certificate for APPLE_TEAM_ID');
+    const matching = identities.split('\n').map(line => line.match(/"(Developer ID Application: [^"]+)"/)?.[1]).filter(name => name?.endsWith(`(${credentials.teamId})`) && (!process.env.CSC_NAME || name === process.env.CSC_NAME));
+    if (matching.length !== 1) throw new Error('Expected exactly one valid Developer ID Application certificate for APPLE_TEAM_ID and CSC_NAME');
+    [identity] = matching;
   }
   const version = JSON.parse(await readFile(join(DESKTOP, 'package.json'), 'utf8')).version;
   const commit = buildOnly ? undefined : (await run('git', ['rev-parse', 'HEAD'], { cwd: ROOT })).stdout.trim();
@@ -173,15 +171,37 @@ export async function releaseMacos({ dir, skipBuild = false, mode = 'adhoc', arc
   await rm(join(dir, 'macos-verification.json'), { force: true });
   await rm(join(dir, 'mac-artifacts.json'), { force: true });
   if (!skipBuild) {
-    const builder = join(dirname(appRequire.resolve('electron-builder/package.json')), 'out/cli/cli.js');
-    const args = macosBuilderArgs(mode, dir).filter(value => !arch || !['--arm64', '--x64'].includes(value));
-    if (arch) args.push(`--${arch}`);
-    const build = env => run(process.execPath, [builder, ...args], { cwd: DESKTOP, env });
+    const build = async env => {
+      for (const architecture of arch ? [arch] : ['x64', 'arm64']) {
+        const args = macosTauriArgs(mode, architecture, identity);
+        await run(process.execPath, [join(DESKTOP, 'scripts/run-tauri.mjs'), ...args], { cwd: ROOT, env });
+        await stageTauriArtifacts({ dir, version, mode, architecture, target: args[2], env });
+      }
+    };
     if (mode === 'adhoc') await withAdhocKeychain(build);
     else await build(macosBuildEnvironment(process.env, mode));
   }
   if (buildOnly) { console.log(`Built ${mode} macOS packages without uploading: ${dir}`); return; }
   await verifyMacosArtifacts({ dir, version, commit, mode, credentials });
+}
+
+async function stageTauriArtifacts({ dir, version, mode, architecture, target, env }) {
+  const targetDir = resolve(DESKTOP, env.CARGO_TARGET_DIR || 'src-tauri/target');
+  const bundle = join(targetDir, target, 'release/bundle');
+  const app = join(bundle, 'macos/Quotern.app');
+  const stagedApp = join(dir, architecture === 'x64' ? 'mac/Quotern.app' : 'mac-arm64/Quotern.app');
+  await mkdir(dirname(stagedApp), { recursive: true });
+  await rm(stagedApp, { recursive: true, force: true });
+  await run('ditto', [app, stagedApp]);
+  const prefix = `Quotern-${version}-mac-${architecture}`;
+  await run('ditto', ['-c', '-k', '--keepParent', stagedApp, join(dir, `${prefix}.zip`)]);
+  const dmgDir = join(bundle, 'dmg');
+  const dmgs = (await readdir(dmgDir)).filter(name => name.endsWith('.dmg'));
+  if (dmgs.length !== 1) throw new Error(`Expected exactly one Tauri DMG for ${architecture}; found ${dmgs.length}`);
+  await copyFile(join(dmgDir, dmgs[0]), join(dir, `${prefix}.dmg`));
+  if (mode === 'signed') {
+    for (const suffix of ['.app.tar.gz', '.app.tar.gz.sig']) await copyFile(join(bundle, 'macos', `Quotern${suffix}`), join(dir, `${prefix}${suffix}`));
+  }
 }
 
 async function withAdhocKeychain(build) {
@@ -190,8 +210,7 @@ async function withAdhocKeychain(build) {
   const password = randomBytes(32).toString('hex');
   let created = false;
   try {
-    // An explicit "-" can match a certificate containing a hyphen in builder 26.15.3.
-    // Restrict its identity search to an owned empty keychain without changing the search list.
+    // Keep an owned empty keychain without changing the caller's keychain search list.
     await run('security', ['create-keychain', '-p', password, keychain]);
     created = true;
     await run('security', ['unlock-keychain', '-p', password, keychain]);

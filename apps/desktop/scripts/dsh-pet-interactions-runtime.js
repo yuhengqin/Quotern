@@ -311,7 +311,7 @@
   proto.onPointerDown = function (event) {
     if (event.button === 0) {
       this.companionPhase = null; this.companionManual = true;
-      if (this.frozen) this.preemptControl();
+      // The wrapped pointer handler releases the control lease once for this press.
       if (this.companionDock) this.setCompanionExpanded(true, false);
       this.stage.style.rotate = '0deg'; this.stage.style.translate = '0px';
     }

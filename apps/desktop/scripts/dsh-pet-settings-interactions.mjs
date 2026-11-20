@@ -4,20 +4,20 @@ import { mkdir, readFile, rename, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { transform } from 'esbuild';
-import { connectPage, launchProbe, unusedPort, wait } from './desktop-cdp.mjs';
+import { connectPage, launchProbe, wait } from './desktop-cdp.mjs';
+import { ownedPetWindow } from './native-pet-probe.mjs';
 
-const [executable, output, appPath] = process.argv.slice(2);
+const [executable, output] = process.argv.slice(2);
 assert.ok(executable && output, 'exe output');
 const localeSource = await readFile(new URL('../src/renderer/i18n/dsh-pet-messages.ts', import.meta.url), 'utf8');
 const module = await transform(localeSource, { loader: 'ts', format: 'esm' });
 const { dshPetRows } = await import(`data:text/javascript;base64,${Buffer.from(module.code).toString('base64')}`);
 const text = key => dshPetRows[`desktop.dshPet.${key}`][0];
 const results = [];
-const inspectorPort = await unusedPort();
-const probe = await launchProbe(executable, output, { args: [...(appPath ? [path.resolve(appPath)] : []), `--inspect=127.0.0.1:${inspectorPort}`] });
-let page, inspector;
+const probe = await launchProbe(executable, output, { webview2: true });
+let page;
 try {
-  page = await probe.connect(target => /index\.html/.test(target.url));
+  page = await probe.connect(target => target.url.includes('tauri.localhost') && !target.url.includes('/dsh/') && !target.url.includes('pet.html'));
   const ev = page.evaluate;
   const section = `document.querySelector('[data-pet-settings="dsh"]')`;
   const petSection = `(${section}).closest('section')`;
@@ -99,35 +99,31 @@ try {
     }
   });
   await check('pending-save-preserves-newer-draft-and-focus', async () => {
-    const targets=await(await fetch(`http://127.0.0.1:${inspectorPort}/json/list`)).json();
-    inspector=await connectPage(targets[0]);
-    await inspector.evaluate(`(() => {
-      const ipc=process.getBuiltinModule('module').createRequire(process.execPath)('electron').ipcMain;
-      const original=ipc._invokeHandlers.get('dsh-pet:action');
-      if(typeof original!=='function')throw Error('Missing owned test IPC handler');
-      globalThis.__auditRestore=()=>{ipc.removeHandler('dsh-pet:action');ipc.handle('dsh-pet:action',original);};
-      let once=true;ipc.removeHandler('dsh-pet:action');ipc.handle('dsh-pet:action',async(event,action)=>{
+    await ev(`(() => {
+      const bridge=window.tud.dshPet, original=bridge.dispatch;
+      if(typeof original!=='function')throw Error('Missing owned test dispatch');
+      globalThis.__auditRestore=()=>{bridge.dispatch=original;};
+      let once=true;bridge.dispatch=async function(action){
         if(once&&action.type==='patch-pet'){once=false;await new Promise(resolve=>{globalThis.__auditRelease=resolve;});}
-        return original(event,action);
-      });return true;
+        return original.call(this,action);
+      };return true;
     })()`);
-    await page.fill(field('name'),'保存中的旧名称');
     try {
+      await page.fill(field('name'),'保存中的旧名称');
       await page.key('Tab');
-      for(let i=0;i<50&&!await inspector.evaluate('Boolean(globalThis.__auditRelease)');i++)await wait(50);
-      assert.equal(await inspector.evaluate('Boolean(globalThis.__auditRelease)'),true,'the blur request must be in flight');
+      for(let i=0;i<50&&!await ev('Boolean(globalThis.__auditRelease)');i++)await wait(50);
+      assert.equal(await ev('Boolean(globalThis.__auditRelease)'),true,'the blur request must be in flight');
       await page.fill(field('name'),'继续输入的新名称');
       await page.key('Tab');
       await page.fill(field('name'),'保存中的旧名称');
       await ev(`window.__auditNameInput=(${field('name')}); true;`);
-    } finally { await inspector.evaluate('globalThis.__auditRelease?.(); globalThis.__auditRestore?.(); true;'); }
+    } finally { await ev('globalThis.__auditRelease?.(); globalThis.__auditRestore?.(); delete globalThis.__auditRelease; delete globalThis.__auditRestore; true;'); }
     await wait(100); await idle();
     assert.equal((await state()).config.main.pets[0].name,'继续输入的新名称');
     assert.equal(await ev(`(${field('name')})===window.__auditNameInput && document.activeElement===window.__auditNameInput`),true,'save acknowledgement must preserve the focused input');
     assert.equal(await ev(`(${field('name')}).value`),'保存中的旧名称');
     await page.key('Tab'); await wait(100); await idle();
     assert.equal((await state()).config.main.pets[0].name,'保存中的旧名称');
-    inspector.close(); inspector=undefined;
   });
   await check('blur-save-does-not-swallow-next-button', async () => {
     const count=(await state()).config.main.pets.length;
@@ -151,17 +147,17 @@ try {
   await check('quota-unselected', async () => { await select('quota',''); assert.equal((await state()).quotaSource,null); });
   await check('interval:balance', async () => { await edit('interval.balance','1234',0,group('behavior')); assert.equal((await state()).config.main.eventsRefreshSec.balance,1234); });
   await check('enable-after-settings', async () => { await ev('window.tud.pet.select({kind:"dsh"})'); await click(`(${petSection}).querySelector('[data-slot="switch-control"]')`); assert.equal((await state()).status,'running'); await wait(1500); assert.equal((await state()).status,'running'); });
-  const ownedHelper = () => {
-    const command=`Get-CimInstance Win32_Process -Filter 'ParentProcessId = ${probe.child.pid}' | Where-Object { $_.CommandLine -like '*--quotern-dsh-pet-helper*' } | Select-Object -ExpandProperty ProcessId`;
-    const output=execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{encoding:'utf8',windowsHide:true});
-    const ids=output.trim().split(/\s+/).filter(Boolean).map(Number); assert.equal(ids.length,1,'exactly one helper belonging to this private app'); return ids[0];
-  };
-  await check('retry-after-owned-helper-exits', async () => {
-    const previous=ownedHelper(); process.kill(previous);
+  await check('retry-after-owned-window-exits', async () => {
+    const fishTargets=(await probe.pages()).filter(target=>target.url.includes('/dsh/index.html'));
+    assert.equal(fishTargets.length,1,'exactly one fish window belonging to this private app');
+    const previous=fishTargets[0].id, fish=await connectPage(fishTargets[0]);
+    try { await ownedPetWindow(probe, 'dsh')('close-window'); } finally { fish.close(); }
     for(let i=0;i<100 && (await state()).status!=='error';i++)await wait(100);
     assert.equal((await state()).status,'error');
     await click(button('retry')); assert.equal((await state()).status,'running');
-    assert.notEqual(ownedHelper(),previous);
+    let reopened;
+    for(let i=0;i<100;i++){reopened=(await probe.pages()).find(target=>target.url.includes('/dsh/index.html')&&target.id!==previous);if(reopened)break;await wait(100);}
+    assert.ok(reopened,'retry opens a new fish window');
   });
   const readPetState=async()=>JSON.parse((await ev(`window.tud.dshPet.dispatch({type:'request',method:'GET',path:'/state'})`)).body);
   await check('manual-quota', async () => { await click(button('balance',group('controls'))); assert.equal(await ev(`(${section}).querySelector('[role="alert"]')?.textContent??''`),''); });
@@ -190,12 +186,37 @@ try {
   await check('reset-updates-edited-inputs', async () => { await click(button('reset')); assert.equal((await state()).config.main.pets[0].name,defaults.pets[0].name); assert.equal(await ev(`(${field('name')}).value`),defaults.pets[0].name); assert.equal((await state()).config.main.pets[0].size,defaults.pets[0].size); assert.equal(await ev(`(${sizeButtons()}).filter(button=>button.getAttribute('aria-pressed')==='true').length`),1); assert.equal(await ev(`(${field('fontSize')}).value`),String(defaults.font.size)); });
   await check('reset-failure-preserves-jsonc-draft', async () => {
     await click(button('loadConfig')); const draft='// unsaved draft\n{"keep":"草稿"}'; await page.fill(jsonc,draft);
-    const file=path.join(probe.directory,'electron/dsh-pet/main-config.jsonc'), backup=file+'.audit-backup';
+    const file=path.join(probe.directory,'profile/dsh-pet/main-config.jsonc'), backup=file+'.audit-backup';
     await rename(file,backup); await mkdir(file);
     try { await click(button('reset')); assert.ok(await ev(`!!(${section}).querySelector('[role="alert"]')`)); assert.equal(await ev(`(${jsonc})?.value`),draft); }
     finally { await rmdir(file); await rename(backup,file); }
   });
-  await check('open-private-directory', async () => { await click(button('openDirectory')); assert.equal((await readFile(path.join(probe.directory,'electron/dsh-pet/.directory'),'utf8')),'Quotern dsh-pet'); assert.equal(await ev(`(${section}).querySelector('[role="alert"]')?.textContent??''`),''); });
+  await check('open-private-directory', async () => {
+    const directory=path.join(probe.directory,'profile','dsh-pet');
+    const command=`$shell = New-Object -ComObject Shell.Application
+      foreach ($window in @($shell.Windows())) {
+        try {
+          $uri = [Uri]$window.LocationURL
+          if ($uri.IsFile -and [String]::Equals([IO.Path]::GetFullPath($uri.LocalPath).TrimEnd('\\'), [IO.Path]::GetFullPath($env:QUOTERN_AUDIT_DIR).TrimEnd('\\'), [StringComparison]::OrdinalIgnoreCase)) {
+            if ($env:QUOTERN_AUDIT_CLOSE -eq '1' -and $env:QUOTERN_AUDIT_EXISTING.Split(',') -notcontains [string]$window.HWND) { $window.Quit() }
+            else { [string]$window.HWND }
+          }
+        } catch {}
+      }`;
+    const windows = (close, existing='') => execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{encoding:'utf8',windowsHide:true,env:{...process.env,QUOTERN_AUDIT_DIR:directory,QUOTERN_AUDIT_CLOSE:close?'1':'0',QUOTERN_AUDIT_EXISTING:existing}}).trim();
+    const existing=windows(false).split(/\s+/).filter(Boolean).join(',');
+    try {
+      await click(button('openDirectory'));
+      assert.equal((await readFile(path.join(directory,'.directory'),'utf8')),'Quotern dsh-pet');
+      assert.equal(await ev(`(${section}).querySelector('[role="alert"]')?.textContent??''`),'');
+    } finally {
+      const known=new Set(existing.split(',').filter(Boolean));
+      for(let i=0;i<20;i++){
+        if(windows(false).split(/\s+/).some(handle=>handle&&!known.has(handle))){windows(true,existing);break;}
+        await wait(100);
+      }
+    }
+  });
   assert.equal(page.errors.length,0,'Uncaught renderer errors');
   await page.screenshot(path.join(probe.directory,'settings-final.png'));
 } catch (error) {
@@ -203,7 +224,7 @@ try {
   await page?.screenshot(path.join(probe.directory,'runner-failure.png')).catch(()=>{});
   throw error;
 } finally {
-  if(inspector){ await inspector.evaluate('globalThis.__auditRelease?.(); globalThis.__auditRestore?.(); true;').catch(()=>{}); inspector.close(); }
+  if(page) await page.evaluate('globalThis.__auditRelease?.(); globalThis.__auditRestore?.(); true;').catch(()=>{});
   await probe.close();
   await writeFile(path.join(probe.directory,'result.json'),JSON.stringify({ok:results.length>0&&results.every(item=>item.ok),checks:results.length,passed:results.filter(item=>item.ok).length,results},null,2));
 }

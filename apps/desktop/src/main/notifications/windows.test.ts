@@ -7,10 +7,10 @@ import { createWindowsNotifications, registerWindowsNotificationIdentity, window
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
-test('packaged shell icon resolves to a real file outside the ASAR archive', t => {
+test('the notification identity uses the icon bundled with the Node resources', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'quotern-shell-icon-')); t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(path.join(root, 'resources')); writeFileSync(path.join(root, 'resources/icon.png'), 'fixture'); writeFileSync(path.join(root, 'app.asar'), 'archive');
-  assert.equal(existsSync(windowsNotificationIconPath(root, path.join(root, 'app.asar'))), true);
+  mkdirSync(path.join(root, 'resources')); writeFileSync(path.join(root, 'resources/icon.png'), 'fixture');
+  assert.equal(existsSync(windowsNotificationIconPath(root, path.join(root, 'Quotern.exe'))), true);
 });
 
 test('Windows resolves the registered Quotern name and icon instead of its internal application ID', t => {
@@ -23,13 +23,13 @@ test('Windows resolves the registered Quotern name and icon instead of its inter
   assert.match(values, /IconUri\s+REG_SZ\s+.*icon\.png/);
 });
 
-test('an application directory ending in a separator cannot swallow the activation flag', async t => {
+test('the registered protocol quotes the native host and forwards the pipe and URL separately', async t => {
   if (process.platform !== 'win32') { t.skip('Windows protocol registration'); return; }
-  let argumentsRegistered: string[] = [];
-  const value = await createWindowsNotifications({ appId: `dev.quotern.desktop.test.${randomUUID()}`, iconPath: path.resolve('resources/icon.png'), temporary: true, entry: path.resolve('.') + path.sep,
-    app: { setAsDefaultProtocolClient: (_scheme, _executable, args) => { argumentsRegistered = args ?? []; return true; }, removeAsDefaultProtocolClient: () => true }, onAction: () => true,
+  const hostExecutable=path.resolve('a path with spaces','Quotern.exe');
+  const value = await createWindowsNotifications({ appId: `dev.quotern.desktop.test.${randomUUID()}`, iconPath: path.resolve('resources/icon.png'), temporary: true, hostExecutable, onAction: () => true,
   });
   t.after(() => value.dispose());
-  assert.equal(argumentsRegistered[0], path.resolve('.'));
-  assert.equal(argumentsRegistered[1], '--quotern-notification-action');
+  const registered=execFileSync('reg.exe',['query',`HKCU\\Software\\Classes\\${value.scheme}\\shell\\open\\command`,'/ve'],{windowsHide:true,encoding:'utf8'}).trimEnd();
+  assert.ok(registered.includes('"'+hostExecutable+'" --quotern-notification-action "'));
+  assert.match(registered,/quotern-notifications-[a-f0-9-]+" "%1"$/);
 });

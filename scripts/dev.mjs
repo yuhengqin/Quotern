@@ -169,11 +169,7 @@ async function run() {
     }
     if (mode === 'desktop') {
       const cwd = join(root, 'apps/desktop');
-      // electron-vite 5 reads the renderer host from electron.vite.config.ts;
-      // its dev CLI has no --host option (unlike the standalone Vite CLI).
-      // Use the same startup path as Desktop dev/preview so helper assets are
-      // regenerated before Electron can load them.
-      services.push(launch('electron-vite', process.execPath, [join(cwd, 'scripts/run-electron-vite.mjs'), 'dev'], cwd));
+      services.push(launch('tauri', process.execPath, [join(cwd, 'scripts/run-tauri.mjs'), 'dev'], cwd));
     }
     for (const child of services) child.on('exit', (code) => { if (!closing) void shutdown(code ?? 1); });
     await update({ status: 'running' });

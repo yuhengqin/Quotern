@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import yaml from 'js-yaml';
+import { macosBuildEnvironment, macosTauriArgs } from './macos-release-policy.mjs';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 test('CI and release verification install fresh dependencies instead of restoring a global virtual store', async () => {
@@ -71,17 +72,31 @@ test('ad-hoc workflow runs without Apple secrets and keeps signed selection expl
   assert.match(mac.scripts['build:mac:signed'], /--mode signed/);
 });
 
-test('all desktop packaging entries disable direct electron-builder publication', async () => {
+test('desktop packaging uses Tauri targets and does not directly publish', async () => {
   const desktop = JSON.parse(await read('apps/desktop/package.json'));
   for (const [name, command] of Object.entries(desktop.scripts)) {
-    if (command.includes('electron-builder')) assert.match(command, /--publish never/, name);
-    assert.doesNotMatch(command, /--publish always|--publish onTag/);
+    assert.doesNotMatch(command, /electron-builder|--publish\s+(?:always|onTag)/, name);
   }
-  const config = yaml.load(await read('apps/desktop/electron-builder.yml'));
-  assert.equal(config.mac.artifactName, '${productName}-${version}-mac-${arch}.${ext}');
-  assert.deepEqual(config.mac.target.map(target => target.arch), [['arm64', 'x64'], ['arm64', 'x64']]);
-  assert.equal(config.mac.forceCodeSigning, true);
-  assert.equal(config.mac.type, 'distribution');
-  assert.equal(config.mac.notarize, true);
-  assert.equal(config.dmg.sign, true);
+  const config = JSON.parse(await read('apps/desktop/src-tauri/tauri.conf.json'));
+  assert.deepEqual(config.bundle.targets, ['nsis', 'app', 'dmg']);
+  assert.deepEqual(config.bundle.externalBin, ['binaries/quotern-node']);
+  for (const [arch, target] of [['x64', 'x86_64-apple-darwin'], ['arm64', 'aarch64-apple-darwin']]) {
+    for (const mode of ['adhoc', 'signed']) {
+      const args = macosTauriArgs(mode, arch, 'Developer ID Application: Example');
+      assert.deepEqual(args.slice(0, 5), ['bundle', '--target', target, '--bundles', 'app,dmg']);
+      const bundle = JSON.parse(args[6]).bundle;
+      assert.equal(bundle.macOS.signingIdentity, mode === 'adhoc' ? '-' : 'Developer ID Application: Example');
+      assert.equal(bundle.createUpdaterArtifacts, mode === 'signed');
+    }
+  }
+  assert.throws(() => macosTauriArgs('signed', 'x64', '-'));
+  assert.throws(() => macosBuildEnvironment({}, 'signed'));
+  const windows = await read('scripts/release-windows.mjs');
+  assert.match(windows, /x86_64-pc-windows-msvc/);
+  assert.match(windows, /aarch64-pc-windows-msvc/);
+  assert.match(windows, /'--bundles','nsis'/);
+  assert.match(windows, /Supply both updater signing keys/);
+  for (const file of ['scripts/release-macos.mjs', 'scripts/release-windows.mjs', 'apps/desktop/scripts/run-tauri.mjs']) {
+    assert.doesNotMatch(await read(file), /gh\s+release\s+(?:create|upload)|--publish\s+(?:always|onTag)/, file);
+  }
 });

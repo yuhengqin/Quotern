@@ -1,29 +1,35 @@
-import { spawn, execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { randomUUID } from 'node:crypto';
+// Opt-in Windows acceptance. This sends and removes a real toast using a private profile/AUMID.
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { access, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
-import electron from 'electron';
-import { unusedPort } from './desktop-cdp.mjs';
+import { promisify } from 'node:util';
+import { launchProbe } from './desktop-cdp.mjs';
+import { defaultHost, eventually } from './native-pet-probe.mjs';
 
-const desktop = fileURLToPath(new URL('../', import.meta.url));
-if (process.platform !== 'win32') throw new Error('This opt-in native acceptance harness requires Windows.');
-const output = process.argv[2] ? path.resolve(process.argv[2]) : path.join(desktop, '../../.quotern-dev', `notification-native-${Date.now()}`);
-const bundle = path.join(desktop, 'out/notifications-native-live.cjs');
-await build({ entryPoints: [fileURLToPath(new URL('./notifications-native-live.ts', import.meta.url))], outfile: bundle, bundle: true, platform: 'node', target: 'node22', format: 'cjs', external: ['electron', 'sharp'], define: { 'import.meta.url': '__notificationImportMetaUrl' }, banner: { js: "const __notificationImportMetaUrl = require('node:url').pathToFileURL(__filename).href;" }, logLevel: 'warning' });
-const appId = `dev.quotern.desktop.acceptance.${randomUUID()}`;
-const env = { ...process.env, QUOTERN_DEV_ISOLATED: '1', QUOTERN_DATA_DIR: path.join(output, 'data'), QUOTERN_CONFIG_HOME: path.join(output, 'config-home'), QUOTERN_DESKTOP_USER_DATA: path.join(output, 'profile'), QUOTERN_NATIVE_APP_ID: appId }; delete env.ELECTRON_RUN_AS_NODE;
-const registryKey = `HKCU\\Software\\Classes\\AppUserModelId\\${appId}`;
-const run = promisify(execFile);
-// The production integration registers this unique identity and protocol.
-console.log(JSON.stringify({ output }));
-const child = spawn(electron, [bundle, desktop, output, String(await unusedPort())], { env, windowsHide: true, stdio: 'inherit' });
-child.on('error', error => { console.error(error); process.exitCode = 1; });
-child.on('close', async code => {
-  if (process.platform === 'win32') {
-    const exists = await run('reg.exe', ['query', registryKey], { windowsHide: true }).then(() => true, () => false);
-    if (exists) await run('reg.exe', ['delete', registryKey, '/f'], { windowsHide: true }).catch(error => console.error('Owned notification identity cleanup failed:', error.message));
-  }
-  process.exitCode = code ?? 1;
-});
+assert.equal(process.platform,'win32','Windows notifications require Windows');
+const directory=path.resolve(process.argv[2] || fileURLToPath(new URL('../../../.quotern-dev/notification-live-'+Date.now(),import.meta.url)));
+const probe=await launchProbe(process.argv[3] || defaultHost,directory,{webview2:true});
+const run=promisify(execFile);
+const appId='dev.quotern.desktop.dev.'+createHash('sha256').update(path.join(directory,'profile').toLowerCase()).digest('hex').slice(0,16);
+async function history(){
+  const command="[void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]; $items=[Windows.UI.Notifications.ToastNotificationManager]::History.GetHistory('"+appId+"'); @($items | Where-Object { $_.Group -eq 'Quotern' }).Count";
+  const {stdout}=await run('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{windowsHide:true,timeout:10000});
+  return Number(stdout.trim());
+}
+try{
+  const main=await probe.connect(p=>p.url.includes('tauri.localhost'));
+  await eventually(()=>main.evaluate('Boolean(window.tud?.notifications)'),'notification bridge');
+  await main.evaluate("window.tud.notifications.setPreferences({sound:'none'})");
+  assert.equal(await history(),0);
+  const delivery=await main.evaluate('window.tud.notifications.test()');
+  assert.equal(delivery,'shown');
+  await eventually(async()=>await history()>0,'the test toast in Windows notification history');
+  await main.evaluate('window.tud.notifications.clear()');
+  await eventually(async()=>await history()===0,'withdrawn toast');
+  await writeFile(path.join(directory,'result.json'),JSON.stringify({delivery,listed:true,removed:true}));
+  console.log(JSON.stringify({directory,delivery,listed:true,removed:true}));
+} finally {await probe.close();}
+await assert.rejects(access(path.join(directory,'data','tud.pid')),{code:'ENOENT'});

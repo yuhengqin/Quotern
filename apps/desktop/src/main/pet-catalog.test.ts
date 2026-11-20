@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { PetCatalog, petIdFromCodexPetsUrl, readWebpDimensions, validatePetPackage } from './pet-catalog.js';
+import { PetCatalogStore as PetCatalog, petIdFromCodexPetsUrl, readWebpDimensions, validatePetPackage } from './pet-catalog-store.js';
 import { BUILTIN_PETS } from './pet-core.js';
 
 test('a fresh profile offers the six bundled atlas pets without installing files', async () => {

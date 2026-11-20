@@ -15,5 +15,6 @@ export const DSH_PET_PREVIEW_ACTIONS = [
 ] as const;
 
 export function dshPetPreviewUrl(name: string): string {
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) return 'http://quotern-media.localhost/dsh-pet-7340/thumb/main/'+encodeURIComponent(name)+'.webm';
   return `${DSH_PET_PREVIEW_SCHEME}://preview/${encodeURIComponent(name)}.webm`;
 }

@@ -9,11 +9,11 @@
 | `packages/core` | parser、queue、sync、local-api |
 | `packages/cli` | `quotern`：HTTP + 托管 dashboard dist |
 | `packages/dashboard` | CLI 内置面板与可独立部署的浏览器面板 |
-| `apps/desktop` | Electron；`src/renderer` 与 dashboard **同构但独立** |
+| `apps/desktop` | Tauri 2 原生外壳与 Node sidecar；`src/renderer` 与 dashboard **同构但独立** |
 
 改 `packages/dashboard/src` 的共享 UI / 数据层时，核对该路径在 `apps/desktop/src/renderer` 是否有同名副本，有则一起改完。
 
-PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 主进程、IPC、heartbeat：[apps/desktop/README.md](apps/desktop/README.md)。
+PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 原生外壳、桥接与 runtime：[apps/desktop/README.md](apps/desktop/README.md)。
 
 独立修改任务必须**先判断 main 直改条件，再决定是否隔离**。除用户明确要求隔离外，按以下顺序执行：
 
@@ -55,29 +55,9 @@ PR / 分支命名 / 本地开发：[CONTRIBUTING.md](CONTRIBUTING.md)。Desktop 
 
 克隆或新建 worktree 后，需要安装依赖时在仓库根执行 `corepack pnpm install --frozen-lockfile --prefer-offline`。依赖共享由 `pnpm-workspace.yaml` 的全局虚拟存储配置管理，禁止手动复制或链接其他 worktree 的 `node_modules`；依赖变更、已有安装迁移和共享存储清理必须遵守 [依赖初始化与共享](docs/worktree-development.md#依赖初始化与共享)。
 
-如 `pnpm install` 卡在 electron postinstall
-
-Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
-
-请在安装前设置环境变量：
-
-```bash
-# Git Bash / macOS / Linux
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-```powershell
-# PowerShell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
 ## 契约
 
-`packages/core/src/server/local-api.ts` 的 `/functions/tud-*` 是本地面板契约。Dashboard 经 HTTP 读取 CLI；Desktop renderer 经 IPC 走同一套内存 local-api，不占 `:8252`。路由、响应与参数见架构注意事项。
+`packages/core/src/server/local-api.ts` 的 `/functions/tud-*` 是本地面板契约。Dashboard 经 HTTP 读取 CLI；Desktop renderer 经 JS 桥接、Tauri 外壳和 Node sidecar 访问内存 local-api，不占 `:8252`。路由、响应与参数见架构注意事项。
 
 定价：`packages/core/src/pricing/pricing.json` 是内置底表。CLI / Desktop 先读有效磁盘缓存，启动及默认每 24 小时从 models.dev 主源与 LiteLLM 官方直连补缺源重验证；Desktop 唤醒只检查是否过期。转换、差异检查与 `sync:pricing` 共用，失败保留已有价格；自定义 Quotern 格式源独立优先。补缺不得混用转售渠道或覆盖已有明确价，特殊费率只转换上游明确字段，未发布的档位组合保持未知。两端价格页经 HTTP / IPC 的 `/functions/tud-pricing` 读取生效表和价格来源，runtime 不可用时回退内置表。
 
@@ -85,7 +65,7 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 数据目录 `~/.quotern/`（`packages/core/src/paths.ts`），日志 `~/.quotern/logs/`。
 
-`tud.pid`（`{pid,kind}`，`kind` ∈ `{cli,desktop}`）互斥：Desktop 启动停 CLI 并抢 owner；之后 CLI `start` 只开面板（observer），不创建常驻采集调度。
+每个数据目录的 `tud.pid`（`{pid,kind}`，`kind` ∈ `{cli,desktop}`）互斥：Desktop 启动停同一数据目录的 CLI 并抢 owner；之后 CLI `start` 只开面板（observer），不创建常驻采集调度。
 
 ## Dashboard 进 CLI 包
 
@@ -97,7 +77,7 @@ CLI 构建固定 `VITE_BASE=/`。子路径在构建环境注入 `PUBLIC_PATH` / 
 
 GitHub Release 经人工公开发布后，`.github/workflows/release-npm.yml` 自动构建、校验并发布 CLI / core / i18n 到 npm：正式版使用 `latest`，预发布使用 `next`，已有同版本包跳过；所需 `NPM_TOKEN`、包验收和失败补发见 `RELEASE.md`。草稿、tag push 与普通构建不发布 npm。
 
-`corepack pnpm release:desktop:mac|win` 仅构建与验证，所有打包命令禁用上传。macOS 默认 ad-hoc 签名和手动更新，无需 Apple 凭据；`:mac:signed` 保留正式签名、公证及自动更新。统一入口为 `.github/workflows/release-desktop.yml`，`macos_signing` 显式选择 `adhoc` / `signed`，默认仅保留 Actions artifacts；显式手动选择发布且 tag 匹配 Desktop 版本时，验证全部平台、构建模式和无 `.git` 源码构建后创建 Draft Release。签名凭据与验收见 `RELEASE.md`。`electron-builder.yml` 的 `publish` 指向 `yuhengqin/Quotern`，用于生成运行时 `app-update.yml`。私有仓库自动更新需客户端环境提供 `GH_TOKEN` / `GITHUB_TOKEN`。Electron 二进制走 `apps/desktop/.npmrc` 国内镜像；根 `pnpm.onlyBuiltDependencies` 已含 `electron`。
+Desktop 发版使用根 `package.json` 的 `release:desktop:mac`、`release:desktop:mac:signed` 或 `release:desktop:win` 入口；具体构建、签名、产物和验收步骤见 [RELEASE.md](RELEASE.md)。迁移后的各平台产物及更新能力须分别验证，不以旧版结果代替。
 
 ---
 

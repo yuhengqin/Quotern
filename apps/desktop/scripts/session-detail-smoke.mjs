@@ -5,9 +5,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
-import { app, BrowserWindow, ipcMain, clipboard } from 'electron';
+import { fileURLToPath } from 'node:url';
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain, fixtureClipboard as clipboard, fixtureReferenceTheme as updateReferencePricingTheme } from './renderer-fixture.mjs';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 
 const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -186,7 +185,15 @@ async function checkPricingTiers(client, label) {
   await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'Space opens rate tiers');
   await client.evaluate(`(() => { const body=${dialog}.querySelector('.modal__body'); body.scrollTop=body.scrollTop>0?0:40; })()`);
   await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]')`), 'ancestor scrolling dismisses rate tiers');
+  // Park the real pointer outside row help triggers before resizing. Chromium can
+  // otherwise open a delayed tooltip underneath the stationary pointer after reflow.
+  await client.call('Input.dispatchMouseEvent', {type:'mouseMoved',x:2,y:2});
   await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 400, deviceScaleFactor: 1, mobile: false });
+  await client.evaluate(`(${trigger}).scrollIntoView({block:'center',inline:'nearest',behavior:'instant'}); true`);
+  await client.call('Input.dispatchMouseEvent', {type:'mouseMoved',x:3,y:2});
+  // A scroll or resize can put the rate behind a hover preview from the preceding
+  // interaction. A real user can dismiss that preview before the next click.
+  await client.evaluate('new Promise(resolve=>setTimeout(resolve, 180))');
   if (await client.evaluate('Boolean(document.querySelector(".help-popup"))')) {
     await client.key('Escape');
     await until(() => client.evaluate('!document.querySelector(".help-popup")'), 'dismiss the hover hint before the short-viewport rate action');
@@ -205,9 +212,6 @@ async function checkPricingTiers(client, label) {
 }
 async function main() {
   await mkdir(output, { recursive: true });
-  const windowFixture = path.join(output, 'window-main.mjs');
-  await build({ stdin: { contents: 'export { installReferencePricingLinks, updateReferencePricingTheme } from "./src/main/reference-pricing-window.ts"; export { registerDesktopWindowControls } from "./src/main/DesktopWindow.ts";', resolveDir: desktop }, outfile: windowFixture, bundle: true, format: 'esm', platform: 'node', external: ['electron'] });
-  const { installReferencePricingLinks, updateReferencePricingTheme, registerDesktopWindowControls } = await import(pathToFileURL(windowFixture).href);
   ipcMain.handle('locale:get', () => ({ preference: locale, resolved: locale, systemLocale: locale }));
   ipcMain.handle('theme:get', () => ({ mode: 'light', resolved: 'light' }));
   ipcMain.handle('auto-update:get-state', () => ({ status: 'unsupported', currentVersion: 'fixture' }));
@@ -218,10 +222,7 @@ async function main() {
     ipcMain.handle(`${prefix}:navigation-ack`, (_event, id) => { if (navigation?.navigationId === id) navigation = null; });
   }
   ipcMain.handle('tud:api-request', (_event, route, init) => api(route, init));
-  const preloadPath = path.join(desktop, 'out/preload/index.js');
-  const window = new BrowserWindow({ width: 1080, height: 900, show: true, webPreferences: { preload: preloadPath, contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
-  installReferencePricingLinks(window, { preloadPath, theme: 'light' });
-  registerDesktopWindowControls(() => window.isDestroyed() ? null : window);
+  const window = new BrowserWindow({ width: 1080, height: 900, show: true, desktop: true, webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(window);
   await window.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=initial' });
   const client = await connect(window);
   await until(async () => (await text(client)).includes(title), 'notification target detail');
@@ -538,16 +539,17 @@ async function main() {
   server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname.startsWith('/functions/')) { const chunks = []; for await (const chunk of req) chunks.push(chunk); const result = await api(req.url, { method: req.method, headers: req.headers, body: Buffer.concat(chunks).toString() }); res.writeHead(result.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(result.body)); return; }
-    const directory = url.pathname.startsWith('/desktop/') ? path.join(desktop, 'out/renderer') : dashboard;
-    const relative = directory === dashboard ? ['/sessions', '/pricing', '/'].includes(url.pathname) ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '') : decodeURIComponent(url.pathname).slice('/desktop/'.length);
+    const appRoute=url.pathname.startsWith('/desktop/');
+    const desktopAsset=url.pathname.startsWith('/assets/') && (req.headers.referer?.includes('/desktop/') || !existsSync(path.join(dashboard,url.pathname)));
+    const directory=appRoute || desktopAsset ? path.join(desktop,'out/renderer') : dashboard;
+    const relative=appRoute ? decodeURIComponent(url.pathname).slice('/desktop/'.length) : ['/sessions','/pricing','/'].includes(url.pathname) ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
     const file = path.resolve(directory, relative);
     if (!file.startsWith(directory + path.sep)) { res.writeHead(403).end(); return; }
     try { const data = await readFile(file); res.writeHead(200, { 'Content-Type': ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' })[path.extname(file)] ?? 'application/octet-stream' }).end(data); } catch { res.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const devWindow = new BrowserWindow({ width: 1080, height: 900, show: true, webPreferences: { preload: preloadPath, contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(devWindow);
-  installReferencePricingLinks(devWindow, { preloadPath, theme: 'light' });
+  const devWindow = new BrowserWindow({ width: 1080, height: 900, show: true, desktop: true, webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(devWindow);
   const devUrl = `${origin}/desktop/index.html#/sessions?sessionSource=codex&sessionId=fixture-root&sessionFocus=dev`;
   await devWindow.loadURL(devUrl);
   const devClient = await connect(devWindow);
@@ -562,10 +564,11 @@ async function main() {
   assert.equal(devWindow.webContents.getURL(), devOriginalUrl);
   assert.equal(await devClient.evaluate(`Boolean(${dialog})`), true);
   // The browser reads origin storage; Desktop's IPC locale does not initialize it.
-  await devClient.evaluate('localStorage.setItem("quotern.locale.preference", "zh-CN"); true');
   devReference.destroy(); devWindow.destroy();
   checks.push('desktop-http-renderer-reference-keeps-preload-and-original-detail');
   const browserWindow = new BrowserWindow({ width: 1080, height: 900, show: true, webPreferences: { contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } }); windows.push(browserWindow);
+  await browserWindow.loadURL(origin);
+  await browserWindow.page.evaluate(()=>localStorage.setItem('quotern.locale.preference','zh-CN'));
   await browserWindow.loadURL(`${origin}/sessions`);
   const selectedBrowser = await connect(browserWindow);
   await until(() => selectedBrowser.evaluate(`Boolean(document.querySelector('button[aria-haspopup="dialog"]'))`), 'regular session list');

@@ -50,13 +50,13 @@ Windows 下 Vite 6 的 `/@fs/` 静态服务跨盘查找由 [vite@6.4.3.patch](..
 
 ```bash
 corepack pnpm dev:cli       # 构建本 worktree 的 CLI，再启动独立 API + 浏览器 Vite
-corepack pnpm dev:desktop   # 构建依赖，再启动独立 Electron / renderer Vite
+corepack pnpm dev:desktop   # 构建依赖，再启动独立 Tauri 宿主、Node sidecar 和 renderer Vite
 corepack pnpm dev:status    # 只读查看此 worktree 的端口及会话记录
 ```
 
 CLI 与浏览器 Vite 也可分开启动：先 `pnpm dev:cli:api`，待 API 就绪后再 `pnpm dev:cli:ui`。`pnpm dev:dashboard` 等价于后者，默认要求本 worktree 已有所属 API，核对已发布配置的会话 ID 及 `/health` 的 `X-Quotern-Dev-Instance` 响应标识，否则拒绝启动；复用其他 API 必须显式指定代理目标。已有 UI 使用本 worktree API 时，API 重启保持原端口，端口被占用则失败；更改端口前先退出所属 UI。API 与 UI 分别取得资源锁；完整 CLI 取得两者，Desktop 与 CLI API 在同一 worktree 互斥，跨 worktree 使用独立状态。
 
-Dashboard 和 Desktop renderer 的 Vite 开发服务通过 `scripts/vite-core-source.mjs` 将浏览器可用的 Core 入口解析到源码，避免 Core 构建清空 `dist` 时中断热更新。新增浏览器运行时入口时同步维护该插件及回归测试。正式构建、CLI 和 Desktop 主进程继续使用 Core 包的 `dist` 导出；此规则不负责重启运行中的采集进程。`pnpm test:vite-core-source` 在临时目录清空 Core 构建文件，验证两端开发服务仍能加载依赖，并检查正式构建仍读取编译产物。
+Dashboard 和 Desktop renderer 的 Vite 开发服务通过 `scripts/vite-core-source.mjs` 将浏览器可用的 Core 入口解析到源码，避免 Core 构建清空 `dist` 时中断热更新。新增浏览器运行时入口时同步维护该插件及回归测试。正式构建、CLI 和 Desktop Node sidecar 继续使用 Core 包的 `dist` 导出；此规则不负责重启运行中的采集进程。`pnpm test:vite-core-source` 在临时目录清空 Core 构建文件，验证两端开发服务仍能加载依赖，并检查正式构建仍读取编译产物。
 
 默认优先使用 API `8252`、浏览器 Vite `5194`、Desktop renderer `5195`。已有服务占用默认 / 保存端口时，启动器寻找其他空闲端口，并保存实际选择；Vite 及 CLI 监听仍严格检查端口，检查后发生竞争时退出报错，绝不停止占用者。打开启动输出中的实际地址，不凭分支名猜端口。
 
@@ -70,7 +70,7 @@ $env:QUOTERN_DEV_UI_PORT = '5204'
 corepack pnpm dev:cli
 ```
 
-Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。CLI API、浏览器 Vite 和 Desktop renderer 的监听地址默认 `127.0.0.1`；需要局域网访问时，在启动命令的环境中设置 `QUOTERN_DEV_HOST=0.0.0.0`，例如 `QUOTERN_DEV_HOST=0.0.0.0 pnpm dev:cli`。端口预检使用同一监听地址；未显式指定的端口遇到其他网卡占用时也会另选空闲端口，显式端口冲突仍报错。浏览器使用宿主机的实际局域网 IP 和启动输出中的端口访问；Vite 到 CLI 的代理仍走 `127.0.0.1`。Desktop 数据仍经 Electron IPC 读取，对外开放 renderer 不会提供 Desktop HTTP API。上述环境变量仅用于本地启动，不提交 `.env*`，也不改仓库默认端口来绕过冲突。
+Desktop renderer 用 `QUOTERN_DEV_DESKTOP_PORT`。CLI API、浏览器 Vite 和 Desktop renderer 的监听地址默认 `127.0.0.1`；需要局域网访问时，在启动命令的环境中设置 `QUOTERN_DEV_HOST=0.0.0.0`，例如 `QUOTERN_DEV_HOST=0.0.0.0 pnpm dev:cli`。端口预检使用同一监听地址；未显式指定的端口遇到其他网卡占用时也会另选空闲端口，显式端口冲突仍报错。浏览器使用宿主机的实际局域网 IP 和启动输出中的端口访问；Vite 到 CLI 的代理仍走 `127.0.0.1`。Desktop 数据经 Tauri 桥接和 Node sidecar 读取，对外开放 renderer 不会提供 Desktop HTTP API。上述环境变量仅用于本地启动，不提交 `.env*`，也不改仓库默认端口来绕过冲突。
 
 只改 UI 时可明确复用已有 API：
 
@@ -95,7 +95,7 @@ corepack pnpm dev:cli:ui
 | `process-groups/<sessionId>.json` | POSIX 同步 spawn 记录，包含完整历史 PGID、创建中标记及会话归属凭据 |
 | `data/` | 配置、`tud.pid`、heartbeat、采集队列、游标、缓存、图片和运行日志 |
 | `config-home/` | 开发设备身份 sidecar |
-| `electron/` | 独立 Electron userData / sessionData、偏好和浏览器存储 |
+| `electron/` | 沿用的目录名：独立 Desktop 配置和偏好目录 |
 | `*.log` | 此启动会话的构建及服务输出 |
 
 启动器仅给自己的子进程注入 `QUOTERN_DEV_ISOLATED=1`、绝对 `QUOTERN_DATA_DIR`、`QUOTERN_CONFIG_HOME`、`QUOTERN_DESKTOP_USER_DATA` 及实际端口。它不会更改调用者的全局环境。隔离标记缺少必要目录时拒绝启动，禁止回退正式目录。
@@ -111,7 +111,7 @@ corepack pnpm dev:cli:ui
 - 正常退出使用本会话终端的 Ctrl+C。启动器只清理自己创建的子进程树，CLI 优先经自己的 IPC 清理并确认，再由 supervisor 终止所属进程树；确认清理完成后记录结束状态并释放自己的资源锁。POSIX 检查所属进程组，避免父进程退出后遗漏后代。
 - Windows 启动器在启动任何构建或服务之前，通过本机 WMI `Win32_Process.Create`、`CREATE_BREAKAWAY_FROM_JOB` 和隐藏窗口创建独立 Node guardian，再启动 Windows PowerShell 监视进程，避免普通 `detached` 后代随终端进程树或外层 Job 一起退出。guardian 经随机会话命名管道握手，核对 WMI 返回的 PID 和随机 token；监视进程先固定原 supervisor 的内核句柄，记录创建时间及 Windows Session ID，再确认 supervisor 已加入专属 Job、监视进程未加入后才允许启动服务。WMI 权限、breakaway、PowerShell 或 Job 建立失败时不会启动构建和服务，也不会回退到同树监视者。
 - Windows 正常退出在停止派生新进程并完成所属子进程的清理后，查询 Job，确认只剩 supervisor 才释放锁。服务父进程意外退出时不按死 PID 扩大停止范围；若 Job 仍有其他成员或查询失败，记录 `cleanup-required` 并保留锁。
-- 禁止按端口批量结束进程、按 `node` / `electron` / `vite` 进程名清理，或调用系统 `service stop` 腾端口。端口相同、目录相似、PID 文件存在，都不足以证明归属。
+- 禁止按端口批量结束进程、按 `node` / Tauri 宿主 / `vite` 等进程名清理，或调用系统 `service stop` 腾端口。端口相同、目录相似、PID 文件存在，都不足以证明归属。
 - `dev:status` 不会停止进程或自动修复。`supervisorAlive` 仅表示 PID 是否存在，不能单独证明原会话仍在运行，也不能排除 PID 重用。
 - 下次 `pnpm dev:*` 遇到残留资源锁时会尝试检查并自动恢复：锁和会话记录的 sessionId、mode、PID、worktree、开始时间必须匹配。POSIX 的 supervisor 和记录的所有子 PID 均须不存在；Windows 有完整匹配的 Job 完成凭据时，以凭据对原内核进程及其整个 Job 的确认作为退出依据，不因历史 PID 被无关进程复用而拦截或操作复用者。没有可信完成凭据时，活跃 PID 仍保守拦截。Windows 旧版本已记录正常清理完成、没有 Job 元数据且记录 PID 均不存在的 `stopped` 会话可恢复。
 - 新 Windows 会话的监视进程在原 supervisor 句柄已结束后，对一直持有的所属 Job 调用 `TerminateJobObject` 收尾，然后继续查询；只有 Job 活跃进程数为零，才将完成凭据写入临时文件并原子发布。不会按历史 PID 结束孤儿，不操作其他会话的 Job。恢复必须核对凭据的完整会话身份、Job 名称和随机 proofToken；即使会话已标记 `stopped`，崩溃遗留的锁也须有凭据。新管道方案明确记录 `setupComplete: false`、无子进程且尚未进入 building/running 的失败初始化可恢复，因为建立成功并持久记录之前禁止启动工作负载。监视进程失踪、查询失败、凭据缺失或损坏均不代表成功；恢复不会扫描整机孤儿或以端口空闲作为清锁依据。
@@ -123,6 +123,6 @@ corepack pnpm dev:cli:ui
 
 ## 验收与文档
 
-修改开发启动器或运行隔离逻辑时，验证应使用临时数据目录、受控来源和独立端口。至少覆盖：两实例共存、代理分别指向自身 API、显式端口冲突不影响占用者、重复启动不接管，以及一个实例退出后另一个仍响应。报告区分脚本 / Core 自动化、实际 CLI/Vite 探测和 Electron 实机验证。仅修改文档时检查文档差异即可，无需运行这些测试。
+修改开发启动器或运行隔离逻辑时，验证应使用临时数据目录、受控来源和独立端口。至少覆盖：两实例共存、代理分别指向自身 API、显式端口冲突不影响占用者、重复启动不接管，以及一个实例退出后另一个仍响应。报告区分脚本 / Core 自动化、实际 CLI/Vite 探测和 Tauri Desktop 实机验证。仅修改文档时检查文档差异即可，无需运行这些测试。
 
 AGENTS.md 只保留适用条件、关键禁令和本文引用。普通文档不会因一个链接自动加入 Codex 指令链，所以引用要明确要求在相关操作前读取。官方建议按任务需要引用相关材料，避免每次修改都要求阅读全部文档；见 [OpenAI 关于 AGENTS.md 的建议](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra) 和 [指令加载规则](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。具体目录名和端口策略是本项目约定，并非 Codex 官方强制要求。

@@ -1,11 +1,12 @@
-// Synthetic Core data and real renderer, preload, appearance persistence and tray controller.
+// Synthetic Core data and a real renderer in controlled browser windows; native windows have a separate smoke test.
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rmdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain, fixtureTheme as nativeTheme } from './renderer-fixture.mjs';
+import { FixtureMainWindow, registerAppearanceIpc } from './renderer-fixture-windows.mjs';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 import { checkAppearanceMotion } from './appearance-motion-checks.mjs';
 
@@ -18,6 +19,7 @@ app.setPath('userData', path.join(output, 'profile'));
 process.env.QUOTERN_DATA_DIR = path.join(output, 'data');
 process.env.QUOTERN_CONFIG_HOME = path.join(output, 'config-home');
 process.env.QUOTERN_DEV_ISOLATED = '1';
+app.commandLine.appendSwitch('lang', 'zh-CN');
 const port = await unusedPort(); app.commandLine.appendSwitch('remote-debugging-port', String(port));
 app.on('window-all-closed', () => {});
 const deadline = setTimeout(() => { console.error('Appearance acceptance exceeded 420 seconds'); app.exit(2); }, 420_000);
@@ -145,10 +147,9 @@ async function main() {
   ipcMain.handle('quota:navigation:ack', () => {});
   ipcMain.handle('quota:dialog-state', () => {});
   ipcMain.handle('quota:get', runtime.getState); ipcMain.handle('quota:refresh', runtime.refresh); ipcMain.handle('quota:set', (_event, patch) => runtime.setPreferences(patch));
-  const { registerAppearanceIpc } = await import('../out/main/appearance-ipc-test.mjs');
   const apply = value => { style = value.style; mainWindow?.setThemeBackground(resolved, style); };
   disposeAppearance = await registerAppearanceIpc(app.getPath('userData'), apply);
-  const browser = new BrowserWindow({ width: 1120, height: 960, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
+  const browser = new BrowserWindow({ width: 1120, height: 960, show: true }); windows.push(browser);
   const url = `http://127.0.0.1:${server.address().port}/dashboard`;
   await browser.loadURL(url); const web = await connect(browser);
   await until(() => web.evaluate('Boolean(document.querySelector("[data-quota-card]"))'), 'browser quota data');
@@ -180,20 +181,19 @@ async function main() {
   await browser.reload();
   await until(async () => (await snapshot(web)).palette === 'rose', 'browser migrates legacy accent');
   await settings(web, false); await select(web, 'appearance-style', 'catppuccin'); await closeSettings(web);
-  const peerWindow = new BrowserWindow({ width: 900, height: 780, show: false, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(peerWindow);
+  const peerWindow = new BrowserWindow({ width: 900, height: 780, show: false }); windows.push(peerWindow);
   await peerWindow.loadURL(url); const peer = await connect(peerWindow);
   await until(async () => (await snapshot(peer)).style === 'catppuccin' && (await snapshot(peer)).palette === 'rose', 'new browser tab reads style and old accent');
   await settings(web, false); await select(web, 'appearance-style', 'newspaper'); await closeSettings(web);
   await until(async () => (await snapshot(peer)).style === 'newspaper', 'browser storage event reaches another tab');
-  const { DesktopWindow, defaultPreloadPath } = await import('../out/main/appearance-window-test.mjs');
-  mainWindow = new DesktopWindow({ preloadPath: defaultPreloadPath(), theme: 'light' }); windows.push(mainWindow.window);
+  mainWindow = new FixtureMainWindow({ theme: 'light' }); windows.push(mainWindow.window);
   // Keep this acceptance renderer drawing while other test windows overlap it.
-  // Hidden/minimized shutdown is tested separately through the real native bridge.
+  // Native window lifecycle is tested separately through the native bridge.
   mainWindow.window.webContents.setBackgroundThrottling(false);
   await until(() => mainWindow.window.webContents.getURL().includes('index.html'), 'desktop navigation');
   const native = await connect(mainWindow.window);
   await until(() => native.evaluate('Boolean(document.querySelector("[data-quota-card]"))'), 'desktop quota data');
-  tray = await import('../out/main/appearance-tray-test.mjs');
+  tray = await import('./renderer-fixture-windows.mjs');
   tray.createTrayPopover({ getLocale: () => locale, showMainWindow: () => mainWindow.window.show(), getMainWindow: () => mainWindow.window, openSettings: () => {}, getAutostart: async () => false, setAutostart: async () => {} });
   tray.showQuotaPopover(); let panel;
   await until(() => { panel = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=tray-popover')); return Boolean(panel); }, 'tray window');
@@ -244,7 +244,7 @@ async function main() {
   }
   if (!process.argv.includes('--static-only')) {
     const openHidden = async () => {
-      const window = new BrowserWindow({ show: false, width: 800, height: 700, webPreferences: { preload: defaultPreloadPath(), contextIsolation: true, sandbox: true, backgroundThrottling: false } });
+      const window = new BrowserWindow({ show: false, width: 800, height: 700, desktop: true });
       windows.push(window); await window.loadFile(path.join(desktop, 'out/renderer/index.html')); return connect(window);
     };
     await checkAppearanceMotion({ web, peer, native, popup, mainWindow, panel, settings, select, closeSettings, until, shot, output, openHidden });
@@ -312,7 +312,7 @@ app.whenReady().then(main).catch(async error => {
   }
 }).finally(async () => {
   clearTimeout(deadline);
-  disposeAppearance?.(); tray?.disposeTrayPopover();
+  disposeAppearance?.(); tray?.destroyTrayPopover();
   for (const client of clients) client.close();
   for (const window of windows) if (!window.isDestroyed()) window.destroy();
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

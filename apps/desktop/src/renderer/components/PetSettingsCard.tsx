@@ -38,7 +38,7 @@ type PetFeedback = { key: string; options?: Record<string, string> };
 type PetCatalogFeedback = { action: PetCatalogRequest['action']; message: PetFeedback; failed: boolean; detail?: string };
 
 function spriteUrl(path: string): string {
-  return `quotern-pet://builtin/${path}`;
+  return petAsset(`quotern-pet://builtin/${path}`);
 }
 
 function ClawdSprite({ path, size, label, preview = false }: { path: string; size: number; label?: string; preview?: boolean }) {
@@ -378,3 +378,4 @@ export function PetSettingsCard({ request }: { request?: PetSettingsRequest } = 
     </section>
   );
 }
+import { petAsset } from '../pet-assets';

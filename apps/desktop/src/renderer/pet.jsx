@@ -22,7 +22,7 @@ import { PetAtlasAnimated } from "./ui/foundation/PetAtlasAnimated.jsx";
 import { usePetCatalog } from "./hooks/use-pet-catalog.js";
 
 /**
- * Standalone pet renderer inside Quotern's transparent Electron window.
+ * Standalone pet renderer inside Quotern's transparent Tauri window.
  * The main process supplies usage, limits and window state through pet-entry.js.
  * Only pointer interaction within the pet window is observed; there is no global
  * keyboard activity listener.
@@ -202,7 +202,7 @@ const PET_STATE_TO_PATH = {
 const petSvgCache = new Map();
 async function fetchPetSvg(path) {
   if (petSvgCache.has(path)) return petSvgCache.get(path);
-  const resp = await fetch(`quotern-pet://builtin/clawd/${path}`);
+  const resp = await fetch(petAsset(`quotern-pet://builtin/clawd/${path}`));
   if (!resp.ok) return null;
   const raw = await resp.text();
   // Strip the SVG's own sizing and pin the fixed character frame so every pose scales
@@ -1021,3 +1021,4 @@ createRoot(document.getElementById("pet-root")).render(
     <Pet />
   </React.StrictMode>,
 );
+import { petAsset } from './pet-assets';

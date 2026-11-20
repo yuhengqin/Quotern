@@ -5,25 +5,7 @@
 ## 安装依赖的注意事项
 已发布 CLI 的运行时需要 Node.js >= 20.10；从源码构建、开发和测试使用 Node.js 22.13+。克隆后先在仓库根执行 `corepack pnpm install --frozen-lockfile --prefer-offline`，pnpm 版本以根 `package.json` 的 `packageManager` 为准。
 
-如 `pnpm install` 卡在 electron postinstall
-
-Electron 二进制默认从 GitHub Releases 拉取；国内网络可能会超时
-
-请在安装前设置环境变量：
-
-```bash
-# Git Bash / macOS / Linux
-export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
-
-```powershell
-# PowerShell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-$env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
-corepack pnpm install --frozen-lockfile --prefer-offline
-```
+Desktop 使用 Tauri 2 和内置 Node 运行时；构建需要 Rust 和目标平台的 Tauri 构建依赖。
 
 从 `main` 拉分支，PR 回 `main`。
 
@@ -40,9 +22,9 @@ corepack pnpm build
 corepack pnpm --filter quotern-desktop typecheck
 ```
 
-安装包含 Electron 下载，需要网络或上面的镜像设置。`build` 会构建 core、i18n、Dashboard、CLI（含面板静态文件）和 Desktop，无需 Git 历史或 Apple 签名密钥。CLI 输出在 `packages/cli/dist/`，Desktop 输出在 `apps/desktop/out/`；在支持的桌面系统上可用 `corepack pnpm --filter quotern-desktop start` 预览已构建应用。Linux 可构建源码与 CLI，目前不提供 Linux 桌面安装包。
+构建需要下载依赖及目标平台的 Node 运行时。`build` 会构建 core、i18n、Dashboard、CLI（含面板静态文件）和 Desktop，无需 Git 历史或 Apple 签名密钥。CLI 输出在 `packages/cli/dist/`，Desktop 的 renderer 和运行时资源位于 `apps/desktop/out/`，Tauri 程序位于 `apps/desktop/src-tauri/target/release/`；在支持的桌面系统上可用 `corepack pnpm --filter quotern-desktop start` 预览已构建应用。Linux 可构建源码与 CLI，目前不提供 Linux 桌面安装包。
 
-生成安装包需要对应系统的打包工具。macOS 默认 `adhoc` 模式无需 Apple 会员或凭据，同时生成 ARM64/x64 的 DMG、ZIP，并采用手动更新；`signed` 模式需要 Developer ID 证书与公证凭据，保留自动更新，见 [发布验收](./RELEASE.md#desktop-统一构建与验收)。在 Git checkout 中使用 `corepack pnpm build:desktop:mac` 或 `corepack pnpm build:desktop:mac:signed` 构建并验证。源码归档没有 Git commit 可供发布证明，在完成上面的根 `build` 后，可只生成本机测试包：
+生成安装包需要对应系统的打包工具。macOS 默认 `adhoc` 模式无需 Apple 会员或凭据，同时生成 ARM64/x64 的 DMG、ZIP，并采用手动更新；`signed` 模式需要 Developer ID 证书、公证凭据及更新签名密钥，见 [发布验收](./RELEASE.md#desktop-统一构建与验收)。在 Git checkout 中使用 `corepack pnpm build:desktop:mac` 或 `corepack pnpm build:desktop:mac:signed` 构建并验证。源码归档没有 Git commit 可供发布证明，在完成上面的根 `build` 后，可只生成本机测试包：
 
 ```bash
 corepack pnpm --filter quotern-desktop exec node ../../scripts/release-macos.mjs --mode adhoc --build-only
@@ -136,7 +118,7 @@ PR 推上来后 CI（`.github/workflows/ci.yml`）会在 Ubuntu、macOS、Window
 pnpm install
 # 开发热更新：
 pnpm dev:desktop
-# 构建依赖后启动 Electron
+# 构建依赖后启动已构建的 Tauri 应用
 pnpm start:desktop    
 ```
 

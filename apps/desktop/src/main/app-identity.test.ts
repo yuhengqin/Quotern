@@ -42,7 +42,7 @@ test('Windows process identity matches the installer AppUserModelID', t => {
   const f = fixture(t);
   configureQuoternAppIdentity(f.app);
   assert.equal(f.windowsAppId(), 'dev.quotern.desktop');
-  assert.match(readFileSync('electron-builder.yml', 'utf8'), /^appId: dev\.quotern\.desktop\r?$/m);
+  assert.equal(JSON.parse(readFileSync('src-tauri/tauri.conf.json','utf8')).identifier, f.windowsAppId());
 });
 
 test('existing Quotern profile keeps preferences, update state and session directory', (t) => {

@@ -22,7 +22,7 @@ export function SubscriptionUsageGrid({ className = '', summaryOnly = false }: S
   const request = useQuotaNavigation();
   const [handledId, setHandledId] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
-  const visible = state?.providers.filter(provider => provider.profileLabel || provider.windows.length || provider.details.length || provider.planLabel || provider.fetchedAt || ['expired', 'access-denied', 'custom-provider'].includes(provider.status)) ?? [];
+  const visible = state?.providers.filter(provider => provider.access || provider.profileLabel || provider.windows.length || provider.details.length || provider.planLabel || provider.fetchedAt || ['expired', 'access-denied', 'custom-provider'].includes(provider.status)) ?? [];
   const allowances = distinctQuotaAllowances(visible.filter(provider => !isQuotaStatusOnly(provider)));
   const statuses = visible.filter(isQuotaStatusOnly);
   const editor = useQuotaLayout([...allowances, ...statuses], state?.preferences, save);

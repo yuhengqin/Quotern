@@ -1,7 +1,6 @@
 /**
- * Desktop runtime: BucketStore + local-api stay in the Electron main process.
- * Parsers/queue IO and heavy read-only session queries run in separate
- * utilityProcesses so neither path can block the window event loop.
+ * The bundled Node sidecar owns BucketStore and the in-memory local API.
+ * Collection and expensive session queries run in dedicated child processes.
  */
 import {
   AggregateCache,

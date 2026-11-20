@@ -5,19 +5,28 @@ export function macosReleasePolicy(mode) {
     checks: ['codesign', 'architecture', 'version', 'update-policy', 'zip-extracted', 'dmg-mounted', ...(signed ? ['spctl', 'stapler'] : ['adhoc-signature'])] };
 }
 
-export function macosBuilderArgs(mode, dir) {
+export function macosTauriArgs(mode, architecture, identity) {
   macosReleasePolicy(mode);
-  return ['--mac', '--arm64', '--x64', '--publish', 'never', `--config.directories.output=${dir}`,
-    '--config.mac.type=distribution', `--config.extraMetadata.quoternMacosReleaseMode=${mode}`,
-    ...(mode === 'adhoc' ? ['--config.mac.identity=-', '--config.mac.forceCodeSigning=false', '--config.mac.hardenedRuntime=false', '--config.mac.notarize=false', '--config.dmg.sign=false'] : [])];
+  const target = { x64: 'x86_64-apple-darwin', arm64: 'aarch64-apple-darwin' }[architecture];
+  if (!target) throw new Error(`Invalid macOS architecture: ${architecture}`);
+  if (mode === 'signed' && (!identity || identity === '-')) throw new Error('Signed builds require a verified Developer ID identity');
+  const config = { bundle: { createUpdaterArtifacts: mode === 'signed', macOS: {
+    signingIdentity: mode === 'adhoc' ? '-' : identity, entitlements: '../resources/entitlements.mac.plist',
+  } } };
+  return ['bundle', '--target', target, '--bundles', 'app,dmg', '--config', JSON.stringify(config)];
 }
 
 export function macosBuildEnvironment(original, mode, keychain) {
   macosReleasePolicy(mode);
   const env = { ...original };
-  if (mode === 'signed') return env;
+  env.QUOTERN_MACOS_MODE = mode;
+  if (mode === 'signed') {
+    if (!env.QUOTERN_UPDATER_PUBLIC_KEY || !env.TAURI_SIGNING_PRIVATE_KEY) throw new Error('Signed builds require QUOTERN_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY');
+    if (env.APPLE_APP_SPECIFIC_PASSWORD) env.APPLE_PASSWORD = env.APPLE_APP_SPECIFIC_PASSWORD;
+    return env;
+  }
   if (!keychain) throw new Error('Ad-hoc builds require an empty signing keychain');
-  for (const key of Object.keys(env)) if (/^(CSC_|WIN_CSC_|APPLE_)/i.test(key)) delete env[key];
+  for (const key of Object.keys(env)) if (/^(CSC_|WIN_CSC_|APPLE_|TAURI_SIGNING_)/i.test(key)) delete env[key];
   return { ...env, CSC_IDENTITY_AUTO_DISCOVERY: 'false', CSC_KEYCHAIN: keychain };
 }
 

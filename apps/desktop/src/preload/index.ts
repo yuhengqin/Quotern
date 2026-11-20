@@ -1,12 +1,11 @@
 /**
- * Preload bridge for quotern-desktop.
+ * Shared desktop bridge for quotern-desktop.
  *
- * Exposes a small, audited surface to the renderer via `contextBridge`:
+ * Creates the audited renderer surface for a host transport:
  *  - window controls (minimize / maximize / close)
  *  - tud.api.request → in-process local-api (same contract as CLI :8252)
  *  - tud.onDataSynced → Core poll / sync watcher refresh
  */
-import { contextBridge, ipcRenderer } from 'electron';
 import { parseOpenSettingsDetail, type OpenSettingsDetail } from '../shared/settings-navigation';
 import { DSH_PET_GET, DSH_PET_ACTION, DSH_PET_CHANGED, DSH_PET_NAVIGATION, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK, type DshPetAction, type DshPetState, type SessionNavigation } from '../shared/dsh-pet';
 import { QUOTA_CHANGED, QUOTA_GET, QUOTA_REFRESH, QUOTA_SET, type QuotaPreferencePatch, type QuotaState } from '../shared/quota';
@@ -112,6 +111,16 @@ const TRAE_CN_SUBSCRIPTION_GET_CHANNEL = 'trae-cn-subscription:get';
 const WORKBUDDY_GLOBAL_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-global-subscription:get';
 const WORKBUDDY_MAINLAND_SUBSCRIPTION_GET_CHANNEL = 'workbuddy-mainland-subscription:get';
 
+import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type NotificationSettingsState, type NotificationPreferencePatch, type NotificationDelivery, type NotificationSound } from '../shared/notifications';
+
+export interface DesktopTransport {
+  invoke(channel: string, ...args: any[]): Promise<any>;
+  send(channel: string, ...args: any[]): void;
+  on(channel: string, listener: (...args: any[]) => void): void;
+  removeListener(channel: string, listener: (...args: any[]) => void): void;
+}
+
+export function createTudApi(ipcRenderer: DesktopTransport, platform: NodeJS.Platform) {
 async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise<SavedShareBackground[]> {
   try {
     return await ipcRenderer.invoke(SHARE_BACKGROUNDS_CHANNEL, request);
@@ -120,8 +129,6 @@ async function requestShareBackgrounds(request: ShareBackgroundRequest): Promise
     throw new Error(message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''));
   }
 }
-
-import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_CHANGED, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type NotificationSettingsState, type NotificationPreferencePatch, type NotificationDelivery, type NotificationSound } from '../shared/notifications';
 
 let appearanceVisibilitySubscribers = 0;
 const tudApi = {
@@ -145,12 +152,14 @@ const tudApi = {
     onState: (callback: (state: DshPetState) => void) => { const listener = (_event: unknown, state: DshPetState) => callback(state); ipcRenderer.on(DSH_PET_CHANGED, listener); return () => ipcRenderer.removeListener(DSH_PET_CHANGED, listener); },
   },
   version: () => '0.1.0',
-  platform: process.platform,
+  platform,
   quota: {
     testNotification: (): Promise<'shown' | 'requested'> => ipcRenderer.invoke(QUOTA_TEST_NOTIFICATION),
     isShortcutRegistered: (): Promise<boolean> => ipcRenderer.invoke(QUOTA_SHORTCUT_GET),
     getState: (): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_GET),
     refresh: (provider?: string): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_REFRESH, provider),
+    authorize: (id: string, secret?: string): Promise<void> => ipcRenderer.invoke('quota:authorize', id, secret),
+    disconnect: (id: string): Promise<void> => ipcRenderer.invoke('quota:disconnect', id),
     setPreferences: (patch: QuotaPreferencePatch): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_SET, patch),
     onChanged: (callback: (state: QuotaState) => void) => {
       const listener = (_event: unknown, state: QuotaState) => callback(state);
@@ -473,6 +482,7 @@ const tudApi = {
   },
 };
 
-contextBridge.exposeInMainWorld('tud', tudApi);
+return tudApi;
+}
 
-export type TudApi = typeof tudApi;
+export type TudApi = ReturnType<typeof createTudApi>;

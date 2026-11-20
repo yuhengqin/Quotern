@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Quotern",
+  "version": "../package.json",
+  "identifier": "dev.quotern.desktop",
+  "plugins": { "updater": { "pubkey": "" } },
+  "build": {
+    "frontendDist": "../out/renderer",
+    "devUrl": "http://127.0.0.1:5195"
+  },
+  "app": {
+    "windows": [],
+    "macOSPrivateApi": true,
+    "security": {
+      "capabilities": ["desktop"],
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://quotern-media.localhost; font-src 'self' data: http://quotern-media.localhost; connect-src 'self' ipc: http://ipc.localhost http://quotern-media.localhost; media-src 'self' blob: data: http://quotern-media.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "app", "dmg"],
+    "icon": ["icons/icon.ico", "icons/icon.png", "icons/icon.icns"],
+    "externalBin": ["binaries/quotern-node"],
+    "resources": { "../out/sidecar/": "node/" },
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "displayLanguageSelector": true,
+        "languages": ["English", "SimpChinese", "Japanese", "Korean"]
+      }
+    }
+  }
+}

@@ -64,7 +64,12 @@ jobs:
         with:
           node-version: 22
       - run: corepack pnpm install --frozen-lockfile --prefer-offline
+      - run: rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
       - name: Build and verify x64 and ARM64 Windows assets without uploading
+        env:
+          QUOTERN_UPDATER_PUBLIC_KEY: ${{ vars.QUOTERN_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: corepack pnpm release:desktop:win
       - uses: actions/upload-artifact@v7
         with:
@@ -77,6 +82,8 @@ jobs:
             apps/desktop/release/${{ needs.preflight.outputs.version }}/latest.yml
             apps/desktop/release/${{ needs.preflight.outputs.version }}/beta.yml
             apps/desktop/release/${{ needs.preflight.outputs.version }}/win-artifacts.json
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/Quotern-*-setup.exe.sig
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/tauri-windows-*.json
 
   macos:
     needs: preflight
@@ -116,8 +123,12 @@ jobs:
           xcrun notarytool store-credentials quotern-release --keychain "$keychain" --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID"
           printf 'CSC_KEYCHAIN=%s\nAPPLE_KEYCHAIN=%s\nAPPLE_KEYCHAIN_PROFILE=quotern-release\nAPPLE_TEAM_ID=%s\n' "$keychain" "$keychain" "$APPLE_TEAM_ID" >> "$GITHUB_ENV"
           rm -f "$certificate"
+      - run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
       - name: Build and verify ARM64 and x64 macOS assets in the selected mode
         env:
+          QUOTERN_UPDATER_PUBLIC_KEY: ${{ vars.QUOTERN_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           MACOS_MODE: ${{ needs.preflight.outputs.macos-mode }}
         shell: bash
         run: |
@@ -156,6 +167,8 @@ jobs:
             apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/beta-mac.yml
             apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/macos-verification.json
             apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/mac-artifacts.json
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/Quotern-*-mac-*.app.tar.gz*
+            apps/desktop/release/${{ needs.preflight.outputs.version }}/mac-${{ needs.preflight.outputs.macos-mode }}/tauri-darwin-*.json
 
   source:
     needs: preflight
@@ -168,6 +181,8 @@ jobs:
         with:
           node-version: 22
       # The checker uses only Node builtins; the verified installation/build happen in the extracted archive.
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - run: rustup update stable --no-self-update
       - name: Install and build the exact committed source archive without .git
         run: corepack pnpm check:source-archive --ref HEAD --output "$RUNNER_TEMP/source-archive.json"
       - uses: actions/upload-artifact@v7

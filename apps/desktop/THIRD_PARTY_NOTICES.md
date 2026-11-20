@@ -13,7 +13,7 @@ Code: MIT License, Copyright (c) 2026 PC2005-cloud. The full MIT license is reta
 The Windows desktop pet uses adapted source code and assets from [TokenTracker](https://github.com/xiufengsun/TokenTracker):
 `src/renderer/pet.jsx`, `src/renderer/lib/pet-*`, `src/renderer/lib/bot-appearance.js`,
 `src/renderer/ui/foundation/{BotAnimated,PetAtlasAnimated}.jsx`, and
-`src/renderer/public/clawd`. The code is adapted to Quotern's Electron host and
+`src/renderer/public/clawd`. The code is adapted to Quotern's Tauri host and
 local usage data contract.
 
 MIT License

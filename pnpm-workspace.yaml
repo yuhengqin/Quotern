@@ -7,9 +7,6 @@ packageExtensions:
   '@heroui/react@3.2.4':
     dependencies:
       '@internationalized/date': 3.12.3
-  'electron-vite@5.0.0':
-    dependencies:
-      electron: 35.4.0
 supportedArchitectures:
   os:
     - current
@@ -22,9 +19,6 @@ overrides:
   '@heroui/styles': 3.2.4
   tailwind-variants: 3.3.1
 allowBuilds:
-  electron: true
-  # Squirrel.Windows is unused by our NSIS and portable targets.
-  electron-winstaller: false
   esbuild: true
   protobufjs: false
 patchedDependencies:

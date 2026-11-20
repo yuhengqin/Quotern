@@ -19,8 +19,9 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
       details.push({ id: key, label: title, text: valueKind === 'exhausted' ? '已用尽' : '无限', valueKind, resetsAt: timestamp(row.resetsAt) });
       return;
     }
+    const isBalance = id === 'deepseek' || (id === 'kimi' && ['balance-usd', 'balance-cny'].includes(key));
     const used = finite(row.usedPercent) ? row.usedPercent
-      : finite(row.remainingPercent) ? 100 - row.remainingPercent : null;
+      : finite(row.remainingPercent) ? 100 - row.remainingPercent : isBalance && finite(row.remaining) ? 0 : null;
     if (used === null || windows.some(window => window.id === key)) return;
     const window: QuotaWindow = { id: key, label: title, usedPercent: Math.max(0, Math.min(100, used)),
       resetsAt: timestamp(row.resetsAt), durationSeconds: finite(row.durationSeconds) && row.durationSeconds > 0 ? row.durationSeconds : duration ?? null,
@@ -28,8 +29,9 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
       ...(id === 'qoder' ? { timeKind: 'expiry' as const } : {}),
       ...(typeof row.groupLabel === 'string' ? { groupLabel: row.groupLabel } : {}),
       ...(row.analysisEligible === false ? { analysisEligible: false } : {}),
-      ...(id === 'deepseek' ? { valueText: finite(row.remaining) ? `¥${row.remaining.toFixed(2)}` : '余额未知',
-        balance: { currency: 'CNY' as const, remaining: finite(row.remaining) && row.remaining >= 0 ? row.remaining : null }, analysisEligible: false } : {}),
+      ...(isBalance ? { valueText: finite(row.remaining) ? `${row.currency === 'USD' ? '$' : '¥'}${row.remaining.toFixed(2)}` : '余额未知',
+        balance: { currency: row.currency === 'USD' ? 'USD' as const : 'CNY' as const,
+          remaining: finite(row.remaining) && row.remaining >= 0 ? row.remaining : null }, analysisEligible: false } : {}),
       ...(finite(row.used) && finite(row.limit) && row.limit > 0 ? { used: row.used, limit: row.limit,
         unit: row.unit === 'requests' || row.unit === 'credits' ? row.unit : 'tokens' } : {}),
     };
@@ -45,7 +47,7 @@ export function normalizeQuotaSnapshot(id: string, label: string, value: unknown
     if (Array.isArray(raw.limits)) for (const item of raw.limits) {
       const row = record(item);
       if (typeof row.id !== 'string' || typeof row.label !== 'string') continue;
-      const duration = ['five-hour', 'five_hour', '5h'].includes(row.id) ? 18000 : ['weekly', 'seven-day', '7d'].includes(row.id) ? 604800 : undefined;
+      const duration = ['five-hour', 'five_hour', '5h', 'limit5h'].includes(row.id) ? 18000 : ['weekly', 'seven-day', '7d', 'limit7d'].includes(row.id) ? 604800 : undefined;
       add(row.id, row.label, row, duration);
     }
   }

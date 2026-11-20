@@ -11,7 +11,7 @@ import { useQuotaLayout } from '../hooks/useQuotaLayout';
 export function SubscriptionUsageGrid({ className = '' }: { className?: string }) {
   const { t } = useTranslation();
   const { state, error, refresh, save } = useQuotaState();
-  const visible = state?.providers.filter(provider => provider.profileLabel || provider.windows.length || provider.details.length || provider.planLabel || provider.fetchedAt || ['expired', 'access-denied', 'custom-provider'].includes(provider.status)) ?? [];
+  const visible = state?.providers.filter(provider => provider.access || provider.profileLabel || provider.windows.length || provider.details.length || provider.planLabel || provider.fetchedAt || ['expired', 'access-denied', 'custom-provider'].includes(provider.status)) ?? [];
   const allowances = distinctQuotaAllowances(visible.filter(provider => !isQuotaStatusOnly(provider)));
   const statuses = visible.filter(isQuotaStatusOnly);
   const editor = useQuotaLayout([...allowances, ...statuses], state?.preferences, save);

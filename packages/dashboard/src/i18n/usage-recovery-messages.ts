@@ -23,6 +23,22 @@ const entries = {
   'credits.expirations': ['重置资格到期时间', 'Reset credit expiration', 'リセット枠の有効期限', '초기화 크레딧 만료일'],
   'credits.expiryUnavailable': ['到期时间未知', 'Expiration unavailable', '有効期限不明', '만료일을 확인할 수 없음'],
   'credits.someExpiryUnavailable': ['部分重置资格的到期时间未知', 'Some expiration dates are unavailable', '一部の有効期限は不明です', '일부 크레딧의 만료일을 확인할 수 없음'],
+  'quotaAccess.connect': ['连接', 'Connect', '接続', '연결'],
+  'quotaAccess.manage': ['管理连接', 'Manage connection', '接続を管理', '연결 관리'],
+  'quotaAccess.disconnect': ['断开', 'Disconnect', '切断', '연결 해제'],
+  'quotaAccess.usage': ['官方用量页', 'Official usage page', '公式使用量ページ', '공식 사용량 페이지'],
+  'quotaAccess.guide': ['官方使用指南', 'Official guide', '公式ガイド', '공식 사용 안내'],
+  'quotaAccess.apiKey': ['API 密钥', 'API key', 'API キー', 'API 키'],
+  'quotaAccess.kimiToken': ['Kimi 本地服务令牌', 'Kimi local server token', 'Kimi ローカルサーバートークン', 'Kimi 로컬 서버 토큰'],
+  'quotaAccess.kimiNote': ['启动 Kimi Code 本地服务后，输入其访问令牌。本次会话只查询本机 58627 端口的用量接口。', 'Start the Kimi Code local server and enter its access token. This session queries usage on local port 58627.', 'Kimi Code のローカルサーバーを起動してアクセス用トークンを入力します。このセッションはローカルの 58627 番ポートで使用量を取得します。', 'Kimi Code 로컬 서버를 시작한 후 액세스 토큰을 입력하세요. 이 세션은 로컬 포트 58627에서 사용량을 조회합니다.'],
+  'quotaAccess.sessionNote': ['仅授权本次会话使用此密钥。', 'Authorize this key for this session only.', 'このセッションに限り、このキーの使用を許可します。', '이 세션에서만 이 키를 사용하도록 허용합니다.'],
+  'quotaAccess.cliNote': ['确认本次会话使用已登录的官方 CLI。', 'Allow this session to use the signed-in official CLI.', 'このセッションでログイン済みの公式 CLI を使用することを許可します。', '이 세션에서 로그인된 공식 CLI를 사용하도록 허용합니다.'],
+  'quotaAccess.save': ['保存并连接', 'Save and connect', '保存して接続', '저장하고 연결'],
+  'quotaAccess.confirm': ['确认连接', 'Confirm connection', '接続を確認', '연결 확인'],
+  'quotaAccess.connected': ['已连接', 'Connected', '接続済み', '연결됨'],
+  'quotaAccess.working': ['正在处理…', 'Working…', '処理中…', '처리 중…'],
+  'quotaAccess.failed': ['操作失败，请重试。', 'Action failed. Please try again.', '操作に失敗しました。もう一度お試しください。', '작업에 실패했습니다. 다시 시도해 주세요.'],
+  'quotaAccess.done': ['操作已完成。', 'Action completed.', '操作が完了しました。', '작업이 완료되었습니다.'],
 } as const;
 
 registerMessages(Object.fromEntries((['zh-CN', 'en', 'ja', 'ko'] as SupportedLocale[]).map((locale, index) => [locale, Object.fromEntries(Object.entries(entries).map(([key, values]) => [key, values[index]]))])) as Record<SupportedLocale, Record<string, string>>);

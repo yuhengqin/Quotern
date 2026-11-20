@@ -1,10 +1,10 @@
 # 订阅额度管理
 
-主窗口与 macOS / Windows 托盘面板共用额度管理状态，Windows 宠物也复用这份读数。额度来自既有订阅读取器，Token 与费用仍由 Core 本地统计链路计算。
+主窗口、托盘和 Windows 桌宠共用额度状态。桌面端默认展示 14 张未连接的来源卡片。用户可以在卡片中授权官方客户端或接口读取额度，或直接打开提供方的用量页面。连接凭据仅在当前桌面会话有效。Token 与费用由 Core 的本地统计链路计算。
 
 CLI 浏览器面板也提供同一套卡片、详情、趋势和手动刷新。CLI 可独立读取现有 13 个订阅通道（含 Gemini CLI），无需运行 Quotern Desktop；仍需各 Agent 自身的有效登录状态，依赖 Agent 客户端/CLI 的来源保留原要求。网页显示的是提供 HTTP 服务的那台机器的额度。网页在可见时每 15 秒读取本地快照，回到页面时更新；上游读取仍受管理器间隔和退避约束。
 
-额度采集、归一化、采样和分析位于 `packages/core/src/quota`。Desktop 保留 Electron 网络适配、IPC、系统电源事件与通知；CLI 使用 Node 网络，当前不发送系统额度通知。Desktop 运行时，CLI 的 observer 仅在网页请求或手动刷新时读取额度，不启动额外额度轮询。
+额度的采样、归一化和分析位于 `packages/core/src/quota`。Desktop 的授权和读取入口在 `apps/desktop/src/sidecar/quotas.ts` 与 `official-providers.ts`，Tauri 负责系统窗口和通知。CLI 使用原有的独立读取器。下文中 OMP 发现、附加凭据和逐供应商读取细节适用于对应的 CLI 读取器。桌面端仅展示官方接入实际给出的字段。
 
 ## 查看与设置
 

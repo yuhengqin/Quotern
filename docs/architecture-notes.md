@@ -1,6 +1,6 @@
 # 架构注意事项
 
-项目在本机采集 Coding Agent 用量，以 Core 统一解析、存储和计算，由 CLI 浏览器面板或 Electron 桌面端展示。修改功能时，先确定数据归属和运行进程，再选择实现入口。
+项目在本机采集 Coding Agent 用量，以 Core 统一解析、存储和计算，由 CLI 浏览器面板或 Tauri 2 桌面端展示。修改功能时，先确定数据归属和运行进程，再选择实现入口。
 
 相关说明：[数据采集与统计](./data-notes.md)、[运行维护](./runtime-notes.md)、[开发协作](./development-notes.md)。
 
@@ -11,11 +11,12 @@
 | `packages/core` | 数据源发现、parser、queue、sync、定价、聚合与 local-api | 统计规则放在这里，避免各端自行解释同一字段 |
 | `packages/cli` | 命令解析、后台服务、HTTP 与 Dashboard 静态资源托管 | CLI 构建依赖 Core 和 Dashboard；服务注册与进程运行是两个状态 |
 | `packages/dashboard` | 浏览器面板，构建后随 CLI 分发 | 开发请求代理到本机 CLI，发布构建默认使用根路径 |
-| `apps/desktop/src/main` | 窗口、IPC、运行时管理、订阅额度与更新 | 采集与重会话查询由各自 utilityProcess 执行，主进程应用结果并分发请求；采集仍有显式降级分支 |
-| `apps/desktop/src/preload` | `window.tud` 桥接 | 只暴露明确的方法及必要的返回数据 |
+| `apps/desktop/src-tauri/src/main.rs` | Tauri 原生宿主、窗口及桥接 | 通过私有通道与 Node sidecar 通信 |
+| `apps/desktop/src/sidecar/index.ts` | Node sidecar 入口和本地 runtime | 采集与会话分析由捆绑 Node fork 子进程执行 |
+| `apps/desktop/src/preload` | `window.tud` 桥接与 `tauri-transport.ts` | 只暴露明确的方法及必要的返回数据 |
 | `apps/desktop/src/renderer` | 桌面主窗口和托盘面板 | 与 Dashboard 同构但独立，存在需要同步修改的同名文件 |
 
-两份 UI 的 transport 不同。浏览器通过 HTTP，桌面端优先通过 `window.tud.api.request` 进入主进程；重会话查询分发给分析 utilityProcess 的 Hono app，其余请求在主进程内处理。不要整目录复制 `api.ts`；共享字段含义和展示逻辑时，保留各自的 transport 和恢复处理。实际分流范围见[运行维护](runtime-notes.md#会话分析与窗口响应)。
+两份 UI 的 transport 不同。浏览器通过 HTTP；桌面端通过 `window.tud.api.request`、Tauri 桥接进入 Node sidecar 的内存 local-api，重会话查询分发给分析子进程。不要整目录复制 `api.ts`；共享字段含义和展示逻辑时，保留各自的 transport 和恢复处理。实际分流范围见[运行维护](runtime-notes.md#会话分析与窗口响应)。
 
 ## 数据流
 
@@ -29,13 +30,13 @@ Agent 日志或数据库 / 需要登录状态的数据源
       └─ Desktop IPC → Renderer / 托盘
 ```
 
-订阅额度走另一条链路：`packages/core/src/quota` 读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效额度采样。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 经 `quota` IPC 向主窗口、托盘与宠物提供状态，并负责系统通知。两端共用卡片和详情展示，保留各自的额度采样目录。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和采样口径见[额度管理](./quota-management.md)。
+订阅额度走另一条链路，`QuotaManager` 调度并保存有效额度采样。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 仅在用户同意后通过当前应用会话中的授权访问支持的官方接口，否则提供官方用量页，不导入其他应用的登录凭据。额度余额不能当作已采集 Token 总量。
 
 ## Desktop 响应性约束
 
 这些约束适用于新增和修改的执行路径；既有例外必须保留明确的适用范围，并单独验证，不作为新代码的默认模式。
 
-- **先追踪执行进程。** Core 的同一函数在 CLI 中可能运行于独立 Node 服务，在 Desktop 中却可能经 IPC 进入 Electron 主进程。复用 Core、把函数声明为 `async`、套 `Promise` 或使用异步 IPC，都不会自动把同步解析、遍历和计算移出主进程。
+- **先追踪执行进程。** Core 的同一函数在 CLI 中可能运行于独立 Node 服务，在 Desktop 中可能经桥接进入 Node sidecar。复用 Core、把函数声明为 `async`、套 `Promise` 或使用异步 IPC，都不会自动把同步解析、遍历和计算移出 sidecar。
 - **周期任务不得阻塞窗口线程。** 不在新增的主进程轮询、watchdog、聚焦或 IPC 查询路径中使用 `execSync`、`execFileSync`、`spawnSync`，或执行随历史数据增长的全量解析、多重扫描与同步目录递归。系统探测使用异步入口并合并在途请求；重计算放入独立执行单元。公开同步诊断 helper 仍存在，调用前必须确认所在进程。
 - **先减少工作，再隔离计算。** 会话关联使用共享索引；相同范围的在途查询与未变化的洞察结果复用。同步、历史快照、价格和窗口变化应正确失效，标题与账号标签保持当前值，返回对象不得污染缓存。仅降低刷新频率不能替代消除重复扫描。
 - **分析隔离必须覆盖生命周期。** 沿用 [session-analysis-host.ts](../apps/desktop/src/main/session-analysis-host.ts) 与对应协议，保证快照一致、旧代响应隔离、超时有界、停止期间及等待恢复的旧请求不能重建进程；分析失败返回错误，不回退主进程重算。现有采集 worker 的主进程 fallback 是单独的兼容路径，不能据此给分析新增同类降级。

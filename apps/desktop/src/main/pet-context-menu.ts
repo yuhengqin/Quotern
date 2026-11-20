@@ -1,4 +1,3 @@
-import type { MenuItemConstructorOptions } from 'electron';
 import type { SupportedLocale } from 'quotern-i18n';
 import type { PetKind, PetSelection } from '../shared/pet.js';
 import type { PetSize } from './pet-core.js';
@@ -19,7 +18,7 @@ interface MenuState {
   theme?: PetContextMenu['theme'];
 }
 
-/** JSON-only model: both Electron processes render exactly the same base menu. */
+/** Both native pet windows use this menu model. */
 export function buildPetContextMenu(state: MenuState): PetContextMenu {
   const t = (key: NativeMessageKey) => nativeText(state.locale, key);
   const target: PetSelection = state.kind === 'dsh' ? { kind: 'dsh' } : { kind: 'builtin', character: state.character };
@@ -74,13 +73,6 @@ export function withDshActions(menu: PetContextMenu, tree: unknown): PetContextM
   const root = tree[0] as { children?: unknown } | undefined;
   const submenu = Array.isArray(root?.children) ? root.children.map(child => convert(child, 0)) : [];
   return { ...menu, items: menu.items.map(item => item.id === 'actions' ? { ...item, enabled: submenu.length > 0, submenu } : item) };
-}
-
-export function toNativePetMenuTemplate(items: readonly PetMenuItem[], select: (item: PetMenuItem) => void): MenuItemConstructorOptions[] {
-  return items.map(item => item.type === 'separator' ? { id: item.id, type: 'separator' } : {
-    id: item.id, label: item.label, type: item.type, checked: item.checked, enabled: item.enabled,
-    ...(item.submenu ? { submenu: toNativePetMenuTemplate(item.submenu, select) } : { click: () => select(item) }),
-  });
 }
 
 export interface PetMenuPorts {

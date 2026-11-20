@@ -1,0 +1,38 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { copyFile, mkdir, readFile, readdir, rm } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { releaseLayout, refreshMetadata, verifyPlatform } from './release-artifacts.mjs';
+
+if (process.platform !== 'win32') throw Error('Windows packages require a Windows build host');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const desktop = join(root, 'apps/desktop');
+const version = JSON.parse(await readFile(join(desktop, 'package.json'), 'utf8')).version;
+const dir = join(desktop, 'release', version);
+const commit = execFileSync('git', ['rev-parse','HEAD'], {cwd: root, encoding: 'utf8'}).trim();
+const targets = { x64: 'x86_64-pc-windows-msvc', arm64: 'aarch64-pc-windows-msvc' };
+const layout = releaseLayout(version,'win');
+await mkdir(dir, {recursive:true});
+await rm(join(dir,'win-artifacts.json'), {force:true});
+const signedUpdates = Boolean(process.env.QUOTERN_UPDATER_PUBLIC_KEY && process.env.TAURI_SIGNING_PRIVATE_KEY);
+if (Boolean(process.env.QUOTERN_UPDATER_PUBLIC_KEY) !== Boolean(process.env.TAURI_SIGNING_PRIVATE_KEY)) throw Error('Supply both updater signing keys');
+for (const [arch, target] of Object.entries(targets)) {
+  const config = JSON.stringify({bundle: {createUpdaterArtifacts:signedUpdates}});
+  execFileSync(process.execPath,[join(desktop,'scripts/run-tauri.mjs'),'bundle','--target',target,'--bundles','nsis','--config',config],{cwd:desktop,stdio:'inherit'});
+  const release = join(resolve(desktop,process.env.CARGO_TARGET_DIR || 'src-tauri/target'),target,'release');
+  const nsisDir = join(release, 'bundle/nsis');
+  const candidates = (await readdir(nsisDir)).filter(name=>name === `Quotern_${version}_${arch}-setup.exe`);
+  if (candidates.length !== 1) throw Error('Missing target NSIS installer: ' + arch);
+  const setup = layout.updates.find(name=>name.endsWith(`-${arch}-setup.exe`));
+  const installer = join(nsisDir,candidates[0]);
+  await copyFile(installer,join(dir,setup));
+  if (signedUpdates) await copyFile(installer+'.sig',join(dir,setup+'.sig'));
+  else await rm(join(dir,setup+'.sig'),{force:true});
+  const portable = layout.downloads.find(name=>name.endsWith(`-${arch}-portable.exe`));
+  const bundledNsis = join(process.env.LOCALAPPDATA,'tauri','NSIS','makensis.exe');
+  const makensis = existsSync(bundledNsis) ? bundledNsis : 'makensis.exe';
+  execFileSync(makensis,['/V2','/DHOST_DIR='+release,'/DNODE_RESOURCES='+join(desktop,'out/sidecar'),'/DOUTPUT_EXE='+join(dir,portable),join(desktop,'scripts/portable.nsi')],{cwd:desktop,stdio:'inherit'});
+}
+await refreshMetadata({dir,platform:'win',version});
+await verifyPlatform({dir,platform:'win',version,commit,writeManifest:true});

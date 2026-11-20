@@ -9,7 +9,7 @@ interface AppIdentity {
   setAppUserModelId(id: string): void;
 }
 
-/** Keep aligned with electron-builder.yml and the installed Start Menu shortcut. */
+/** Shared with the Tauri bundle identifier and the installed Start Menu shortcut. */
 export const WINDOWS_APP_USER_MODEL_ID = 'dev.quotern.desktop';
 
 export function windowsNotificationAppId(isolatedProfile?: string): string {

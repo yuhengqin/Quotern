@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appleCredentials, assertAppIdentity, assertAdhocIdentity, assertArchitecture, notarizeDmg, verifyNativeArchitecture, verifyMacosArtifacts } from './release-macos.mjs';
@@ -15,10 +14,6 @@ test('ad-hoc acceptance rejects unsigned or certificate-signed code', () => {
 for (const mode of ['adhoc', 'signed']) test(`${mode} verification checks ZIP/DMG mode and only notarizes signed packages`, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'quotern adhoc verification '));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const require = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
-  const builder = createRequire(require.resolve('electron-builder/package.json'));
-  const lib = createRequire(builder.resolve('app-builder-lib/package.json'));
-  const { createPackage } = lib('@electron/asar');
   const version = '0.1.13';
   const commit = 'a'.repeat(40);
   for (const arch of ['x64', 'arm64']) {
@@ -26,15 +21,15 @@ for (const mode of ['adhoc', 'signed']) test(`${mode} verification checks ZIP/DM
     const resources = join(app, 'Contents/Resources');
     await mkdir(join(app, 'Contents/MacOS'), { recursive: true });
     await writeFile(join(app, 'Contents/MacOS/Quotern'), Buffer.from('cffaedfe00000000', 'hex'));
+    await writeFile(join(app, 'Contents/MacOS/quotern-node'), Buffer.from('cffaedfe00000000', 'hex'));
     for (const [name, file] of [[`sharp-darwin-${arch}`, 'sharp.node'], [`sharp-libvips-darwin-${arch}`, 'libvips.dylib']]) {
-      const libDirectory = join(resources, 'app.asar.unpacked/node_modules/@img', name, 'lib');
+      const libDirectory = join(resources, 'node/node_modules/@img', name, 'lib');
       await mkdir(libDirectory, { recursive: true });
       await writeFile(join(libDirectory, file), Buffer.from('cffaedfe00000000', 'hex'));
     }
-    const source = join(directory, `asar-${arch}`);
-    await mkdir(source);
-    await writeFile(join(source, 'package.json'), JSON.stringify({ version, quoternMacosReleaseMode: mode }));
-    await createPackage(source, join(resources, 'app.asar'));
+    const node = join(resources, 'node');
+    await writeFile(join(node, 'release-mode.json'), JSON.stringify({ version, mode }));
+    for (const entry of ['quotern-desktop-runtime.cjs', 'sync-worker.cjs', 'session-analysis-worker.cjs']) await writeFile(join(node, entry), 'fixture');
     for (const extension of ['zip', 'dmg']) await writeFile(join(directory, `Quotern-${version}-mac-${arch}.${extension}`), `fixture ${arch} ${extension}`);
   }
   const calls = [];
@@ -68,9 +63,7 @@ for (const mode of ['adhoc', 'signed']) test(`${mode} verification checks ZIP/DM
   const manifest = JSON.parse(await readFile(join(directory, 'mac-artifacts.json'), 'utf8'));
   assert.equal(manifest.files.length, mode === 'signed' ? 10 : 5);
   // A valid signature must not make a mismatched app package mode acceptable.
-  const source = join(directory, 'asar-x64');
-  await writeFile(join(source, 'package.json'), JSON.stringify({ version, quoternMacosReleaseMode: mode === 'signed' ? 'adhoc' : 'signed' }));
-  await createPackage(source, join(directory, 'mac/Quotern.app/Contents/Resources/app.asar'));
+  await writeFile(join(directory, 'mac/Quotern.app/Contents/Resources/node/release-mode.json'), JSON.stringify({ version, mode: mode === 'signed' ? 'adhoc' : 'signed' }));
   await assert.rejects(verifyMacosArtifacts({ dir: directory, mode, version, commit, command, credentials }), /mode|marker/i);
 });
 test('release signing requires an expected team and one complete notarization identity', () => {

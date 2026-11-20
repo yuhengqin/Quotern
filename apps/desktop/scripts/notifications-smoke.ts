@@ -1,17 +1,21 @@
-// Real Desktop preload, notification settings and pet activity stream, with private fixture data.
-// OS toast delivery is intentionally excluded: show() captures the real Notification object.
+// Desktop preload, notification settings and pet activity stream, with private fixture data.
+// Native delivery is captured; Windows protocol activation still uses the real host.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync } from 'node:fs';
 import { mkdir, writeFile, appendFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import path from 'node:path';
-import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
+// @ts-ignore shared JS renderer fixture
+import { fixtureApp as app, FixtureWindow as BrowserWindow, fixtureIpc as ipcMain } from './renderer-fixture.mjs';
 import { createLocalApiApp } from '../../../packages/core/src/server/local-api';
 import { BucketStore } from '../../../packages/core/src/server/state';
 import type { TudConfig } from '../../../packages/core/src/types';
-import { initializeNotifications } from '../src/main/notifications/runtime';
+import { desktopNotifications } from '../src/sidecar/notifications';
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/shared/quota';
-import { NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, type DesktopNotice } from '../src/shared/notifications';
+import { NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, type DesktopNotice } from '../src/shared/notifications';
+import { DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK } from '../src/shared/dsh-pet';
 import type { ActivityEvent } from '../src/shared/agent-activity';
 // @ts-ignore opt-in JS acceptance driver
 import { connectPage, wait } from './desktop-cdp.mjs';
@@ -21,6 +25,7 @@ import { registerAppearanceFixture } from './appearance-fixture.mjs';
 const [desktop, output, portArg] = process.argv.slice(2);
 assert.ok(desktop && output && portArg);
 const port = Number(portArg); assert.ok(Number.isInteger(port) && port > 0);
+const openProtocol = promisify(execFile);
 const root = path.resolve(output!);
 assert.equal(existsSync(root), false, 'use fresh navigation acceptance data');
 mkdirSync(path.join(root, 'profile'), { recursive: true });
@@ -55,22 +60,31 @@ async function main() {
     routes.push(route);
     const response = await api.request(route, init); return { status: response.status, body: await response.json() };
   });
-  let mainWindow: BrowserWindow | null = null, notice: Notification | null = null, shown = 0, closed = 0, failSave = false, failClear = false;
-  const originalShow = Notification.prototype.show;
-  const originalClose = Notification.prototype.close;
-  Notification.prototype.show = function () { notice = this; shown++; this.emit('show'); };
-  Notification.prototype.close = function () { closed++; return originalClose.call(this); };
+  let mainWindow: InstanceType<typeof BrowserWindow> | null = null, notice: { title: string; toastXml?: string; id: string } | null = null, shown = 0, closed = 0, failSave = false, failClear = false;
   const createWindow = () => {
     if (mainWindow && !mainWindow.isDestroyed()) return;
-    mainWindow = new BrowserWindow({ width: 1050, height: 750, show: false, webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: false, backgroundThrottling: false, preload: path.join(desktop!, 'out/preload/index.js') } });
-    const created = mainWindow; created.once('ready-to-show', () => { if (!created.isDestroyed()) created.showInactive(); });
+    mainWindow = new BrowserWindow({ width: 1050, height: 750, show: false, desktop: true });
     void mainWindow.loadFile(path.join(desktop!, 'out/renderer/index.html'), { hash: '/dashboard' });
   };
-  const originalHandle = ipcMain.handle.bind(ipcMain);
-  ipcMain.handle = (channel, handler) => originalHandle(channel, (event, ...args) => { if (channel === NOTIFICATIONS_SET && failSave) { failSave = false; throw Error('fixture save failure'); } if (channel === NOTIFICATIONS_CLEAR && failClear) { failClear = false; throw Error('fixture clear failure'); } return handler(event, ...args); });
   const quotaTargets: unknown[] = [], activity: ActivityEvent[] = [];
-  const initialized = await initializeNotifications({ getMainWindow: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow : null, showQuota: target => { quotaTargets.push(target); }, getLocale: () => 'zh-CN', activityRoots: [{ source: 'codex', path: activityFile }, { source: 'claude', path: claudeActivityFile }], showMainWindow: createWindow, applicationDirectory: desktop });
-  ipcMain.handle = originalHandle;
+  const initialized = await desktopNotifications(path.join(root, 'profile'), (channel, ...args) => {
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, ...args);
+  }, async (channel, ...args) => {
+    if (channel === 'notifications:show') {
+      const value = args[0] as DesktopNotice, options = args[1] as { toast?: string };
+      notice = { title: value.title, toastXml: options.toast, id: value.id }; shown++; return 'shown';
+    }
+    if (channel === 'notifications:remove') { closed++; return; }
+    if (channel === 'host:open-main') { createWindow(); return; }
+    if (channel === 'host:open-quota') { quotaTargets.push(args[0]); return; }
+    throw Error('Unexpected native operation: ' + channel);
+  }, () => 'zh-CN', { activityRoots: async () => [{ source: 'codex', path: activityFile }, { source: 'claude', path: claudeActivityFile }], iconPath: path.join(desktop!, 'resources/icon.png') });
+  const channels = [NOTIFICATIONS_GET, NOTIFICATIONS_SET, NOTIFICATIONS_CLEAR, NOTIFICATIONS_TEST, NOTIFICATIONS_PREVIEW_SOUND, NOTIFICATION_NAVIGATION_GET, NOTIFICATION_NAVIGATION_ACK, DSH_PET_NAVIGATION_GET, DSH_PET_NAVIGATION_ACK, 'notifications:activate'];
+  for (const channel of channels) ipcMain.handle(channel, (_event, ...args) => {
+    if (channel === NOTIFICATIONS_SET && failSave) { failSave = false; throw Error('fixture save failure'); }
+    if (channel === NOTIFICATIONS_CLEAR && failClear) { failClear = false; throw Error('fixture clear failure'); }
+    return initialized.request(channel, args);
+  });
   const unsubscribe = initialized.activity.subscribe(event => { activity.push(event); });
   const clients: Array<{ close(): void; evaluate(expression: string): Promise<unknown>; screenshot(file: string): Promise<void> }> = [], checks: string[] = [];
   const until = async (predicate: () => boolean | Promise<boolean>, label: string) => {
@@ -112,18 +126,18 @@ async function main() {
       await initialized.send({ id: randomUUID(), category, title: 'Fixture notification', body: 'Quota navigation acceptance', target: { kind: 'quota', value: target } }, true);
       assert.ok(notice);
       if (process.platform === 'win32') {
-        const launch = /launch="([^"]+)"/.exec((notice as Notification).toastXml)?.[1]?.replaceAll('&amp;', '&');
+        const launch = /launch="([^"]+)"/.exec(notice.toastXml ?? '')?.[1]?.replaceAll('&amp;', '&');
         assert.ok(launch); const previous = quotaTargets.length;
-        await shell.openExternal(launch); await until(() => quotaTargets.length > previous, 'real Windows notification protocol activation');
-      } else (notice as Notification).emit('click');
+        await openProtocol('rundll32.exe', ['url.dll,FileProtocolHandler', launch]); await until(() => quotaTargets.length > previous, 'real Windows notification protocol activation');
+      } else await initialized.request('notifications:activate', [notice.id, 'view']);
       assert.deepEqual(quotaTargets.at(-1), target);
     }
     checks.push('quota-and-provider-service-notifications-deliver-and-keep-navigation');
     if (process.platform === 'win32') {
       const id = randomUUID(), before = closed, navigations = quotaTargets.length;
       await initialized.send({ id, category: 'quota', title: 'Deferred fixture', body: 'No visible window is opened', replaceKey: 'snooze-acceptance', target: { kind: 'quota', value: { providerId: 'claude', providerType: 'claude' } } }, true);
-      const snooze = /arguments="([^"]+:\/\/snooze\/[^\"]+)"/.exec((notice as unknown as Notification).toastXml)?.[1]?.replaceAll('&amp;', '&');
-      assert.ok(snooze); await shell.openExternal(snooze);
+      const snooze = /arguments="([^"]+:\/\/snooze\/[^\"]+)"/.exec(notice!.toastXml ?? '')?.[1]?.replaceAll('&amp;', '&');
+      assert.ok(snooze); await openProtocol('rundll32.exe', ['url.dll,FileProtocolHandler', snooze]);
       await until(() => closed > before, 'real Windows snooze protocol retracts the notice');
       assert.equal(quotaTargets.length, navigations); assert.equal(mainWindow, null);
       checks.push('windows-snooze-activation-retracts-without-opening-a-window');
@@ -134,21 +148,22 @@ async function main() {
     assert.equal(shown, beforeBurst, 'ordinary notices wait for the fixed batching window');
     assert.deepEqual(await Promise.all(burst), ['shown', 'shown', 'shown']);
     assert.equal(shown, beforeBurst + 1);
-    assert.equal((notice as unknown as Notification).title, '3 项额度提醒');
+    assert.equal(notice!.title, '3 项额度提醒');
     checks.push('ordinary-real-runtime-burst-is-one-localized-native-summary');
     if (process.platform === 'win32') {
-      const dismissAll = /arguments="([^"]+:\/\/dismiss-all\/[^\"]+)"/.exec((notice as unknown as Notification).toastXml)?.[1]?.replaceAll('&amp;', '&');
+      const dismissAll = /arguments="([^"]+:\/\/dismiss-all\/[^\"]+)"/.exec(notice!.toastXml ?? '')?.[1]?.replaceAll('&amp;', '&');
       assert.ok(dismissAll);
       const beforeClear = closed, navigations = quotaTargets.length;
-      await shell.openExternal(dismissAll);
+      await openProtocol('rundll32.exe', ['url.dll,FileProtocolHandler', dismissAll]);
       await until(() => closed > beforeClear, 'real Windows clear-all protocol');
       assert.equal(quotaTargets.length, navigations); assert.equal(mainWindow, null);
       checks.push('windows-clear-all-protocol-does-not-navigate');
     }
     const urgent = ordinary('immediate'); urgent.context = { kind: 'quota', alert: 'depleted', resetsAt: null };
-    const beforeUrgent = shown; const urgentSend = initialized.send(urgent);
-    assert.equal(shown, beforeUrgent + 1, 'depletion bypasses the aggregation delay');
+    const beforeUrgent = shown, urgentStarted = performance.now(); const urgentSend = initialized.send(urgent);
     assert.equal(await urgentSend, 'shown');
+    assert.equal(shown, beforeUrgent + 1, 'depletion bypasses the aggregation delay');
+    assert.ok(performance.now() - urgentStarted < 1000, 'depletion completes before the batching window');
     checks.push('new-critical-event-delivers-immediately-after-clearing');
     if (process.argv.includes('--actions-only')) {
       await writeFile(path.join(root, 'result.json'), JSON.stringify({ ok: true, checks, visibleWindows: 0, nativeDelivery: false }, null, 2));
@@ -222,10 +237,9 @@ async function main() {
     }
     throw error;
   } finally {
-    Notification.prototype.show = originalShow;
-    Notification.prototype.close = originalClose;
     for (const client of clients) client.close();
-    mainWindow?.destroy(); unsubscribe(); initialized.dispose(); ipcMain.removeHandler('tud:api-request');
+    mainWindow?.destroy(); unsubscribe(); await initialized.close(); ipcMain.removeHandler('tud:api-request');
+    for (const channel of channels) ipcMain.removeHandler(channel);
   }
 }
 const deadline = setTimeout(() => app.exit(2), 110_000);

@@ -1,4 +1,4 @@
-// Shared, opt-in Electron acceptance driver. Never attaches to an existing app.
+// Start a dedicated acceptance instance and attach only to its WebView port.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -14,14 +14,20 @@ export async function unusedPort() {
   await new Promise(resolve => server.close(resolve));
   return port;
 }
-export async function launchProbe(executable, output, { args = [], env: extraEnv = {} } = {}) {
+export async function launchProbe(executable, output, { args = [], env: extraEnv = {}, webview2 = false, prepare } = {}) {
   const directory = path.resolve(output);
   await mkdir(directory, { recursive: true });
-  assert.ok(!existsSync(path.join(directory, 'electron')) && !existsSync(path.join(directory, 'data')), 'Use a new, dedicated acceptance output directory');
+  assert.ok(!existsSync(path.join(directory, 'profile')) && !existsSync(path.join(directory, 'data')), 'Use a new, dedicated acceptance output directory');
   const port = await unusedPort();
-  const env = { ...process.env, QUOTERN_DEV_ISOLATED: '1', QUOTERN_DESKTOP_USER_DATA: path.join(directory, 'electron'), QUOTERN_DATA_DIR: path.join(directory, 'data'), QUOTERN_CONFIG_HOME: path.join(directory, 'config-home'), PORTABLE_EXECUTABLE_FILE: path.resolve(executable), ...extraEnv };
+  const env = { ...process.env, QUOTERN_DEV_ISOLATED: '1', QUOTERN_DESKTOP_USER_DATA: path.join(directory, 'profile'), QUOTERN_DATA_DIR: path.join(directory, 'data'), QUOTERN_CONFIG_HOME: path.join(directory, 'config-home'), PORTABLE_EXECUTABLE_FILE: path.resolve(executable), ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(path.resolve(executable), [...args, `--remote-debugging-port=${port}`], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  if (webview2) {
+    Object.assign(env, { HOME: directory, USERPROFILE: directory, APPDATA: directory, LOCALAPPDATA: directory,
+      XDG_CONFIG_HOME: directory, XDG_DATA_HOME: directory, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1` });
+    for (const name of Object.keys(env)) if (/^(?:CODEX_HOME|CLAUDE_CONFIG_DIR|CURSOR_CONFIG_DIR|OPENAI_API_KEY|ANTHROPIC_API_KEY)$/.test(name)) delete env[name];
+  }
+  if (prepare) await prepare(env);
+  const child = spawn(path.resolve(executable), webview2 ? args : [...args, `--remote-debugging-port=${port}`], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += String(chunk); });
   child.stderr.on('data', chunk => { stderr += String(chunk); });
@@ -44,7 +50,7 @@ export async function launchProbe(executable, output, { args = [], env: extraEnv
         for (const client of clients) {
           try { await client.evaluate('window.tud?.quit(); true'); } catch {}
         }
-        await Promise.race([new Promise(resolve => child.once('exit', resolve)), wait(2500)]);
+        await Promise.race([new Promise(resolve => child.once('exit', resolve)), wait(webview2 ? 14000 : 2500)]);
       }
       for (const client of clients) client.close();
       if (child.exitCode === null) child.kill();
@@ -85,22 +91,31 @@ export async function connectPage(target, { waitForActionability = false } = {})
   };
   const actionablePoint = expression => {
     let previous = null;
+    let diagnostic;
     return ready(async () => {
       const current = await evaluate(`(() => {
     const el = (${expression});
     if (!el || el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true') return null;
-    el.scrollIntoView({block:'center',inline:'nearest'});
+    const initial=el.getBoundingClientRect();
+    if(!initial.width || initial.top<0 || initial.bottom>innerHeight || !document.elementsFromPoint(initial.x+initial.width/2,initial.y+initial.height/2).includes(el))
+      el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
     if (!el.isConnected || document.documentElement.matches(':active-view-transition') || el.closest('[data-entering="true"],[data-exiting="true"]')) return null;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) return null;
-    const x = r.x+r.width/2, y = r.y+r.height/2;
-    const hit = document.elementFromPoint(x,y);
-    return x >= 0 && y >= 0 && (hit === el || el.contains(hit)) ? {x,y,width:r.width,height:r.height} : null;
+    const left=Math.max(0,r.left),right=Math.min(innerWidth,r.right),top=Math.max(0,r.top),bottom=Math.min(innerHeight,r.bottom);
+    for(const fx of [.5,.25,.75])for(const fy of [.5,.25,.75]) {
+      const x=left+(right-left)*fx,y=top+(bottom-top)*fy;
+      const hit=document.elementFromPoint(x,y);
+      if(right>left&&bottom>top&&(hit===el||el.contains(hit)))return {x,y,width:r.width,height:r.height};
+    }
+    const hit=document.elementFromPoint((left+right)/2,(top+bottom)/2);
+    return {blocked:true,rect:r.toJSON(),hit:hit?.outerHTML?.slice(0,190),overlay:hit?.closest('.help-popup')?.getAttribute('aria-label')};
   })()`);
-      const stable = current && previous && ['x','y','width','height'].every(key => Math.abs(current[key]-previous[key]) <= 0.5);
+      diagnostic=current;
+      const stable = current && !current.blocked && previous && ['x','y','width','height'].every(key => Math.abs(current[key]-previous[key]) <= 0.5);
       previous = current;
       return stable ? {x:current.x,y:current.y} : null;
-    }, 'an actionable pointer target');
+    }, 'an actionable pointer target').catch(error=>{throw Error(error.message+' '+JSON.stringify(diagnostic));});
   };
   const settled = () => {
     let previous = false;

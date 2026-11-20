@@ -47,7 +47,7 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
         valueRect: { right: valueRect.right, top: valueRect.top, bottom: valueRect.bottom }, resetRect: { left: resetRect.left, top: resetRect.top, bottom: resetRect.bottom } };
     })()`);
     assert.ok(fiveHour, mode + ' 5h row contains its value and reset action');
-    assert.equal(fiveHour.value, '剩余 76%', mode + ' displays remaining quota');
+    assert.equal(fiveHour.value, '76%', mode + ' displays remaining quota');
     assert.deepEqual(fiveHour.segmentCounts, [12, 12], mode + ' renders 12 segments in each quota bar');
     assert.equal(fiveHour.widths.length, 12, mode + ' renders 12 quota segments');
     for (const [index, width] of fiveHour.widths.entries()) {
@@ -112,15 +112,42 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       assert.equal(await client.evaluate(`${badge}?.getAttribute('aria-label')`), `可重置 ${count} 次`);
     }
     await shot(client, `${mode}-reset-card-count`);
+    const remainingStyles = scope => client.evaluate(`(() => {
+      const value = ${scope}.querySelector('[data-quota-window-value]'), label = value?.closest('[data-quota-remaining]');
+      if (!value || !label) return null;
+      const number = getComputedStyle(value), text = getComputedStyle(label);
+      return { value: value.textContent.trim(), text: label.textContent.trim(), numberSize: parseFloat(number.fontSize), textSize: parseFloat(text.fontSize), textWeight: parseInt(text.fontWeight, 10), numberColor: number.color, textColor: text.color };
+    })()`);
+    const assertRemainingStyles = (styles, detail) => {
+      assert.ok(styles, mode + ' remaining quota has a value and label');
+      assert.match(styles.value, /^\d+%$/);
+      assert.equal(styles.text, `剩余 ${styles.value}`);
+      assert.ok(detail ? styles.textSize < styles.numberSize : styles.textSize <= styles.numberSize, mode + ' remaining label is small');
+      assert.ok(styles.textWeight <= 400, mode + ' remaining label has regular weight');
+      assert.notEqual(styles.textColor, styles.numberColor, mode + ' remaining label and number have distinct colors');
+    };
+    assertRemainingStyles(await remainingStyles(item(a)), false);
     await client.click(`${item(a)}.querySelector('[data-quota-reset-credits]')`);
-    const detailCredits = 'document.querySelector("[role=dialog] [data-quota-detail-credits]")';
+    const modal = 'document.querySelector("[data-slot=modal-dialog]")';
+    const detailCredits = 'document.querySelector("[data-slot=modal-dialog] [data-quota-detail-credits]")';
+    const dates = 'document.querySelector("[data-quota-credit-dates]")';
     await until(() => client.evaluate(`${detailCredits}?.getAttribute('aria-expanded') === 'true'`), mode + ' reset card opens its expiry dates directly');
-    assert.equal(await client.evaluate(`document.getElementById(${detailCredits}.getAttribute('aria-controls')).querySelectorAll('li time').length`), original.resetCredits);
+    await until(() => client.evaluate(`Boolean(${dates})`), mode + ' expiry date popover opens');
+    const dateCount = await client.evaluate(`${dates}.querySelectorAll('li time').length`);
+    assert.equal(dateCount, original.resetCredits);
+    assertRemainingStyles(await remainingStyles(modal), true);
     assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog] [data-quota-pace-marker]"))'), false);
-    await client.click(detailCredits);
-    assert.equal(await client.evaluate(`document.getElementById(${detailCredits}.getAttribute('aria-controls')).hidden`), true);
+    await client.key('Escape');
+    await until(() => client.evaluate(`Boolean(${modal}) && !${dates} && ${detailCredits}?.getAttribute('aria-expanded') === 'false' && document.activeElement === ${detailCredits}`), mode + ' Escape closes dates and returns focus to detail count');
+    const measureModal = () => client.evaluate(`(() => { const { x, y, width, height } = ${modal}.getBoundingClientRect(); return { x, y, width, height }; })()`);
+    const parentRect = await measureModal();
     await client.key('Enter');
-    assert.equal(await client.evaluate(`document.getElementById(${detailCredits}.getAttribute('aria-controls')).hidden`), false);
+    await until(() => client.evaluate(`${detailCredits}?.getAttribute('aria-expanded') === 'true' && Boolean(${dates})`), mode + ' Enter reopens expiry dates');
+    assert.equal(await client.evaluate(`${dates}.querySelectorAll('li time').length`), dateCount, mode + ' reopening retains expiry dates');
+    const reopenedRect = await measureModal();
+    for (const axis of ['x', 'y', 'width', 'height']) assert.ok(Math.abs(parentRect[axis] - reopenedRect[axis]) <= 1, mode + ' expiry popover preserves parent ' + axis);
+    await client.key('Escape');
+    await until(() => client.evaluate(`Boolean(${modal}) && !${dates} && document.activeElement === ${detailCredits}`), mode + ' second Escape closes dates');
     await client.key('Escape');
     await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'reset credit details close');
     await until(() => client.evaluate(`document.activeElement === ${item(a)}.querySelector('[data-quota-reset-credits]')`), 'focus returns to the reset-card count');

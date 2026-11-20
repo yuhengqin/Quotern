@@ -142,18 +142,29 @@ async function main() {
     await client.evaluate(`${detailReset}.focus()`); await client.key('Enter');
     await until(() => quota.preferences.resetTimeMode === 'countdown', mode + ' Enter switches time in details');
     assert.equal(await client.evaluate('document.activeElement?.hasAttribute("data-quota-reset-time")'), true, 'time keeps keyboard focus after saving');
-    assert.equal(await client.evaluate('[...document.querySelectorAll("[data-quota-service-details] details")].some(el=>el.open)'), false);
-    await client.click('document.querySelector("[data-quota-service-details] summary")');
-    assert.ok((await body(client)).includes('Service 25'));
+    const quotaModal = 'document.querySelector("[data-slot=modal-dialog]")';
+    const serviceSummary = 'document.querySelector("[data-quota-service-summary]")';
+    const serviceDrawer = 'document.querySelector("[data-slot=drawer-dialog]")';
+    await client.click(serviceSummary);
+    await until(() => client.evaluate(`Boolean(${quotaModal} && ${serviceDrawer})`), mode + ' service drawer opens over quota details');
+    assert.ok(await client.evaluate(`${serviceDrawer}.innerText.includes('Service 25')`));
+    assert.ok(await client.evaluate(`Math.abs(${serviceDrawer}.getBoundingClientRect().right - innerWidth) <= 1`), mode + ' service drawer aligns with viewport right');
     await client.click(select('关注的服务'));
     assert.ok(await client.evaluate(`Boolean(${option('APIs · Login')} && ${option('ChatGPT · Login')})`), 'same-name service options show their products');
+    failPreference = true;
+    await client.click(option('APIs · Login'));
+    await until(() => client.evaluate(`${serviceDrawer}.querySelector('[role=alert]')?.textContent.includes('设置保存失败')`), mode + ' failed selection is reported inside the drawer');
+    assert.ok(await client.evaluate(`${select('关注的服务')}.textContent.includes('已选 25 项服务')`), mode + ' failed selection preserves followed services');
+    if (!await client.evaluate('Boolean(document.querySelector("[role=listbox]"))')) await client.click(select('关注的服务'));
     await client.click(option('APIs · Login'));
     await until(() => quota.preferences.serviceComponents?.codex?.length === 24, mode + ' saves service selection');
     assert.ok(quota.preferences.serviceComponents.codex.includes(components[1].id) && !quota.preferences.serviceComponents.codex.includes(components[0].id));
     await client.click(option('APIs · Login'));
     await until(() => quota.preferences.serviceComponents?.codex?.length === 25, mode + ' service selection restored');
     await client.key('Escape');
-    await client.click('document.querySelector("[data-quota-service-details] summary")');
+    await until(() => client.evaluate(`!document.querySelector('[role=listbox]') && Boolean(${serviceDrawer} && ${quotaModal})`), mode + ' Escape closes service selection only');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${serviceDrawer} && Boolean(${quotaModal}) && document.activeElement === ${serviceSummary}`), mode + ' Escape closes service drawer and restores summary focus');
     failPreference = true;
     await client.click(select('重点关注窗口')); await client.click(option('5 小时限额'));
     await until(async () => (await body(client)).includes('设置保存失败'), mode + ' preference save failure');
@@ -163,9 +174,9 @@ async function main() {
     await shot(client, mode + '-quota-focus'); await closeDetails(client);
     const serviceButton = 'document.querySelector("[data-quota-service-trigger]")';
     await client.click(serviceButton);
-    await until(() => client.evaluate('document.activeElement?.hasAttribute("data-quota-service-details") && document.querySelector("[data-quota-service-details] details")?.open'), mode + ' status dot focuses the expanded service section');
-    await closeDetails(client);
-    await until(() => client.evaluate(`document.activeElement === ${serviceButton}`), mode + ' Escape returns to the status dot');
+    await until(() => client.evaluate(`Boolean(${serviceDrawer}) && !${quotaModal}`), mode + ' status dot opens an independent service drawer');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${serviceDrawer} && !${quotaModal} && document.activeElement === ${serviceButton}`), mode + ' Escape returns to the status dot');
     const healthyService = provider.service;
     provider.service = { ...healthyService, level: 'major',
       components: components.map((component, index) => index === 0 ? { ...component, level: 'major' } : component),
@@ -176,7 +187,7 @@ async function main() {
     const serviceSection = 'document.querySelector("[data-quota-service-details]")';
     await until(() => client.evaluate(`${serviceSection}?.innerText.includes('正在恢复登录')`), mode + ' active incident and latest update are visible without expanding');
     provider.service = { ...healthyService, stale: true }; publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
-    await until(() => client.evaluate(`${serviceSection}?.innerText.includes('状态未确认') && ${serviceSection}.innerText.includes('已过期')`), mode + ' outdated service data stays visible');
+    await until(() => client.evaluate(`${serviceSection}?.querySelector('[role=status]')?.innerText.includes('状态未确认') && ${serviceSection}.innerText.includes('已过期')`), mode + ' outdated service data stays visible in the live summary');
     await closeDetails(client);
     provider.service = healthyService; publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
     await until(() => client.evaluate(`${serviceButton}.getAttribute('aria-label').includes('服务正常')`), mode + ' service resumes normal state');
@@ -326,6 +337,10 @@ async function main() {
   trayController.showQuotaPopover({ ...target, windowId: 'retired-window' });
   await until(async () => (await body(client)).includes('额度窗口已不可用'), 'missing window feedback');
   await closeDetails(client);
+  trayController.showQuotaPopover({ providerId: 'codex', providerType: 'codex' });
+  await until(() => client.evaluate('Boolean(document.querySelector("[data-slot=drawer-dialog]")) && !document.querySelector("[data-slot=modal-dialog]")'), 'service notification opens its drawer directly');
+  await closeDetails(client);
+  assert.ok(panel.isVisible(), 'closing a service notification drawer keeps the tray visible');
   checks.push('windows-native-tray-summary-only-legacy-preference-navigation-identity-deduplication-open-main-and-escape');
   for (const client of clients) assert.deepEqual(client.errors, []);
   await writeFile(path.join(output, 'results.json'), JSON.stringify({ ok: true, checks, output }, null, 2));

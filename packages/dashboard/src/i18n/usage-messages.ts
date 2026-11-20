@@ -19,6 +19,7 @@ const rows: Record<string, readonly [string, string, string, string]> = {
   'usage.quota.autoResetsIn': ['{{time}}后自动重置', 'Auto-resets in {{time}}', '{{time}}後に自動リセット', '{{time}} 후 자동 재설정'],
   'usage.quota.autoReset': ['自动重置', 'auto-reset', '自動リセット', '자동 재설정'],
   'usage.quota.serviceDetails': ['服务状态与事件', 'Service status and incidents', 'サービス状態と障害', '서비스 상태 및 장애'],
+  'usage.quota.providerServiceDetails': ['{{provider}} 服务状态与事件', '{{provider}} service status and incidents', '{{provider}} のサービス状態と障害', '{{provider}} 서비스 상태 및 장애'],
   'usage.quota.officialStatus': ['官方状态页', 'Official status page', '公式ステータスページ', '공식 상태 페이지'],
   'usage.quota.followServices': ['关注的服务', 'Services to follow', '確認するサービス', '확인할 서비스'],
   'usage.quota.servicesSelected': ['已选 {{count}} 项服务', '{{count}} services selected', '{{count}}件のサービスを選択', '서비스 {{count}}개 선택됨'],

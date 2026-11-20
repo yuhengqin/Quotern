@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Card, Chip, Label, ListBox, Modal, ProgressBar, Select } from '@heroui/react';
+import { Button, Card, Chip, Label, ListBox, Modal, Popover, ProgressBar, Select } from '@heroui/react';
 import { HelpPopup } from './HelpPopover';
 import { Button as AriaButton } from 'react-aria-components';
 import { translate, type SupportedLocale } from 'quotern-i18n';
@@ -76,7 +76,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const providerType = provider.providerId ?? provider.id;
   const proof = provider.provenance;
-  const [error, setError] = useState<'refreshFailed' | 'saveFailed' | null>(null);
+  const [error, setError] = useState<'refreshFailed' | 'saveFailed' | 'serviceSaveFailed' | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [now, setNow] = useState(() => new Date());
@@ -93,15 +93,16 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
     if (!onSave || savingRef.current) return;
     savingRef.current = true;
     setSaving(true); setError(null);
-    try { await onSave(patch); } catch { setError('saveFailed'); } finally { savingRef.current = false; setSaving(false); }
+    try { await onSave(patch); } catch { setError(patch.serviceComponents ? 'serviceSaveFailed' : 'saveFailed'); } finally { savingRef.current = false; setSaving(false); }
   };
   const [refreshing, setRefreshing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [activeTarget, setActiveTarget] = useState<{ requestId: string; windowId?: string } | null>(null);
   const openedRequest = useRef<string | null>(null);
-  const [openAtService, setOpenAtService] = useState(false);
+  const [serviceOpen, setServiceOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
-  const creditDatesId = useId();
+  const openDatesOnEntry = useRef(false);
+  const creditTrigger = useRef<HTMLButtonElement>(null);
   const detailsBody = useRef<HTMLDivElement>(null);
   const [hintVisible, setHintVisible] = useState(false);
   const [hintSource, setHintSource] = useState<'pointer' | 'focus'>('pointer');
@@ -111,39 +112,50 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   const pointerPosition = useRef({ x: 0, y: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
+  const hasService = Boolean(provider.service);
+  useEffect(() => {
+    if (!hasService) setServiceOpen(false);
+  }, [hasService]);
   useEffect(() => {
     if (!navigation || navigation.handled || openedRequest.current === navigation.requestId) return;
     openedRequest.current = navigation.requestId;
-    setActiveTarget(navigation); setOpenAtService(!navigation.windowId); setCreditsOpen(false); setHintVisible(false); setDetailsOpen(true);
+    openDatesOnEntry.current = false;
+    const openService = !navigation.windowId && hasService;
+    setActiveTarget(navigation); setServiceOpen(openService); setCreditsOpen(false); setHintVisible(false); setDetailsOpen(!openService);
     onNavigationHandled?.(navigation.requestId);
-  }, [navigation, onNavigationHandled]);
+  }, [navigation, onNavigationHandled, hasService]);
   useEffect(() => {
-    if (activeTarget && !navigation) { setActiveTarget(null); setDetailsOpen(false); }
+    if (activeTarget && !navigation) { setActiveTarget(null); setServiceOpen(false); setDetailsOpen(false); }
   }, [activeTarget, navigation]);
+  const panelOpen = detailsOpen || (serviceOpen && hasService);
   useEffect(() => {
-    if (!detailsOpen) return;
+    if (!panelOpen) return;
     window.dispatchEvent(new CustomEvent('quotern:quota-dialog', { detail: { id: provider.id, open: true } }));
     return () => { window.dispatchEvent(new CustomEvent('quotern:quota-dialog', { detail: { id: provider.id, open: false } })); };
-  }, [detailsOpen, provider.id]);
+  }, [panelOpen, provider.id]);
   useEffect(() => {
-    if (!detailsOpen || (!activeTarget && !openAtService)) return;
+    if (!detailsOpen || (!activeTarget?.windowId && !openDatesOnEntry.current)) return;
     let frame = 0, focused = false;
     const focusTarget = () => {
-      if (focused || !document.hasFocus()) return;
-      const element = activeTarget?.windowId ? [...(detailsBody.current?.querySelectorAll<HTMLElement>('[data-quota-window]') ?? [])].find(row => row.dataset.quotaWindow === activeTarget.windowId) : detailsBody.current?.querySelector<HTMLElement>('[data-quota-service-details]');
+      const showDates = openDatesOnEntry.current;
+      if (focused || (!showDates && !document.hasFocus())) return;
+      const element = showDates ? creditTrigger.current : [...(detailsBody.current?.querySelectorAll<HTMLElement>('[data-quota-window]') ?? [])].find(row => row.dataset.quotaWindow === activeTarget?.windowId);
       if (!element) return;
       if (element.closest('[data-entering="true"]')) { frame = requestAnimationFrame(focusTarget); return; }
-      element.scrollIntoView({ block: activeTarget?.windowId ? 'nearest' : 'start' }); element.focus({ preventScroll: true });
+      element.scrollIntoView({ block: 'nearest' }); element.focus({ preventScroll: true });
       focused = document.activeElement === element;
+      // A shortcut opens two layers. Establish the date trigger as the return
+      // destination after the outer dialog has mounted its own focus scope.
+      if (showDates && focused) { openDatesOnEntry.current = false; setCreditsOpen(true); }
     };
     const scheduleFocus = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { frame = requestAnimationFrame(focusTarget); }); };
     scheduleFocus();
     window.addEventListener('focus', scheduleFocus);
     return () => { cancelAnimationFrame(frame); window.removeEventListener('focus', scheduleFocus); };
-  }, [detailsOpen, activeTarget, openAtService]);
+  }, [detailsOpen, activeTarget]);
   useEffect(() => () => { if (hintTimer.current !== null) window.clearTimeout(hintTimer.current); }, []);
   useLayoutEffect(() => {
-    if (!hintVisible || detailsOpen || !hintRef.current || !triggerRef.current?.parentElement) return;
+    if (!hintVisible || panelOpen || !hintRef.current || !triggerRef.current?.parentElement) return;
     const card = triggerRef.current.parentElement.getBoundingClientRect();
     const { width, height } = hintRef.current.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth;
@@ -174,7 +186,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       window.removeEventListener('scroll', dismiss, true);
       window.removeEventListener('keydown', dismissOnEscape);
     };
-  }, [hintVisible, detailsOpen, hintSource]);
+  }, [hintVisible, panelOpen, hintSource]);
   const status = provider.service;
   const serviceLevel = status?.stale ? 'unknown' : status?.level;
   const openIncidents = serviceLevel === 'operational' ? status?.incidents?.length ?? 0 : 0;
@@ -205,7 +217,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       : provider.stale ? t('usage.quota.stale')
         : provider.message ? locale === 'zh-CN' ? provider.message : t('usage.quota.noReading')
           : compact ? t('usage.quota.noReading') : null;
-  const errorMessage = error ? t(`usage.quota.${error}`) : null;
+  const errorMessage = error ? t(error === 'refreshFailed' ? 'usage.quota.refreshFailed' : 'usage.quota.saveFailed') : null;
   const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
   const busy = provider.refreshing || refreshing;
   const observedAt = proof?.observedAt ?? provider.fetchedAt;
@@ -228,10 +240,11 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
     if (layoutControls) return;
     trigger?.focus({ preventScroll: true });
     hideHint();
-    setOpenAtService(section === 'service');
-    setCreditsOpen(section === 'credits');
+    setServiceOpen(section === 'service');
+    openDatesOnEntry.current = section === 'credits';
+    setCreditsOpen(false);
     setActiveTarget(null);
-    setDetailsOpen(true);
+    setDetailsOpen(section !== 'service');
   };
   const toggleResetTime = onSave ? () => {
     hideHint();
@@ -243,23 +256,31 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   const creditLabel = provider.resetCredits === null ? t('credits.expirations') : t('usage.quota.resetCredits', { count: provider.resetCredits });
   const creditCount = provider.resetCredits === null ? t('credits.expirations') : `x${provider.resetCredits}`;
   const creditBadge = showCredits && (hasCreditDates
-    ? <button type="button" data-quota-detail-credits aria-expanded={creditsOpen} aria-controls={creditDatesId} aria-label={provider.resetCredits === null ? creditLabel : `${creditLabel} · ${t('credits.expirations')}`} title={creditLabel}
-        className="inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-default px-2 text-xs font-medium text-foreground tabular-nums hover:bg-foreground/12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" onClick={() => setCreditsOpen(open => !open)}>
-        <Copy aria-hidden="true" className="size-3.5" />{creditCount}<ChevronDown aria-hidden="true" className={`size-3 ${creditsOpen ? 'rotate-180' : ''}`} />
-      </button>
+    ? <Popover isOpen={creditsOpen} onOpenChange={setCreditsOpen}>
+      <AriaButton ref={creditTrigger} type="button" data-quota-detail-credits aria-label={provider.resetCredits === null ? creditLabel : `${creditLabel} · ${t('credits.expirations')}`}
+        className="inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-default px-2 text-xs font-medium text-foreground tabular-nums hover:bg-foreground/12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+        <Copy aria-hidden="true" className="size-3.5" /><span title={creditLabel}>{creditCount}</span><ChevronDown aria-hidden="true" className={`size-3 ${creditsOpen ? 'rotate-180' : ''}`} />
+      </AriaButton>
+      <Popover.Content placement="bottom start" offset={6} maxHeight={280} className="w-max max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain rounded-xl border border-separator bg-overlay">
+        <Popover.Dialog data-quota-credit-dates className="space-y-2 px-3.5 py-3 text-xs">
+          <Popover.Heading className="text-xs font-medium text-muted">{t('credits.expirations')}</Popover.Heading>
+          {creditExpirations.length > 0 && <ul className="space-y-1.5 tabular-nums text-foreground">{creditExpirations.map((at, index) => {
+            const expiry = new Date(at * 1000);
+            return <li key={`${at}:${index}`}><time dateTime={expiry.toISOString()}>{expiry.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</time></li>;
+          })}</ul>}
+          {(provider.resetCredits ?? 0) > creditExpirations.length && <p className="max-w-64 text-muted">{t(creditExpirations.length ? 'credits.someExpiryUnavailable' : 'credits.expiryUnavailable')}</p>}
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover>
     : <span data-quota-detail-credits role="img" aria-label={creditLabel} title={creditLabel} className="inline-flex items-center gap-1 rounded-full bg-default px-2 py-1 text-xs tabular-nums"><Copy aria-hidden="true" className="size-3.5" />{creditCount}</span>);
-  const creditDates = showCredits && hasCreditDates && <div id={creditDatesId} hidden={!creditsOpen} className="my-1 rounded-lg bg-default/60 px-3 py-2 text-xs">
-    <p className="font-medium text-foreground">{t('credits.expirations')}</p>
-    {creditExpirations.length > 0 && <ul className="mt-1 space-y-1 tabular-nums">{creditExpirations.map((at, index) => {
-      const expiry = new Date(at * 1000);
-      return <li key={`${at}:${index}`}><time dateTime={expiry.toISOString()}>{expiry.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</time></li>;
-    })}</ul>}
-    {(provider.resetCredits ?? 0) > creditExpirations.length && <p className="mt-1 text-muted">{t(creditExpirations.length ? 'credits.someExpiryUnavailable' : 'credits.expiryUnavailable')}</p>}
-  </div>;
+  const serviceDetails = status && service && <QuotaServiceDetails providerLabel={provider.label} status={status} statusLabel={service.label} dotClassName={service.dotClassName}
+    showSummary={detailsOpen} isOpen={serviceOpen && (!activeTarget || Boolean(navigation))} onOpenChange={setServiceOpen}
+    selected={preferences.serviceComponents?.[providerType as SubscriptionChannelId]} saving={saving} saveError={error === 'serviceSaveFailed' ? errorMessage ?? undefined : undefined}
+    onSelect={onSave ? ids => void apply({ serviceComponents: { [providerType]: ids } }) : undefined} onOpenExternal={onOpenExternal} />;
   return <>
     <Card data-quota-card={provider.id} data-quota-compact={compact} data-quota-status-row={grouped} className="group relative min-w-0 cursor-pointer overflow-visible p-0 transition-[background-color,box-shadow] data-[quota-compact=true]:self-start data-[quota-status-row=true]:rounded-xl data-[quota-status-row=true]:shadow-none hover:bg-accent/5 hover:ring-1 hover:ring-accent/25 active:bg-accent/10 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent motion-reduce:transition-none" variant={grouped ? 'transparent' : 'secondary'}
       onPointerEnter={event => {
-        if (event.pointerType === 'touch' || detailsOpen || layoutControls) return;
+        if (event.pointerType === 'touch' || panelOpen || layoutControls) return;
         hideHint();
         setHintSource('pointer');
         pointerPosition.current = { x: event.clientX, y: event.clientY };
@@ -320,7 +341,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       </p>}
       {provider.windows.length > (summaryOnly ? 1 : 3) && <span className="text-[10px] text-muted">{t('usage.quota.moreWindows', { count: provider.windows.length - (summaryOnly ? 1 : 3) })}</span>}
     </Card.Content>
-    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !detailsOpen && !layoutControls ? 'visible opacity-100' : 'invisible opacity-0'}`}>{t('usage.quota.openDetails')}</span>
+    <span ref={hintRef} id={hintId} role="tooltip" style={hintPosition} className={`pointer-events-none absolute z-20 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm transition-opacity duration-150 group-has-[[data-quota-action]:hover]:hidden group-has-[[data-quota-action]:focus-visible]:hidden motion-reduce:transition-none ${hintVisible && !panelOpen && !layoutControls ? 'visible opacity-100' : 'invisible opacity-0'}`}>{t('usage.quota.openDetails')}</span>
     </Card>
     <Modal.Backdrop isOpen={detailsOpen && (!activeTarget || Boolean(navigation))} onOpenChange={setDetailsOpen}>
       <Modal.Container placement="center" scroll="inside">
@@ -334,8 +355,8 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
           </Modal.Header>
           <Modal.Body ref={detailsBody} className="flex flex-col gap-4">
             {activeTarget?.windowId && !windows.some(window => window.id === activeTarget.windowId) && <p role="status" className="text-sm text-warning">{t('island.quota.windowUnavailable')}</p>}
-            {windows.map((window, index) => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} sharedReset={index === 0 ? sharedReset : null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} detailed primary={index === 0} highlighted={activeTarget?.windowId === window.id} creditBadge={index === 0 ? creditBadge : null} creditDates={index === 0 ? creditDates : null} />)}
-            {!windows.length && showCredits && <div className="space-y-2">{creditBadge}{creditDates}</div>}
+            {windows.map((window, index) => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} etaAt={forecasts.get(window.id)} showSparkline={preferences.showSparkline && trendWindows.has(window.id)} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} sharedReset={index === 0 ? sharedReset : null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} detailed primary={index === 0} highlighted={activeTarget?.windowId === window.id} creditBadge={index === 0 ? creditBadge : null} />)}
+            {!windows.length && showCredits && <div>{creditBadge}</div>}
             {providerType !== 'codex' && provider.resetCredits !== null && <p className="text-sm">{t('usage.quota.resetCredits', { count: provider.resetCredits })}</p>}
             {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
             {(message || error) && <p role="status" className="text-sm text-muted">{errorMessage ?? message}</p>}
@@ -350,7 +371,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
               </ListBox></FilterSelectPopover>
             </Select>}
             {providerType === 'claude' && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal('https://claude.ai/settings/usage')}>{t('usage.quota.claudeUsage')} ↗</Button>}
-            {status && service && <QuotaServiceDetails status={status} statusLabel={service.label} openAtService={openAtService} selected={preferences.serviceComponents?.[providerType as SubscriptionChannelId]} saving={saving} onSelect={onSave ? ids => void apply({ serviceComponents: { [providerType]: ids } }) : undefined} onOpenExternal={onOpenExternal} />}
+            {detailsOpen && serviceDetails}
           </Modal.Body>
           <Modal.Footer className="flex-wrap items-center justify-between gap-2">
             {observedAt != null && <time dateTime={new Date(observedAt * 1000).toISOString()} title={new Date(observedAt * 1000).toLocaleString(locale)} className="text-xs text-muted tabular-nums">{t('usage.quota.updatedAt', { time: queryDate(observedAt, locale, now) })}</time>}
@@ -361,6 +382,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+    {!detailsOpen && serviceDetails}
   </>;
 }
 
@@ -402,14 +424,16 @@ function QuotaCommonResetTime({ at, now, dateMode, onToggle, saving }: { at: num
   return <span data-quota-common-reset><QuotaResetTime text={text!} absolute={formatSubscriptionResetTime(at, now, true, locale) ?? undefined} dateMode={dateMode} onToggle={onToggle} saving={saving} /></span>;
 }
 
-function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, primary = false, highlighted = false, hideReset = false, sharedReset, creditBadge, creditDates, now, dateMode, onToggleResetTime, saving }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; primary?: boolean; highlighted?: boolean; hideReset?: boolean; sharedReset?: ReactNode; creditBadge?: ReactNode; creditDates?: ReactNode; now: Date; dateMode: boolean; onToggleResetTime?: () => void; saving?: boolean }) {
+function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, primary = false, highlighted = false, hideReset = false, sharedReset, creditBadge, now, dateMode, onToggleResetTime, saving }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; primary?: boolean; highlighted?: boolean; hideReset?: boolean; sharedReset?: ReactNode; creditBadge?: ReactNode; now: Date; dateMode: boolean; onToggleResetTime?: () => void; saving?: boolean }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const label = localizeQuotaWindowLabel(locale, providerId, window);
   const reset = hideReset ? null : dateMode ? formatSubscriptionResetTime(window.resetsAt, now, false, locale) : formatSubscriptionCountdown(window.resetsAt, now, locale);
   const paceText = analysis ? localizeQuotaPaceLabel(locale, analysis) : null;
   const remaining = 100 - window.usedPercent;
-  const value = window.valueText ? localizeQuotaValueText(locale, window.valueText) : t('usage.quota.remaining', { percent: Math.round(remaining) });
+  const amount = window.valueText ? localizeQuotaValueText(locale, window.valueText) : `${Math.round(remaining)}%`;
+  const value = window.valueText ? amount : t('usage.quota.remaining', { percent: Math.round(remaining) });
+  const [prefix, suffix] = value.split(amount);
   const color = window.usedPercent >= 90 ? 'light-dark(#c32232, #ff6974)'
     : window.usedPercent >= 70 ? 'light-dark(#a55200, #ffb347)'
       : 'var(--accent)';
@@ -423,7 +447,7 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
   return <div data-quota-window={detailed ? window.id : undefined} tabIndex={detailed ? -1 : undefined} className={`flex min-w-0 flex-col ${detailed ? 'gap-2' : 'gap-1'} rounded-md outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent ${highlighted ? 'bg-accent/5 ring-2 ring-accent/40' : ''}`}>
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       <div className={`min-w-0 max-w-full break-words ${detailed ? 'flex flex-wrap items-baseline gap-x-2 text-sm text-foreground' : 'text-muted'}`}>
-        {label}{!detailed && <span aria-hidden="true"> · </span>}<span data-quota-window-value className={`whitespace-nowrap font-semibold tabular-nums ${primary ? 'text-2xl' : detailed ? 'text-lg' : ''}`} style={{ color }}>{value}</span>
+        {label}{!detailed && <span aria-hidden="true"> · </span>}<span data-quota-remaining className="whitespace-nowrap text-xs font-normal text-muted">{prefix}<span data-quota-window-value className={`font-semibold tabular-nums ${primary ? 'text-2xl' : detailed ? 'text-lg' : ''}`} style={{ color }}>{amount}</span>{suffix}</span>
       </div>
       {creditBadge}
       {resetControl && <div className="ml-auto min-w-0 max-w-full text-end">{resetControl}</div>}
@@ -441,7 +465,6 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
         </ProgressBar.Track>
       </ProgressBar>
     </div>
-    {creditDates}
     {detailed && window.used !== undefined && window.limit !== undefined && <p className="text-[10px] text-muted">{window.used.toLocaleString(locale)} / {window.limit.toLocaleString(locale)} {window.unit === 'requests' ? t('usage.quota.requestUnit') : window.unit === 'credits' ? t('usage.quota.creditUnit') : 'Token'}</p>}
     {detailed && !stale && paceText && <p className="text-xs text-muted" title={localizeQuotaPaceDescription(locale, window, analysis!) ?? undefined}>{paceText}</p>}
     {detailed && !stale && etaAt && <p data-quota-forecast className="text-xs text-amber-700 dark:text-amber-400">{t('usage.quota.forecast', { duration: duration(etaAt, locale) })}</p>}

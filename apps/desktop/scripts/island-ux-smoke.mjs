@@ -116,6 +116,12 @@ async function main() {
     assert.match(await body(client), /输出 Token/);
     assert.match(await body(client), /总消息数/);
     const cardButton = 'document.querySelector("[data-quota-card]")';
+    const cardText = await client.evaluate(`${cardButton}.innerText`);
+    assert.equal(cardText.match(/周限额/g)?.length, 1, mode + ' names the forecast window only once');
+    assert.equal(cardText.match(/剩余\s*8%/g)?.length, 1, mode + ' displays the forecast window balance only once');
+    const forecast = `${cardButton}.querySelector('[data-quota-summary]')`;
+    assert.match(await client.evaluate(`${forecast}.innerText`), /^按近期用量，预计.+后耗尽$/);
+    assert.match(await client.evaluate(`${forecast}.parentElement.querySelector('[role=progressbar]').getAttribute('aria-label')`), /周限额/);
     const cardReset = 'document.querySelector("[data-quota-card] button[data-quota-reset-time]")';
     assert.ok(await client.evaluate(`Boolean(${cardReset})`), mode + ' time itself is the display-mode control');
     const countdown = await client.evaluate(`${cardReset}.textContent`);
@@ -264,7 +270,11 @@ async function main() {
   const layoutOnly = process.argv.includes('--quota-layout-only');
   const runLayout = async (window, mode) => { await exerciseQuotaLayout({ client: await connect(window), window, mode, quota, publish, failNextSave: () => { failPreference = true; }, until, shot }); checks.push(mode + '-quota-layout-draft-cancel-failure-retry-pointer-touch-keyboard-and-details'); };
   if (layoutOnly) await runLayout(browser, 'browser');
-  else if (!process.argv.includes('--tray-only')) await exercise(browser, await connect(browser), 'browser'); browser.destroy();
+  else {
+    provider.analyses.weekly = { paceDifference: null, etaAt: now + 3600, trend: [] };
+    if (!process.argv.includes('--tray-only')) await exercise(browser, await connect(browser), 'browser');
+  }
+  browser.destroy();
   quota.preferences.preferredWindows = {};
   mainWindow = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(mainWindow);
   await mainWindow.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/dashboard' });
@@ -276,6 +286,7 @@ async function main() {
   if (!process.argv.includes('--tray-only')) await exercise(mainWindow, await connect(mainWindow), 'desktop');
 
   const target = { providerId: provider.id, providerType: 'codex', accountRef: provider.provenance.accountRef, windowId: 'weekly' };
+  quota.preferences.preferredWindows = { [provider.id]: 'five-hour' };
   trayController.showQuotaPopover(target);
   let panel;
   await until(() => { panel = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=tray-popover')); return Boolean(panel); }, 'native tray');
@@ -306,6 +317,9 @@ async function main() {
     assert.equal(await client.evaluate(`Boolean(${button('摘要')} || ${button('完整')})`), false, 'tray has no mode switch');
     assert.equal(await client.evaluate('document.querySelectorAll(".tray-popover__body [role=progressbar]").length'), 1, 'tray displays one quota window');
     assert.equal(await client.evaluate('Boolean(document.querySelector(".tray-popover [role=tablist], .tray-popover__usage"))'), false, 'usage analytics are in the main window');
+    const cardText = await client.evaluate('document.querySelector(".tray-popover__body [data-quota-card]").innerText');
+    assert.match(cardText, /周限额\s*·\s*剩余 8%\s*·\s*按近期用量/, 'identifies a forecast for a window outside the tray preview');
+    assert.equal(cardText.match(/剩余\s*8%/g)?.length, 1, 'merges the same secondary risk balance into its forecast');
     assert.match(await body(client), /另有 1 个窗口/);
   };
   await assertTraySummary();

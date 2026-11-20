@@ -52,8 +52,12 @@ function quotaSummary(provider: QuotaProviderState, showTrend: boolean, forecast
   const row = eta ?? rows.find(row => row.analysis.paceDifference !== null)
     ?? (showTrend ? rows.find(row => trendWindows.has(row.window.id) && row.analysis.trend.length >= 3) : undefined);
   if (!row) return null;
-  const text = eta ? translate(locale, 'usage.quota.exhaustedIn', { duration: duration(row.analysis.etaAt!, locale) }) : localizeQuotaPaceLabel(locale, row.analysis) ?? translate(locale, 'usage.quota.trendSixHours');
-  return { text: eta ? `${translate(locale, 'usage.quota.remaining', { percent: Math.round(100 - row.window.usedPercent) })} · ${text}` : text, label: localizeQuotaWindowLabel(locale, provider.providerId ?? provider.id, row.window), description: eta ? null : localizeQuotaPaceDescription(locale, row.window, row.analysis), warning: Boolean(eta), trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [] };
+  const text = eta ? translate(locale, 'usage.quota.forecast', { duration: duration(row.analysis.etaAt!, locale) }) : localizeQuotaPaceLabel(locale, row.analysis) ?? translate(locale, 'usage.quota.trendSixHours');
+  return {
+    window: row.window, label: localizeQuotaWindowLabel(locale, provider.providerId ?? provider.id, row.window),
+    text, warning: Boolean(eta), description: eta ? null : localizeQuotaPaceDescription(locale, row.window, row.analysis),
+    trend: showTrend && trendWindows.has(row.window.id) && row.analysis.trend.length >= 3 ? row.analysis.trend : [],
+  };
 }
 
 export interface QuotaUsageCardProps {
@@ -207,10 +211,22 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   const primary = primaryQuotaWindow(provider, preferredWindow, now.getTime() / 1000);
   const risk = primaryQuotaWindow(provider, undefined, now.getTime() / 1000);
   const windows = [...new Set([primary, risk, ...sortQuotaWindows(provider.windows)].filter((window): window is QuotaWindow => window !== null))];
+  const visibleWindows = windows.slice(0, summaryOnly ? 1 : 3);
   const details = quotaDisplayDetails(providerType, provider.details);
   const forecasts = quotaForecasts(providerType, provider.windows, provider.analyses, Date.now() / 1000);
   const trendWindows = quotaTrendWindows(providerType, provider.windows);
   const summary = quotaSummary(provider, preferences.showSparkline, forecasts, trendWindows, locale);
+  const summaryInWindow = visibleWindows.some(window => window.id === summary?.window.id);
+  const showSecondaryRisk = summaryOnly && risk && risk.id !== primary?.id && risk.usedPercent >= 70
+    && !(summary?.warning && summary.window.id === risk.id);
+  const summaryLine = summary && (!summaryOnly || summary.warning) && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={t('usage.quota.summaryTitle', { window: summary.label, description: summary.description ?? summary.text })}>
+    {!summary.warning && summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
+    <p className={`min-w-0 text-xs ${summary.warning ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>
+      {!summaryInWindow && `${summary.label} · `}
+      {!summaryInWindow && summary.warning && `${t('usage.quota.remaining', { percent: Math.round(100 - summary.window.usedPercent) })} · `}
+      {summary.text}
+    </p>
+  </div>;
   const commonReset = commonQuotaResetAt(provider.windows);
   const message = provider.status === 'custom-provider' ? t('usage.quota.customProvider')
     : provider.status === 'expired' ? t('usage.quota.expired')
@@ -324,14 +340,13 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       {proof?.identityVerified && proof.accountRef && <p className="text-xs text-muted">{t('usage.profiles.accountId', { id: proof.accountRef.slice(0, 8) })}</p>}
       {provider.provenance?.source === 'omp' && <p className="text-[10px] text-muted">{t('usage.quota.ompRecord', { date: provider.provenance.observedAt ? queryDate(provider.provenance.observedAt, locale) : t('usage.quota.timeUnknown') })}{provider.provenance.identityVerified ? '' : ` · ${t('usage.quota.identityUnverified')}`}</p>}
       {hasReading && <div className={`flex flex-col ${preferences.compact ? 'gap-1.5' : 'gap-3'}`}>
-        {windows.slice(0, summaryOnly ? 1 : 3).map((window, index) => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} sharedReset={index === 0 ? sharedReset : null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving} />)}
+        {visibleWindows.map((window, index) => <QuotaWindowRow key={window.id} providerId={providerType} window={window} analysis={provider.analyses[window.id]} stale={provider.stale || provider.status !== 'ready'} hideReset={commonReset !== null} sharedReset={index === 0 ? sharedReset : null} now={now} dateMode={dateMode} onToggleResetTime={toggleResetTime} saving={saving}>
+          {window.id === summary?.window.id && summaryLine}
+        </QuotaWindowRow>)}
         {(!summaryOnly || !windows.length) && details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-2 text-xs"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
       </div>}
-      {summaryOnly && risk && risk.id !== primary?.id && risk.usedPercent >= 70 && <p className="text-xs text-warning">{localizeQuotaWindowLabel(locale, providerType, risk)} · {t('usage.quota.remaining', { percent: Math.round(100 - risk.usedPercent) })}</p>}
-      {summary && (!summaryOnly || summary.warning) && <div data-quota-summary className="flex min-w-0 items-center gap-2" title={t('usage.quota.summaryTitle', { window: summary.label, description: summary.description ?? summary.text })}>
-        {!summary.warning && summary.trend.length >= 3 && <QuotaTrendPreview samples={summary.trend} />}
-        <p className={`min-w-0 text-xs ${summary.warning ? 'text-amber-700 dark:text-amber-400' : 'text-muted'}`}>{summary.label} · {summary.text}</p>
-      </div>}
+      {showSecondaryRisk && <p className="text-xs text-warning">{localizeQuotaWindowLabel(locale, providerType, risk)} · {t('usage.quota.remaining', { percent: Math.round(100 - risk.usedPercent) })}</p>}
+      {!summaryInWindow && summaryLine}
       {(message || error) && <div className={`flex items-center justify-between gap-2 ${grouped ? 'min-w-0 flex-1' : compact ? 'min-h-8' : ''}`}>
         <p role="status" className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? errorMessage ?? message ?? undefined : undefined}>{errorMessage ?? message}</p>
         {(retryable || error === 'refreshFailed') && <Button data-quota-action data-quota-retry aria-label={t('usage.quota.retryAria', { provider: provider.label })} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? t('usage.quota.retrying') : t('usage.quota.retry')}</Button>}
@@ -424,7 +439,7 @@ function QuotaCommonResetTime({ at, now, dateMode, onToggle, saving }: { at: num
   return <span data-quota-common-reset><QuotaResetTime text={text!} absolute={formatSubscriptionResetTime(at, now, true, locale) ?? undefined} dateMode={dateMode} onToggle={onToggle} saving={saving} /></span>;
 }
 
-function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, primary = false, highlighted = false, hideReset = false, sharedReset, creditBadge, now, dateMode, onToggleResetTime, saving }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; primary?: boolean; highlighted?: boolean; hideReset?: boolean; sharedReset?: ReactNode; creditBadge?: ReactNode; now: Date; dateMode: boolean; onToggleResetTime?: () => void; saving?: boolean }) {
+function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = false, stale, detailed = false, primary = false, highlighted = false, hideReset = false, sharedReset, creditBadge, now, dateMode, onToggleResetTime, saving, children }: { providerId: string; window: QuotaWindow; analysis?: QuotaAnalysis; etaAt?: number; showSparkline?: boolean; stale: boolean; detailed?: boolean; primary?: boolean; highlighted?: boolean; hideReset?: boolean; sharedReset?: ReactNode; creditBadge?: ReactNode; now: Date; dateMode: boolean; onToggleResetTime?: () => void; saving?: boolean; children?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const label = localizeQuotaWindowLabel(locale, providerId, window);
@@ -469,6 +484,7 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
     {detailed && !stale && paceText && <p className="text-xs text-muted" title={localizeQuotaPaceDescription(locale, window, analysis!) ?? undefined}>{paceText}</p>}
     {detailed && !stale && etaAt && <p data-quota-forecast className="text-xs text-amber-700 dark:text-amber-400">{t('usage.quota.forecast', { duration: duration(etaAt, locale) })}</p>}
     {detailed && showSparkline && analysis && analysis.trend.length >= 3 && <QuotaSparkline samples={analysis.trend} label={label} />}
+    {children}
   </div>;
 }
 

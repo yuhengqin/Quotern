@@ -334,6 +334,7 @@ corepack pnpm install --frozen-lockfile --prefer-offline
 
 - [dsh-pet](https://github.com/PC2005-cloud/dsh-pet): 一只住在 DSH 里的桌面宠物：一百余个透明动画随时无缝衔接；还能跟随 DSH 会话事件切换工作状态动画。
 - [Token Tracker](https://github.com/xiufengsun/TokenTracker): 多工具 Token 用量追踪与 Dashboard；本 README 的功能介绍与截图编排参考其[中文说明](https://github.com/xiufengsun/TokenTracker/blob/main/README.zh-CN.md)。
+- [Juejin Usage](https://github.com/juejin-cn/juejin-usage) 提供 Token 用量追踪与订阅额度查看。Quotern 的 Codex 重置卡徽标参考了该项目的样式。
 - [vibe-usage](https://github.com/vibe-cafe/vibe-usage): Token 使用量统计工具（CLI）
 - [OpenUsage](https://github.com/robinebers/openusage): The Only AI Usage Tracker That's Truly Yours
 - [agent-usage](https://github.com/briqt/agent-usage): 统一采集 Agent 的本地会话数据，通过 Web 仪表板展示 token 用量、费用趋势和会话明细。

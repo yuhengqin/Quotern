@@ -102,7 +102,7 @@ Desktop 系统通知由 `apps/desktop/src/main/notifications/` 统一管理。�
 | 简短提示 | [Tooltip](../packages/dashboard/src/components/Tooltip.tsx)，工具栏、导航、短操作说明与精确单价使用 | 参考 WeKnora Tooltip：深灰底白字、14px/1.55、6px 圆角、4px/8px 内边距、最大 340px，默认带箭头；沿用已有明确 placement。多段/列表/交互内容转入 HelpPopup，不放入 Tooltip | Desktop re-export；皮肤由同一 help-overlays.css 提供，图表数据 Tooltip 保留各自业务样式 |
 | 图表基础 | [ChartPrimitives](../packages/dashboard/src/components/ChartPrimitives.tsx)，TokenUsageTrendCard、UsageDistributionCard 等使用 | Recharts 容器、主题、Tooltip/Legend；数据转换与指标含义留在业务图表中 | 同名独立副本 |
 | 模型占比分布 | [ModelTokenShareCard](../packages/dashboard/src/components/ModelTokenShareCard.tsx)，两端 DashboardPage 的模型槽位使用 | 按当前 Token/费用原值排序，展示 Top5＋其他及双指标；显隐保留原项位置并以显示项重算分母，其他与查看全部进入完整列表。复用 UsageDistributionCard 导出的 DistributionRowList，保留分类 Tooltip。流带两端严格同比例，卡片宽度小于 420px 时改为行内占比条；模型长名换行、数字遵守单位设置。Agent 继续使用原有 UsageDistributionCard 圆环图 | 直接引用 Dashboard 共享组件及 CSS，index.css 登记共享卡片和完整列表的 `@source` |
-| 日历热力图图例 | [ActivityHeatmapLegend](../packages/dashboard/src/components/ActivityHeatmapLegend.tsx)，ActivityHeatmap 使用 | 默认显示每日 Token 指标、少／多和五档主题色；footer 插槽与成就入口宽屏同排、窄屏换行。HelpPopover 首先展示色块与每日用量区间，不显示等级文字，Token 单位统一放在标题；表下简述区间随来源调整。灰色记录边界、分档方法和时区保留在默认收起的「统计口径」。复用 formatTokens，重复阈值不生成空区间，无活跃日不虚构区间 | Desktop 独立 ActivityHeatmap 直接引用共享图例并传入自身阈值；index.css 登记 `@source` |
+| 日历热力图图例 | [ActivityHeatmapLegend](../packages/dashboard/src/components/ActivityHeatmapLegend.tsx)，ActivityHeatmap 使用 | 显示少／多和五档主题色，成就入口与色阶在空间不足时可换行。每日 Token 数值由格子提示展示，复用 formatTokens | Desktop 独立 ActivityHeatmap 直接引用共享图例，index.css 登记 `@source` |
 | 堆叠图模型明细 | [UsageRowDetails](../packages/dashboard/src/components/UsageRowDetails.tsx)，ToolModelUsagePanel、ProjectUsagePanel 使用 | 整行作为点击和键盘入口，Popover 显示完整名称、原始费用格式化结果及本行模型占比；图形保持真实比例，极小条段也可经整行查看。保留鼠标模型提示，Escape、滚动或缩放关闭悬停提示 | Desktop 两个独立面板直接引用共享明细组件，并登记 CSS `@source` |
 | Agent 来源图标 | [ProviderIcon](../packages/dashboard/src/components/ProviderIcon.tsx)，会话、项目和 Agent 选择器使用 | Agent/采集来源标识及 fallback | 同名文件，分别核对资源与平台能力 |
 | 模型厂商图标 | [ModelProviderIcon](../packages/dashboard/src/components/ModelProviderIcon.tsx)，价格列表与比较使用 | 模型厂商及渠道标识；不要替代 Agent 来源图标 | 随共享价格组件引用 Dashboard 源文件 |
@@ -181,9 +181,9 @@ Windows 横幅超时不等于用户已处理：保留通知中心条目的点击
 
 会话搜索由共享 `SessionBrowser` 同步维护输入草稿，URL `q` 表示已应用查询。输入法组字期间保留已应用筛选、计数与结果；结束后读取完整输入值并去重更新，取消且原文未变时不重复查询。组字期间的 Enter / Escape 交给输入法；搜索框清除、移除搜索条件和清除全部均不查询被丢弃的拼音，取消清除按压仍保留已编辑文字。英文即时搜索、分页及历史恢复保持原行为。`test:session-pagination-ui` 通过真实浏览器组合输入事件核对 HTTP / IPC 请求，系统输入法候选与键盘行为另做实测。
 
-热力图局部入口明确标注「热力图来源」，菜单解释仅影响本图；空选动作称为「取消全选」，保留已有无结果语义。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
+Dashboard 热力图的局部来源入口显示当前 Agent 选择，触发器和浮层保留「热力图来源」的无障碍名称。菜单提供「全部」和「清空」，清空后提示至少选择一个 Agent。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
 
-热力图图例专项验收：两端构建后运行 `corepack pnpm test:heatmap-legend-ui [全新输出目录]`，覆盖 HTTP / IPC、320/375/1120px 布局、帮助键盘与焦点返回、页面滚轮、浏览器容器滚动条拖动与 Desktop 文档滚动时立即关闭、外部点击关闭、矮窗口浮层内部滚动、打开期间单位更新、四语言、重复阈值和空选来源时保留成就入口；追加 `--heatmap-close-bands` 检查不同阈值缩写后重合时使用近似范围、避免虚假精确区间。输出明暗截图仍需人工查看。
+热力图专项验收使用 `corepack pnpm test:heatmap-legend-ui [全新输出目录]`。两端构建后检查 HTTP / IPC 的五档色阶、320/375/1120px 布局、成就入口和四语言；Dashboard 额外检查来源菜单文案、键盘清空、焦点返回及恢复全部。输出明暗截图仍需人工查看。
 
 当前没有统一的全页面 EmptyState；无数据、无匹配结果、读取失败由对应业务表达。新增页面先复用合适的 HeroUI 原件或现有业务表达，确有重复契约时再抽取。
 

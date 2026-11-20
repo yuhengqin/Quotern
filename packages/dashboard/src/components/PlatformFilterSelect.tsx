@@ -60,7 +60,7 @@ export function PlatformFilterSelect({
           <ProviderIcon provider={value[0]} size={12} />
         ) : null}
         <span className="min-w-0 max-w-52 truncate whitespace-nowrap">
-          {t('usage.heatmap.filterScope')} · {label}
+          {label}
         </span>
         <ChevronDown className="size-3.5 shrink-0 opacity-70" />
       </Button>
@@ -68,28 +68,27 @@ export function PlatformFilterSelect({
       <FilterMenuPopover
         className="min-w-56 overflow-hidden rounded-[10px] border-0 bg-overlay p-0 text-overlay-foreground shadow-surface"
         placement="bottom end"
-        header={<div className="flex items-center justify-between gap-2 px-3 py-2">
-            <Popover.Heading className="text-[10px] font-semibold tracking-wider text-muted">
+        header={
+          <div className="flex items-center justify-end gap-1 px-3 py-2">
+            <Popover.Heading className="sr-only">
               {t('usage.heatmap.filterScope')}
             </Popover.Heading>
-            <div className="flex items-center gap-1">
-              <button
-                className="rounded-md px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
-                type="button"
-                onClick={() => onChange([...allSources])}
-              >
-                {t('usage.filter.all')}
-              </button>
-              <button
-                className="rounded-md px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
-                type="button"
-                onClick={() => onChange([])}
-              >
-                {t('usage.heatmap.deselectAll')}
-              </button>
-            </div>
-          </div>}
-        footer={<p className="px-3 py-2 text-xs text-muted">{t('usage.heatmap.filterHint')}</p>}
+            <button
+              className="rounded-md px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
+              type="button"
+              onClick={() => onChange([...allSources])}
+            >
+              {t('usage.filter.all')}
+            </button>
+            <button
+              className="rounded-md px-1.5 py-0.5 text-[11px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
+              type="button"
+              onClick={() => onChange([])}
+            >
+              {t('usage.filter.clear')}
+            </button>
+          </div>
+        }
       >
           <ul
             aria-multiselectable="true"

@@ -670,7 +670,7 @@ export function ActivityHeatmap({
       {tooltipNode}
         </>
       )}
-      <ActivityHeatmapLegend colors={heatmapColors} thresholds={heatmap.thresholds} footer={footer} />
+      <ActivityHeatmapLegend colors={heatmapColors} footer={footer} />
     </div>
   );
 

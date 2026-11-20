@@ -631,7 +631,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 
         </>
       )}
-      <ActivityHeatmapLegend colors={heatmapColors} thresholds={heatmap.thresholds} footer={footer} />
+      <ActivityHeatmapLegend colors={heatmapColors} footer={footer} />
       {tooltipNode}
     </div>
   );

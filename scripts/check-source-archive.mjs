@@ -9,6 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+function tar(args) {
+  // Git stores names as UTF-8. Windows bsdtar otherwise uses the system code page.
+  const windows = process.platform === 'win32';
+  const executable = windows ? join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
+  execFileSync(executable, [...(windows ? ['--options', 'hdrcharset=UTF-8'] : []), ...args], { stdio: 'inherit' });
+}
 const OMIT = new Set(['.git', 'node_modules', 'dist', 'out', 'dist-test', 'release', '.quotern-dev', 'reference']);
 
 async function archiveHash(file) {
@@ -51,7 +57,7 @@ export async function makeSourceArchive({ root, archive, mode = 'ref', ref = 'HE
       await mkdir(dirname(target), { recursive: true });
       await cp(source, target, { dereference: false, verbatimSymlinks: true });
     }
-    execFileSync('tar', ['-cf', archive, '-C', staging, '.'], { stdio: 'inherit' });
+    tar(['-cf', archive, '-C', staging, '.']);
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
@@ -59,7 +65,7 @@ export async function makeSourceArchive({ root, archive, mode = 'ref', ref = 'HE
 
 export async function extractSourceArchive({ archive, source }) {
   await mkdir(source);
-  execFileSync('tar', ['-xf', resolve(archive), '-C', resolve(source)], { stdio: 'inherit' });
+  tar(['-xf', resolve(archive), '-C', resolve(source)]);
 }
 
 export async function assertCleanSource(root) {

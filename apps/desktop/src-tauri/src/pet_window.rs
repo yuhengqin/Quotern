@@ -40,6 +40,84 @@ fn point_in(rect: &Value, x: f64, y: f64) -> bool {
     };
     x >= rx && x < rx + w && y >= ry && y < ry + h
 }
+
+#[derive(Clone, Copy, serde::Serialize)]
+struct MonitorRect {
+    x: i64,
+    y: i64,
+    width: i64,
+    height: i64,
+}
+
+impl MonitorRect {
+    fn new(position: &PhysicalPosition<i32>, size: &PhysicalSize<u32>) -> Self {
+        Self {
+            x: position.x.into(),
+            y: position.y.into(),
+            width: size.width.into(),
+            height: size.height.into(),
+        }
+    }
+    fn union(self, other: Self) -> Self {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        Self {
+            x,
+            y,
+            width: (self.x + self.width).max(other.x + other.width) - x,
+            height: (self.y + self.height).max(other.y + other.height) - y,
+        }
+    }
+}
+
+fn fish_displays(app: &AppHandle, scale: f64) -> Result<Value, String> {
+    let monitors = app.available_monitors().map_err(|e| e.to_string())?;
+    let primary = app
+        .primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("No primary display")?;
+    let primary_index = monitors
+        .iter()
+        .position(|m| m.position() == primary.position())
+        .unwrap_or(0);
+    let areas: Vec<_> = monitors
+        .iter()
+        .map(|m| MonitorRect::new(&m.work_area().position, &m.work_area().size))
+        .collect();
+    let panels: Vec<_> = monitors
+        .iter()
+        .map(|m| MonitorRect::new(m.position(), m.size()))
+        .collect();
+    let hull = areas
+        .iter()
+        .copied()
+        .reduce(MonitorRect::union)
+        .ok_or("No display work area")?;
+    Ok(
+        json!({"hull":hull,"areas":areas,"workAreas":areas,"panels":panels,"primaryIndex":primary_index,"scale":scale}),
+    )
+}
+
+#[test]
+fn display_hull_includes_negative_origins_and_offset_panels() {
+    let primary = MonitorRect {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1040,
+    };
+    let rotated = MonitorRect {
+        x: -1080,
+        y: -200,
+        width: 1080,
+        height: 1920,
+    };
+    let hull = primary.union(rotated);
+    assert_eq!(
+        (hull.x, hull.y, hull.width, hull.height),
+        (-1080, -200, 3000, 1920)
+    );
+}
 fn refresh_topmost(
     last: &mut Instant,
     now: Instant,
@@ -87,6 +165,8 @@ fn sample(app: AppHandle, label: &'static str, run: Arc<std::sync::atomic::Atomi
         let mut idle = false;
         let mut topmost = Instant::now();
         let fish = label == "dsh-pet";
+        let mut last_geometry = Value::Null;
+        let mut next_display_check = Instant::now();
         while run.load(std::sync::atomic::Ordering::Acquire) {
             tokio::time::sleep(Duration::from_millis(16)).await;
             if !run.load(std::sync::atomic::Ordering::Acquire) {
@@ -115,6 +195,15 @@ fn sample(app: AppHandle, label: &'static str, run: Arc<std::sync::atomic::Atomi
             ) else {
                 continue;
             };
+            if fish && Instant::now() >= next_display_check {
+                next_display_check = Instant::now() + Duration::from_secs(2);
+                if let Ok(geometry) = fish_displays(&app, scale) {
+                    if geometry != last_geometry {
+                        event(&app, label, "pet:displays", geometry.clone());
+                        last_geometry = geometry;
+                    }
+                }
+            }
             let data = app.state::<Pets>();
             let input = (if fish { &data.fish } else { &data.builtin })
                 .lock()
@@ -324,6 +413,8 @@ pub async fn set_window(
     } else {
         let page = if fish {
             let mut params = tauri::Url::parse("http://quotern.invalid/").unwrap();
+            let layout = fish_displays(app, scale)?;
+            let hull = &layout["hull"];
             params
                 .query_pairs_mut()
                 .append_pair(
@@ -332,10 +423,14 @@ pub async fn set_window(
                 )
                 .append_pair("openTarget", "desktop")
                 .append_pair("scale", &scale.to_string())
-                .append_pair("workAreaX", &area.position.x.to_string())
-                .append_pair("workAreaY", &area.position.y.to_string())
-                .append_pair("workAreaW", &area.size.width.to_string())
-                .append_pair("workAreaH", &area.size.height.to_string());
+                .append_pair("workAreaX", &hull["x"].to_string())
+                .append_pair("workAreaY", &hull["y"].to_string())
+                .append_pair("workAreaW", &hull["width"].to_string())
+                .append_pair("workAreaH", &hull["height"].to_string())
+                .append_pair("areas", &layout["areas"].to_string())
+                .append_pair("workAreas", &layout["workAreas"].to_string())
+                .append_pair("panels", &layout["panels"].to_string())
+                .append_pair("primaryIndex", &layout["primaryIndex"].to_string());
             format!("dsh/index.html?{}", params.query().unwrap_or(""))
         } else {
             "pet.html".to_owned()

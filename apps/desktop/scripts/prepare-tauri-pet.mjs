@@ -23,6 +23,13 @@ export async function prepareTauriPet() {
   for (const name of petRuntimeFiles) {
     const input = path.join(source, 'runtime', name);
     const output = path.join(web, name);
+    if (name === 'constants.js') {
+      const constants = await readFile(input, 'utf8');
+      const hook = 'function applyDeskGeometry(geo) {';
+      if (constants.split(hook).length !== 2) throw Error('Unsupported fish display geometry hook');
+      await writeFile(output, constants.replace(hook, hook + '\n  if (Number.isFinite(geo?.scale) && geo.scale > 0) CONFIG.scale = geo.scale;'));
+      continue;
+    }
     if (name !== 'index.html') {
       await copyFile(input, output);
       continue;

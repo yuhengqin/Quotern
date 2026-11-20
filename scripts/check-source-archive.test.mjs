@@ -17,6 +17,7 @@ async function repository(t) {
   await writeFile(join(root, '.gitattributes'), 'ignored.txt export-ignore\n');
   await writeFile(join(root, '.gitignore'), 'node_modules/\nout/\n.quotern-dev/\n');
   await writeFile(join(root, 'ignored.txt'), 'not exported');
+  await writeFile(join(root, '测试素材.png'), 'unicode filename');
   execFileSync('git', ['-C', root, 'add', '.']);
   execFileSync('git', ['-C', root, 'commit', '-qm', 'fixture']);
   const temporary = await mkdtemp(join(tmpdir(), 'quotern source archive '));
@@ -31,6 +32,7 @@ test('a committed archive honors export-ignore and extracts without Git metadata
   const source = join(temporary, 'source');
   await extractSourceArchive({ archive, source });
   assert.equal(JSON.parse(await readFile(join(source, 'package.json'), 'utf8')).name, 'source-fixture');
+  assert.equal(await readFile(join(source, '测试素材.png'), 'utf8'), 'unicode filename');
   await assert.rejects(access(join(source, '.git')));
   await assert.rejects(access(join(source, 'ignored.txt')));
   await assertCleanSource(source);
@@ -54,6 +56,7 @@ test('working-tree validation includes new and modified source while rejecting o
   await extractSourceArchive({ archive, source });
   assert.equal(JSON.parse(await readFile(join(source, 'package.json'), 'utf8')).name, 'modified');
   assert.equal(await readFile(join(source, 'new-script.mjs'), 'utf8'), 'console.log("new");');
+  assert.equal(await readFile(join(source, '测试素材.png'), 'utf8'), 'unicode filename');
   await assertCleanSource(source);
   for (const directory of ['node_modules', 'out', '.quotern-dev']) await assert.rejects(access(join(source, directory)));
   for (const directory of ['apps/desktop/src-tauri/target', 'apps/desktop/src-tauri/binaries', 'apps/desktop/src-tauri/gen', 'apps/desktop/dist-test-renderer']) await assert.rejects(access(join(source, directory)));

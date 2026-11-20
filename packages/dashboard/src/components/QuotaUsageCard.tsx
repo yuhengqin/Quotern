@@ -28,7 +28,6 @@ const SERVICE_STATUS: Record<QuotaServiceStatus['level'], { dotClassName: string
 };
 const DETAILS_HINT_DELAY_MS = 800;
 const QUOTA_SEGMENTS = 12;
-const QUOTA_ACCENT = 'var(--quota-accent, light-dark(color-mix(in srgb, var(--color-accent) 78%, black), color-mix(in srgb, var(--color-accent) 90%, white)))';
 
 function clock(at: number, locale: SupportedLocale) { return new Date(at * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }); }
 function queryDate(at: number, locale: SupportedLocale, now = new Date()) {
@@ -411,7 +410,7 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
   const value = window.valueText ? localizeQuotaValueText(locale, window.valueText) : t('usage.quota.remaining', { percent: Math.round(remaining) });
   const color = window.usedPercent >= 90 ? 'light-dark(#c32232, #ff6974)'
     : window.usedPercent >= 70 ? 'light-dark(#a55200, #ffb347)'
-      : QUOTA_ACCENT;
+      : 'var(--accent)';
   const expiry = window.timeKind === 'expiry';
   const resetText = !reset ? null : dateMode ? `${reset} ${t(expiry ? 'usage.quota.expiry' : 'usage.quota.reset')}`
     : window.resetsAt! <= now.getTime() / 1000 ? (expiry ? t('usage.quota.expiredAt') : reset)

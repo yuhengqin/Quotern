@@ -56,6 +56,8 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       assert.ok(Math.abs(parseFloat(width) - expected) < 0.01, mode + ' segment ' + (index + 1) + ' fill');
     }
     assert.equal(fiveHour.valueColor, fiveHour.fillColor, mode + ' remaining value and filled segments share a color');
+    const rangeColor = () => client.evaluate(`getComputedStyle(${textButton('7D')}).backgroundColor`);
+    assert.equal(fiveHour.fillColor, await rangeColor(), mode + ' normal quota uses the exact selected 7D background color');
     assert.ok(fiveHour.marker && fiveHour.description, mode + ' pace marker retains its accessible description');
     assert.ok(fiveHour.resetRect.left >= fiveHour.valueRect.right && fiveHour.resetRect.top < fiveHour.valueRect.bottom && fiveHour.resetRect.bottom > fiveHour.valueRect.top, mode + ' reset is to the right of and aligned with remaining quota');
     const colors = () => client.evaluate(`(() => {
@@ -95,6 +97,7 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     await until(async () => { const current = await colors(); return current[0] && current[0].value !== beforeAccent[0].value && current[0].value === current[0].fill; }, mode + ' normal quota follows violet accent');
     const violetAccent = await colors();
     for (const color of violetAccent) assert.equal(color.value, color.fill, mode + ' violet quota number and fill share a color');
+    assert.equal(violetAccent[0].fill, await rangeColor(), mode + ' violet normal quota matches the selected 7D background');
     assert.deepEqual(violetAccent.slice(1), beforeAccent.slice(1), mode + ' warning colors stay unchanged with violet accent');
     await closeSettings();
     await shot(client, `${mode}-quota-accent-violet`);

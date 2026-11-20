@@ -6,6 +6,7 @@ import type { QuotaPaceModel, QuotaPreferencePatch } from '../../shared/quota';
 import { useQuotaState } from '../hooks/useQuotaState';
 import { quotaShortcutFromKey } from '../lib/quota-shortcut-input';
 import { SettingsHelpPopover } from './SettingsHelpPopover';
+import { AccountAlertsSettings } from '../../../../../packages/dashboard/src/components/AccountAlertsControl';
 import { QUOTA_SHORTCUT_ACCELERATOR, normalizeQuotaShortcut, resolveQuotaShortcut } from '../../shared/quota-desktop';
 
 function displayShortcut(value: string): string {
@@ -86,6 +87,7 @@ export function QuotaSettings() {
         <Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>{t(labelKey)}</Checkbox.Content>
       </Checkbox>)}
     </div>
+    <AccountAlertsSettings providers={state.providers} preferences={prefs} onSave={save} />
     {import.meta.env.DEV && <div className="flex flex-col items-start gap-2">
       <Button size="sm" variant="secondary" isDisabled={testing} onPress={() => void testNotification()}>{t(testing ? 'desktop.quota.testing' : 'desktop.quota.testNotification')}</Button>
       {testResult && <p role="status" className={`text-xs ${testResult === 'failed' ? 'text-danger' : 'text-muted'}`}>{t(`desktop.quota.test.${testResult}`)}</p>}

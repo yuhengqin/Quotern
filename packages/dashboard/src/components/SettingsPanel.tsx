@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Database, Info, Palette, Plug } from 'lucide-react';
+import { CreditCard, Database, Info, Palette, Plug } from 'lucide-react';
 import {
   Label,
   Radio,
@@ -18,11 +18,13 @@ import { HelpPopover } from './HelpPopover';
 import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
 import { ThemePreferenceControl } from '@/components/ThemePreferenceControl';
 import { AgentIntegrationSettings } from './AgentIntegrationSettings';
+import { AccountAlertsSettings } from './AccountAlertsControl';
 import { LocalBackupPanel } from './LocalBackupPanel';
 import { UsageRecoveryPanel } from './UsageRecoveryPanel';
 import { StatusBanner } from '@/components/StatusBanner';
 import { getTokenUnitMode, setTokenUnitMode } from '@/lib/utils';
 import { useLocalePreference } from '@/hooks/useLocalePreference';
+import { useQuotaState } from '@/hooks/useQuotaState';
 import { useTheme } from '@/hooks/useTheme';
 import { isDemoMode } from '@/lib/demo-runtime';
 import { useTranslation } from 'quotern-i18n/react';
@@ -36,6 +38,7 @@ registerMessages(settingsMessages);
 
 const TAB_ITEMS = [
   { id: 'appearance', labelKey: 'settings.tabs.general', Icon: Palette },
+  { id: 'subscription', labelKey: 'settings.tabs.subscription', Icon: CreditCard },
   { id: 'integrations', labelKey: 'agent.title', Icon: Plug },
   { id: 'data', labelKey: 'settings.tabs.data', Icon: Database },
   { id: 'about', labelKey: 'settings.tabs.about', Icon: Info },
@@ -59,10 +62,11 @@ export function SettingsPanel({
   // Keep existing settings events pointing to their corresponding section.
   const requestedTab = tab === 'app' ? 'appearance' : tab === 'sync' ? 'data' : tab;
   const demo = isDemoMode();
-  const resolvedTab = demo && requestedTab === 'integrations' ? 'appearance' : requestedTab;
-  const items = TAB_ITEMS.filter(({ id }) => id !== 'integrations' || !demo);
+  const resolvedTab = demo && (requestedTab === 'integrations' || requestedTab === 'subscription') ? 'appearance' : requestedTab;
+  const items = TAB_ITEMS.filter(({ id }) => !demo || (id !== 'integrations' && id !== 'subscription'));
   const panels = {
     appearance: <GeneralSettingsPanel />,
+    subscription: <SubscriptionSettingsPanel />,
     integrations: <AgentIntegrationSettings />,
     data: <DataSettingsPanel />,
     about: <AboutContent />,
@@ -111,6 +115,16 @@ export function SettingsPanel({
       </Tabs>
     </div>
   );
+}
+
+function SubscriptionSettingsPanel() {
+  const { t } = useTranslation();
+  const { state, error, save } = useQuotaState();
+  if (!state) return <p role="status" className="text-sm text-muted">{t(error ?? 'settings.accountAlerts.loading')}</p>;
+  return <div className="space-y-3">
+    {error === 'usage.quota.loadFailed' && <p role="status" className="text-sm text-warning">{t(error)}</p>}
+    <AccountAlertsSettings providers={state.providers} preferences={state.preferences} onSave={save} />
+  </div>;
 }
 
 function GeneralSettingsPanel() {

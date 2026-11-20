@@ -32,7 +32,7 @@ Desktop 已运行时，另开 `quotern start` 会作为 observer 提供浏览器
 
 可选 Agent 行为 Hook 与现有采集 Hook 分开管理；配置、交接、Claude 插件和真实请求的边界见 [Agent 集成](agent-integrations.md)。`/functions/tud-agent` 要求本机请求，写操作还需要运行实例的动作 token；演示模式不注册此路由。自动开窗复用成功额度观测，但必须由当前 runtime owner 执行，开发隔离时禁用。
 
-`/functions/tud-agent/activity` 只读返回有界的会话元数据观测；自动开窗等待原因与最近请求结果由 Agent 状态一起返回。账号提醒、历史范围、离线 statusline 与活动入口的语义和验收见 [额度体验](quota-experience.md)。请求完成不等于额度窗口已确认开启，工具结果不等于任务成功。
+`/functions/tud-agent/activity` 只读返回有界的会话元数据观测；自动开窗等待原因与最近请求结果由 Agent 状态一起返回。账号提醒、离线 statusline 与活动入口的语义和验收见 [额度体验](quota-experience.md)。请求完成不等于额度窗口已确认开启，工具结果不等于任务成功。
 
 Claude / Codex Hook 写入 `notify.signal`，常驻进程监听后调度同步。当前脚本为 POSIX 的 `notify.sh` 和 Windows 的 `notify.cmd` / `notify.ps1`，不需要在每次通知时启动 CLI。
 
@@ -58,7 +58,7 @@ worker 的启动请求合并，每代进程仅处理自己的消息与等待请�
 
 ### 会话分析与窗口响应
 
-Desktop 的 `/functions/tud-session-activity`、`tud-session-list`、`tud-session-detail`、`tud-performance`、`tud-usage-sessions`、`tud-quota-history` 仅 GET 经独立分析 utilityProcess 执行。该进程复用同一 Core local-api，按顺序应用主进程当前 BucketStore、有效采集起点、配置、分层价格和账号标签快照，再处理查询。桶与价格只在版本变化时重传；session-only 写入仍经磁盘快照版本检查发现，不依赖 bucket revision。额度历史只传递当前请求的安全快照，返回前由主进程再次核对账号 revision，切换后返回 `QUOTA_ACCOUNT_CHANGED`。
+Desktop 的 `/functions/tud-session-activity`、`tud-session-list`、`tud-session-detail`、`tud-performance`、`tud-usage-sessions` 仅 GET 经独立分析 utilityProcess 执行。该进程复用同一 Core local-api，按顺序应用主进程当前 BucketStore、有效采集起点、配置、分层价格和账号标签快照，再处理查询。桶与价格只在版本变化时重传；session-only 写入仍经磁盘快照版本检查发现，不依赖 bucket revision。
 
 Core 在一次洞察分析中共享派发索引；同范围在途构建与已完成 hydration 复用，返回对象单独复制，防止 API 筛选、调用方修改和账号标签污染缓存。范围、桶、历史或价格变化后失效；会话标题与账号标签继续读取当前值。
 

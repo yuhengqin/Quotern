@@ -131,7 +131,6 @@ export interface LocalApiDeps {
   quota?: LocalQuotaRuntime;
   /** Electron exposes quota through IPC while sharing account labels locally. */
   getQuotaState?(): QuotaState | null;
-  getQuotaHistory?(providerId: string): import('../quota/quota-history.js').QuotaHistorySource | null;
   /** Desktop keeps quota separately from the CLI data directory. */
   desktopQuotaDirectory?: string;
   usageRecoveryEnabled?: boolean | (() => boolean);

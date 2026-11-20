@@ -1,18 +1,9 @@
 import { registerMessages } from 'quotern-i18n';
 
 const rows = {
-  'experience.cycle': ['本周期', 'This cycle', 'この周期', '현재 주기'],
-  'experience.previous': ['更早', 'Earlier', '前へ', '이전'],
-  'experience.next': ['更晚', 'Later', '次へ', '다음'],
-  'experience.now': ['回到现在', 'Back to now', '現在に戻る', '현재로'],
-  'experience.compare': ['对比窗口', 'Compare window', '比較する枠', '비교 구간'],
-  'experience.noCompare': ['不对比', 'No comparison', '比較しない', '비교 안 함'],
-  'experience.noSamples': ['此时间范围没有观测样本', 'No observations in this range', 'この期間に観測がありません', '이 기간의 관측값 없음'],
-  'experience.range': ['图表时间范围', 'Chart time range', 'グラフの期間', '차트 기간'],
   'experience.directory': ['配置目录', 'Configuration directory', '設定ディレクトリ', '설정 디렉터리'],
   'experience.launchScope': ['默认账号用于后续 Quotern 启动；已运行终端的账号由该终端决定。', 'The default applies to future Quotern launches. Existing terminals retain their own account.', '既定は今後のQuotern起動に適用されます。既存ターミナルのアカウントは維持されます。', '기본 계정은 이후 Quotern 실행에 적용됩니다. 기존 터미널은 해당 계정을 유지합니다.'],
   'experience.quotaUnknown': ['额度未知', 'Allowance unknown', '利用枠不明', '한도 알 수 없음'],
-  'experience.alerts': ['此账号的额度提醒', 'Allowance alerts for this account', 'このアカウントの利用枠通知', '이 계정의 한도 알림'],
   'experience.standard': ['标准', 'Standard', '標準', '표준'],
   'experience.critical': ['仅耗尽与重置', 'Exhaustion and reset only', '上限到達とリセットのみ', '소진 및 초기화만'],
   'experience.custom': ['自定义', 'Custom', 'カスタム', '사용자 지정'],

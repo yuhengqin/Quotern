@@ -16,7 +16,6 @@ import { quotaNotice, serviceNotice } from './notifications/quota-notices';
 export { parseQuotaServiceStatus } from 'quotern-core/quota/runtime';
 let activeManager: QuotaManager | null = null;
 export function getQuotaRuntimeState(): QuotaState | null { return activeManager?.getState() ?? null; }
-export function getQuotaRuntimeHistory(providerId: string) { return activeManager?.getHistory(providerId) ?? null; }
 export function getQuotaBackupDirectory() { return path.join(app.getPath('userData'), 'quota'); }
 
 export async function initializeQuotaRuntime(options: { onChanged(state: QuotaState): void; showMainWindow(): void; showQuota(target?: QuotaNavigationTarget): void; getLocale(): SupportedLocale; sendNotification(notice: DesktopNotice, test?: boolean): Promise<NotificationDelivery> }) {

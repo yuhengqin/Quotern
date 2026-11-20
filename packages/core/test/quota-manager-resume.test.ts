@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { QuotaManager } from '../src/quota/readers/quota-manager.js';
+import { markQuotaIdentity } from '../src/quota/readers/quota-identity.js';
 import { DEFAULT_QUOTA_PREFERENCES } from '../src/quota/shared/quota.js';
 
 for (const declaredRetry of [undefined, 600]) {
@@ -22,3 +23,24 @@ for (const declaredRetry of [undefined, 600]) {
     } finally { manager.dispose(); }
   });
 }
+
+test('switching accounts keeps current quota analysis isolated', async () => {
+  let time = 1_800_000_000, account = 'A', stale = false, used = 10;
+  const reset = time + 18000;
+  const manager = new QuotaManager({ now: () => time, monotonic: () => time * 1000, notify() {},
+    store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history: {}, notice: null, async savePreferences() {}, async saveHistory() {} },
+    readers: [{ id: 'codex', label: 'Codex', interval: 180, read: async () => markQuotaIdentity({ status: 'ready', fetchedAt: time, stale,
+      fiveHour: { usedPercent: used, resetsAt: reset, windowDurationMins: 300 } }, account) }],
+  });
+  try {
+    for (const value of [10, 20, 30]) { used = value; await manager.refresh('manual'); time += 60; }
+    assert.deepEqual(manager.getState().providers[0]!.analyses['five-hour'].trend.map(row => row.usedPercent), [10, 20, 30]);
+    account = 'B'; stale = true;
+    await manager.refresh('manual');
+    assert.equal(manager.getState().providers[0]!.stale, true);
+    assert.deepEqual(manager.getState().providers[0]!.analyses, {});
+    stale = false;
+    for (const value of [40, 50, 60]) { used = value; time += 60; await manager.refresh('manual'); }
+    assert.deepEqual(manager.getState().providers[0]!.analyses['five-hour'].trend.map(row => row.usedPercent), [40, 50, 60]);
+  } finally { manager.dispose(); }
+});

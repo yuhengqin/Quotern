@@ -36,7 +36,7 @@ async function fixture(mode) {
     p.id = `claude@${profile.id}`; p.providerId = 'claude'; p.profileLabel = profile.label; p.provenance = { source: 'native', observer: 'fixture', observedAt: now, identityVerified: true, accountRef: String(index + 1).repeat(64) }; return p;
   });
   const quota = { providers, preferences: { ...DEFAULT_QUOTA_PREFERENCES, profiles }, notice: null };
-  let failPreferences = false, failActivity = false, activityAt = now;
+  let failPreferences = false, failActivity = false, activityAt = now, quotaReads = 0;
   const saveQuota = patch => { if (failPreferences) { failPreferences = false; throw Error('Synthetic preference failure'); } quota.preferences = { ...quota.preferences, ...patch, accountAlerts: { ...quota.preferences.accountAlerts, ...patch.accountAlerts } }; return quota; };
   let failSpend = false;
   const billing = new BillingService(root, { fetch: async (input, init) => {
@@ -52,22 +52,21 @@ async function fixture(mode) {
     throw Error('Unexpected fixture endpoint');
   } });
   const api = new Hono(); registerAccountLaunchApi(api, { dataDir: root, quotaDirectory: path.join(root, 'quota'), getState: () => quota, ipc: true, launch: async (provider, profile) => { launched.push({ mode, provider, directory: profile.directory }); } }); registerBillingApi(api, { service: billing, ipc: true });
-  api.get('/functions/tud-quota', c => c.json(ok(quota)));
+  api.get('/functions/tud-quota', c => { quotaReads++; return c.json(ok(quota)); });
   api.post('/functions/tud-quota/preferences', async c => { try { return c.json(ok(saveQuota(await c.req.json()))); } catch { return c.json({ success: false, message: 'QUOTA_SAVE_FAILED', data: null }, 500); } });
   api.get('/functions/tud-agent/activity', c => failActivity ? c.json({ success: false, message: 'AGENT_ACTIVITY_UNAVAILABLE', data: null }, 500) : c.json(ok([
     { source: 'claude', sessionId: 'activity-one', project: 'Quotern', tool: 'Bash', state: 'tool-running', startedAt: now - 300, observedAt: activityAt, stale: false },
     { source: 'codex', sessionId: 'activity-two', project: 'Research', tool: null, state: 'turn-ended', startedAt: now - 600, observedAt: activityAt - 30, stale: false },
   ])));
-  api.get('/functions/tud-quota-history', c => c.json(ok({ providerId: providers[0].id, label: '工作账号', observedAt: now, windows: ['five-hour','weekly'].map((id, index) => ({ id, label: index ? '7d' : '5h', cycles: [0,1].map(segment => ({ id: `${id}:${segment}`, startedAt: null, resetsAt: segment ? now - 86400 : now + 3600, firstObservedAt: now - (segment ? 36 : 4) * 3600, lastObservedAt: now - (segment ? 30 : 1) * 3600, lastUsedPercent: index ? 30 : 80, observedUsedPercent: null, discontinuous: false, sampleCount: 3, usage: null, samples: [4,2,1].map(hours => ({ at: now - (hours + (segment ? 32 : 0)) * 3600, usedPercent: index ? 30 : 80 })) })) })) })));
   registerAgentApi(api, root, true, () => quota);
   api.post('/functions/tud-ensure-local-range', c => c.json(ok({ expanded: false, localCollectSince: '2026-01-01', statsSince: '2026-01-01', sync: null })));
   const referenceTime = new Date().toISOString(), facts = buildAchievementFacts([], [], [], new Date());
   const demo = { schemaVersion: 1, readOnly: true, referenceTime, exportedAt: referenceTime, collectSince: '2026-01-01T00:00:00Z', lastSyncAt: referenceTime, buckets: [], pricing: { builtin: { exact: {} }, overlay: null }, history: { messages: [], observations: [], timingEvents: [], evidence: [], titles: [], codexParents: [], missingSources: [] }, achievements: { ...evaluateAchievements(facts), earned: [], preferences: { showcaseIds: [], celebrationsEnabled: false }, unreadIds: [], coverage: { fromDate: '2026-01-01', asOfDate: referenceTime.slice(0, 10), timeZone: 'Asia/Shanghai', missingSessionSources: [], projectSources: [] } } };
   const base = createLocalApiApp({ dataDir: path.join(root, 'unused'), bucketStore: new BucketStore(), demo, getConfig: () => ({ deviceId: 'fixture', statsSince: demo.collectSince, localCollectSince: demo.collectSince }) });
   api.all('*', c => base.fetch(c.req.raw));
-  return { root, api, quota, saveQuota, fail: () => { failSpend = true; }, failSave: () => { failPreferences = true; }, touchActivity: () => { activityAt = Date.now() / 1000; }, failActivity: value => { failActivity = value; } };
+  return { root, api, quota, saveQuota, get quotaReads() { return quotaReads; }, fail: () => { failSpend = true; }, failSave: () => { failPreferences = true; }, touchActivity: () => { activityAt = Date.now() / 1000; }, failActivity: value => { failActivity = value; } };
 }
-const until = async (predicate, label) => { for (let i = 0; i < 100; i++) { if (await predicate()) return; await wait(75); } throw Error('Timed out: ' + label); };
+const until = async (predicate, label, attempts = 100) => { for (let i = 0; i < attempts; i++) { if (await predicate()) return; await wait(75); } throw Error('Timed out: ' + label); };
 async function connect(window) {
   await window.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}');
   let target; await until(async () => { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(x => x.type === 'page' && x.url === window.webContents.getURL()); return !!target; }, 'debug target');
@@ -150,32 +149,46 @@ async function exercise(window, client, mode, data) {
   data.failActivity(false); await client.click(button('重试'));
   await until(() => client.evaluate('document.querySelector("[data-agent-activity]")?.innerText.includes("正在执行工具")'), 'activity retry');
   await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'activity closed');
-  await client.evaluate(`document.querySelector('[data-quota-card] button[aria-haspopup="dialog"]').focus();true`); await client.key('Enter');
-  await until(() => client.evaluate(`Boolean([...document.querySelectorAll('[role=dialog] [aria-haspopup=listbox]')].find(el=>el.textContent.includes('标准')))`), 'account alerts');
-  await client.click(`[...document.querySelectorAll('[role=dialog] [aria-haspopup=listbox]')].find(el=>el.textContent.includes('标准'))`);
-  await client.key('Home'); await client.key('ArrowDown'); await client.key('ArrowDown'); await client.key('Enter');
-  await until(() => client.evaluate(`Boolean(document.querySelector('[role=dialog] form input'))`), 'custom thresholds');
-  await client.fill(`document.querySelector('[role=dialog] form input')`, '0'); await client.click(button('保存'));
-  await until(() => client.evaluate('document.querySelector("[role=dialog]").innerText.includes("1–99")'), 'invalid threshold');
-  await client.fill(`document.querySelector('[role=dialog] form input')`, '85, 95'); data.failSave(); await client.click(button('保存'));
-  await until(() => client.evaluate('document.querySelector("[role=dialog]").innerText.includes("设置保存失败")'), 'failed threshold save');
-  assert.equal(await client.evaluate(`document.querySelector('[role=dialog] form input').value`), '85, 95');
-  await client.click(button('保存')); await until(() => Promise.resolve(data.quota.preferences.accountAlerts?.[`claude:${'1'.repeat(64)}`]?.thresholds?.[0] === 85), 'threshold save');
-  await client.click(`[...document.querySelectorAll('[role=tab]')].find(el=>el.textContent.includes('额度历史'))`);
-  await until(() => client.evaluate(`Boolean(${button('24h')})`), 'history ranges'); await client.click(button('24h'));
-  await client.click(`[...document.querySelectorAll('[role=dialog] [aria-haspopup=listbox]')].find(el=>el.textContent.includes('不对比'))`);
-  await client.key('End'); await client.key('Enter');
-  await until(() => client.evaluate('document.querySelectorAll(".recharts-line").length>=2'), 'history comparison lines');
-  await shot(window, mode + '-history');
-  await client.click(button('更早')); await until(() => client.evaluate(`(${button('回到现在')}).getAttribute('aria-disabled')==='false'`), 'history earlier');
-  await client.click(button('回到现在'));
-  await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 850, deviceScaleFactor: 1, mobile: false });
-  assert.equal(await client.evaluate(`(()=>{const d=document.querySelector('[role=dialog]');return d.scrollWidth<=d.clientWidth+1})()`), true, 'history fits narrow screen');
-  await shot(window, mode + '-history-375');
-  await client.evaluate(`document.querySelector('[role=dialog] .recharts-wrapper').scrollIntoView({block:'center'});true`);
-  assert.equal(await client.evaluate(`(()=>{const r=document.querySelector('[role=dialog] .recharts-wrapper').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight})()`), true, 'full narrow history chart is reachable by scrolling');
-  await shot(window, mode + '-history-375-chart'); await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.click(`document.querySelector('[data-quota-card] [data-quota-window-value]')`);
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'quota details opened by click');
+  assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog] [role=tablist]"))'), false, 'quota details have no tabs');
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 375, height: 850, deviceScaleFactor: 1, mobile: false }); await wait(150);
+  assert.equal(await client.evaluate(`(()=>{const d=document.querySelector('[role=dialog]');return d.scrollWidth<=d.clientWidth+1})()`), true, 'quota details fit narrow screen');
+  await shot(window, mode + '-quota-details-375'); await client.call('Emulation.clearDeviceMetricsOverride');
   await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'quota details closed');
+  await until(() => client.evaluate(`document.activeElement===document.querySelector('[data-quota-card] button[aria-haspopup="dialog"]')`), 'quota trigger focus restored');
+  await client.evaluate(`document.querySelector('[data-quota-card] button[aria-haspopup="dialog"]').focus();true`); await client.key('Enter');
+  await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'quota details opened by keyboard');
+  assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog] [role=tablist]"))'), false, 'keyboard-opened quota details have no tabs');
+  await client.key('Escape'); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'keyboard-opened quota details closed');
+  await until(() => client.evaluate(`document.activeElement===document.querySelector('[data-quota-card] button[aria-haspopup="dialog"]')`), 'keyboard quota trigger focus restored');
+  await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", {detail:{tab:"subscription"}})); true');
+  const accountSettings = `[...document.querySelectorAll('[data-account-alerts-settings] p')].find(el=>el.textContent.includes('工作账号') && el.textContent.includes('11111111'))?.parentElement`;
+  await until(() => client.evaluate(`Boolean((${accountSettings})?.querySelector('[aria-haspopup=listbox]'))`), 'account alerts in subscription settings');
+  const alertSelect = `(${accountSettings}).querySelector('[aria-haspopup=listbox]')`;
+  const alertInput = `(${accountSettings}).querySelector('form input')`;
+  const alertSave = `(${accountSettings}).querySelector('form button[type=submit]')`;
+  await client.click(alertSelect);
+  await client.key('Home'); await client.key('ArrowDown'); await client.key('ArrowDown'); await client.key('Enter');
+  await until(() => client.evaluate(`Boolean(${alertInput})`), 'custom thresholds');
+  await client.fill(alertInput, '0'); await client.click(alertSave);
+  await until(() => client.evaluate(`(${accountSettings}).innerText.includes('1–99')`), 'invalid threshold');
+  await client.fill(alertInput, '85, 95'); data.failSave(); await client.click(alertSave);
+  await until(() => client.evaluate(`(${accountSettings}).innerText.includes('设置保存失败')`), 'failed threshold save');
+  assert.equal(await client.evaluate(`${alertInput}.value`), '85, 95');
+  const accountKey = `claude:${'1'.repeat(64)}`;
+  await client.click(alertSave); await until(() => Promise.resolve(data.quota.preferences.accountAlerts?.[accountKey]?.thresholds?.[0] === 85), 'threshold save');
+  assert.deepEqual(data.quota.preferences.accountAlerts[accountKey], { level: 'custom', thresholds: [85, 95] });
+  assert.equal(data.quota.preferences.accountAlerts[`claude:${'2'.repeat(64)}`], undefined, 'other verified account keeps its own preference');
+  await client.click(alertSelect); await client.key('Home'); await client.key('Enter');
+  await until(() => Promise.resolve(data.quota.preferences.accountAlerts?.[accountKey]?.level === 'standard'), 'standard alert restored');
+  const previousReads = data.quotaReads;
+  data.quota.providers[1].provenance.accountRef = '3'.repeat(64);
+  if (mode === 'desktop') window.webContents.send('quota:changed', data.quota);
+  // The CLI polls every 15 seconds while the tab is visible. Keep the settings window open and focused.
+  await until(() => client.evaluate(`document.querySelector('[data-account-alerts-settings]').innerText.includes('33333333')`), 'open settings follow a changed account', 300);
+  assert.equal(await client.evaluate(`document.querySelector('[data-account-alerts-settings]').innerText.includes('22222222')`), false);
+  if (mode === 'browser') assert.equal(data.quotaReads, previousReads + 1, 'dashboard and settings share the polling request');
   await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", {detail:{tab:"integrations"}})); true');
   await until(() => client.evaluate('Boolean(document.querySelector("[data-agent-settings]"))'), 'Agent settings');
   await client.click(`[...document.querySelectorAll('[data-agent-settings] summary')].find(el=>el.textContent.includes('Codex'))`);
@@ -189,7 +202,7 @@ async function exercise(window, client, mode, data) {
   await client.key('Escape');
   await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'settings closed');
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
-  checks.push(mode + ': launch/default/keyboard-auto, billing, layout-mode-restore, activity-failure-retry, custom-threshold-validation-save-retry, history-range-comparison-navigation, 375px/1280px, Escape/focus');
+  checks.push(mode + ': launch/default/keyboard-auto, billing, layout-mode-restore, activity-failure-retry, subscription-alert-validation-save-retry-restore, quota-details-click-keyboard, 375px/1280px, Escape/focus');
 }
 async function main() {
   const browserData = await fixture('browser'), server = createHttpServer({ honoApp: browserData.api, staticDir: path.join(workspace, 'packages/dashboard/dist'), host: '127.0.0.1', port: 0 }); servers.push(server);

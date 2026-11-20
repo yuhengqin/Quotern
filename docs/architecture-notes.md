@@ -29,7 +29,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
       └─ Desktop IPC → Renderer / 托盘
 ```
 
-订阅额度走另一条链路：`packages/core/src/quota` 读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效历史。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 经 `quota` IPC 向主窗口、托盘与宠物提供状态，并负责系统通知。两端共用卡片和详情展示，保留各自的额度历史目录。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和历史口径见[额度管理](./quota-management.md)。
+订阅额度走另一条链路：`packages/core/src/quota` 读取 Agent 登录状态或调用 Agent CLI / 官方额度接口，由 `QuotaManager` 统一调度、保存有效额度采样。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 经 `quota` IPC 向主窗口、托盘与宠物提供状态，并负责系统通知。两端共用卡片和详情展示，保留各自的额度采样目录。额度余额不能当作已采集 Token 总量。适配规则见[订阅数据说明](./subscription-plan-design.md)，刷新、通知和采样口径见[额度管理](./quota-management.md)。
 
 ## Desktop 响应性约束
 
@@ -61,7 +61,6 @@ Agent 日志或数据库 / 需要登录状态的数据源
 | `GET /functions/tud-config` | 设备标识、统计下限、采集下限、最近同步时间 |
 | `GET /functions/tud-pricing` | runtime 生效价格表与 `hasOverlay/updatedAt/refreshing` 状态；不下载远端、不暴露自定义源地址，响应禁止缓存；Desktop 经 IPC 走同一接口 |
 | `GET /functions/tud-performance` | 从原始有效证据聚合首字时间 P50/P95、估算输出速度及每日趋势；支持日期/时间、`sources/model/project` 和 `groupBy=model\|source\|project`，最近样本最多 100 条，汇总覆盖完整匹配集合 |
-| `GET /functions/tud-quota-history?provider=ID` | 按当前额度账号读取窗口及周期，返回观察区间和可可靠关联的本机订阅用量；查询期间身份变化返回 409，不暴露内部历史分区键 |
 | `GET/POST /functions/tud-local-admin/pricing` | 读取和修改独立手动单价；POST 携带 `revision/model/rates`，`rates:null` 恢复参考价，版本冲突返回 409 |
 | `GET/POST /functions/tud-local-admin/backup` | GET 提供本机能力与建议恢复目录；POST 的 `action=create\|verify\|restore` 创建、校验或恢复快照，恢复仅接受新目录 |
 | `GET /functions/tud-session-list` | 轻量会话列表；日期/时间和 `sources` 限定统计范围，`q/filterSources/project/model/group/sort/direction` 在完整范围内筛选排序；`page` 从 1 开始，`pageSize=12\|24\|48` 按主会话分页。返回当前页及匹配子树、完整 facets、`pagination`（根总数和匹配会话总数分开），越界页夹到有效范围；摘要行标记 `detailLevel=summary`，包含当前页及关联子树的 `taskSeconds/taskTimingKind`，复用按会话缓存的计时计算；不含完整模型与活动详情 |

@@ -45,15 +45,6 @@ test('analysis uses current buckets and layered pricing while preserving validat
   const priced = await service.request({ ...warm, snapshot: { ...warm.snapshot, pricingFingerprint: 'second', pricing: { builtin: { exact: { fixture: { input: 2 } } }, overlay: null } } });
   assert.equal((priced.body as { data: { sessions: Array<{ costUsd: number }> } }).data.sessions[0]!.costUsd, 0.006);
   const current = { ...warm, snapshot: { ...warm.snapshot, pricingFingerprint: 'second' } };
-  const quota = await service.request({ ...current, url: 'http://tud.local/functions/tud-quota-history?provider=codex', snapshot: {
-    ...current.snapshot, quotaHistory: { providerId: 'codex', label: 'Codex fixture', revision: 1, windows: [] },
-  } });
-  assert.equal(quota.status, 200);
-  assert.equal((quota.body as { data: { label: string } }).data.label, 'Codex fixture');
-  const secondary = await service.request({ ...current, url: 'http://tud.local/functions/tud-quota-history?provider=codex%40secondary', snapshot: {
-    ...current.snapshot, quotaHistoryKey: 'codex@secondary', quotaHistory: { providerId: 'codex', label: 'Secondary account', revision: 2, windows: [] },
-  } });
-  assert.equal((secondary.body as { data: { label: string } }).data.label, 'Secondary account', 'slot ids differ from canonical provider ids');
   assert.equal((await service.request({ ...current, url: url.replace('activity', 'detail') + '&source=claude' })).status, 400);
   assert.equal((await service.request({ ...current, init: { headers: { Origin: 'https://evil.example' } } })).status, 403);
   await assert.rejects(service.request({ ...current, init: { method: 'POST' } }), /invalid/);

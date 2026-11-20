@@ -1,6 +1,5 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
-@source "../../../../packages/dashboard/src/components/QuotaHistoryPanel.tsx";
 @source "../../../../packages/dashboard/src/components/ManualPricingEditor.tsx";
 @source "../../../../packages/dashboard/src/components/LocalBackupPanel.tsx";
 @source "../../../../packages/dashboard/src/components/UsageRecoveryPanel.tsx";

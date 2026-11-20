@@ -1,7 +1,7 @@
-import type { PricingSnapshot, QueueBucket, QuotaHistorySource, TudConfig } from 'quotern-core';
+import type { PricingSnapshot, QueueBucket, TudConfig } from 'quotern-core';
 import type { QuotaState } from '../shared/quota';
 
-const ROUTES = new Set(['/functions/tud-session-activity', '/functions/tud-session-list', '/functions/tud-session-detail', '/functions/tud-performance', '/functions/tud-usage-sessions', '/functions/tud-quota-history']);
+const ROUTES = new Set(['/functions/tud-session-activity', '/functions/tud-session-list', '/functions/tud-session-detail', '/functions/tud-performance', '/functions/tud-usage-sessions']);
 export interface AnalysisRequestInit { method?: string; headers?: Record<string, string>; body?: string }
 export interface AnalysisContext {
   dataDir: string;
@@ -12,9 +12,6 @@ export interface AnalysisContext {
   pricingFingerprint: string;
   pricing: PricingSnapshot;
   quotaState: QuotaState | null;
-  quotaHistory?: QuotaHistorySource | null;
-  /** The selected slot key can differ from QuotaHistorySource.providerId. */
-  quotaHistoryKey?: string;
 }
 export type AnalysisSnapshot = Omit<AnalysisContext, 'rows' | 'pricing'> & { rows?: QueueBucket[]; pricing?: PricingSnapshot };
 export interface AnalysisResult { status: number; body: unknown }

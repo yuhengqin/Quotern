@@ -13,7 +13,6 @@ import { join } from 'node:path';
 import { SessionQueryService, type SessionRangeQuery } from '../session-query.js';
 import type { SessionListQuery } from '../session-list.js';
 import { sessionsToCsv } from '../session-csv.js';
-import { buildQuotaHistoryReport } from '../quota/quota-history.js';
 
 import type { LocalApiDeps } from './state.js';
 import { inTimeBounds, validTimeBounds, type UsageBounds } from '../usage-window.js';
@@ -145,21 +144,6 @@ export function createLocalApiApp(deps: LocalApiDeps): Hono {
     const { hasOverlay, updatedAt, refreshing, checkedAt } = getPricingStatus();
     // Custom source URLs can embed credentials; the panel needs only table state.
     return c.json(ok({ pricing: getEffectivePricingData(), status: { hasOverlay, updatedAt: deps.demo?.exportedAt ?? updatedAt, checkedAt, refreshing: deps.demo ? false : refreshing } }));
-  });
-
-  app.get('/functions/tud-quota-history', async c => {
-    if (!isLocalPanelOrigin(c.req.header('Origin'), c.req.url)) return c.json({ success: false, message: 'QUOTA_FORBIDDEN_ORIGIN', data: null }, 403);
-    c.header('Cache-Control', 'no-store');
-    if (deps.demo) return c.json({ success: false, message: 'DEMO_QUOTA_UNAVAILABLE', data: null }, 503);
-    const params = new URL(c.req.url).searchParams, id = params.get('provider');
-    if (!id || id.length > 100 || [...params.keys()].some(key => key !== 'provider' || params.getAll(key).length !== 1)) return c.json({ success: false, message: 'INVALID_QUOTA_QUERY', data: null }, 400);
-    const read = () => deps.getQuotaHistory?.(id) ?? deps.quota?.getHistory?.(id) ?? null;
-    const snapshot = read();
-    if (!snapshot) return c.json(ok({ providerId: id, label: '', windows: [], observedAt: Date.now() / 1000 }));
-    const history = await readHistory(deps.dataDir, []);
-    const current = read();
-    if (!current || current.revision !== snapshot.revision) return c.json({ success: false, message: 'QUOTA_ACCOUNT_CHANGED', data: null }, 409);
-    return c.json(ok(buildQuotaHistoryReport(snapshot, history.observations)));
   });
 
   app.get('/functions/tud-usage-report', (c) => {

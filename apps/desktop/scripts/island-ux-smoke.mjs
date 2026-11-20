@@ -59,6 +59,8 @@ async function main() {
   applyRemotePricingOverlay({ exact: Object.fromEntries([0, 1, 2].map(n => [`island-priced-${n}`, { input: 1, output: 2 }])) });
   await writeFile(path.join(dataDir, `queue/${iso(now).slice(0, 7)}.jsonl`), rows.map(row => JSON.stringify(row)).join('\n'));
   const components = Array.from({ length: 25 }, (_, n) => ({ id: `service-${n}`, name: `Service ${n + 1}`, level: 'operational' }));
+  Object.assign(components[0], { id: '01JSM5RTJWHRWDTS6Q604VEW3B', name: 'Login' });
+  Object.assign(components[1], { id: '01JMXBNJXG1S2D9V65P1ZZTD94', name: 'Login' });
   const provider = { id: 'codex@work', providerId: 'codex', label: 'Codex · 工作', profileLabel: '工作', status: 'ready', fetchedAt: now, queriedAt: now, stale: false, planLabel: 'Pro', message: null, resetCredits: 2, refreshing: false, nextRefreshAt: null, details: [], analyses: {},
     provenance: { source: 'native', observer: 'Codex', observedAt: now, identityVerified: true, accountRef: 'synthetic-account-a' },
     windows: [{ id: 'five-hour', label: '5h', durationSeconds: 18000, resetsAt: now + 7200, usedPercent: 20 }, { id: 'weekly', label: '7d', durationSeconds: 604800, resetsAt: now + 86400, usedPercent: 92 }],
@@ -133,7 +135,8 @@ async function main() {
     await until(() => quota.preferences.resetTimeMode === 'date', mode + ' time save retries');
     await shot(client, mode + '-quota-reset-date');
     await client.click(cardButton);
-    await until(async () => (await body(client)).includes('查看 25 项正常服务'), mode + ' healthy collapsed');
+    await until(async () => (await body(client)).includes('25 项服务正常'), mode + ' healthy service summary');
+    assert.equal(await client.evaluate('document.querySelector("[data-quota-detail-credits]").getAttribute("aria-expanded")'), 'false');
     const detailReset = 'document.querySelector("[role=dialog] button[data-quota-reset-time]")';
     assert.equal(await client.evaluate(`Boolean(${button('显示重置日期')} || ${button('显示重置倒计时')})`), false, 'no separate display-mode button');
     await client.evaluate(`${detailReset}.focus()`); await client.key('Enter');
@@ -142,6 +145,14 @@ async function main() {
     assert.equal(await client.evaluate('[...document.querySelectorAll("[data-quota-service-details] details")].some(el=>el.open)'), false);
     await client.click('document.querySelector("[data-quota-service-details] summary")');
     assert.ok((await body(client)).includes('Service 25'));
+    await client.click(select('关注的服务'));
+    assert.ok(await client.evaluate(`Boolean(${option('APIs · Login')} && ${option('ChatGPT · Login')})`), 'same-name service options show their products');
+    await client.click(option('APIs · Login'));
+    await until(() => quota.preferences.serviceComponents?.codex?.length === 24, mode + ' saves service selection');
+    assert.ok(quota.preferences.serviceComponents.codex.includes(components[1].id) && !quota.preferences.serviceComponents.codex.includes(components[0].id));
+    await client.click(option('APIs · Login'));
+    await until(() => quota.preferences.serviceComponents?.codex?.length === 25, mode + ' service selection restored');
+    await client.key('Escape');
     await client.click('document.querySelector("[data-quota-service-details] summary")');
     failPreference = true;
     await client.click(select('重点关注窗口')); await client.click(option('5 小时限额'));
@@ -150,6 +161,25 @@ async function main() {
     await client.click(select('重点关注窗口')); await client.click(option('5 小时限额'));
     await until(() => quota.preferences.preferredWindows?.[provider.id] === 'five-hour', mode + ' focused window saved');
     await shot(client, mode + '-quota-focus'); await closeDetails(client);
+    const serviceButton = 'document.querySelector("[data-quota-service-trigger]")';
+    await client.click(serviceButton);
+    await until(() => client.evaluate('document.activeElement?.hasAttribute("data-quota-service-details") && document.querySelector("[data-quota-service-details] details")?.open'), mode + ' status dot focuses the expanded service section');
+    await closeDetails(client);
+    await until(() => client.evaluate(`document.activeElement === ${serviceButton}`), mode + ' Escape returns to the status dot');
+    const healthyService = provider.service;
+    provider.service = { ...healthyService, level: 'major',
+      components: components.map((component, index) => index === 0 ? { ...component, level: 'major' } : component),
+      incidents: [{ id: 'synthetic-login', name: '合成登录异常', phase: 'identified', level: 'major', componentIds: [components[0].id], body: '正在恢复登录', updatedAt: now, url: 'https://status.openai.com/incidents/synthetic-login' }] };
+    publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate(`${serviceButton}.getAttribute('aria-label').includes('严重异常')`), mode + ' outage changes the dot label');
+    await client.click(`document.querySelector('[data-quota-card] [data-quota-window-value]')`);
+    const serviceSection = 'document.querySelector("[data-quota-service-details]")';
+    await until(() => client.evaluate(`${serviceSection}?.innerText.includes('正在恢复登录')`), mode + ' active incident and latest update are visible without expanding');
+    provider.service = { ...healthyService, stale: true }; publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate(`${serviceSection}?.innerText.includes('状态未确认') && ${serviceSection}.innerText.includes('已过期')`), mode + ' outdated service data stays visible');
+    await closeDetails(client);
+    provider.service = healthyService; publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate(`${serviceButton}.getAttribute('aria-label').includes('服务正常')`), mode + ' service resumes normal state');
     assert.equal(await client.evaluate('document.querySelectorAll("[data-quota-card]").length'), 1);
     await shot(client, mode + '-full-analysis');
     failShareReport = true;
@@ -215,7 +245,7 @@ async function main() {
       }
     }
     await client.call('Emulation.clearDeviceMetricsOverride'); await closeDetails(client);
-    checks.push(mode + '-focus-save-failure-healthy-details-full-analysis-legacy-preference-and-four-PNG-formats');
+    checks.push(mode + '-quota-focus-service-selection-outage-stale-details-full-analysis-and-four-PNG-formats');
   }
   const browser = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
   browser.webContents.session.on('will-download', (_event, item) => { item.setSavePath(downloadPath); item.once('done', (_event, state) => { if (state === 'completed') downloaded++; }); });

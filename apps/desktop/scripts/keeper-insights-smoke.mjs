@@ -28,7 +28,6 @@ const until = async (predicate, label) => {
 };
 const body = () => client.evaluate('document.body.innerText');
 const button = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
-const tab = text => `[...document.querySelectorAll('[role="tab"]')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const labelInput = label => `document.getElementById([...document.querySelectorAll('label')].find(el=>el.textContent.trim()===${JSON.stringify(label)})?.htmlFor)`;
 const select = label => `[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)} || el.parentElement?.textContent.includes(${JSON.stringify(label)}))`;
 const option = label => `[...document.querySelectorAll('[role="option"]')].find(el=>el.textContent.trim()===${JSON.stringify(label)})`;
@@ -65,7 +64,6 @@ async function seed() {
   }
   for (const month of new Set(rows.map(row => row.hour_start.slice(0, 7)))) await writeFile(path.join(dataDir, `queue/${month}.jsonl`), rows.filter(row => row.hour_start.startsWith(month)).map(row => JSON.stringify(row)).join('\n') + '\n');
   const samples = [-1, 0].flatMap(cycle => Array.from({ length: 8 }, (_, n) => ({ at: now - 1800 + cycle * 18000 + n * 200, usedPercent: 10 + n * 7, resetsAt: now + 16200 + cycle * 18000, durationSeconds: 18000, service: 'openai', accountRef: 'synthetic-account' })));
-  const weeklySamples = [{ at: now - 7200, usedPercent: 10, resetsAt: now + 86400 }, { at: now - 3600, usedPercent: 15, resetsAt: now + 86400 }];
   await writeFile(path.join(quotaDir, 'history.json'), JSON.stringify({ 'codex:synthetic-private:account:18000': samples }));
   await writeFile(path.join(quotaDir, 'preferences.json'), JSON.stringify(DEFAULT_QUOTA_PREFERENCES));
   const provider = { id: 'codex', label: 'Codex', status: 'ready', planLabel: 'Pro', fetchedAt: now, queriedAt: now, stale: false, message: null, details: [], resetCredits: null, refreshing: false, nextRefreshAt: null, analyses: {}, service: null, windows: [{ id: 'account:18000', label: '5h', usedPercent: 59, resetsAt: now + 16200, durationSeconds: 18000 }] };
@@ -75,8 +73,7 @@ async function seed() {
   let failNextPriceUpdate = false;
   const rebuild = aggregateCache.rebuildFromRows.bind(aggregateCache);
   aggregateCache.rebuildFromRows = async rows => { await wait(500); if (failNextPriceUpdate) { failNextPriceUpdate = false; throw new Error('Synthetic cache write failure'); } await rebuild(rows); };
-  const api = createLocalApiApp({ dataDir, bucketStore: store, aggregateCache, getConfig: () => config, sessionActionsIpc: true, desktopQuotaDirectory: quotaDir, getQuotaState: () => quota,
-    getQuotaHistory: () => ({ providerId: 'codex', label: 'Codex', revision: 1, windows: [{ id: 'account:18000', label: '5h', samples }, { id: '7d', label: '7d', samples: weeklySamples }] }) });
+  const api = createLocalApiApp({ dataDir, bucketStore: store, aggregateCache, getConfig: () => config, sessionActionsIpc: true, desktopQuotaDirectory: quotaDir, getQuotaState: () => quota });
   return { dataDir, api, quota, failPriceUpdate: () => { failNextPriceUpdate = true; } };
 }
 
@@ -175,31 +172,15 @@ async function main() {
   await route('/dashboard');
   await until(() => client.evaluate(`Boolean(document.querySelector('button[aria-label="查看 Codex 额度详情"]'))`), 'quota card');
   await client.click(`document.querySelector('button[aria-label="查看 Codex 额度详情"]').parentElement`);
-  const historyCallsBefore = calls.filter(call => call.route.startsWith('/functions/tud-quota-history')).length;
-  await client.evaluate(`${tab('当前额度')}.focus(); true`); await client.key('ArrowRight');
-  assert.equal(calls.filter(call => call.route.startsWith('/functions/tud-quota-history')).length, historyCallsBefore, 'arrow focus does not fetch history');
-  await client.key('Enter');
-  await until(async () => (await body()).includes('同账号本机 Token'), 'account-linked history');
-  assert.ok((await body()).includes('1.5万'));
-  assert.equal(await client.evaluate(`${dialog}.length`), 1, 'history shares the details dialog');
-  assert.ok((await body()).includes('当前周期'));
-  const point = await client.evaluate(`(() => { const r = [...${dialog}].at(-1).querySelector('.recharts-wrapper').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
-  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
-  await until(() => client.evaluate(`Boolean([...${dialog}].at(-1).querySelector('.recharts-tooltip-wrapper')?.textContent)`), 'quota chart tooltip');
-  assert.ok(!(await body()).includes('Invalid Date'), 'quota tooltip must format the sample timestamp');
-  await snapshot('desktop-quota-history');
-  window.setSize(390, 780); await wait(150); await fits(); await snapshot('desktop-quota-history-narrow');
-  await client.click(select('观察周期')); await client.key('End'); await client.key('Enter');
-  await until(async () => (await body()).includes('暂无可可靠关联的本机用量'), 'old cycle without attributed use');
-  assert.ok((await body()).includes('已结束'));
-  await client.click(select('额度窗口')); await client.key('End'); await client.key('Enter');
-  await until(async () => (await body()).includes('周限额'), 'localized weekly window');
-  await client.click(`[...document.querySelectorAll('[role=dialog] summary')].find(el=>el.textContent.includes('实际观察区间'))`);
-  await until(async () => (await body()).includes('周期开始') && (await body()).includes('无法确认'), 'weekly window keeps unknown cycle start in observed interval details');
+  await until(() => client.evaluate(`${dialog}.length === 1`), 'quota details opened by click');
+  assert.equal(await client.evaluate(`Boolean([...${dialog}].at(-1).querySelector('[role=tablist]'))`), false, 'quota details have no tabs');
+  window.setSize(390, 780); await wait(150); await fits();
+  assert.equal(await client.evaluate(`(()=>{const d=[...${dialog}].at(-1);return d.scrollWidth<=d.clientWidth+1})()`), true, 'quota details fit narrow screen');
+  await snapshot('desktop-quota-details-narrow');
   await client.key('Escape');
   await until(() => client.evaluate(`${dialog}.length === 0`), 'one Escape closes quota details');
   assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-label")'), '查看 Codex 额度详情');
-  checks.push('desktop-quota-cycle-selection-account-join-and-narrow-layout');
+  checks.push('desktop-quota-details-click-narrow-escape-and-focus');
 
   window.setSize(1000, 920);
   // Use the production shell navigation event to select the data settings tab.
@@ -245,11 +226,12 @@ async function main() {
   await client.click(`document.querySelector('input[name="token-unit-mode"][value="international"]').closest('label')`);
   await until(() => client.evaluate(`document.querySelector('input[name="token-unit-mode"][value="international"]').checked`), 'international token units selected');
   await client.key('Escape');
-  await client.click(`document.querySelector('button[aria-label="查看 Codex 额度详情"]').parentElement`);
-  assert.equal(await client.evaluate(`${tab('当前额度')}.getAttribute('aria-selected')`), 'true', 'reopening starts at current quota');
-  await client.click(tab('额度历史'));
-  await until(async () => (await body()).includes('同账号本机 Token') && (await body()).includes('15K'), 'quota history respects saved token units');
+  await client.evaluate(`document.querySelector('button[aria-label="查看 Codex 额度详情"]').focus(); true`); await client.key('Enter');
+  await until(() => client.evaluate(`${dialog}.length === 1`), 'quota details opened by keyboard');
+  assert.equal(await client.evaluate(`Boolean([...${dialog}].at(-1).querySelector('[role=tablist]'))`), false, 'reopened quota details have no tabs');
   await client.key('Escape');
+  await until(() => client.evaluate(`${dialog}.length === 0`), 'keyboard-opened quota details closed');
+  assert.equal(await client.evaluate('document.activeElement.getAttribute("aria-label")'), '查看 Codex 额度详情');
   for (const [value, heading] of [['en', 'Performance'], ['ja', 'パフォーマンス分析'], ['ko', '성능 분석']]) {
     await client.evaluate('window.dispatchEvent(new CustomEvent("tud:open-settings", { detail: { tab: "appearance" } })); true');
     await client.click(`document.querySelector('input[name="locale-preference"][value="${value}"]').closest('label')`);
@@ -258,7 +240,7 @@ async function main() {
     await until(() => client.evaluate(`${dialog}.length === 0`), 'settings close before localized page');
     await route('/performance');
     await until(() => client.evaluate(`document.querySelector('h1')?.textContent === ${JSON.stringify(heading)}`), `localized performance ${value}`);
-    assert.ok(!/\b(?:insights|history)\.[a-z]/.test(await body()));
+    assert.ok(!/\binsights\.[a-z]/.test(await body()));
     if (value === 'en') { window.setSize(390, 780); await wait(150); await fits(); await snapshot('desktop-performance-english-narrow'); window.setSize(1000, 920); }
   }
   checks.push('desktop-token-unit-preference-and-four-locales');

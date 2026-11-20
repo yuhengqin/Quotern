@@ -13,6 +13,9 @@ test('fixed quota labels use semantic period and provider identity', () => {
 test('quota value kind and pace use stable semantics', () => {
   assert.deepEqual(localizeQuotaDetail('en', { id: 'chat-completions', label: '聊天与代码补全', text: '无限', valueKind: 'unlimited' }), { label: 'Chat and code completions', text: 'Unlimited' });
   const pace = { paceDifference: -14, paceBasis: 'automatic' };
-  assert.equal(localizeQuotaPaceLabel('en', pace), 'Using faster');
+  assert.equal(localizeQuotaPaceLabel('en', pace), 'Faster quota use');
+  assert.equal(localizeQuotaPaceLabel('zh-CN', pace), '额度消耗较快');
+  assert.equal(localizeQuotaPaceLabel('zh-CN', { ...pace, paceDifference: 14 }), '额度消耗较慢');
+  assert.equal(localizeQuotaPaceLabel('zh-CN', { ...pace, paceDifference: 0 }), '额度消耗正常');
   assert.equal(localizeQuotaPaceDescription('en', { usedPercent: 54 }, pace), '54% used; 40% expected based on past usage.');
 });

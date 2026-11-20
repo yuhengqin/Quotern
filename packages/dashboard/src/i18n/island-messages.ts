@@ -14,7 +14,6 @@ export const islandMessages: Record<string, readonly [string, string, string, st
   'island.quota.windowUnavailable': ['提醒对应的额度窗口已不可用，以下是该账号当前的额度。', 'This alert’s window is no longer available. Current allowances for this account are shown below.', '通知の枠は利用できません。以下に現在の使用枠を表示します。', '알림의 한도를 더 이상 사용할 수 없습니다. 아래에서 현재 한도를 확인하세요.'],
   'island.quota.preferredWindow': ['重点关注窗口', 'Focus window', '注目する期間', '주요 한도'],
   'island.quota.automatic': ['自动选择最紧张额度', 'Automatically show tightest allowance', '残量が最も少ない枠を自動選択', '잔여 한도가 가장 적은 항목 자동 선택'],
-  'island.quota.readingDetails': ['读数来源与时间', 'Reading source and timing', '取得元と時刻', '조회 출처 및 시각'],
   'island.quota.healthyServices': ['查看 {{count}} 项正常服务', 'View {{count}} healthy services', '正常なサービス {{count}} 件を表示', '정상 서비스 {{count}}개 보기'],
   'island.quota.serviceList': ['查看 {{count}} 项服务明细', 'View {{count}} service details', 'サービス {{count}} 件の詳細を表示', '서비스 {{count}}개 상세 보기'],
   'island.quota.loginThenRefresh': ['在 {{provider}} 重新登录，完成后刷新额度。', 'Sign in again in {{provider}}, then refresh the allowance.', '{{provider}} に再ログインしてから残量を更新してください。', '{{provider}}에 다시 로그인한 후 한도를 새로고침하세요.'],

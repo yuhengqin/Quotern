@@ -12,6 +12,7 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     ...states.map((id, index) => ({ ...copy(id, ['Claude', 'Gemini CLI', 'ZCode', 'Antigravity'][index], ['claude', 'gemini', 'zcode', 'antigravity'][index]), windows: [], details: [], resetCredits: null, status: 'expired', planLabel: null }))];
   quota.providers[0].windows.find(window => window.id === 'five-hour').usedPercent = 24;
   quota.providers[0].analyses['five-hour'] = { paceDifference: 20, etaAt: null, trend: [], paceBasis: 'uniform' };
+  quota.providers[0].resetCreditExpirations = Array.from({ length: original.resetCredits }, (_, i) => Math.floor(Date.now() / 1000) + (i + 1) * 86400);
   quota.providers[1].windows[1].usedPercent = 78;
   quota.providers[1].windows[1].resetsAt = quota.providers[1].windows[0].resetsAt;
   quota.preferences = { ...saved.preferences, providerOrder: ['temporarily-hidden', ...initial], compact: false };
@@ -40,10 +41,9 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       const valueRect = value.getBoundingClientRect(), resetRect = reset.getBoundingClientRect();
       const valueColor = getComputedStyle(value).color;
       const segments = [...bar.querySelectorAll('[data-quota-segment]')];
-      const description = (bar.getAttribute('aria-describedby') ?? '').split(/\\s+/).map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
       return { value: value.textContent.trim(), segmentCounts: [...card.querySelectorAll('[role=progressbar]')].map(el => el.querySelectorAll('[data-quota-segment]').length), widths: segments.map(segment => segment.firstElementChild?.style.width ?? ''),
         valueColor, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null,
-        marker: Boolean(bar.querySelector('[data-quota-pace-marker]')), description,
+        marker: Boolean(bar.querySelector('[data-quota-pace-marker]')), accessibleValue: bar.getAttribute('aria-label'), pace: card.querySelector('[data-quota-summary]')?.textContent,
         valueRect: { right: valueRect.right, top: valueRect.top, bottom: valueRect.bottom }, resetRect: { left: resetRect.left, top: resetRect.top, bottom: resetRect.bottom } };
     })()`);
     assert.ok(fiveHour, mode + ' 5h row contains its value and reset action');
@@ -58,7 +58,9 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     assert.equal(fiveHour.valueColor, fiveHour.fillColor, mode + ' remaining value and filled segments share a color');
     const rangeColor = () => client.evaluate(`getComputedStyle(${textButton('7D')}).backgroundColor`);
     assert.equal(fiveHour.fillColor, await rangeColor(), mode + ' normal quota uses the exact selected 7D background color');
-    assert.ok(fiveHour.marker && fiveHour.description, mode + ' pace marker retains its accessible description');
+    assert.equal(fiveHour.marker, false, mode + ' quota bars have no pace marker');
+    assert.match(fiveHour.accessibleValue, /剩余 76%/);
+    assert.match(fiveHour.pace, /额度消耗较慢/);
     assert.ok(fiveHour.resetRect.left >= fiveHour.valueRect.right && fiveHour.resetRect.top < fiveHour.valueRect.bottom && fiveHour.resetRect.bottom > fiveHour.valueRect.top, mode + ' reset is to the right of and aligned with remaining quota');
     const colors = () => client.evaluate(`(() => {
       const read = (card, remaining) => {
@@ -111,9 +113,17 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     }
     await shot(client, `${mode}-reset-card-count`);
     await client.click(`${item(a)}.querySelector('[data-quota-reset-credits]')`);
-    await until(() => client.evaluate(`document.querySelector('[role="dialog"]')?.textContent.includes('可重置 ${original.resetCredits} 次')`), mode + ' reset credits remain available in card details');
+    const detailCredits = 'document.querySelector("[role=dialog] [data-quota-detail-credits]")';
+    await until(() => client.evaluate(`${detailCredits}?.getAttribute('aria-expanded') === 'true'`), mode + ' reset card opens its expiry dates directly');
+    assert.equal(await client.evaluate(`document.getElementById(${detailCredits}.getAttribute('aria-controls')).querySelectorAll('li time').length`), original.resetCredits);
+    assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog] [data-quota-pace-marker]"))'), false);
+    await client.click(detailCredits);
+    assert.equal(await client.evaluate(`document.getElementById(${detailCredits}.getAttribute('aria-controls')).hidden`), true);
+    await client.key('Enter');
+    assert.equal(await client.evaluate(`document.getElementById(${detailCredits}.getAttribute('aria-controls')).hidden`), false);
     await client.key('Escape');
     await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'reset credit details close');
+    await until(() => client.evaluate(`document.activeElement === ${item(a)}.querySelector('[data-quota-reset-credits]')`), 'focus returns to the reset-card count');
     await client.click(`${item(states[3])}.querySelector('[data-quota-card]')`);
     await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'status details open before a sibling changes type');
     const changingStatus = quota.providers.find(provider => provider.id === states[1]);

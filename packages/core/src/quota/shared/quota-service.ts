@@ -18,9 +18,12 @@ export function parseQuotaServiceStatus(value: unknown): Level {
 /** Project the public Statuspage summary; never forward arbitrary URLs or raw HTML. */
 export function parseQuotaServiceSummary(value: unknown, url: string, checkedAt: number): QuotaServiceStatus {
   const raw = object(value);
+  const components = rows(raw.components).filter(row => typeof row.id === 'string' && typeof row.name === 'string');
+  const groups = new Map(components.filter(row => row.group === true).map(row => [text(row.id), text(row.name)]));
   return { level: parseQuotaServiceStatus(raw), url, checkedAt, stale: false,
-    components: rows(raw.components).filter(row => typeof row.id === 'string' && typeof row.name === 'string').map(row => ({
-      id: text(row.id), name: text(row.name), level: Object.hasOwn(componentLevels, text(row.status)) ? componentLevels[text(row.status)] : 'unknown',
+    components: components.map(row => ({
+      id: text(row.id), name: text(row.name), ...(groups.has(text(row.group_id)) ? { groupName: groups.get(text(row.group_id)) } : {}),
+      level: Object.hasOwn(componentLevels, text(row.status)) ? componentLevels[text(row.status)] : 'unknown',
     })),
     incidents: rows(raw.incidents).filter(row => /^[a-zA-Z0-9_-]+$/.test(text(row.id)) && !['resolved', 'postmortem'].includes(text(row.status))).map(row => {
       const update = rows(row.incident_updates).sort((a, b) => (timestamp(b.created_at) ?? 0) - (timestamp(a.created_at) ?? 0))[0] ?? {};
@@ -33,7 +36,8 @@ export function parseQuotaServiceSummary(value: unknown, url: string, checkedAt:
 
 export function selectQuotaServiceStatus(status: QuotaServiceStatus, selected?: readonly string[]): QuotaServiceStatus {
   if (selected === undefined) {
-    const level = (status.components ?? []).reduce<Level>((worst, component) => rank[component.level] > rank[worst] ? component.level : worst, status.level);
+    const reported = [...(status.components ?? []), ...(status.incidents ?? [])];
+    const level = reported.reduce<Level>((worst, item) => rank[item.level] > rank[worst] ? item.level : worst, status.level);
     return { ...status, level };
   }
   if (!selected.length) return { ...status, level: 'unknown', incidents: [], selectionEmpty: true };

@@ -5,7 +5,7 @@ import { Button as AriaButton } from 'react-aria-components';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { localizeQuotaDetail, localizeQuotaPaceDescription, localizeQuotaPaceLabel, localizeQuotaValueText, localizeQuotaWindowLabel } from 'quotern-i18n/quota';
 import { useTranslation } from 'quotern-i18n/react';
-import { RefreshCw } from 'lucide-react';
+import { Copy, RefreshCw } from 'lucide-react';
 import type { QuotaAnalysis, QuotaPreferences, QuotaPreferencePatch, QuotaProviderState, QuotaSample, QuotaServiceStatus, QuotaWindow } from 'quotern-core/quota/shared/quota';
 import type { SubscriptionChannelId } from 'quotern-core/quota/shared/subscription-channels';
 import { SubscriptionBrandIcon } from './SubscriptionBrandIcon';
@@ -184,7 +184,9 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
   const compact = isQuotaStatusOnly(provider);
   const grouped = compact && statusRow;
   const headerService = grouped ? serviceWarning : service;
-  const planSummary = grouped ? '' : [provider.planLabel, !compact && provider.resetCredits !== null ? t('usage.quota.resetCredits', { count: provider.resetCredits }) : null].filter(Boolean).join(' · ');
+  const resetCredits = compact ? null : provider.resetCredits;
+  const resetCreditLabel = resetCredits !== null ? t('usage.quota.resetCredits', { count: resetCredits }) : undefined;
+  const planSummary = grouped ? '' : [provider.planLabel, providerType !== 'codex' ? resetCreditLabel : undefined].filter(Boolean).join(' · ');
   const preferredWindow = preferences.preferredWindows?.[provider.id];
   const primary = primaryQuotaWindow(provider, preferredWindow, now.getTime() / 1000);
   const risk = primaryQuotaWindow(provider, undefined, now.getTime() / 1000);
@@ -259,7 +261,13 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
             <SubscriptionBrandIcon brand={providerType as Parameters<typeof SubscriptionBrandIcon>[0]['brand']} />
             <span className={`min-w-0 truncate text-sm font-medium ${grouped ? 'max-w-24' : ''}`}>{provider.label}</span>
           </div>
-          {planSummary && !summaryOnly && <Chip size="sm" variant="soft" className="min-w-0 max-w-full bg-foreground/8 text-foreground" title={planSummary}><Chip.Label className="truncate">{planSummary}</Chip.Label></Chip>}
+          {!summaryOnly && (planSummary || (providerType === 'codex' && resetCredits !== null)) && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5 gap-y-1">
+            {planSummary && <Chip size="sm" variant="soft" className="min-w-0 max-w-full bg-foreground/8 text-foreground" title={planSummary}><Chip.Label className="truncate">{planSummary}</Chip.Label></Chip>}
+            {providerType === 'codex' && resetCredits !== null && <Chip data-quota-reset-credits role="img" aria-label={resetCreditLabel} title={resetCreditLabel} size="sm" variant="soft" className="h-4.5 shrink-0 gap-1 rounded-full bg-foreground/8 px-1.5 text-[11px] leading-4 text-foreground/70 tabular-nums">
+              <Copy aria-hidden="true" className="size-3" />
+              <Chip.Label>x{resetCredits}</Chip.Label>
+            </Chip>}
+          </div>}
         </div>
         {(headerService || layoutControls) && <div className="flex items-center gap-1">{status && headerService && (layoutControls ? <span role="img" aria-label={headerService.label} className={`size-2 shrink-0 rounded-full ${headerService.dotClassName}`} /> : <QuotaServiceStatusLink label={provider.label} status={status} service={headerService} onOpen={openDetails} iconOnly />)}{layoutControls?.menu}</div>}
       </div>

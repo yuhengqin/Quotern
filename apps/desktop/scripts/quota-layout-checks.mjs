@@ -8,7 +8,7 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     provenance: { ...original.provenance, accountRef: `synthetic-${id}` } });
   const states = ['layout-claude', 'layout-gemini', 'layout-zcode', 'layout-antigravity'];
   const initial = [a, b, c, ...states];
-  quota.providers = [copy(a, 'Codex'), copy(b, 'Cursor', 'cursor'), copy(c, 'Codex · 研究用账号名称'),
+  quota.providers = [copy(a, 'Codex'), copy(b, 'Cursor', 'cursor'), { ...copy(c, 'Codex · 研究用账号名称'), resetCredits: 0 },
     ...states.map((id, index) => ({ ...copy(id, ['Claude', 'Gemini CLI', 'ZCode', 'Antigravity'][index], ['claude', 'gemini', 'zcode', 'antigravity'][index]), windows: [], details: [], resetCredits: null, status: 'expired', planLabel: null }))];
   quota.preferences = { ...saved.preferences, providerOrder: ['temporarily-hidden', ...initial], compact: false };
   const textButton = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
@@ -25,6 +25,16 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
   const reload = async () => { await window.loadURL(window.webContents.getURL()); await until(() => client.evaluate(`document.querySelectorAll("[data-quota-layout-item]").length === ${initial.length}`), mode + ' layout loaded'); };
   try {
     publish(); await reload(); await expectOrder(initial);
+    for (const [id, count] of [[a, original.resetCredits], [c, 0]]) {
+      const badge = `${item(id)}.querySelector('[data-quota-reset-credits]')`;
+      assert.equal(await client.evaluate(`${badge}?.textContent`), `x${count}`, mode + ' displays the known reset card count');
+      assert.equal(await client.evaluate(`${badge}?.getAttribute('aria-label')`), `可重置 ${count} 次`);
+    }
+    await shot(client, `${mode}-reset-card-count`);
+    await client.click(`${item(a)}.querySelector('[data-quota-reset-credits]')`);
+    await until(() => client.evaluate(`document.querySelector('[role="dialog"]')?.textContent.includes('可重置 ${original.resetCredits} 次')`), mode + ' reset credits remain available in card details');
+    await client.key('Escape');
+    await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'reset credit details close');
     await client.click(`${item(states[3])}.querySelector('[data-quota-card]')`);
     await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'status details open before a sibling changes type');
     const changingStatus = quota.providers.find(provider => provider.id === states[1]);

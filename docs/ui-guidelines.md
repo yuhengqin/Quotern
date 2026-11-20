@@ -164,7 +164,7 @@ Windows 横幅超时不等于用户已处理：保留通知中心条目的点击
 | 能力 | 入口与使用点 | 适用边界及共享方式 |
 | --- | --- | --- |
 | 总览 Agent 多选 | [DashboardFilter.ToolChannelSelect](../packages/dashboard/src/components/DashboardFilter.tsx)，总览及 ShareActivityModal 使用 | 空数组表示全部。Desktop 总览/托盘使用自己的 DashboardFilter；共享分享弹窗使用 Dashboard 版本 |
-| 热力图 Agent 多选 | [PlatformFilterSelect](../packages/dashboard/src/components/PlatformFilterSelect.tsx)，ActivityHeatmap 使用 | `value` 是具体选中集合；`[]` 表示无结果，全选可由 `applyPlatformFilterChange` 折叠成 `null`。与总览 Agent 不可混用空选语义 |
+| 热力图 Agent 多选 | [PlatformFilterSelect](../packages/dashboard/src/components/PlatformFilterSelect.tsx)，Dashboard 与 Desktop 总览的 ActivityHeatmap 使用 | 局部选项取自总览 Agent 筛选后的来源。`value` 是具体选中集合，`[]` 表示无结果，全选由 `applyPlatformFilterChange` 折叠成 `null`。Desktop re-export 共享控件并登记 CSS `@source` |
 | 用量日期范围 | [DashboardDateRangePicker](../packages/dashboard/src/components/DashboardDateRangePicker.tsx)，DashboardTimeRangeControl 使用 | 以日历图标打开自定义日期，保留本地化可访问名称、Tooltip 和选中态；已选日期范围显示在时间控件旁。绑定统计时区、DashboardDateRange 和回看天数限制；Desktop 直接 re-export |
 | 时间范围快捷选择 | [DashboardTimeRangeControl](../packages/dashboard/src/components/DashboardTimeRangeControl.tsx)，DashboardFilter 与 SessionsPage 使用 | “今天 / 1D / 7D / 30D / 90D / 日历图标”的共享外观、选中态与日期选择器；调用者负责查询范围。会话页显式选择 1D 后复用滚动时间 hook，切换时间保留列表筛选并重置页码；两端直接引用同一组件，Desktop 登记 CSS `@source` |
 | 初次加载/范围刷新 | [DashboardLoadingSkeleton](../packages/dashboard/src/components/DashboardLoadingSkeleton.tsx)、[DashboardRangeSyncOverlay](../packages/dashboard/src/components/DashboardRangeSyncOverlay.tsx)，DashboardPage 使用 | 骨架匹配当前总览槽位；刷新遮罩需要定位父级。两端有独立副本，Desktop 另用于托盘 |
@@ -181,9 +181,9 @@ Windows 横幅超时不等于用户已处理：保留通知中心条目的点击
 
 会话搜索由共享 `SessionBrowser` 同步维护输入草稿，URL `q` 表示已应用查询。输入法组字期间保留已应用筛选、计数与结果；结束后读取完整输入值并去重更新，取消且原文未变时不重复查询。组字期间的 Enter / Escape 交给输入法；搜索框清除、移除搜索条件和清除全部均不查询被丢弃的拼音，取消清除按压仍保留已编辑文字。英文即时搜索、分页及历史恢复保持原行为。`test:session-pagination-ui` 通过真实浏览器组合输入事件核对 HTTP / IPC 请求，系统输入法候选与键盘行为另做实测。
 
-Dashboard 热力图的局部来源入口显示当前 Agent 选择，触发器和浮层保留「热力图来源」的无障碍名称。菜单提供「全部」和「清空」，清空后提示至少选择一个 Agent。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
+两端总览热力图右上的局部来源入口显示当前 Agent 选择，触发器和浮层保留「热力图来源」的无障碍名称。菜单中的「全部」恢复顶部筛选范围内的全部来源，「清空」只清空热力图并提示至少选择一个 Agent。圆环图隐藏分项后，以「显示项合计」说明分母并提供「恢复全部」。Token 数量格式保存后通过 i18n 的展示偏好事件更新已挂载组件，不刷新文档、不重置弹层和页面状态；两端独立存储入口均通知同一共享 i18n 实例，跨窗口 storage 变化也触发更新。
 
-热力图专项验收使用 `corepack pnpm test:heatmap-legend-ui [全新输出目录]`。两端构建后检查 HTTP / IPC 的五档色阶、320/375/1120px 布局、成就入口和四语言；Dashboard 额外检查来源菜单文案、键盘清空、焦点返回及恢复全部。输出明暗截图仍需人工查看。
+热力图专项验收使用 `corepack pnpm test:heatmap-legend-ui [全新输出目录]`。两端构建后检查 HTTP / IPC 的五档色阶、320/375/1120px 布局、成就入口、四语言、来源菜单和每日用量联动、键盘清空、焦点返回及恢复全部。Desktop 额外检查局部与顶部 Agent 筛选叠加及 320px 菜单。输出明暗截图仍需人工查看。
 
 当前没有统一的全页面 EmptyState；无数据、无匹配结果、读取失败由对应业务表达。新增页面先复用合适的 HeroUI 原件或现有业务表达，确有重复契约时再抽取。
 
@@ -194,7 +194,7 @@ Dashboard 热力图的局部来源入口显示当前 Agent 选择，触发器和
 - 成就的周期可达成性依据统计日期和当前采集的活跃日；今天尚未结束时允许当天继续达成，历史漏采可在补采后更新。当前记录下已无法完成的周期不进入首页推荐，历史记录不删除；详情明确已结束或本期无法达成，进度仍可查看。
 - 上下文审计保留已发现内容估算与实际加载量未知的区别。异常正文显示跳过文件/目录及读取/解析异常数量，位置、原因和影响按需展开；未扫描目录内的文件数未知。诊断最多展示前 100 项，汇总仍计入其余已记录问题；旧运行端没有明细时明确提示。路径为扫描根相对路径，多个用户根以序号区分，不返回内容、密钥或错误原文。失败可在弹窗内重试。
 
-存量 `RankFilter`、`RankModelCascadeSelect` 和 `KeyFilterSelect` 在当前两个 UI 根中未找到页面接入点。它们的菜单外壳也遵守公共约束，但不能作为已验收页面或优先复用的业务入口；接入时重新核对调用、键盘和视觉行为。Desktop 的 PlatformFilterSelect 当前也未找到使用点。
+存量 `RankFilter`、`RankModelCascadeSelect` 和 `KeyFilterSelect` 在当前两个 UI 根中未找到页面接入点。它们的菜单外壳也遵守公共约束，但不能作为已验收页面或优先复用的业务入口；接入时重新核对调用、键盘和视觉行为。
 
 ## 筛选与选项菜单
 

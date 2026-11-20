@@ -29,6 +29,7 @@
 @source "../../../../packages/dashboard/src/components/SessionUsageBreakdown.tsx";
 @source "../../../../packages/dashboard/src/components/HelpPopover.tsx";
 @source "../../../../packages/dashboard/src/components/ActivityHeatmapLegend.tsx";
+@source "../../../../packages/dashboard/src/components/PlatformFilterSelect.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardTimeRangeControl.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardDateRangePicker.tsx";
 @source "../../../../packages/dashboard/src/components/BackToUsageLink.tsx";

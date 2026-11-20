@@ -654,9 +654,84 @@ async function exerciseModelTokenShare(window, client, mode) {
   checks.push(mode + '-model-share-ranking-grouping-hide-restore-full-list-classifications-keyboard-units-responsive-themes-languages');
 }
 
+async function exerciseHeatmapSources(window, client, mode) {
+  const trigger = 'document.querySelector(\'button[aria-label^="热力图来源："]\')';
+  const dialog = 'document.querySelector("[role=dialog]")';
+  const options = selector => `[...${dialog}.querySelectorAll(${JSON.stringify(selector)})]`;
+  const action = label => `${options('button')}.find(el => el.textContent.trim() === ${JSON.stringify(label)})`;
+  const topFilter = 'document.querySelector(\'[aria-label="筛选条件"] .select__trigger\')';
+  const dayLabel = 'document.querySelector(\'[data-day="2026-10-25"]\')?.getAttribute("aria-label")';
+  const open = async () => {
+    await client.click(trigger);
+    await until(() => client.evaluate(`Boolean(${dialog}?.querySelector('[role=option]'))`), mode + ' heatmap source options are visible');
+  };
+  const close = async () => {
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${dialog} && document.activeElement === ${trigger}`), mode + ' heatmap source menu restores focus');
+  };
+  const chooseAll = async () => {
+    await client.click(action('全部'));
+    await close();
+  };
+  const clear = async () => {
+    await client.evaluate(`(${action('清空')}).focus(); true`);
+    await client.key('Enter');
+    await until(() => client.evaluate(`${dialog} && !${dialog}.querySelector('[role=option][aria-selected=true]')`), mode + ' clear deselects every source and keeps the menu open');
+    await close();
+    assert.equal(await client.evaluate(`document.body.innerText.includes('请至少选择一个 Agent')`), true, mode + ' empty source selection');
+  };
+
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 1120, height: 900, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await client.evaluate(`${trigger}?.innerText.trim()`), '全部 Agent', mode + ' heatmap trigger only shows the selection');
+  const allUsage = await client.evaluate(dayLabel);
+  const topSelection = await client.evaluate(`${topFilter}.textContent.trim()`);
+  await open();
+  const heading = await client.evaluate(`(() => {
+    const el = ${dialog}.querySelector('h2');
+    return { text: el?.textContent, width: el?.getBoundingClientRect().width };
+  })()`);
+  assert.equal(heading.text, '热力图来源', 'heatmap source menu retains its accessible title');
+  assert.ok(heading.width <= 1, 'heatmap source heading is visually hidden');
+  assert.equal(await client.evaluate(`${dialog}.innerText.includes('仅影响热力图')`), false, 'heatmap source explanation is removed');
+  await captureSettled(window, path.join(output, `${mode}-heatmap-sources.png`));
+  await client.click(`${options('[role=option] button')}.find(el => el.textContent.trim() === 'Cursor')`);
+  await until(() => client.evaluate(`${trigger}.innerText.trim() === 'Claude' && (${dayLabel}) === '2026-10-25，10 Token'`), mode + ' single heatmap source updates the daily total');
+  await clear();
+  assert.equal(await client.evaluate(`${topFilter}.textContent.trim()`), topSelection, mode + ' local selection leaves the global filter intact');
+  assert.equal(await client.evaluate(`Boolean(document.querySelector('[data-heatmap-footer] a[href*=achievements]'))`), true, 'empty source selection preserves achievement navigation');
+  await open();
+  await chooseAll();
+  assert.equal(await client.evaluate(dayLabel), allUsage, mode + ' all heatmap sources restore the daily total');
+
+  if (mode === 'desktop') {
+    await client.click(topFilter);
+    await client.click(`[...document.querySelectorAll('[role=listbox] [role=option]')].find(el => el.textContent.trim() === 'Cursor')`);
+    await client.key('Escape');
+    await until(() => client.evaluate(`${topFilter}.textContent.trim() === 'Cursor' && Boolean(${dayLabel}) && (${dayLabel}) !== ${JSON.stringify(allUsage)}`), 'global Cursor selection narrows the heatmap data');
+    const cursorUsage = await client.evaluate(dayLabel);
+    await open();
+    assert.deepEqual(await client.evaluate(`${options('[role=option]')}.map(el => el.textContent.trim())`), ['Cursor'], 'heatmap options respect the current global Agent filter');
+    await clear();
+    assert.equal(await client.evaluate(`${topFilter}.textContent.trim()`), 'Cursor', 'local Clear preserves the global Cursor selection');
+    await open();
+    await chooseAll();
+    assert.equal(await client.evaluate(dayLabel), cursorUsage, 'local All restores the globally filtered total');
+    await client.click('document.querySelector(\'button[aria-label="清空 Agent 筛选"]\')');
+    await until(() => client.evaluate(`(${dayLabel}) === ${JSON.stringify(allUsage)}`), 'clearing the global filter restores both sources');
+
+    await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 900, deviceScaleFactor: 1, mobile: false });
+    await open();
+    const bounds = await client.evaluate(`(() => { const {left, right} = ${dialog}.getBoundingClientRect(); return {left, right}; })()`);
+    assert.ok(bounds.left >= 0 && bounds.right <= 320, 'desktop heatmap source menu fits the narrow viewport');
+    await captureSettled(window, path.join(output, 'desktop-heatmap-sources-320.png'));
+    await close();
+    checks.push('desktop-heatmap-source-filter-composes-with-global-filter');
+  }
+  checks.push(mode + '-heatmap-source-labels-clear-all-keyboard-focus');
+}
+
 async function exerciseHeatmapLegend(window, client, mode) {
   const legend = 'document.querySelector("[data-heatmap-legend]")';
-  const dialog = 'document.querySelector("[role=dialog]")';
   await until(() => client.evaluate('Boolean(document.querySelector("button[aria-label=\\"查看 Cursor 模型明细\\"]"))'), mode + ' dashboard ready');
   assert.equal(await client.evaluate(`(${legend})?.innerText.replace(/\\s+/g, '')`), '少多', mode + ' legend only shows the scale labels');
   assert.equal(await client.evaluate(`Boolean((${legend}).querySelector('button'))`), false, mode + ' legend has no help trigger');
@@ -677,34 +752,7 @@ async function exerciseHeatmapLegend(window, client, mode) {
       await writeFile(path.join(output, `${mode}-heatmap-preview.png`), (await window.webContents.capturePage(clip)).toPNG());
     }
   }
-  if (mode === 'browser') {
-    await client.call('Emulation.setDeviceMetricsOverride', { width: 1120, height: 900, deviceScaleFactor: 1, mobile: false });
-    const trigger = 'document.querySelector(\'button[aria-label^="热力图来源："]\')';
-    const action = label => `[...${dialog}.querySelectorAll('button')].find(el => el.textContent.trim() === ${JSON.stringify(label)})`;
-    assert.equal(await client.evaluate(`${trigger}.innerText.trim()`), '全部 Agent', 'heatmap trigger only shows the selection');
-    await client.click(trigger);
-    await until(() => client.evaluate(`Boolean(${dialog}?.querySelector('[role=option]'))`), 'heatmap source options are visible');
-    const heading = await client.evaluate(`(() => {
-      const el = ${dialog}.querySelector('h2');
-      return { text: el?.textContent, width: el?.getBoundingClientRect().width };
-    })()`);
-    assert.equal(heading.text, '热力图来源', 'heatmap source menu retains its accessible title');
-    assert.ok(heading.width <= 1, 'heatmap source heading is visually hidden');
-    assert.equal(await client.evaluate(`${dialog}.innerText.includes('仅影响热力图')`), false, 'heatmap source explanation is removed');
-    await captureSettled(window, path.join(output, 'browser-heatmap-sources.png'));
-    await client.evaluate(`(${action('清空')}).focus(); true`);
-    await client.key('Enter');
-    await until(() => client.evaluate(`${dialog} && !${dialog}.querySelector('[role=option][aria-selected=true]')`), 'clear deselects every source and keeps the menu open');
-    await client.key('Escape');
-    await until(() => client.evaluate(`!${dialog} && document.activeElement === ${trigger} && document.body.innerText.includes('请至少选择一个 Agent')`), 'empty source selection and focus return');
-    assert.equal(await client.evaluate(`Boolean(document.querySelector('[data-heatmap-footer] a[href*=achievements]'))`), true, 'empty source selection preserves achievement navigation');
-    await client.click(trigger);
-    await until(() => client.evaluate(`Boolean(${dialog}?.querySelector('[role=option]'))`), 'reopen heatmap source options');
-    await client.click(action('全部'));
-    await client.key('Escape');
-    await until(() => client.evaluate(`!${dialog} && ${trigger}.innerText.trim() === '全部 Agent' && !document.body.innerText.includes('请至少选择一个 Agent')`), 'all sources restored');
-    checks.push('browser-heatmap-source-labels-clear-all-keyboard-focus');
-  }
+  await exerciseHeatmapSources(window, client, mode);
   for (const [locale, scale] of [['en', 'LessMore'], ['ja', '少多'], ['ko', '적음많음'], ['zh-CN', '少多']]) {
     if (mode === 'browser') await client.evaluate(`localStorage.setItem('quotern.locale.preference',${JSON.stringify(locale)}); window.dispatchEvent(new StorageEvent('storage',{key:'quotern.locale.preference'})); true`);
     else window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'zh-CN' });

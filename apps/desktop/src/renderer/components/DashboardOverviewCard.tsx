@@ -434,6 +434,7 @@ function HeatmapSection({
       models={modelRows}
       onSelectDate={onSelectDate}
       selectedDate={selectedDate}
+      showPlatformFilter
     />
   );
 }

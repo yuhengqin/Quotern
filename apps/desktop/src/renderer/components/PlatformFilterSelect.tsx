@@ -1,123 +1,15 @@
 import type { ReactNode } from 'react';
 import { Check, ChevronDown } from '@gravity-ui/icons';
-import { Button, Label, ListBox, Popover } from '@heroui/react';
+import { Button, Popover } from '@heroui/react';
 import { FilterMenuPopover } from './FilterMenu';
-import { ProviderIcon } from '@/components/ProviderIcon';
-import { sourceLabel, TOOLTIP_SHADOW } from '@/lib/tokens';
+import { TOOLTIP_SHADOW } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'quotern-i18n/react';
 
-/**
- * Text-only multi-select used by Token / Daily / Heatmap platform filters.
- * Parent owns `null = 全部` semantics; pass `value = allSources` when unfiltered.
- */
-export function PlatformFilterSelect({
-  allSources,
-  value,
-  onChange,
-}: {
-  allSources: string[];
-  value: string[];
-  onChange: (keys: string[]) => void;
-}) {
-  const { t } = useTranslation();
-  if (allSources.length === 0) return null;
-
-  const allSelected = value.length === allSources.length;
-
-  const label =
-    value.length === 0
-      ? t('usage.filter.selectAgents')
-      : allSelected
-        ? t('usage.filter.allAgents')
-        : t('usage.filter.selectedAgents', { count: value.length });
-
-  return (
-    <Popover>
-      <Button
-        aria-label={t('usage.filter.agentsAria', { label })}
-        className="h-7 min-h-0 w-auto min-w-0 max-w-40 gap-1 px-2 text-xs font-medium"
-        size="sm"
-        variant="tertiary"
-      >
-        {value.length > 0 ? (
-          <span className="flex items-center gap-0.5">
-            {value.slice(0, 4).map((source) => (
-              <span
-                className="flex size-6 items-center justify-center rounded-md bg-white"
-                key={source}
-              >
-                <ProviderIcon onLightBackground provider={source} size={14} />
-              </span>
-            ))}
-            {value.length > 4 ? (
-              <span className="px-1 text-[11px] text-muted">+{value.length - 4}</span>
-            ) : null}
-          </span>
-        ) : (
-          <span className="whitespace-nowrap">{t('usage.filter.selectAgents')}</span>
-        )}
-        <ChevronDown className="size-3.5 shrink-0 opacity-70" />
-      </Button>
-
-      <FilterMenuPopover
-        className="rounded-lg"
-        placement="bottom end"
-      >
-          <ListBox
-            aria-label={t('usage.filter.agentList')}
-            className="flex min-w-48 flex-col gap-1 p-2"
-            selectedKeys={new Set(value)}
-            selectionMode="multiple"
-            onSelectionChange={(keys) => onChange([...keys].map(String))}
-          >
-            {allSources.map((source) => (
-              <ListBox.Item
-                className="min-w-0 gap-3 rounded-lg px-2 py-1.5 text-xs data-[selected=true]:bg-accent/10"
-                id={source}
-                key={source}
-                textValue={sourceLabel(source)}
-              >
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-black/10 bg-white text-black shadow-xs">
-                  <ProviderIcon onLightBackground provider={source} size={22} />
-                </span>
-                <Label className="min-w-0 flex-1 truncate font-medium">
-                  {sourceLabel(source)}
-                </Label>
-                <ListBox.ItemIndicator>
-                  {({ isSelected }) =>
-                    isSelected ? (
-                      <Check className="size-4 text-accent-soft-foreground" />
-                    ) : null
-                  }
-                </ListBox.ItemIndicator>
-              </ListBox.Item>
-            ))}
-          </ListBox>
-      </FilterMenuPopover>
-    </Popover>
-  );
-}
-
-/** Normalize onChange so selecting all keys collapses to `null` (=全部). */
-export function applyPlatformFilterChange(
-  keys: string[],
-  allSources: string[],
-  setSelected: (next: string[] | null) => void,
-): void {
-  if (keys.length === 0) {
-    setSelected([]);
-    return;
-  }
-  if (
-    keys.length === allSources.length &&
-    allSources.every((source) => keys.includes(source))
-  ) {
-    setSelected(null);
-    return;
-  }
-  setSelected(keys);
-}
+export {
+  applyPlatformFilterChange,
+  PlatformFilterSelect,
+} from '../../../../../packages/dashboard/src/components/PlatformFilterSelect';
 
 /** Optional custom multi-key filter trigger (e.g. models). */
 export function KeyFilterSelect({

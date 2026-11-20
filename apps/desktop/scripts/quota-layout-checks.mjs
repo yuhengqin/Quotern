@@ -12,6 +12,7 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     ...states.map((id, index) => ({ ...copy(id, ['Claude', 'Gemini CLI', 'ZCode', 'Antigravity'][index], ['claude', 'gemini', 'zcode', 'antigravity'][index]), windows: [], details: [], resetCredits: null, status: 'expired', planLabel: null }))];
   quota.providers[0].windows.find(window => window.id === 'five-hour').usedPercent = 24;
   quota.providers[0].analyses['five-hour'] = { paceDifference: 20, etaAt: null, trend: [], paceBasis: 'uniform' };
+  quota.providers[1].windows[1].usedPercent = 78;
   quota.providers[1].windows[1].resetsAt = quota.providers[1].windows[0].resetsAt;
   quota.preferences = { ...saved.preferences, providerOrder: ['temporarily-hidden', ...initial], compact: false };
   const textButton = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
@@ -37,10 +38,15 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       if (!row) return null;
       const value = row.querySelector('[data-quota-window-value]'), reset = row.querySelector('[data-quota-reset-time]');
       const valueRect = value.getBoundingClientRect(), resetRect = reset.getBoundingClientRect();
+      const valueColor = getComputedStyle(value).color;
+      const pixel = document.createElement('canvas').getContext('2d');
+      pixel.fillStyle = valueColor;
+      pixel.fillRect(0, 0, 1, 1);
+      const [red, green, blue] = pixel.getImageData(0, 0, 1, 1).data;
       const segments = [...bar.querySelectorAll('[data-quota-segment]')];
       const description = (bar.getAttribute('aria-describedby') ?? '').split(/\\s+/).map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(' ');
       return { value: value.textContent.trim(), segmentCounts: [...card.querySelectorAll('[role=progressbar]')].map(el => el.querySelectorAll('[data-quota-segment]').length), widths: segments.map(segment => segment.firstElementChild?.style.width ?? ''),
-        valueColor: getComputedStyle(value).color, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null,
+        valueColor, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null, isGreen: green > red && green > blue,
         marker: Boolean(bar.querySelector('[data-quota-pace-marker]')), description,
         valueRect: { right: valueRect.right, top: valueRect.top, bottom: valueRect.bottom }, resetRect: { left: resetRect.left, top: resetRect.top, bottom: resetRect.bottom } };
     })()`);
@@ -54,6 +60,7 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
       assert.ok(Math.abs(parseFloat(width) - expected) < 0.01, mode + ' segment ' + (index + 1) + ' fill');
     }
     assert.equal(fiveHour.valueColor, fiveHour.fillColor, mode + ' remaining value and filled segments share a color');
+    assert.ok(fiveHour.isGreen, mode + ' healthy remaining quota uses green');
     assert.ok(fiveHour.marker && fiveHour.description, mode + ' pace marker retains its accessible description');
     assert.ok(fiveHour.resetRect.left >= fiveHour.valueRect.right && fiveHour.resetRect.top < fiveHour.valueRect.bottom && fiveHour.resetRect.bottom > fiveHour.valueRect.top, mode + ' reset is to the right of and aligned with remaining quota');
     assert.equal(await client.evaluate(`${item(b)}.querySelectorAll('[data-quota-reset-time]').length`), 1, mode + ' shows one action for a shared reset');

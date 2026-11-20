@@ -408,8 +408,9 @@ function QuotaWindowRow({ providerId, window, analysis, etaAt, showSparkline = f
   const paceText = analysis ? localizeQuotaPaceLabel(locale, analysis) : null;
   const remaining = 100 - window.usedPercent;
   const value = window.valueText ? localizeQuotaValueText(locale, window.valueText) : t('usage.quota.remaining', { percent: Math.round(remaining) });
-  const tone = window.usedPercent >= 90 ? 'var(--color-danger)' : window.usedPercent >= 70 ? 'var(--color-warning)' : 'var(--color-accent)';
-  const color = `color-mix(in oklab, ${tone} 50%, var(--color-foreground))`;
+  const color = window.usedPercent >= 90 ? 'light-dark(#c32232, #ff6974)'
+    : window.usedPercent >= 70 ? 'light-dark(#a55200, #ffb347)'
+      : 'light-dark(#00783f, #35e48b)';
   const expiry = window.timeKind === 'expiry';
   const resetText = !reset ? null : dateMode ? `${reset} ${t(expiry ? 'usage.quota.expiry' : 'usage.quota.reset')}`
     : window.resetsAt! <= now.getTime() / 1000 ? (expiry ? t('usage.quota.expiredAt') : reset)

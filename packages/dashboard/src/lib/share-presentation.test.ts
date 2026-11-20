@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shareDimensions, cumulativeShareTokens, shareCostState } from './share-presentation.ts';
+import { shareDimensions, shareCostState } from './share-presentation.ts';
 
 test('all share formats use the same design and export aspect, preserving the original PNG size', () => {
   for (const aspect of ['2:3', '1:1', '4:5', '9:16'] as const) {
@@ -10,13 +10,7 @@ test('all share formats use the same design and export aspect, preserving the or
     assert.ok(Math.abs(size.exportWidth / size.exportHeight - x / y) < 0.001);
     assert.equal(Math.max(size.exportWidth, size.exportHeight), 2048);
   }
-  assert.equal(shareDimensions('2:3').exportWidth, 1365);
-});
-
-test('cumulative token series uses observed calendar dates, aggregates duplicates and handles one point', () => {
-  assert.deepEqual(cumulativeShareTokens([{ date: '2026-11-03', tokens: 20 }, { date: '2026-11-01', tokens: 5 }, { date: '2026-11-01', tokens: 7 }]), [{ date: '2026-11-01', tokens: 12 }, { date: '2026-11-03', tokens: 32 }]);
-  assert.deepEqual(cumulativeShareTokens([{ date: '2026-11-01', tokens: 5 }]), [{ date: '2026-11-01', tokens: 5 }]);
-  assert.deepEqual(cumulativeShareTokens([]), []);
+  assert.equal(shareDimensions().exportWidth, 1365);
 });
 
 test('share cost distinguishes no evidence, entirely unpriced, partial and known zero', () => {

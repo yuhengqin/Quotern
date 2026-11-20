@@ -51,7 +51,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-export async function renderShareCardPng(node: HTMLElement, aspect: ShareAspect = '2:3'): Promise<Blob> {
+export async function renderShareCardPng(node: HTMLElement, aspect?: ShareAspect): Promise<Blob> {
   await waitForShareImageAssets(node);
   const size = shareDimensions(aspect);
 

@@ -44,7 +44,6 @@ test('sharing a custom historical day retains its label and hourly date', () => 
   const result = buildShareSnapshot(data, { rangeDays: 1, selectedDate: null, selectedSources: [], dateRange });
   assert.equal(result.summary.totalTokens, 1000);
   assert.equal(result.rangeLabel, yesterday);
-  assert.deepEqual(result.details.days, [{ date: yesterday, tokens: 1000 }]);
 });
 
 test('share Agent filter keeps totals, model ranking and badges in the same scope', () => {
@@ -55,7 +54,6 @@ test('share Agent filter keeps totals, model ranking and badges in the same scop
   assert.equal(result.summary.totalCostUsd, 21.7);
   assert.deepEqual(result.details.sources, ['codex']);
   assert.deepEqual(result.details.models.map(({ model, tokens }) => ({ model, tokens })), [{ model: 'gpt-5', tokens: 2170 }]);
-  assert.equal(result.details.days.reduce((sum, day) => sum + day.tokens, 0), 2170);
   assert.deepEqual(data, before, 'sharing must not mutate the main dashboard data');
 });
 
@@ -64,7 +62,7 @@ test('share preserves a heatmap day instead of exporting its enclosing range', (
   const result = buildShareSnapshot(data, { rangeDays: 30, selectedDate: yesterday, selectedSources: ['codex'] });
   assert.equal(result.summary.totalTokens, 700);
   assert.equal(result.summary.totalCostUsd, 7);
-  assert.deepEqual(result.details.days, [{ date: yesterday, tokens: 700 }]);
+  assert.equal(result.rangeLabel, yesterday);
   assert.deepEqual(result.details.models.map(({ model, tokens }) => ({ model, tokens })), [{ model: 'gpt-5', tokens: 700 }]);
 });
 
@@ -72,7 +70,6 @@ test('today share uses only today hourly usage and keeps an absent Agent filter 
   const data = buildDashboardDataFromDataset(dataset, 1);
   const result = buildShareSnapshot(data, { rangeDays: 1, selectedDate: null, selectedSources: ['codex'] });
   assert.equal(result.summary.totalTokens, 70);
-  assert.deepEqual(result.details.days, [{ date: today, tokens: 70 }]);
   const empty = buildShareSnapshot(data, { rangeDays: 1, selectedDate: null, selectedSources: ['cursor'] });
   assert.equal(empty.summary.totalTokens, 0);
   assert.deepEqual(empty.details.models, []);
@@ -112,12 +109,11 @@ test('share export labels follow locale without changing selected data or dates'
   const inChinese = buildShareSnapshot(data, filters);
   const inEnglish = buildShareSnapshot(data, filters, 'en');
   assert.equal(inEnglish.rangeLabel, 'Last 30 days');
-  assert.equal(inEnglish.toolLabel, 'All agents');
   assert.deepEqual(inEnglish.summary, inChinese.summary);
   assert.deepEqual(inEnglish.details, inChinese.details);
 
   const dateFilters = { ...filters, selectedDate: yesterday, dateRange: { start: yesterday, end: yesterday } };
   const inJapanese = buildShareSnapshot(data, dateFilters, 'ja');
   assert.equal(inJapanese.rangeLabel, yesterday);
-  assert.equal(inJapanese.details.days[0]?.date, yesterday);
+  assert.equal(inJapanese.summary.totalTokens, 1000);
 });

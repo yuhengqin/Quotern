@@ -71,7 +71,7 @@ test('rolling projection uses partial days, retains both midnight sides and filt
   assert.equal(buildVisibleMetricTrends({ ...comparison, availableFromTime: '2026-10-16T06:31:00Z' }).totalTokens, null);
   const share = buildShareSnapshot(view, { rangeDays: 1, selectedDate: null, selectedSources: ['codex'], dateRange: range });
   assert.equal(share.summary.totalTokens, 30);
-  assert.equal(share.details.days.reduce((sum, day) => sum + day.tokens, 0), 30);
+  assert.equal(share.details.models[0]?.tokens, 30);
 });
 
 test('custom historical range includes both endpoints and excludes later usage', () => {

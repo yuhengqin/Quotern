@@ -18,7 +18,6 @@ export interface ShareSnapshot {
   details?: SharePosterDetails;
   rangeLabel: string;
   summary: DashboardUsageSummary;
-  toolLabel: string;
 }
 
 interface ShareSnapshotContextValue {

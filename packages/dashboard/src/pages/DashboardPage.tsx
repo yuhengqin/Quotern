@@ -35,7 +35,6 @@ import { DATA_SYNCED_EVENT } from '@/lib/shell-events';
 import { getDashboardReturnState, rememberDashboardScroll, useDashboardReturnState } from '@/lib/dashboard-return-state';
 import { localDateNow } from '@/lib/stats-timezone';
 import { dateRangeDays, formatDashboardDateRange, isDashboardDateRange, type DashboardDateRange } from '@/lib/dashboard-date-range';
-import { sourceLabel } from '@/lib/tokens';
 import { usageErrorDescription, usageErrorTitle } from '@/lib/usage-error';
 import {
   buildVisibleMetricTrends,
@@ -102,9 +101,6 @@ export function DashboardPage() {
       : range === 'today' ? t('usage.range.today')
         : range === 'last-24-hours' ? t('usage.range.last24Hours')
         : t('usage.range.lastDays', { count: DASHBOARD_RANGE_DAYS[range] });
-  const shareToolLabel = selectedTools.length > 0
-    ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedTools.map(sourceLabel))
-    : t('usage.filter.allAgents');
   const showProjectDistribution = isCliBackend();
 
   useEffect(() => {
@@ -255,31 +251,23 @@ export function DashboardPage() {
         sources: selectedTools.length > 0
           ? selectedTools
           : view.toolModelUsage.filter((row) => row.tokens > 0).map((row) => row.source),
-        days: visibleTrendRows.dailyRows
-          .filter((row) => !isHourly || (!selectedDate && rollingRange) || row.date === (selectedDate ?? customRange?.end ?? localDateNow()))
-          .map((row) => ({ date: row.date, tokens: isHourly && !rollingRange ? visibleSummary.totalTokens : row.totalTokens })),
         models: filterModelRowsBySources(view.modelRows, selectedTools),
       },
       rangeLabel: shareRangeLabel,
       summary: visibleSummary,
-      toolLabel: shareToolLabel,
     });
   }, [
     data,
     dataRange,
     range,
     rangeDays,
-    customRange,
     queryRange,
-    rollingRange,
     error,
     loading,
     publishSnapshot,
     refreshing,
     shareRangeLabel,
-    shareToolLabel,
     visibleSummary,
-    visibleTrendRows.dailyRows,
     view.modelRows,
     view.toolModelUsage,
     selectedTools,

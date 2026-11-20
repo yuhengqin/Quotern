@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { app, BrowserWindow, clipboard, ipcMain, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 import { exerciseQuotaLayout } from './quota-layout-checks.mjs';
 import { registerAppearanceFixture } from './appearance-fixture.mjs';
@@ -26,6 +26,7 @@ const windows = [], clients = [], checks = [];
 const windowEvents = [];
 app.on('browser-window-created', (_event, window) => { for (const event of ['show', 'hide', 'focus', 'blur', 'ready-to-show']) window.on(event, () => windowEvents.push({ event, id: window.id, at: Date.now() })); });
 let server, trayController, mainWindow, downloadPath, downloaded = 0, failPreference = false, failShareReport = false, locale = 'zh-CN';
+let copiedImageSize;
 const until = async (predicate, label) => { for (let n = 0; n < 150; n++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
 const button = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const select = label => `[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)} || el.parentElement?.textContent.includes(${JSON.stringify(label)}))`;
@@ -97,7 +98,11 @@ async function main() {
   ipcMain.handle('dsh-pet:navigation-get', () => null);
   ipcMain.handle('quota:get', runtime.getState); ipcMain.handle('quota:refresh', runtime.refresh); ipcMain.handle('quota:set', (_event, patch) => runtime.setPreferences(patch));
   ipcMain.handle('share-backgrounds:request', (_event, value) => { assert.equal(value.operation, 'legacy'); return []; });
-  ipcMain.handle('share-card:copy-image', (_event, data) => { clipboard.writeImage(nativeImage.createFromDataURL(data)); return true; });
+  ipcMain.handle('share-card:copy-image', (_event, data) => {
+    const image = nativeImage.createFromDataURL(data);
+    copiedImageSize = image.getSize();
+    return !image.isEmpty();
+  });
   trayController = await import('../out/main/island-tray-test.mjs');
   const trayOptions = { getLocale: () => locale, showMainWindow: () => mainWindow?.show(), getMainWindow: () => mainWindow, openSettings: () => {}, getAutostart: async () => false, setAutostart: async () => {} };
   await writeFile(path.join(output, 'profile/tray-panel.json'), JSON.stringify({ pinned: true, x: -800.3, y: 25.4, mode: 'full' }));
@@ -201,21 +206,24 @@ async function main() {
     await shot(client, mode + '-full-analysis');
     failShareReport = true;
     await client.click('document.querySelector("button[aria-label=分享]")');
-    await until(() => client.evaluate(`Boolean(${select('主指标')})`), mode + ' share editor');
+    await until(() => client.evaluate(`Boolean(${select('画幅')})`), mode + ' share editor');
+    assert.equal(await client.evaluate(`Boolean(${select('主指标')})`), false, mode + ' share has no main metric selector');
+    assert.equal(await client.evaluate(`Boolean(${button('复制配文')})`), false, mode + ' share has no copy caption action');
+    assert.equal(await client.evaluate(`${select('画幅')}.textContent.trim()`), '2:3', mode + ' default aspect');
     await until(() => client.evaluate(`Boolean(${button('重试')})`), mode + ' share report error offers retry');
     assert.match(await body(client), /无法读取报表/);
     failShareReport = false;
     await client.click(button('重试'));
-    await client.click(select('主指标')); await client.click(option('Token 总量'));
     await client.fill('document.querySelector("[role=dialog] input[maxlength]")', '合成署名 · Test');
     const poster = 'document.querySelector("[role=dialog] article:not([aria-hidden=true])")';
     const assertPosterFits = async () => {
       const bounds = await client.evaluate(`(() => { const el = ${poster}, box = el.getBoundingClientRect(); return { height: el.clientHeight, scroll: el.scrollHeight, bottom: box.bottom, footer: el.querySelector('footer').getBoundingClientRect().bottom, children: [...el.children].map(c => ({ tag: c.tagName, top: c.offsetTop, height: c.offsetHeight, scroll: c.scrollHeight, margin: getComputedStyle(c).marginTop })) }; })()`);
       assert.ok(bounds.footer <= bounds.bottom + 1 && bounds.scroll <= bounds.height + 1, 'poster content fits its selected canvas: ' + JSON.stringify(bounds));
     };
-    for (const aspect of ['2:3', '1:1', '4:5', '9:16']) {
+    for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
       await client.click(select('画幅')); await client.click(option(aspect));
-      await until(async () => (await body(client)).includes('累计 Token'), 'real cumulative tokens');
+      const labels = await client.evaluate(`[...${poster}.querySelectorAll('dl dt')].map(label => label.textContent)`);
+      assert.deepEqual(labels, ['预估费用', '总 Token', '输入 Token', '输出 Token'], mode + ' detailed metrics at ' + aspect);
       await assertPosterFits();
       const previous = downloaded; downloadPath = path.join(output, `${mode}-${aspect.replace(':', '-')}.png`);
       await client.click(button('下载'));
@@ -229,32 +237,35 @@ async function main() {
     store.apply([{ ...rows[0], input_tokens: 900000, total_tokens: 900200 }]);
     await client.evaluate('window.dispatchEvent(new Event("focus")); true'); await wait(250);
     assert.equal(await client.evaluate(`${poster}.innerText`), frozen, 'share freezes tokens and costs together across a background refresh');
-    for (const label of ['详细卡片', '估算费用']) {
-      await client.click(select('主指标')); await client.click(option(label));
-      for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
-        await client.click(select('画幅')); await client.click(option(aspect));
-        await assertPosterFits();
-      }
-      await shot(client, mode + (label === '详细卡片' ? '-details-square' : '-cost-square'));
+    if (mode === 'browser') {
+      await client.evaluate(`Object.defineProperty(navigator.clipboard, 'write', { value: async ([item]) => {
+        const bitmap = await createImageBitmap(await item.getType('image/png'));
+        window.copiedImageSize = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+      } }); true`);
     }
-    if (!process.argv.includes('--skip-system-clipboard')) {
-      await client.click(button('复制配文')); await until(async () => (await body(client)).includes('已复制'), 'caption copied');
-      assert.ok(clipboard.readText().includes('合成署名 · Test') && clipboard.readText().includes('Token'));
-    }
+    await client.click(button('复制'));
+    await until(() => client.evaluate(`Boolean(${button('已复制')})`), mode + ' image copied');
+    assert.deepEqual(mode === 'browser' ? await client.evaluate('window.copiedImageSize') : copiedImageSize,
+      { width: 2048, height: 2048 }, mode + ' copied PNG matches the selected square aspect');
     await client.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 780, deviceScaleFactor: 1, mobile: false });
     await shot(client, mode + '-share-narrow');
     assert.equal(await client.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
+    const aspectTrigger = select('画幅');
+    await client.evaluate(`${aspectTrigger}.focus()`); await client.key('Enter');
+    await until(() => client.evaluate(`Boolean(${option('9:16')})`), mode + ' keyboard opens aspect menu');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!document.querySelector('[role=listbox]') && document.activeElement === ${aspectTrigger}`), mode + ' Escape restores aspect focus');
     if (mode === 'desktop') {
       const longAuthor = '极长中文署名用于验证图片没有截断'.repeat(3).slice(0, 40);
       await client.fill('document.querySelector("[role=dialog] input[maxlength]")', longAuthor);
-      await client.click(select('主指标')); await client.click(option('详细卡片'));
       for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
         await client.click(select('画幅')); await client.click(option(aspect));
         assert.ok(await client.evaluate(`(() => { const author = [...${poster}.querySelectorAll('span')].find(el => el.textContent === ${JSON.stringify(longAuthor)}); return author && author.scrollWidth <= author.clientWidth + 1; })()`), `poster shows the entire signature at ${aspect}`);
         await assertPosterFits();
         if (aspect === '9:16') await shot(client, 'desktop-share-long-author');
       }
-      for (const [value, label] of [['en', 'Main metric'], ['ja', '主な指標'], ['ko', '주요 지표'], ['zh-CN', '主指标']]) {
+      for (const [value, label] of [['en', 'Aspect ratio'], ['ja', '縦横比'], ['ko', '화면 비율'], ['zh-CN', '画幅']]) {
         locale = value; window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'en' });
         await until(async () => (await body(client)).includes(label), 'share locale ' + value);
         await assertPosterFits(); assert.equal(await client.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
@@ -262,7 +273,7 @@ async function main() {
       }
     }
     await client.call('Emulation.clearDeviceMetricsOverride'); await closeDetails(client);
-    checks.push(mode + '-quota-focus-service-selection-outage-stale-details-full-analysis-and-four-PNG-formats');
+    checks.push(mode + '-quota-focus-service-selection-outage-stale-details-full-analysis-and-detailed-share-download-image-copy');
   }
   const browser = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
   browser.webContents.session.on('will-download', (_event, item) => { item.setSavePath(downloadPath); item.once('done', (_event, state) => { if (state === 'completed') downloaded++; }); });

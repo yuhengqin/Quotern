@@ -3,7 +3,6 @@ import type { SharePosterDetails } from '../components/SharePosterArtwork';
 import { buildDashboardDataFromDataset, projectDashboardForDate } from './dashboard-data.ts';
 import type { UsageDataset } from './api.ts';
 import { localDateNow } from './stats-timezone.ts';
-import { sourceLabel } from './tokens.ts';
 import { formatDashboardDateRange, type DashboardDateRange } from './dashboard-date-range.ts';
 import { filterModelRowsBySources, filterTrendRowsBySources, normalizeSourceId, summarizeTrendRows } from './usage-filter.ts';
 import { translate, type SupportedLocale } from 'quotern-i18n';
@@ -71,16 +70,12 @@ export function buildShareSnapshot(data: ShareDashboardData, filters: ShareFilte
     sources: selectedSources.length > 0
       ? [...selectedSources]
       : view.toolModelUsage.filter((tool) => tool.tokens > 0).map((tool) => tool.source),
-    days: rows.dailyRows
-      .filter((row) => !hourly || (!selectedDate && data.rollingRange) || row.date === hourlyDate)
-      .map((row) => ({ date: row.date, tokens: hourly && !data.rollingRange ? summary.totalTokens : row.totalTokens })),
     models: filterModelRowsBySources(view.modelRows, selectedSources),
   };
   return {
     summary,
     details,
     rangeLabel: selectedDate ?? shareRangeLabel(rangeDays, locale, data.rollingRange ?? filters.dateRange),
-    toolLabel: selectedSources.length > 0 ? new Intl.ListFormat(locale, { style: 'short', type: 'conjunction' }).format(selectedSources.map(sourceLabel)) : translate(locale, 'share.allAgents'),
     tools: view.toolModelUsage,
   };
 }

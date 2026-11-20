@@ -8,10 +8,9 @@ import { formatTokens, formatUsd } from '../lib/format';
 import { SHARE_CARD_FONT_FAMILY, SHARE_CARD_MONO_FONT_FAMILY } from '../lib/share-card-image';
 import { sourceLabel } from '../lib/tokens';
 import { ProviderIcon } from './ProviderIcon';
-import { cumulativeShareTokens, DEFAULT_SHARE_PRESENTATION, shareCostState, type SharePresentation, type ShareCostEvidence } from '../lib/share-presentation';
+import { DEFAULT_SHARE_ASPECT, shareCostState, type ShareAspect, type ShareCostEvidence } from '../lib/share-presentation';
 
 export interface SharePosterDetails {
-  days: { date: string; tokens: number }[];
   models: { model: string; tokens: number }[];
   sources?: string[];
 }
@@ -66,7 +65,7 @@ function MetricSparklineBackground({ color, index }: { color: string; index: num
 }
 
 export function ShareCardArtwork({
-  borderRadius = 16, cardRef, theme = 'neon', backgroundImage, details, isHidden, locale: exportLocale, rangeLabel, summary, userName, presentation = DEFAULT_SHARE_PRESENTATION, costEvidence,
+  borderRadius = 16, cardRef, theme = 'neon', backgroundImage, details, isHidden, locale: exportLocale, rangeLabel, summary, userName, aspect = DEFAULT_SHARE_ASPECT, costEvidence,
 }: {
   avatarUrl?: string;
   borderRadius?: number;
@@ -78,23 +77,16 @@ export function ShareCardArtwork({
   locale?: SupportedLocale;
   rangeLabel?: string;
   summary: DashboardUsageSummary | null;
-  toolLabel?: string;
   userName?: string;
-  presentation?: SharePresentation;
+  aspect?: ShareAspect;
   costEvidence?: ShareCostEvidence | null;
 }) {
   const { i18n } = useTranslation();
   const locale = exportLocale ?? normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
   const text = (key: string, options?: Record<string, unknown>) => translate(locale, key, options);
   const palette = SHARE_POSTER_PALETTES[theme];
-  const focus = presentation.layout !== 'details';
-  const square = presentation.aspect === '1:1';
+  const square = aspect === '1:1';
   const cost = shareCostState(costEvidence);
-  const cumulative = cumulativeShareTokens(details?.days ?? []);
-  const firstDay = cumulative.length ? Date.parse(cumulative[0].date) : 0;
-  const daySpan = cumulative.length ? Math.max(1, Date.parse(cumulative.at(-1)!.date) - firstDay) : 1;
-  const total = Math.max(1, cumulative.at(-1)?.tokens ?? 0);
-  const points = cumulative.map(row => `${4 + (Date.parse(row.date) - firstDay) / daySpan * 252},${54 - row.tokens / total * 48}`).join(' ');
   const customName = userName?.trim();
   const displayName = customName || text('share.poster.defaultUser');
   const agentSources = [...new Map((details?.sources ?? []).map((source) => [sourceLabel(source), source])).values()];
@@ -153,18 +145,7 @@ export function ShareCardArtwork({
           )}
         </div>
       </div>
-      {focus ? <section style={{ marginTop: square ? 8 : 12 }} aria-label={text('share.poster.summary')}>
-        <div style={{ fontSize: 11, color: palette.muted }}>{metrics[presentation.layout === 'cost' ? 0 : 1].label}</div>
-        <div style={{ fontSize: square ? 28 : 34, fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere', fontFamily: SHARE_CARD_MONO_FONT_FAMILY, color: presentation.layout === 'cost' ? palette.cost : palette.foreground }}>{metrics[presentation.layout === 'cost' ? 0 : 1].value}</div>
-        <div style={{ fontSize: 10, marginTop: 4, color: palette.muted }}>{metrics[presentation.layout === 'cost' ? 1 : 0].label} · {metrics[presentation.layout === 'cost' ? 1 : 0].value}</div>
-        {cumulative.length > 0 && <div style={{ marginTop: square ? 6 : 8 }}>
-          <div style={{ fontSize: 9, color: palette.muted }}>{text('island.share.cumulative')}</div>
-          <svg role="img" aria-label={text('island.share.cumulative')} viewBox="0 0 260 60" preserveAspectRatio="none" style={{ width: '100%', height: square ? 28 : 44, display: 'block' }}>
-            {cumulative.length > 1 ? <polyline points={points} fill="none" stroke={palette.cost} strokeWidth="2" /> : <circle cx="4" cy={54 - cumulative[0].tokens / total * 48} r="3" fill={palette.cost} />}
-          </svg>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: palette.muted }}><span>{cumulative[0].date}</span>{cumulative.length > 1 && <span>{cumulative.at(-1)!.date}</span>}</div>
-        </div>}
-      </section> : <dl aria-label={text('share.poster.summary')} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 6, margin: '12px 0 0' }}>
+      <dl aria-label={text('share.poster.summary')} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 6, margin: '12px 0 0' }}>
         {metrics.map((metric, index) => {
           const valueColor = index === 0 ? palette.cost : palette.foreground;
           return (
@@ -175,8 +156,8 @@ export function ShareCardArtwork({
             </div>
           );
         })}
-      </dl>}
-      <section style={{ marginTop: square ? 8 : focus || customName ? 10 : 24 }} aria-label={text('share.poster.modelRanking')}>
+      </dl>
+      <section style={{ marginTop: square ? 8 : customName ? 10 : 24 }} aria-label={text('share.poster.modelRanking')}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, paddingBottom: 6, borderBottom: `1px solid ${rule}` }}><span>{text('share.poster.modelList')}</span><span>TOP 03</span></div>
         {models.slice(0, 3).map(([model, tokens], index) => (
           <div key={model} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: square ? '3px 0' : '6px 0', borderBottom: `1px solid ${rule}`, fontSize: 10, lineHeight: 1.5 }}>
@@ -188,7 +169,7 @@ export function ShareCardArtwork({
         ))}
         {!models.length && <p style={{ fontSize: 10, opacity: 0.75 }}>{text('share.poster.noModels')}</p>}
       </section>
-      <footer style={{ marginTop: 'auto', paddingTop: square ? 6 : focus ? 8 : 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <footer style={{ marginTop: 'auto', paddingTop: square ? 6 : 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 9, lineHeight: 1.7, opacity: 0.9, whiteSpace: 'nowrap' }}>{text('share.poster.tagline')}</div>
         <QRCodeSVG bgColor={backgroundImage ? '#ffffff' : 'transparent'} fgColor={backgroundImage ? '#111827' : palette.foreground} marginSize={backgroundImage ? 4 : 2} size={backgroundImage ? 36 : square ? 28 : 32} level="M" title={text('share.poster.projectLink')} value="https://github.com/yuhengqin/Quotern" />
       </footer>

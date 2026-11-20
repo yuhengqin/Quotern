@@ -12,7 +12,7 @@ import {
 } from 'react';
 import type { DashboardUsageSummary } from '../lib/dashboard-mock-data';
 import { ShareCardArtwork, type SharePosterDetails, type ShareCardTheme } from './SharePosterArtwork';
-import { shareDimensions, type SharePresentation, type ShareCostEvidence } from '../lib/share-presentation';
+import { shareDimensions, type ShareAspect, type ShareCostEvidence } from '../lib/share-presentation';
 
 export const SHARE_CARD_COLORS = ['#100b35', '#f8f5ee'] as const;
 
@@ -59,7 +59,7 @@ function shouldReduceMotion() {
 export { ShareCardArtwork } from './SharePosterArtwork';
 
 function ShareCard({
-  presentation,
+  aspect,
   costEvidence,
   theme,
   backgroundImage,
@@ -71,11 +71,10 @@ function ShareCard({
   rangeLabel,
   style,
   summary,
-  toolLabel,
   userName,
 }: {
   theme: ShareCardTheme;
-  presentation?: SharePresentation;
+  aspect?: ShareAspect;
   costEvidence?: ShareCostEvidence | null;
   backgroundImage?: string;
   avatarUrl?: string;
@@ -86,12 +85,11 @@ function ShareCard({
   rangeLabel?: string;
   style: CSSProperties;
   summary: DashboardUsageSummary | null;
-  toolLabel?: string;
   userName?: string;
 }) {
   const previewRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const dimensions = shareDimensions(presentation?.aspect);
+  const dimensions = shareDimensions(aspect);
   useLayoutEffect(() => {
     const node = previewRef.current;
     if (!node) return;
@@ -111,7 +109,7 @@ function ShareCard({
     >
       <div style={{ width: dimensions.width, height: dimensions.height, borderRadius: 16, overflow: 'hidden', backgroundColor: color, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
         <ShareCardArtwork
-        presentation={presentation}
+        aspect={aspect}
         costEvidence={costEvidence}
         avatarUrl={avatarUrl}
         details={details}
@@ -120,7 +118,6 @@ function ShareCard({
         isHidden={isHidden}
         rangeLabel={rangeLabel}
         summary={summary}
-        toolLabel={toolLabel}
         userName={userName}
       />
       </div>
@@ -143,7 +140,7 @@ export function getShareCardVariant(index: number, variants = SHARE_CARD_VARIANT
 }
 
 export function ShareCardCarousel({
-  presentation,
+  aspect,
   costEvidence,
   variants = SHARE_CARD_VARIANTS,
   disabled = false,
@@ -160,11 +157,10 @@ export function ShareCardCarousel({
   replaceBackground = false,
   rangeLabel,
   summary,
-  toolLabel,
   userName,
 }: {
   variants?: ShareCardVariant[];
-  presentation?: SharePresentation;
+  aspect?: ShareAspect;
   costEvidence?: ShareCostEvidence | null;
   disabled?: boolean;
   selectionRevision?: number;
@@ -180,7 +176,6 @@ export function ShareCardCarousel({
   replaceBackground?: boolean;
   rangeLabel?: string;
   summary: DashboardUsageSummary | null;
-  toolLabel?: string;
   userName?: string;
 }) {
   const { t } = useTranslation();
@@ -189,7 +184,7 @@ export function ShareCardCarousel({
   const variantIds = variants.map(({ id }) => id).join(',');
   useEffect(() => { setTransition(null); }, [variantIds, activeIndex, selectionRevision]);
   const currentIndex = Math.max(0, Math.min(activeIndex, variants.length - 1));
-  const dimensions = shareDimensions(presentation?.aspect);
+  const dimensions = shareDimensions(aspect);
   const aspectRatio = dimensions.width / dimensions.height;
 
   useEffect(() => {
@@ -280,7 +275,7 @@ export function ShareCardCarousel({
           {transition ? (
             <>
               <ShareCard
-                presentation={presentation} costEvidence={costEvidence}
+                aspect={aspect} costEvidence={costEvidence}
                 avatarUrl={avatarUrl}
                 details={details}
                 color={getShareCardVariant(transition.fromIndex, variants).color}
@@ -296,11 +291,10 @@ export function ShareCardCarousel({
                   zIndex: 20,
                 }}
                 summary={summary}
-                toolLabel={toolLabel}
                 userName={userName}
               />
               <ShareCard
-                presentation={presentation} costEvidence={costEvidence}
+                aspect={aspect} costEvidence={costEvidence}
                 avatarUrl={avatarUrl}
                 details={details}
                 color={getShareCardVariant(transition.toIndex, variants).color}
@@ -316,13 +310,12 @@ export function ShareCardCarousel({
                   zIndex: 10,
                 }}
                 summary={summary}
-                toolLabel={toolLabel}
                 userName={userName}
               />
             </>
           ) : (
             <ShareCard
-              presentation={presentation} costEvidence={costEvidence}
+              aspect={aspect} costEvidence={costEvidence}
               avatarUrl={avatarUrl}
               details={details}
               color={activeVariant.color}
@@ -335,7 +328,6 @@ export function ShareCardCarousel({
                 zIndex: 10,
               }}
               summary={summary}
-              toolLabel={toolLabel}
               userName={userName}
             />
           )}

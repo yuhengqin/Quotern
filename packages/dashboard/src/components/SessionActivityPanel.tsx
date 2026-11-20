@@ -3,6 +3,7 @@ import { dashboardNow } from '../lib/demo-runtime';
 import { Link } from '@tanstack/react-router';
 import { Autocomplete, Button, Card, Label, ListBox, SearchField, Select, Table, Tabs, useFilter } from '@heroui/react';
 import { Tooltip } from '@/components/Tooltip';
+import { HelpPopover } from './HelpPopover';
 import { ArrowDown, ArrowUp, ChevronRight, ChevronUp, Download, X } from 'lucide-react';
 import { translate, type SupportedLocale } from 'quotern-i18n';
 import { useTranslation } from 'quotern-i18n/react';
@@ -60,15 +61,15 @@ export function SessionActivityViews({ snapshot, scope }: { snapshot: SessionAct
   const { t } = useTranslation();
   const recent = useMemo(() => [...snapshot.sessions].sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt)), [snapshot.sessions]);
   return <Tabs defaultSelectedKey={getDashboardReturnState()?.sessionView ?? 'sessions'} onSelectionChange={key => { if (key === 'sessions' || key === 'billing') rememberDashboardSessionView(key); }} variant="secondary" className="min-w-0">
-    <Tabs.ListContainer><Tabs.List aria-label={t('usage.activity.views')}>
-      <Tabs.Tab id="sessions">{t('usage.activity.sessions')}<Tabs.Indicator /></Tabs.Tab>
-      <Tabs.Tab id="billing">{t('usage.activity.billing')}<Tabs.Indicator /></Tabs.Tab>
-    </Tabs.List></Tabs.ListContainer>
+    <div className="flex flex-wrap items-center gap-1">
+      <Tabs.ListContainer><Tabs.List aria-label={t('usage.activity.views')}>
+        <Tabs.Tab id="sessions">{t('usage.activity.sessions')}<Tabs.Indicator /></Tabs.Tab>
+        <Tabs.Tab id="billing">{t('usage.activity.billing')}<Tabs.Indicator /></Tabs.Tab>
+      </Tabs.List></Tabs.ListContainer>
+      <HelpPopover title={t('usage.activity.billing')}><p>{t('usage.activity.billingNote')}</p></HelpPopover>
+    </div>
     <Tabs.Panel id="sessions" className="pt-3"><SessionList rows={recent} total={snapshot.sessionCount ?? recent.length} scope={scope} range={snapshot.range} /></Tabs.Panel>
-    <Tabs.Panel id="billing" className="pt-3">
-      <UsageAttribution snapshot={snapshot} scope={scope} />
-      <p className="mt-3 text-[11px] text-muted">{t('usage.activity.billingNote')}</p>
-    </Tabs.Panel>
+    <Tabs.Panel id="billing" className="pt-3"><UsageAttribution snapshot={snapshot} scope={scope} /></Tabs.Panel>
     <SessionCoverageNote snapshot={snapshot} />
   </Tabs>;
 }
@@ -76,7 +77,14 @@ export function SessionActivityViews({ snapshot, scope }: { snapshot: SessionAct
 export function SessionCoverageNote({ snapshot }: { snapshot: SessionActivitySnapshot }) {
   const { t, i18n } = useTranslation();
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
-  return (snapshot.missingSources.length > 0 || snapshot.tokenTotalMismatch) && <p className="mt-3 text-[11px] text-muted">{snapshot.missingSources.length ? t('usage.activity.missingCoverage', { sources: new Intl.ListFormat(locale).format(snapshot.missingSources.map(sourceLabel)) }) : ''} {snapshot.tokenTotalMismatch ? t('usage.activity.totalMismatch') : ''}</p>;
+  if (!snapshot.missingSources.length && !snapshot.tokenTotalMismatch) return null;
+  return <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+    {snapshot.missingSources.length > 0 && <span>{t('usage.activity.missingCoverage', { sources: new Intl.ListFormat(locale).format(snapshot.missingSources.map(sourceLabel)) })}</span>}
+    {snapshot.tokenTotalMismatch && <span className="inline-flex max-w-full items-center gap-1">
+      <span>{t('usage.activity.totalMismatchStatus')}</span>
+      <HelpPopover title={t('usage.activity.totalMismatchStatus')}><p>{t('usage.activity.totalMismatch')}</p></HelpPopover>
+    </span>}
+  </div>;
 }
 
 export function SessionAttributionSummary({ row }: { row: SessionActivitySnapshot['billing'][number] }) {
@@ -90,7 +98,6 @@ function UsageAttribution({ snapshot, scope }: { snapshot: SessionActivitySnapsh
   const locale = (i18n.resolvedLanguage ?? 'zh-CN') as SupportedLocale;
   const groups = useMemo(() => snapshot.billing.map(row => ({ row, count: row.sessionCount ?? relatedSessionActivity(snapshot.sessions, row).length })), [snapshot]);
   return <>
-    <p className="mb-1 text-xs text-muted">{t('usage.activity.attributionSummary')}</p>
     {groups.some(({ row }) => !row.sessionRefs && row.sessionCount === undefined) && <p role="status" className="mt-2 text-xs text-muted">{t('usage.activity.sessionLinksUnavailable')}</p>}
     <div className="flex flex-col divide-y divide-separator">
       {groups.map(({ row, count }) => <div key={sessionAttributionKey(row)} className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">

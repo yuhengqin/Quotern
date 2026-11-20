@@ -27,12 +27,10 @@ const METRICS = ['tokens', 'cost'] as const;
 
 export function UsageDistributionCard({
   title,
-  description,
   rows,
   className,
 }: {
   title: string;
-  description: string;
   rows: DashboardDistributionRow[];
   className?: string;
 }) {
@@ -78,9 +76,6 @@ export function UsageDistributionCard({
       <Card.Header className="flex-row flex-nowrap items-start justify-between gap-2 pb-0">
         <div className="min-w-0">
           <Card.Title>{title}</Card.Title>
-          <Card.Description className="mt-1">
-            {description}
-          </Card.Description>
         </div>
         <DashboardMetricTabs
           ariaLabel={t('usage.distribution.metricAria', { title })}

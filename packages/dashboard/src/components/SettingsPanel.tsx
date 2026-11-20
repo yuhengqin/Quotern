@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Database, Info, Palette, Plug } from 'lucide-react';
 import {
-  Description,
   Label,
   Radio,
   RadioGroup,
@@ -15,6 +14,7 @@ import {
 } from '@/lib/api';
 import { AboutContent } from '@/components/AboutContent';
 import { AppToastRegion } from './AppToastRegion';
+import { HelpPopover } from './HelpPopover';
 import { LanguagePreferenceControl } from '@/components/LanguagePreferenceControl';
 import { ThemePreferenceControl } from '@/components/ThemePreferenceControl';
 import { AgentIntegrationSettings } from './AgentIntegrationSettings';
@@ -137,8 +137,12 @@ function GeneralSettingsPanel() {
             setTokenUnitMode(next);
           }}
         >
-          <Label>{t('settings.tokenUnit.label')}</Label>
-          <Description>{t('settings.tokenUnit.description')}</Description>
+          <div className="flex items-center gap-1">
+            <Label>{t('settings.tokenUnit.label')}</Label>
+            <HelpPopover title={t('settings.tokenUnit.label')}>
+              <p>{t('settings.tokenUnit.description')}</p>
+            </HelpPopover>
+          </div>
           <Radio value="localized">
             <Radio.Content>
               <Radio.Control>

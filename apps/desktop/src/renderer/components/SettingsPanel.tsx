@@ -126,7 +126,7 @@ export function SettingsPanel({
           >
             {tab === id && (
               <>
-                {id !== 'integrations' && (
+                {id !== 'integrations' && id !== 'notifications' && (
                   <h2 className="mb-4 text-lg font-semibold text-foreground">{t(labelKey)}</h2>
                 )}
                 {panels[id]}
@@ -593,7 +593,6 @@ function AutoUpdateSettings() {
     : status === 'unsupported' ? 'settings.update.unsupported'
     : status === 'checking' ? 'settings.update.checking'
     : status === 'available' ? 'settings.update.available'
-    : status === 'error' ? 'settings.update.retry'
     : status === 'idle' ? 'settings.update.idle'
     : null;
   const message = messageKey ? t(messageKey) : null;

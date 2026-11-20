@@ -10,6 +10,7 @@ import { formatPricingContext, getPrimaryPricingVariant, type PricingModelGroup,
 import { comparePricingCosts, estimatePricingCost, getCacheReadSavings, type PricingScenario } from '../lib/pricing-workbench';
 import { formatPricingCost, formatPricingReleaseDate, formatPricingTokens } from '../lib/pricing-display';
 import { FilterSelectPopover } from './FilterMenu';
+import { HelpPopover } from './HelpPopover';
 
 export function PricingComparison({ groups, initialChannels, onClose, scenario, onScenarioChange, currency, exchangeRate, usageStatus }: {
   groups: PricingModelGroup[]; onClose: () => void; scenario: PricingScenario;
@@ -57,27 +58,36 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
       <Modal.Dialog className="flex w-full !max-w-[1160px] min-w-0 flex-col overflow-hidden !max-h-[calc(100dvh-1.5rem)]">
         <Modal.CloseTrigger aria-label={t('pricing.compare.close')} />
         <Modal.Header className="gap-2 pr-12">
-          <Modal.Heading>{t('pricing.compare.title')} <span className="text-sm font-normal text-muted">{groups.length} / 4</span></Modal.Heading>
-          <p className="text-xs text-muted">{t('pricing.compare.subtitle', { currency })}</p>
+          <Modal.Heading>{t('pricing.compare.title')}</Modal.Heading>
           <div className="flex flex-wrap items-center gap-2">
-            <PricingCalculator scenario={scenario} onChange={onScenarioChange} enabled comparison onEnabledChange={() => {}} />
+            <div className="flex items-center gap-1">
+              <PricingCalculator scenario={scenario} onChange={onScenarioChange} enabled comparison onEnabledChange={() => {}} />
+              <HelpPopover title={t('pricing.compare.equalUsageCost')}>
+                <p>{t('pricing.compare.subtitle', { currency })}</p>
+                {scenario.cacheRead === 0 && scenario.cacheWrite === 0 && <p>{t('pricing.compare.noCache')}</p>}
+                <p>{t('pricing.compare.disclaimer')}</p>
+              </HelpPopover>
+            </div>
             <span className="text-[11px] text-muted"><PricingScenarioSummary scenario={scenario} /></span>
           </div>
         </Modal.Header>
         <Modal.Body className="flex min-h-0 min-w-0 flex-col !overflow-hidden">
-          <p className="mb-2 text-[11px] text-muted sm:hidden">{t('pricing.compare.scrollHint')}</p>
           <div role="region" aria-label={t('pricing.compare.scrollRegion')} tabIndex={0} className="min-h-0 max-w-full flex-1 overflow-auto overscroll-contain rounded-xl border border-border/70 outline-none focus-visible:outline-2 focus-visible:outline-accent">
-            <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ minWidth: 112 + groups.length * 210 }}>
+            <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs [--compare-metric-width:5.5rem] [--compare-model-width:9rem] sm:[--compare-metric-width:7rem] sm:[--compare-model-width:13rem]" style={{ minWidth: `calc(var(--compare-metric-width) + ${groups.length} * var(--compare-model-width))` }}>
+              <colgroup>
+                <col className="w-(--compare-metric-width)" />
+                {groups.map(group => <col key={group.id} />)}
+              </colgroup>
               <caption className="sr-only">{t('pricing.compare.caption')}</caption>
               <thead>
                 <tr>
-                  <th scope="col" className="sticky left-0 top-0 z-20 w-28 min-w-28 bg-surface-secondary p-3 text-muted">{t('pricing.compare.modelChannel')}</th>
+                  <th scope="col" className="sticky left-0 top-0 z-20 bg-surface-secondary p-2 text-muted wrap-anywhere sm:p-3">{t('pricing.compare.modelChannel')}</th>
                   {selections.map(({ group, variant }) => {
                     const provider = getPricingProvider(group.model);
                     const name = getPricingModelName(group.model, group.displayName);
                     const variants = [...group.apiVariants, ...group.subscriptionVariants];
-                    return <th scope="col" key={group.id} className="sticky top-0 z-10 min-w-52 bg-surface-secondary p-3 align-top">
-                      <div className="mb-2 flex items-center gap-2"><ModelProviderIcon provider={provider} size={20} /><span className="font-[system-ui,sans-serif] text-sm font-semibold">{name}</span></div>
+                    return <th scope="col" key={group.id} className="sticky top-0 z-10 bg-surface-secondary p-2 align-top sm:p-3">
+                      <div className="mb-2 flex items-center gap-2"><ModelProviderIcon provider={provider} size={20} /><span className="min-w-0 font-[system-ui,sans-serif] text-sm font-semibold wrap-anywhere">{name}</span></div>
                       <p className="mb-2 text-[11px] font-normal text-muted">{provider.key === 'unknown' ? t('pricing.provider.other') : provider.label}</p>
                       {variants.length > 1 ? <Select aria-label={t('pricing.compare.channelSelect', { name })} value={variant.id} onChange={key => { if (typeof key === 'string') setChannels(current => ({ ...current, [group.id]: key })); }} variant="secondary" className="w-full min-w-0">
                         <Label className="sr-only">{t('pricing.compare.channelSelect', { name })}</Label>
@@ -92,7 +102,7 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
               </thead>
               <tbody>
                 <tr>
-                  <th scope="row" className="sticky left-0 z-10 border-t border-border/60 bg-surface-secondary p-3 font-medium">{t('pricing.compare.equalUsageCost')}<span className="mt-1 block text-[10px] font-normal text-muted">{t('pricing.compare.currentUsage')}</span></th>
+                  <th scope="row" className="sticky left-0 z-10 border-t border-border/60 bg-surface-secondary p-3 font-medium">{t('pricing.compare.equalUsageCost')}</th>
                   {selections.map(({ group, variant }, index) => {
                     const comparison = canDisplayPrice ? comparisons[index] : null;
                     const lowest = Boolean(comparison?.isLowest);
@@ -121,8 +131,6 @@ export function PricingComparison({ groups, initialChannels, onClose, scenario, 
               </tbody>
             </table>
           </div>
-          {scenario.cacheRead === 0 && scenario.cacheWrite === 0 && <p className="mt-3 text-[11px] leading-relaxed text-muted">{t('pricing.compare.noCache')}</p>}
-          <p className="mt-2 text-[11px] leading-relaxed text-muted">{t('pricing.compare.disclaimer')}</p>
         </Modal.Body>
       </Modal.Dialog>
     </Modal.Container>

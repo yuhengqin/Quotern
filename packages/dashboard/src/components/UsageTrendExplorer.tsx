@@ -182,8 +182,8 @@ function TrendChartBody({ variant, data, error, singleDay, ticks, metric, groupi
   // Hidden Recharts tooltips retain their previous coordinates after a resize.
   // Remove them from layout so a wide-screen position cannot widen the modal body.
   return <div ref={plot} className="min-w-0 [&_.recharts-tooltip-wrapper[style*='visibility:_hidden']]:hidden">
-      {error && <p role="status" className="mb-2 text-xs text-warning">{t('usage.explorer.error')}</p>}
-      {!chart ? <p role="status" className={`flex items-center justify-center text-sm text-muted ${heightClass}`}>{t(error ? 'usage.explorer.error' : 'usage.explorer.loading')}</p>
+      {error && chart && <p role="status" className="mb-2 text-xs text-warning">{t('usage.explorer.error')}</p>}
+      {!chart ? <p role="status" className={`flex items-center justify-center text-sm ${error ? 'text-warning' : 'text-muted'} ${heightClass}`}>{t(error ? 'usage.explorer.error' : 'usage.explorer.loading')}</p>
         : <><ChartContainer config={chart.config} className={`w-full ${heightClass}`} initialDimension={{ width: 720, height: 260 }}>
           <ComposedChart data={chart.rows} accessibilityLayer margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <defs>{chart.keys.map(key => <linearGradient key={key} id={`${gradientId}-${key}`} x1="0" y1="0" x2="0" y2="1">

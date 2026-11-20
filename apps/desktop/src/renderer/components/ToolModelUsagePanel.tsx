@@ -61,9 +61,6 @@ export const ToolModelUsagePanel = memo(function ToolModelUsagePanel({
       <Card.Header className="flex-row items-start justify-between gap-3 pb-0">
         <div className="min-w-0">
           <Card.Title id={headingId}>{t('usage.tool.heading')}</Card.Title>
-          <Card.Description className="mt-1">
-            {t('usage.tool.description')}
-          </Card.Description>
         </div>
         <Link to="/pricing" search={{ q: '' }} className="shrink-0 rounded px-1 py-1 text-xs text-muted underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent">
           {t('usage.tool.viewPrices')}

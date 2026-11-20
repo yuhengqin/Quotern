@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Xmark } from '@gravity-ui/icons';
-import { Check, Columns2, Info } from 'lucide-react';
+import { Check, Columns2 } from 'lucide-react';
 import { Button, Label, ListBox, SearchField, Select, Skeleton, Toast, ToastQueue } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
 import { registerMessages } from 'quotern-i18n';
@@ -29,11 +29,13 @@ import {
 } from '../lib/pricing-catalog';
 import { DEFAULT_PRICING_SCENARIO, MAX_COMPARISON_MODELS, togglePricingComparison } from '../lib/pricing-workbench';
 import { filterSessionPricingGroups, parsePricingSearch } from '../lib/pricing-selection';
-import { HelpPopover, HelpPopup } from '../components/HelpPopover';
+import { HelpPopover } from '../components/HelpPopover';
 import { ManualPricingEditor } from '../components/ManualPricingEditor';
 import { isDemoMode } from '@/lib/demo-runtime';
 
 registerMessages(pricingMessages);
+
+const MIN_COMPARISON_MODELS = 2;
 
 function ActiveFilter({ children, onRemove, label }: { children: ReactNode; onRemove: () => void; label: string }) {
   const { t } = useTranslation();
@@ -138,6 +140,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
   const scopedRows = useMemo(() => sessionFilter.groups.flatMap(group => group.entries), [sessionFilter]);
   const groups = useMemo(() => filterAndSortPricingGroups(groupPricingCatalog(filterPricingCatalog(scopedRows, { ...advancedFilters, providers: providerFilters })), debouncedQuery, sort, usedOnly), [scopedRows, debouncedQuery, sort, providerFilters, advancedFilters, usedOnly]);
   const selectedGroups = useMemo(() => selected.flatMap(id => modelGroups.find(group => group.id === id) ?? []), [selected, modelGroups]);
+  const canCompare = selectedGroups.length >= MIN_COMPARISON_MODELS;
   const toggleComparison = (id: string) => {
     if (!selected.includes(id) && selected.length >= MAX_COMPARISON_MODELS) {
       const notice = { title: <strong className="font-semibold">{t('pricing.compare.limit', { count: MAX_COMPARISON_MODELS })}</strong>, variant: 'default' as const };
@@ -163,9 +166,6 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
   const sortKey = `${sort.column}:${sort.direction}`;
   const tableTimestamp = catalog?.generatedAt ?? catalog?.updatedAt;
   const dateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleString(locale, { hour12: false }) : t('pricing.summary.unknownDate');
-  const shortDateLabel = tableTimestamp && Number.isFinite(Date.parse(tableTimestamp)) ? new Date(tableTimestamp).toLocaleDateString(locale) : t('pricing.summary.unknownDate');
-  const comparisonHint = selectedGroups.length === MAX_COMPARISON_MODELS ? ''
-    : selectedGroups.length === 1 ? t('pricing.compare.needOne') : t('pricing.compare.hint');
   const tableDateKind = catalog?.generatedAt ? t('pricing.summary.generatedAt') : t('pricing.summary.updatedAt');
   const rateNote = currency === 'CNY' ? t('pricing.summary.rateNote') : '';
 
@@ -174,7 +174,7 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
       <Toast.Provider placement="top" queue={toastQueue} width={240} className="top-12 !w-60 !min-w-0 max-w-[calc(100vw-2rem)]" />
       <header className="shrink-0">
         <BackToUsageLink />
-        <div className="min-w-0"><h1 className="text-xl font-semibold">{t('pricing.title')}</h1><p className="mt-1 text-xs text-muted">{t('pricing.subtitle', { currency })}</p></div>
+        <h1 className="text-xl font-semibold">{t('pricing.title')}</h1>
       </header>
       <div aria-label={t('pricing.filters.aria')} className="flex shrink-0 flex-wrap items-center gap-2">
         <SearchField aria-label={t('pricing.filters.search')} value={query} onChange={setQuery} variant="secondary" className="min-w-0 flex-1 basis-full sm:basis-auto sm:max-w-72">
@@ -205,26 +205,29 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
         {(advancedFilters.releasedAfter || advancedFilters.releasedBefore) && <ActiveFilter label={t('pricing.filters.release')} onRemove={() => setAdvancedFilters({ ...advancedFilters, releasedAfter: '', releasedBefore: '' })}>{t('pricing.filters.releaseChip', { start: advancedFilters.releasedAfter ? formatPricingReleaseDate(advancedFilters.releasedAfter, locale) : t('pricing.filters.unlimited'), end: advancedFilters.releasedBefore ? formatPricingReleaseDate(advancedFilters.releasedBefore, locale) : t('pricing.filters.unlimited') })}</ActiveFilter>}
         <Button className="!h-6 !min-h-6 !px-2 !text-[11px]" variant="tertiary" size="sm" onPress={clearFilters}>{t('pricing.filters.clearAll')}</Button>
       </div>}
-      {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+      {catalog && !loading && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <span role="status" aria-live="polite">{t('pricing.summary.count', { count: groups.length })}</span>
+        <span className="inline-flex items-center gap-1">
+          {t('pricing.subtitle', { currency })}
+          <HelpPopover title={t('pricing.summary.dataHeading')} ariaLabel={t('pricing.summary.dataHeading')}>
+            <p>{t('pricing.summary.countDetails', { visible: groups.length, total: modelGroups.length, channels: channelCount })}</p>
+            <p>{t(catalog.source === 'bundled' ? 'pricing.summary.bundled' : 'pricing.summary.published')} · {t('pricing.summary.tableDate', { kind: tableDateKind, date: dateLabel })}</p>
+            {catalog.priceSources?.includes('models.dev') ? <p><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
+              : !catalog.priceSources?.length && <p>{t('pricing.provenance.unknown')}</p>}
+            {catalog.priceSources?.includes('litellm') && <p><a className="underline underline-offset-2" href="https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json" target="_blank" rel="noreferrer">LiteLLM</a> · {t('pricing.provenance.secondary')}</p>}
+            {catalog.checkedAt && <p>{t('pricing.provenance.checked', { date: new Date(catalog.checkedAt).toLocaleString(locale, { hour12: false }) })}</p>}
+            {catalog.syncReport && <p>{t('pricing.provenance.report', catalog.syncReport)}</p>}
+            {catalog.syncReport?.failedSources.length ? <p>{t('pricing.provenance.failed', { sources: catalog.syncReport.failedSources.join(' / ') })}</p> : null}
+            {sort.column === 'latest' && <p>{t('pricing.summary.latestSort')}</p>}
+            <p>{t('pricing.summary.providerMeaning')}</p>
+            <p>{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
+            <p>{t('pricing.list.subscriptionPlan')}</p>
+            {sessionModels?.length && <p>{t('usage.detail.referencePrices')}</p>}
+          </HelpPopover>
+        </span>
         {sessionFilter.unmatched.length > 0 && <span className="inline-flex items-center gap-1">{t('usage.detail.unmatchedModels', { count: sessionFilter.unmatched.length })}<HelpPopover title={t('usage.detail.sessionModels')} showTitle><p>{t('usage.detail.unmatchedNote')}</p><ul className="space-y-1">{sessionFilter.unmatched.map(item => <li key={JSON.stringify(item)} className="break-all">{item.model} · {item.source}</li>)}</ul></HelpPopover></span>}
-        {sort.column === 'usage' && <span>{t(usageStatus === 'loading' ? 'pricing.summary.usageLoadingSort' : usageStatus === 'error' ? 'pricing.summary.usageErrorSort' : hasUsage ? 'pricing.summary.usageSort' : 'pricing.summary.noUsageSort')}</span>}
-        {sort.column === 'latest' && <span>{t('pricing.summary.latestSort')}</span>}
+        {sort.column === 'usage' && (!hasUsage || usageStatus !== 'ready') && <span>{t(usageStatus === 'loading' ? 'pricing.summary.usageLoadingSort' : usageStatus === 'error' ? 'pricing.summary.usageErrorSort' : 'pricing.summary.noUsageSort')}</span>}
         {usageStatus !== 'ready' && sort.column !== 'usage' && <span>{t(usageStatus === 'error' ? 'pricing.summary.usageError' : 'pricing.summary.usageLoading')}</span>}
-        <span title={dateLabel}>{t('pricing.summary.tableDate', { kind: tableDateKind, date: shortDateLabel })}</span>
-        <HelpPopup title={t('pricing.summary.dataHeading')} showTitle={false} trigger={open => <Button onPress={open} variant="ghost" size="sm" className="!h-6 !min-h-6 !gap-1 !px-1 !text-[11px] text-muted"><Info className="size-3" aria-hidden />{t('pricing.summary.dataInfo')}</Button>}>
-          <p>{t('pricing.summary.countDetails', { visible: groups.length, total: modelGroups.length, channels: channelCount })}</p>
-          <p className="text-muted">{t(catalog.source === 'bundled' ? 'pricing.summary.bundled' : 'pricing.summary.published')} · {t('pricing.summary.tableDate', { kind: tableDateKind, date: dateLabel })}</p>
-          {catalog.priceSources?.includes('models.dev') ? <p className="text-muted"><a className="underline underline-offset-2" href="https://models.dev" target="_blank" rel="noreferrer">{t('pricing.summary.source')}</a></p>
-            : !catalog.priceSources?.length && <p className="text-muted">{t('pricing.provenance.unknown')}</p>}
-          {catalog.priceSources?.includes('litellm') && <p className="text-muted"><a className="underline underline-offset-2" href="https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json" target="_blank" rel="noreferrer">LiteLLM</a> · {t('pricing.provenance.secondary')}</p>}
-          {catalog.checkedAt && <p className="text-muted">{t('pricing.provenance.checked', { date: new Date(catalog.checkedAt).toLocaleString(locale, { hour12: false }) })}</p>}
-          {catalog.syncReport && <p className="text-muted">{t('pricing.provenance.report', catalog.syncReport)}</p>}
-          {catalog.syncReport?.failedSources.length ? <p className="text-warning">{t('pricing.provenance.failed', { sources: catalog.syncReport.failedSources.join(' / ') })}</p> : null}
-          <p className="text-muted">{t('pricing.summary.providerMeaning')}</p>
-          <p className="text-muted">{t('pricing.summary.priceMeaning', { zero: currency === 'USD' ? '$0' : '¥0', rateNote })}</p>
-          {sessionModels?.length && <p className="text-muted">{t('usage.detail.referencePrices')}</p>}
-        </HelpPopup>
       </div>}
       {estimateEnabled && <div className="flex shrink-0 flex-wrap items-center gap-1.5 text-[11px] text-muted" aria-label={t('pricing.calculator.settings')}>
         <span><PricingScenarioSummary scenario={scenario} withPrefix /></span><Button size="sm" variant="ghost" isIconOnly aria-label={t('pricing.calculator.close')} className="!size-6 !min-h-6 !min-w-6 !p-0" onPress={() => setEstimateEnabled(false)}><Xmark className="size-3" /></Button>
@@ -236,24 +239,24 @@ export function PricingPage({ loadUsage = fetchModelBreakdown, loadCatalog = fet
       {loading ? <div aria-label={t('pricing.loading')} className="min-h-0 flex-1 space-y-3 overflow-hidden">{Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}</div>
         : error ? <div className="flex flex-1 flex-col items-center justify-center gap-4"><StatusBanner tone="error" title={t('pricing.loadError')} /><Button variant="outline" onPress={() => setRetry(value => value + 1)}>{t('pricing.retry')}</Button></div>
           : <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
-            <div role="group" aria-label={t('pricing.compare.operations')} className={`grid h-[72px] shrink-0 grid-rows-[32px_28px] gap-1 rounded-xl border px-2 py-1 sm:h-14 sm:grid-rows-[16px_28px] ${selectedGroups.length ? 'border-accent/20 bg-accent-soft/30' : 'border-border/60 bg-surface-secondary/40'}`}>
-              <div id={comparisonStatusId} role="status" aria-live="polite" aria-atomic="true" className="min-w-0 text-[11px] leading-4">
-                {selectedGroups.length > 0 && <span className="mr-2 whitespace-nowrap font-medium">{t('pricing.compare.selectedCount', { count: selectedGroups.length, max: MAX_COMPARISON_MODELS })}</span>}
-                <span className="text-muted">{comparisonHint}</span>
+            <div role="group" aria-label={t('pricing.compare.operations')} className={`flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 rounded-xl border px-2 py-1 ${selectedGroups.length ? 'border-accent/20 bg-accent-soft/30' : 'border-border/60 bg-surface-secondary/40'}`}>
+              <div role="status" aria-atomic="true" className={selectedGroups.length ? 'shrink-0 text-xs font-medium tabular-nums' : 'sr-only'}>
+                <span aria-hidden="true">{selectedGroups.length} / {MAX_COMPARISON_MODELS}</span>
+                <span className="sr-only">{t('pricing.compare.selectedCount', { count: selectedGroups.length, max: MAX_COMPARISON_MODELS })}</span>
               </div>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label={t('pricing.compare.selectedModels')}>
-                  {selectedGroups.length ? selectedGroups.map(group => <Button key={group.id} variant="tertiary" size="sm" className="!h-6 !min-h-6 max-w-40 shrink-0 !gap-1 !px-1.5 !text-[11px]" aria-label={t('pricing.compare.remove', { name: getPricingModelName(group.model, group.displayName) })} onPress={() => setSelected(current => current.filter(id => id !== group.id))}><span className="truncate">{getPricingModelName(group.model, group.displayName)}</span><Xmark className="size-3 shrink-0" aria-hidden /></Button>)
-                    : <span className="truncate text-[10px] text-muted">{t('pricing.compare.unitHint', { symbol: currency === 'USD' ? '$' : '¥', estimateNote: estimateEnabled ? t('pricing.compare.estimateNote') : '' })}</span>}
-                </div>
-                <Button variant="ghost" size="sm" className="!h-7 !min-h-7 shrink-0 !px-2 !text-xs" isDisabled={selectedGroups.length === 0} onPress={() => setSelected([])}>{t('pricing.compare.clear')}</Button>
-                <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" aria-describedby={comparisonStatusId} isDisabled={selectedGroups.length < 2} onPress={() => setComparisonOpen(true)}><Columns2 className="size-3.5" aria-hidden />{t('pricing.compare.start')}</Button>
-              </div>
+              {selectedGroups.length > 0 && <div role="group" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-0.5" aria-label={t('pricing.compare.selectedModels')}>
+                {selectedGroups.map(group => <Button key={group.id} variant="tertiary" size="sm" className="!h-6 !min-h-6 max-w-40 shrink-0 !gap-1 !px-1.5 !text-[11px]" aria-label={t('pricing.compare.remove', { name: getPricingModelName(group.model, group.displayName) })} onPress={() => setSelected(current => current.filter(id => id !== group.id))}><span className="truncate">{getPricingModelName(group.model, group.displayName)}</span><Xmark className="size-3 shrink-0" aria-hidden /></Button>)}
+              </div>}
+              {selectedGroups.length > 0 && <Button variant="ghost" size="sm" className="!h-7 !min-h-7 shrink-0 !px-2 !text-xs" onPress={() => setSelected([])}>{t('pricing.compare.clear')}</Button>}
+              <span id={comparisonStatusId} className="sr-only">{t('pricing.compare.hint')}</span>
+              <Button size="sm" className="!h-7 !min-h-7 shrink-0 !gap-1 !px-2 !text-xs" aria-describedby={comparisonStatusId} isDisabled={!canCompare} onPress={() => setComparisonOpen(true)}>
+                <Columns2 className="size-3.5" aria-hidden />
+                {canCompare ? t('pricing.compare.start') : t('pricing.compare.minimum', { count: MIN_COMPARISON_MODELS })}
+              </Button>
             </div>
             <PricingList key={`${providerFilters.join(',')}:${debouncedQuery}:${sortKey}:${JSON.stringify(advancedFilters)}:${usedOnly}`} groups={groups} sort={sort} hasUsage={hasUsage} onSortChange={setSort} currency={currency} exchangeRate={exchangeRate?.rate ?? null} query={debouncedQuery} selected={selected} onCompare={toggleComparison} onEdit={isDemoMode() ? undefined : editModel} scenario={estimateEnabled ? scenario : null} />
           </div>}
-      <p className="shrink-0 text-[10px] text-muted">{t('pricing.summary.footnote', { rateNote })}</p>
-      {comparisonOpen && selectedGroups.length >= 2 && <PricingComparison groups={selectedGroups} initialChannels={selectedChannels} onClose={() => setComparisonOpen(false)} scenario={scenario} onScenarioChange={value => { setScenario(value); setEstimateEnabled(true); }} currency={currency} exchangeRate={exchangeRate?.rate ?? null} usageStatus={usageStatus} />}
+      {comparisonOpen && canCompare && <PricingComparison groups={selectedGroups} initialChannels={selectedChannels} onClose={() => setComparisonOpen(false)} scenario={scenario} onScenarioChange={value => { setScenario(value); setEstimateEnabled(true); }} currency={currency} exchangeRate={exchangeRate?.rate ?? null} usageStatus={usageStatus} />}
     </section>
   );
 }

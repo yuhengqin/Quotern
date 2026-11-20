@@ -5,6 +5,7 @@ import { ArrowLeft, History as RotateCcwClock } from 'lucide-react';
 import { useTranslation } from 'quotern-i18n/react';
 import { BackToUsageLink } from '../components/BackToUsageLink';
 import { DashboardTimeRangeControl } from '../components/DashboardTimeRangeControl';
+import { HelpPopover } from '../components/HelpPopover';
 import { FocusedSession, SessionAttributionSummary, SessionBrowser, SessionCoverageNote } from '../components/SessionActivityPanel';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { useSessionList } from '@/hooks/useSessionList';
@@ -70,7 +71,10 @@ export function SessionsPage() {
     {!local ? <p role="status" className="py-8 text-sm text-muted">{t('usage.activity.localOnly')}</p> : <>
       {error && <div className="mb-4 flex flex-wrap items-center gap-2"><p role="status" className="text-xs text-warning">{t('usage.activity.readError')} {data ? t('usage.activity.staleReading') : t('usage.activity.unavailable')}</p>{!target && <Button size="sm" variant="secondary" onPress={list.retry}>{t('usage.detail.retry')}</Button>}</div>}
       {search.group && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-secondary px-4 py-3 text-xs">
-        <div className="min-w-0"><p className="font-medium">{t('usage.activity.relatedSessions')}{group && <> · <SessionAttributionSummary row={group} /></>}</p><p className="mt-1 text-muted">{t('usage.activity.relatedSessionNote')}</p></div>
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="font-medium">{t('usage.activity.relatedSessions')}{group && <> · <SessionAttributionSummary row={group} /></>}</p>
+          <HelpPopover title={t('usage.activity.relatedSessions')}><p>{t('usage.activity.relatedSessionNote')}</p></HelpPopover>
+        </div>
         <Button size="sm" variant="tertiary" onPress={() => update({ group: undefined })}>{t('usage.activity.allSessions')}</Button>
       </div>}
       {!data ? <p role="status" className="py-12 text-center text-sm text-muted">{t(error ? 'usage.activity.unavailable' : 'usage.activity.loading')}</p> : <>

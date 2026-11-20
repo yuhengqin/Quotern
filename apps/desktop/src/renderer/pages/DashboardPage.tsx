@@ -409,13 +409,11 @@ export function DashboardPage() {
             <ProjectUsagePanel rows={visibleProjectRows} />
             {/* 终端分布：暂无真实 API，先隐藏 mock 占位
             <UsageDistributionCard
-              description="按编辑器与终端来源查看用量占比"
               rows={distributions.terminals}
               title="终端分布"
             />
             */}
             <UsageDistributionCard
-              description={t('usage.page.agentDistributionDesc')}
               rows={visibleDistributions.tools}
               title={t('usage.page.agentDistribution')}
             />

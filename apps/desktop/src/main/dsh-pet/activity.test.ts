@@ -44,13 +44,21 @@ test('does not interpret generic task completion, tool output or silence as veri
   assert.equal(parseActivityRecord({ type: 'turn/start', time: context.now }, { ...context, source: 'dsh' })?.task, null);
 });
 
-test('a new short-lived session created after startup delivers its first completion without replaying copied history', async () => {
+test('a new short-lived session created after startup delivers its first completion without replaying copied history', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'quotern-new-session-'));
+  const file = path.join(root, 'new.jsonl');
   const roots: ActivityRoot[] = [], events: ActivityEvent[] = [], now = Date.now();
-  const monitor = new DshPetActivityMonitor({ roots, now: () => now + 1000, onEvent: event => events.push(event), intervalMs: 60_000 });
+  const originalStat = fsPromises.stat;
+  const inspected = t.mock.method(fsPromises, 'stat', async (...args: Parameters<typeof fsPromises.stat>) => {
+    const info = await originalStat(...args);
+    // Model a creation timestamp rounded just before startup by the filesystem.
+    if (args[0] === file) Object.assign(info, { birthtimeMs: now - 1 });
+    return info;
+  });
+  syncBuiltinESMExports();
+  const monitor = new DshPetActivityMonitor({ roots, now: () => now, onEvent: event => events.push(event), intervalMs: 60_000 });
   try {
     await monitor.start();
-    const file = path.join(root, 'new.jsonl');
     await writeFile(file, [
       { type: 'session_meta', payload: { id: 'new-short-session' } },
       { type: 'event_msg', timestamp: new Date(now - 1000).toISOString(), payload: { type: 'task_started' } },
@@ -58,7 +66,7 @@ test('a new short-lived session created after startup delivers its first complet
     ].map(row => JSON.stringify(row)).join('\n') + '\n');
     roots.push({ source: 'codex', path: file }); await monitor.poll();
     assert.equal(events.length, 1); assert.equal(events[0]!.sessionId, 'new-short-session'); assert.equal(events[0]!.terminal, true);
-  } finally { monitor.dispose(); await rm(root, { recursive: true, force: true }); }
+  } finally { monitor.dispose(); inspected.mock.restore(); syncBuiltinESMExports(); await rm(root, { recursive: true, force: true }); }
 });
 
 test('does not reopen unchanged files, including an incomplete trailing record', async t => {

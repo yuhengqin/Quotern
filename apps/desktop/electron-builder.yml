@@ -69,6 +69,8 @@ dmg:
 nsis:
   # Keep the installed application's upgrade identity while changing its product name/appId.
   guid: 77c89c13-52a6-5b46-b7b1-f5b025d10759
+  # NSIS and portable share the app archive. Keep WebM media inside it for both targets.
+  preCompressedFileExtensions: []
   artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
   buildUniversalInstaller: false
   oneClick: false

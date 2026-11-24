@@ -85,3 +85,8 @@ test('all desktop packaging entries disable direct electron-builder publication'
   assert.equal(config.mac.notarize, true);
   assert.equal(config.dmg.sign, true);
 });
+
+test('the shared Windows package archive retains precompressed resources for portable builds', async () => {
+  const config = yaml.load(await read('apps/desktop/electron-builder.yml'));
+  assert.deepEqual(config.nsis.preCompressedFileExtensions, []);
+});

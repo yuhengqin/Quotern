@@ -171,8 +171,9 @@ async function checkPricingTiers(client, label) {
   await client.key('Escape');
   await until(() => client.evaluate('!document.querySelector(".help-popup")'), 'Escape dismisses only the newest help');
   assert.equal(await client.evaluate('Boolean(document.querySelector("[data-pricing-tiers]"))'), true, 'Escape preserves the underlying pricing layer');
-  await client.click(`${dialog}.querySelector('.modal__header')`);
-  await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]')`), 'outside click closes rate tiers');
+  // Use the heading, since a flipped popover can cover the header's center.
+  await client.click(`${dialog}.querySelector('[data-session-heading]')`);
+  await until(() => client.evaluate(`!document.querySelector('[data-pricing-tiers]') && Boolean(${dialog})`), 'outside click closes rate tiers and preserves the session');
   await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 760, deviceScaleFactor: 1, mobile: false });
   await client.click(trigger);
   await until(() => client.evaluate(`Boolean(document.querySelector('[data-pricing-tiers]'))`), 'narrow rate tiers');
@@ -287,8 +288,8 @@ async function main() {
   await wait(250);
   await client.screenshot(path.join(output, 'desktop-help.png'));
   await client.key('Escape');
-  await until(() => client.evaluate(`!document.body.innerText.includes('吞吐按有效请求样本估算')`), 'help dismiss');
-  assert.equal(await client.evaluate(`Boolean(${dialog}) && document.activeElement?.getAttribute('aria-label')==='响应表现说明'`), true);
+  await until(() => client.evaluate(`!document.body.innerText.includes('吞吐按有效请求样本估算')
+    && Boolean(${dialog}) && document.activeElement?.getAttribute('aria-label')==='响应表现说明'`), 'help dismisses and restores focus');
   await client.click(help('已记录的活动说明'));
   await until(() => client.evaluate(`document.body.innerText.includes('未记录的指标')`), 'missing metrics on demand');
   await client.key('Escape');

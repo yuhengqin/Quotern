@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { verifyWindowIdentity } from '../agent/window-identity.js';
 import { readRuntimeOwner } from '../runtime-pid.js';
 import { findSessionExecutable } from '../session-actions.js';
-import { profileLaunchBindings, profileSelection, readLaunchPreferences, updateLaunchPreferences } from './account-launch.js';
+import { matchesPinnedLaunchDirectory, profileLaunchBindings, profileSelection, readLaunchPreferences, updateLaunchPreferences } from './account-launch.js';
 import type { LaunchPreferences } from './shared/account-launch.js';
 import type { QuotaProfile, QuotaState } from './shared/quota.js';
 import { guiCliEnvironment } from './readers/cli-runtime.js';
@@ -22,12 +22,12 @@ async function verify(profile: QuotaProfile, accountRef: string): Promise<boolea
   } finally { await rm(cwd, { recursive: true, force: true }); }
 }
 
-function candidate(state: QuotaState, preferences: LaunchPreferences, quotaDirectory: string, runtime: 'cli' | 'desktop', now: number) {
+async function candidate(state: QuotaState, preferences: LaunchPreferences, quotaDirectory: string, runtime: 'cli' | 'desktop', now: number) {
   const selected = preferences.defaults.claude;
   if (!preferences.autoSwitchClaude || !selected?.accountRef || quotaDirectoryKey(selected.quotaDirectory) !== quotaDirectoryKey(quotaDirectory)) return null;
   const profiles = state.preferences.profiles?.filter(p => p.provider === 'claude' && p.enabled) ?? [];
   const currentProfile = profiles.find(p => p.id === selected.profileId);
-  if (!currentProfile || quotaDirectoryKey(currentProfile.directory) !== quotaDirectoryKey(selected.directory)) return null;
+  if (!currentProfile || !await matchesPinnedLaunchDirectory(currentProfile.directory, selected.directory)) return null;
   const freshState = { ...state, providers: state.providers.map(p => ({ ...p, stale: p.stale || p.refreshing || p.fetchedAt === null || p.fetchedAt < now - 900 || p.fetchedAt > now + 60 })) };
   const current = freshState.providers.find(p => p.id === `claude@${selected.profileId}`);
   if (!current || current.stale || current.provenance?.accountRef !== selected.accountRef) return null;
@@ -61,10 +61,10 @@ export function createAccountAutoSwitcher(dataDir: string, quotaDirectory: strin
     pending = true;
     try {
       if (!await owner()) return;
-      const preferences = await readLaunchPreferences(dataDir), target = candidate(deps.getState(), preferences, quotaDirectory, runtime, now());
+      const preferences = await readLaunchPreferences(dataDir), target = await candidate(deps.getState(), preferences, quotaDirectory, runtime, now());
       if (!target || !await (deps.verify ?? verify)(target.profile, target.accountRef)) return;
       await updateLaunchPreferences(dataDir, preferences.revision, async current => {
-        const state = deps.getState(), latest = candidate(state, current, quotaDirectory, runtime, now());
+        const state = deps.getState(), latest = await candidate(state, current, quotaDirectory, runtime, now());
         if (!deps.isActive() || !await owner() || !latest || latest.profile.id !== target.profile.id || latest.accountRef !== target.accountRef || latest.profile.directory !== target.profile.directory) throw new Error('LAUNCH_CANCELLED');
         const selected = await profileSelection(quotaDirectory, state, 'claude', target.profile.id);
         if (!deps.isActive() || !await owner()) throw new Error('LAUNCH_CANCELLED');

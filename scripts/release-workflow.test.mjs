@@ -100,3 +100,13 @@ test('desktop packaging uses Tauri targets and does not directly publish', async
     assert.doesNotMatch(await read(file), /gh\s+release\s+(?:create|upload)|--publish\s+(?:always|onTag)/, file);
   }
 });
+
+test('the Windows portable wrapper includes the same runtime resources as the installer', async () => {
+  const config = JSON.parse(await read('apps/desktop/src-tauri/tauri.conf.json'));
+  assert.equal(config.bundle.resources['../out/sidecar/'], 'node/');
+  const build = await read('scripts/release-windows.mjs');
+  assert.match(build, /NODE_RESOURCES=.+['"]out\/sidecar['"]/);
+  const portable = await read('apps/desktop/scripts/portable.nsi');
+  assert.match(portable, /^\s*File "\$\{HOST_DIR\}\\quotern-node\.exe"/m);
+  assert.match(portable, /^\s*File \/r "\$\{NODE_RESOURCES\}\\\*"/m);
+});

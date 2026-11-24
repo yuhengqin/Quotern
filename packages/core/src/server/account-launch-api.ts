@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import type { QuotaState } from '../quota/shared/quota.js';
 import type { AccountLaunchView, LaunchProvider } from '../quota/shared/account-launch.js';
-import { launchAccountTerminal, profileSelection, readLaunchPreferences, setAutoSwitchClaude, setDefaultLaunchProfile, validLaunchProfileId, validLaunchProvider } from '../quota/account-launch.js';
+import { launchAccountTerminal, matchesPinnedLaunchDirectory, profileSelection, readLaunchPreferences, setAutoSwitchClaude, setDefaultLaunchProfile, validLaunchProfileId, validLaunchProvider } from '../quota/account-launch.js';
 import { quotaDirectoryKey } from '../quota/snapshot.js';
 import { ACCOUNT_LAUNCH_ROUTE, actionFailure, actionOk, createLocalActionApi } from './local-action-api.js';
 
@@ -18,7 +18,8 @@ export function registerAccountLaunchApi(parent: Hono, options: {
       const saved = preferences.defaults[provider];
       if (!saved) continue;
       const profile = profiles.find(p => p.id === saved.profileId && p.provider === provider && p.enabled);
-      if (profile && quotaDirectoryKey(saved.quotaDirectory) === quotaDirectoryKey(options.quotaDirectory) && quotaDirectoryKey(profile.directory) === quotaDirectoryKey(saved.directory)) selected[provider] = saved.profileId;
+      if (profile && quotaDirectoryKey(saved.quotaDirectory) === quotaDirectoryKey(options.quotaDirectory)
+        && await matchesPinnedLaunchDirectory(profile.directory, saved.directory)) selected[provider] = saved.profileId;
       else unavailableDefaults.push(provider);
     }
     return { token, preferences, profiles, selected, unavailableDefaults, isolated: process.env.QUOTERN_DEV_ISOLATED === '1' };

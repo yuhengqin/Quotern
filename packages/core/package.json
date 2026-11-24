@@ -1,6 +1,6 @@
 {
   "name": "quotern-core",
-  "version": "0.1.13",
+  "version": "0.2.0",
   "description": "Quotern 核心库：AI Agent 用量采集与本地 API（parsers / sync / hooks / pricing）",
   "type": "module",
   "license": "MIT",

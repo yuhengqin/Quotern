@@ -2,6 +2,28 @@
 
 按版本记录与当前维护范围相关的变更；现行使用方式和限制见[本包 README](./README.md)。
 
+## 0.2.0
+
+### 新增与改进
+
+- `quotern usage` 支持综合概览、日／周／月报及模型、项目报表，可按时间和来源筛选，输出文本、JSON 或 CSV。报表包含采集覆盖和计价依据，便于后续核对。
+- `quotern quota` 可查询 CLI 或 Desktop 的本地快照，提供状态、预测、诊断、账号建议及渠道说明。`quotern mcp` 提供四个只读额度工具，`quotern prompt` 输出单行摘要。
+- `quotern statusline` 提供可组合的紧凑或详细模式、额度和重置时间、账号筛选、颜色和合成预览。随包提供查询本地报表的 `quotern-usage` Skill。
+- `quotern launch claude|codex` 支持按配置打开终端并复用已设置的启动默认账号，支持 Windows npm shim 传递引号、JSON 和空参数。
+- `quotern backup` 支持创建、校验和恢复到新目录。`quotern demo` 支持匿名快照导出与独立只读面板。
+- 内置面板新增分页会话浏览与续接、性能分析、模型价格编辑、Gemini CLI 额度、账号及 Claude 账单管理和外观样式。[面板变更](../dashboard/CHANGELOG.md#020)
+
+### 修复
+
+- 修复 Windows 和 macOS 配置目录别名导致的已选账号不可用和 Claude 自动切换失败。
+- 改善独立只读演示的首屏加载，并对演示会话分页明确提示。
+- 修复 Windows 会话路径复制、终端恢复环境和 CLI 发现。完善 Codex 用量和分档价格统计。
+
+### 依赖
+
+- `quotern-core@0.2.0`
+- `quotern-i18n@0.2.0`
+
 ## 0.1.13
 
 ### Patch Changes

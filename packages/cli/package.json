@@ -1,6 +1,6 @@
 {
   "name": "quotern",
-  "version": "0.1.13",
+  "version": "0.2.0",
   "description": "Quotern CLI：Coding Agent 用量、额度与费用的统一入口。",
   "type": "module",
   "license": "MIT",

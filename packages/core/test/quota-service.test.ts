@@ -24,6 +24,20 @@ test('service summaries retain incident updates and filter only the selected com
   assert.equal(selectQuotaServiceStatus(service, []).level, 'unknown');
   assert.equal(selectQuotaServiceStatus(service, []).selectionEmpty, true);
   assert.equal(selectQuotaServiceStatus(service, ['removed']).level, 'unknown');
+  const incidentOnly = { ...service, level: 'operational' as const, components: [] };
+  assert.equal(selectQuotaServiceStatus(incidentOnly).level, 'major');
+});
+test('same-name services keep independent IDs and their reported parent groups', () => {
+  const service = parseQuotaServiceSummary({ status: { indicator: 'none' }, components: [
+    { id: 'api', name: 'APIs', group: true, status: 'operational' },
+    { id: 'web', name: 'Web', group: true, status: 'operational' },
+    { id: 'a', name: 'Login', group_id: 'api', status: 'operational' },
+    { id: 'b', name: 'Login', group_id: 'web', status: 'partial_outage' },
+    { id: 'c', name: 'Other', group_id: 'missing', status: 'operational' },
+  ] }, url, 100);
+  assert.deepEqual(service.components?.map(row => row.groupName), [undefined, undefined, 'APIs', 'Web', undefined]);
+  assert.equal(selectQuotaServiceStatus(service, ['a']).level, 'operational');
+  assert.equal(selectQuotaServiceStatus(service, ['b']).level, 'major');
 });
 test('malformed summaries and unknown component statuses cannot report recovery', () => {
   assert.throws(() => parseQuotaServiceSummary({ status: { indicator: 'bad' } }, url, 100));

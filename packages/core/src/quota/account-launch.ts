@@ -16,6 +16,11 @@ const sameDirectory = (a: string, b: string) => process.platform === 'win32' ? r
 export const validLaunchProvider = (value: unknown): value is LaunchProvider => value === 'claude' || value === 'codex';
 export const validLaunchProfileId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(value);
 
+export async function matchesPinnedLaunchDirectory(configured: string, pinned: string): Promise<boolean> {
+  const directory = await existingSessionDirectory(configured);
+  return directory !== null && sameDirectory(directory, pinned);
+}
+
 export async function readLaunchPreferences(dataDir: string): Promise<LaunchPreferences> {
   const value = await readAgentJson<LaunchPreferences>(preferencesFile(dataDir), { revision: 'initial', defaults: {}, autoSwitchClaude: false, lastSwitch: null });
   if (!value || typeof value.revision !== 'string' || typeof value.autoSwitchClaude !== 'boolean' || !value.defaults || typeof value.defaults !== 'object' || Array.isArray(value.defaults)) throw new Error('LAUNCH_INVALID_SETTINGS');

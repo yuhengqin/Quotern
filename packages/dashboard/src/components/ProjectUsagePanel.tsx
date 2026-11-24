@@ -81,9 +81,6 @@ export function ProjectUsagePanel({
             <span>{t('usage.project.heading')}</span>
             <HelpPopover title={t('usage.project.heading')}><p>{t('usage.project.help')}</p></HelpPopover>
           </Card.Title>
-          <Card.Description className="mt-1">
-            {t('usage.project.description')}
-          </Card.Description>
         </div>
         {hasUnknown ? (
           <Switch

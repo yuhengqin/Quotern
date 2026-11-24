@@ -8,8 +8,13 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
     provenance: { ...original.provenance, accountRef: `synthetic-${id}` } });
   const states = ['layout-claude', 'layout-gemini', 'layout-zcode', 'layout-antigravity'];
   const initial = [a, b, c, ...states];
-  quota.providers = [copy(a, 'Codex'), copy(b, 'Cursor', 'cursor'), copy(c, 'Codex · 研究用账号名称'),
+  quota.providers = [copy(a, 'Codex'), copy(b, 'Cursor', 'cursor'), { ...copy(c, 'Codex · 研究用账号名称'), resetCredits: 0 },
     ...states.map((id, index) => ({ ...copy(id, ['Claude', 'Gemini CLI', 'ZCode', 'Antigravity'][index], ['claude', 'gemini', 'zcode', 'antigravity'][index]), windows: [], details: [], resetCredits: null, status: 'expired', planLabel: null }))];
+  quota.providers[0].windows.find(window => window.id === 'five-hour').usedPercent = 24;
+  quota.providers[0].analyses['five-hour'] = { paceDifference: 20, etaAt: null, trend: [], paceBasis: 'uniform' };
+  quota.providers[0].resetCreditExpirations = Array.from({ length: original.resetCredits }, (_, i) => Math.floor(Date.now() / 1000) + (i + 1) * 86400);
+  quota.providers[1].windows[1].usedPercent = 78;
+  quota.providers[1].windows[1].resetsAt = quota.providers[1].windows[0].resetsAt;
   quota.preferences = { ...saved.preferences, providerOrder: ['temporarily-hidden', ...initial], compact: false };
   const textButton = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
   const item = id => `document.querySelector('[data-quota-layout-item="${id}"]')`;
@@ -25,6 +30,127 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
   const reload = async () => { await window.loadURL(window.webContents.getURL()); await until(() => client.evaluate(`document.querySelectorAll("[data-quota-layout-item]").length === ${initial.length}`), mode + ' layout loaded'); };
   try {
     publish(); await reload(); await expectOrder(initial);
+    const fiveHour = await client.evaluate(`(() => {
+      const card = ${item(a)};
+      const bar = [...card.querySelectorAll('[role=progressbar]')].find(el => el.getAttribute('aria-valuenow') === '76');
+      if (!bar) return null;
+      let row = bar.parentElement;
+      while (row && !(row.querySelector('[data-quota-window-value]') && row.querySelector('[data-quota-reset-time]') && row.querySelectorAll('[role=progressbar]').length === 1)) row = row.parentElement;
+      if (!row) return null;
+      const value = row.querySelector('[data-quota-window-value]'), reset = row.querySelector('[data-quota-reset-time]');
+      const valueRect = value.getBoundingClientRect(), resetRect = reset.getBoundingClientRect();
+      const valueColor = getComputedStyle(value).color;
+      const segments = [...bar.querySelectorAll('[data-quota-segment]')];
+      return { value: value.textContent.trim(), segmentCounts: [...card.querySelectorAll('[role=progressbar]')].map(el => el.querySelectorAll('[data-quota-segment]').length), widths: segments.map(segment => segment.firstElementChild?.style.width ?? ''),
+        valueColor, fillColor: segments[0]?.firstElementChild ? getComputedStyle(segments[0].firstElementChild).backgroundColor : null,
+        marker: Boolean(bar.querySelector('[data-quota-pace-marker]')), accessibleValue: bar.getAttribute('aria-label'), pace: card.querySelector('[data-quota-summary]')?.textContent,
+        valueRect: { right: valueRect.right, top: valueRect.top, bottom: valueRect.bottom }, resetRect: { left: resetRect.left, top: resetRect.top, bottom: resetRect.bottom } };
+    })()`);
+    assert.ok(fiveHour, mode + ' 5h row contains its value and reset action');
+    assert.equal(fiveHour.value, '76%', mode + ' displays remaining quota');
+    assert.deepEqual(fiveHour.segmentCounts, [12, 12], mode + ' renders 12 segments in each quota bar');
+    assert.equal(fiveHour.widths.length, 12, mode + ' renders 12 quota segments');
+    for (const [index, width] of fiveHour.widths.entries()) {
+      const expected = index < 9 ? 100 : index === 9 ? 12 : 0;
+      assert.match(width, /^(?:\d+(?:\.\d+)?|\.\d+)%$/, mode + ' segment width is an inline percentage');
+      assert.ok(Math.abs(parseFloat(width) - expected) < 0.01, mode + ' segment ' + (index + 1) + ' fill');
+    }
+    assert.equal(fiveHour.valueColor, fiveHour.fillColor, mode + ' remaining value and filled segments share a color');
+    const rangeColor = () => client.evaluate(`getComputedStyle(${textButton('7D')}).backgroundColor`);
+    assert.equal(fiveHour.fillColor, await rangeColor(), mode + ' normal quota uses the exact selected 7D background color');
+    assert.equal(fiveHour.marker, false, mode + ' quota bars have no pace marker');
+    assert.match(fiveHour.accessibleValue, /剩余 76%/);
+    assert.match(fiveHour.pace, /额度消耗较慢/);
+    assert.ok(fiveHour.resetRect.left >= fiveHour.valueRect.right && fiveHour.resetRect.top < fiveHour.valueRect.bottom && fiveHour.resetRect.bottom > fiveHour.valueRect.top, mode + ' reset is to the right of and aligned with remaining quota');
+    const colors = () => client.evaluate(`(() => {
+      const read = (card, remaining) => {
+        const bar = [...card.querySelectorAll('[role=progressbar]')].find(el => el.getAttribute('aria-valuenow') === remaining);
+        let row = bar?.parentElement;
+        while (row && !(row.querySelector('[data-quota-window-value]') && row.querySelectorAll('[role=progressbar]').length === 1)) row = row.parentElement;
+        const value = row?.querySelector('[data-quota-window-value]'), fill = bar?.querySelector('[data-quota-segment] > *');
+        return value && fill ? { value: getComputedStyle(value).color, fill: getComputedStyle(fill).backgroundColor } : null;
+      };
+      return [read(${item(a)}, '76'), read(${item(a)}, '8'), read(${item(b)}, '22')];
+    })()`);
+    const openSettings = async () => {
+      window.show(); window.focus();
+      await until(() => client.evaluate('document.visibilityState === "visible"'), mode + ' settings window visible');
+      await client.evaluate(`window.dispatchEvent(new CustomEvent('tud:open-settings', { detail: ${mode === 'desktop' ? "{tab:'appearance'}" : '{}'} })); true`);
+      await until(() => client.evaluate('Boolean(document.querySelector("input[name=accent-palette]"))'), mode + ' accent palette selector');
+    };
+    const selectPalette = async palette => {
+      await client.click(`document.querySelector('input[name="accent-palette"][value="${palette}"]').closest('label')`);
+      await until(() => client.evaluate(`document.documentElement.dataset.palette === ${JSON.stringify(palette)}`), mode + ' palette ' + palette);
+    };
+    const closeSettings = async () => {
+      window.show(); window.focus();
+      await client.key('Escape');
+      await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), mode + ' settings close');
+    };
+    const originalPalette = await client.evaluate('document.documentElement.dataset.palette');
+    await openSettings();
+    if (originalPalette === 'violet') await selectPalette('theme');
+    await until(async () => (await colors()).every(color => color && color.value === color.fill), mode + ' baseline quota colors settle');
+    const beforeAccent = await colors();
+    assert.ok(beforeAccent.every(Boolean), mode + ' normal and warning quota colors are available');
+    for (const color of beforeAccent) assert.equal(color.value, color.fill, mode + ' quota number and fill share a color');
+    assert.notEqual(beforeAccent[1].value, beforeAccent[2].value, mode + ' warning thresholds have distinct colors');
+    await selectPalette('violet');
+    await until(async () => { const current = await colors(); return current[0] && current[0].value !== beforeAccent[0].value && current[0].value === current[0].fill; }, mode + ' normal quota follows violet accent');
+    const violetAccent = await colors();
+    for (const color of violetAccent) assert.equal(color.value, color.fill, mode + ' violet quota number and fill share a color');
+    assert.equal(violetAccent[0].fill, await rangeColor(), mode + ' violet normal quota matches the selected 7D background');
+    assert.deepEqual(violetAccent.slice(1), beforeAccent.slice(1), mode + ' warning colors stay unchanged with violet accent');
+    await closeSettings();
+    await shot(client, `${mode}-quota-accent-violet`);
+    await openSettings(); await selectPalette(originalPalette); await closeSettings();
+    assert.equal(await client.evaluate(`${item(b)}.querySelectorAll('[data-quota-reset-time]').length`), 1, mode + ' shows one action for a shared reset');
+    assert.match(await client.evaluate(`${item(b)}.querySelector('[data-quota-common-reset]').textContent`), /统一重置/, mode + ' identifies a shared countdown');
+    for (const [id, count] of [[a, original.resetCredits], [c, 0]]) {
+      const badge = `${item(id)}.querySelector('[data-quota-reset-credits]')`;
+      assert.equal(await client.evaluate(`${badge}?.textContent`), `x${count}`, mode + ' displays the known reset card count');
+      assert.equal(await client.evaluate(`${badge}?.getAttribute('aria-label')`), `可重置 ${count} 次`);
+    }
+    await shot(client, `${mode}-reset-card-count`);
+    const remainingStyles = scope => client.evaluate(`(() => {
+      const value = ${scope}.querySelector('[data-quota-window-value]'), label = value?.closest('[data-quota-remaining]');
+      if (!value || !label) return null;
+      const number = getComputedStyle(value), text = getComputedStyle(label);
+      return { value: value.textContent.trim(), text: label.textContent.trim(), numberSize: parseFloat(number.fontSize), textSize: parseFloat(text.fontSize), textWeight: parseInt(text.fontWeight, 10), numberColor: number.color, textColor: text.color };
+    })()`);
+    const assertRemainingStyles = (styles, detail) => {
+      assert.ok(styles, mode + ' remaining quota has a value and label');
+      assert.match(styles.value, /^\d+%$/);
+      assert.equal(styles.text, `剩余 ${styles.value}`);
+      assert.ok(detail ? styles.textSize < styles.numberSize : styles.textSize <= styles.numberSize, mode + ' remaining label is small');
+      assert.ok(styles.textWeight <= 400, mode + ' remaining label has regular weight');
+      assert.notEqual(styles.textColor, styles.numberColor, mode + ' remaining label and number have distinct colors');
+    };
+    assertRemainingStyles(await remainingStyles(item(a)), false);
+    await client.click(`${item(a)}.querySelector('[data-quota-reset-credits]')`);
+    const modal = 'document.querySelector("[data-slot=modal-dialog]")';
+    const detailCredits = 'document.querySelector("[data-slot=modal-dialog] [data-quota-detail-credits]")';
+    const dates = 'document.querySelector("[data-quota-credit-dates]")';
+    await until(() => client.evaluate(`${detailCredits}?.getAttribute('aria-expanded') === 'true'`), mode + ' reset card opens its expiry dates directly');
+    await until(() => client.evaluate(`Boolean(${dates})`), mode + ' expiry date popover opens');
+    const dateCount = await client.evaluate(`${dates}.querySelectorAll('li time').length`);
+    assert.equal(dateCount, original.resetCredits);
+    assertRemainingStyles(await remainingStyles(modal), true);
+    assert.equal(await client.evaluate('Boolean(document.querySelector("[role=dialog] [data-quota-pace-marker]"))'), false);
+    await client.key('Escape');
+    await until(() => client.evaluate(`Boolean(${modal}) && !${dates} && ${detailCredits}?.getAttribute('aria-expanded') === 'false' && document.activeElement === ${detailCredits}`), mode + ' Escape closes dates and returns focus to detail count');
+    const measureModal = () => client.evaluate(`(() => { const { x, y, width, height } = ${modal}.getBoundingClientRect(); return { x, y, width, height }; })()`);
+    const parentRect = await measureModal();
+    await client.key('Enter');
+    await until(() => client.evaluate(`${detailCredits}?.getAttribute('aria-expanded') === 'true' && Boolean(${dates})`), mode + ' Enter reopens expiry dates');
+    assert.equal(await client.evaluate(`${dates}.querySelectorAll('li time').length`), dateCount, mode + ' reopening retains expiry dates');
+    const reopenedRect = await measureModal();
+    for (const axis of ['x', 'y', 'width', 'height']) assert.ok(Math.abs(parentRect[axis] - reopenedRect[axis]) <= 1, mode + ' expiry popover preserves parent ' + axis);
+    await client.key('Escape');
+    await until(() => client.evaluate(`Boolean(${modal}) && !${dates} && document.activeElement === ${detailCredits}`), mode + ' second Escape closes dates');
+    await client.key('Escape');
+    await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'reset credit details close');
+    await until(() => client.evaluate(`document.activeElement === ${item(a)}.querySelector('[data-quota-reset-credits]')`), 'focus returns to the reset-card count');
     await client.click(`${item(states[3])}.querySelector('[data-quota-card]')`);
     await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog]"))'), 'status details open before a sibling changes type');
     const changingStatus = quota.providers.find(provider => provider.id === states[1]);

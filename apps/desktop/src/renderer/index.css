@@ -1,6 +1,5 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
-@source "../../../../packages/dashboard/src/components/QuotaHistoryPanel.tsx";
 @source "../../../../packages/dashboard/src/components/ManualPricingEditor.tsx";
 @source "../../../../packages/dashboard/src/components/LocalBackupPanel.tsx";
 @source "../../../../packages/dashboard/src/components/UsageRecoveryPanel.tsx";
@@ -30,6 +29,7 @@
 @source "../../../../packages/dashboard/src/components/SessionUsageBreakdown.tsx";
 @source "../../../../packages/dashboard/src/components/HelpPopover.tsx";
 @source "../../../../packages/dashboard/src/components/ActivityHeatmapLegend.tsx";
+@source "../../../../packages/dashboard/src/components/PlatformFilterSelect.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardTimeRangeControl.tsx";
 @source "../../../../packages/dashboard/src/components/DashboardDateRangePicker.tsx";
 @source "../../../../packages/dashboard/src/components/BackToUsageLink.tsx";
@@ -54,6 +54,7 @@
 @source "../../../../packages/dashboard/src/components/AgentActivityPanel.tsx";
 @source "../../../../packages/dashboard/src/components/BillingPanel.tsx";
 @source "../../../../packages/dashboard/src/components/QuotaServiceDetails.tsx";
+@source "../../../../packages/dashboard/src/components/SideDrawer.tsx";
 @source "../../../../packages/dashboard/src/components/QuotaRecoveryActions.tsx";
 @source "../../../../packages/dashboard/src/components/ShareActivityModalContent.tsx";
 @source "../../../../packages/dashboard/src/components/SubscriptionBrandIcon.tsx";
@@ -305,7 +306,8 @@
    * dialog. Keep modals in the same layer so paint order follows mount order
    * (= open order): menus opened earlier stay behind the modal, menus opened
    * inside it still float above. Toasts stay on the very top layer. */
-  .modal__backdrop {
+  .modal__backdrop,
+  .drawer__backdrop {
     z-index: 100000;
   }
 

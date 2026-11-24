@@ -70,7 +70,7 @@ export interface QuotaServiceStatus {
   checkedAt: number | null;
   stale: boolean;
   url: string;
-  components?: { id: string; name: string; level: QuotaServiceStatus['level'] }[];
+  components?: { id: string; name: string; groupName?: string; level: QuotaServiceStatus['level'] }[];
   incidents?: { id: string; name: string; phase: string; level: QuotaServiceStatus['level']; componentIds: string[]; body: string; updatedAt: number | null; url: string }[];
   selectionEmpty?: boolean;
 }

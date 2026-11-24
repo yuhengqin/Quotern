@@ -8,8 +8,6 @@ test('a failed worker stop cannot masquerade as an active runtime during update 
   let watcherCount = 0, writerAlive = false, failStop = false, writersStarted = 0;
   const mainRequests: string[] = [], analysisRequests: string[] = [];
   let analysisStops = 0, failAnalysis = false;
-  let changeQuotaDuringAnalysis = false;
-  let quotaHistory = { providerId: 'codex', label: 'Codex', revision: 1, windows: [] };
   const config = { deviceId: 'fixture', statsSince: '2026-01-01T00:00:00.000Z', lastSyncAt: null };
   const noOp = async () => {};
   const core = {
@@ -44,14 +42,13 @@ test('a failed worker stop cannot masquerade as an active runtime during update 
     if (id === 'quotern-core') return core;
     if (id === './sync-worker-host') return worker;
     if (id === './session-analysis-host') return {
-      runSessionAnalysisRequest: async (url: string) => { analysisRequests.push(url); if (failAnalysis) throw new Error('analysis failed'); if (changeQuotaDuringAnalysis) quotaHistory = { ...quotaHistory, revision: 2 }; return { status: 200, body: { success: true, data: 'analysis' } }; },
+      runSessionAnalysisRequest: async (url: string) => { analysisRequests.push(url); if (failAnalysis) throw new Error('analysis failed'); return { status: 200, body: { success: true, data: 'analysis' } }; },
       stopSessionAnalysisWorker: async () => { analysisStops++; },
     };
     if (id === './session-analysis-protocol') return require('./session-analysis-protocol.js');
     if (id === './evict-cli-autostart') return { evictCliAutostart: noOp };
     if (id === './quota-runtime') return {
       getQuotaRuntimeState: () => null,
-      getQuotaRuntimeHistory: () => quotaHistory,
       getQuotaBackupDirectory: () => 'fixture/quota',
     };
     if (id === './sync-recovery') return require('./sync-recovery.js');
@@ -64,10 +61,6 @@ test('a failed worker stop cannot masquerade as an active runtime during update 
   assert.equal(watcherCount, 1); assert.equal(writersStarted, 1);
   assert.deepEqual((await runtime.localApiRequest('/functions/tud-session-activity?days=7')).body, { success: true, data: 'analysis' });
   assert.equal(analysisRequests.length, 1); assert.equal(mainRequests.length, 0);
-  assert.deepEqual((await runtime.localApiRequest('/functions/tud-quota-history?provider=codex')).body, { success: true, data: 'analysis' });
-  changeQuotaDuringAnalysis = true;
-  assert.equal((await runtime.localApiRequest('/functions/tud-quota-history?provider=codex')).status, 409, 'a switched quota account must invalidate an in-flight history result');
-  changeQuotaDuringAnalysis = false;
   await runtime.localApiRequest('/functions/tud-session-activity-not-a-query');
   await runtime.localApiRequest('/functions/tud-session-activity', { method: 'POST' });
   assert.equal(mainRequests.length, 2, 'only exact GET analysis routes may leave the main API');
@@ -121,7 +114,7 @@ test('an analysis request waiting for cold startup cannot start a process after 
     if (id === './session-analysis-host') return { runSessionAnalysisRequest: async () => { analysisRequests++; return { status: 200, body: null }; }, stopSessionAnalysisWorker: noOp };
     if (id === './session-analysis-protocol') return require('./session-analysis-protocol.js');
     if (id === './evict-cli-autostart') return { evictCliAutostart: noOp };
-    if (id === './quota-runtime') return { getQuotaRuntimeState: () => null, getQuotaRuntimeHistory: () => null, getQuotaBackupDirectory: () => 'fixture/quota' };
+    if (id === './quota-runtime') return { getQuotaRuntimeState: () => null, getQuotaBackupDirectory: () => 'fixture/quota' };
     if (id === './sync-recovery') return require('./sync-recovery.js');
     return require(id);
   }, module, module.exports, { log() {}, warn() {}, error() {} });

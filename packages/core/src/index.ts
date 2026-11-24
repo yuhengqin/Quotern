@@ -12,7 +12,6 @@ export * from './aggregate.js';
 export * from './usage-report.js';
 export * from './usage-trend.js';
 export type { PerformanceReport, PerformanceMetrics, PerformanceSample, PerformanceFilters, PerformanceGroup } from './performance-analysis.js';
-export type { QuotaHistorySource, QuotaHistoryReport, QuotaHistoryCycle, QuotaHistoryUsage } from './quota/quota-history.js';
 export * from './token-quality.js';
 export * from './aggregate-cache.js';
 export * from './timezone.js';

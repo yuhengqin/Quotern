@@ -30,15 +30,21 @@ export function DashboardSessionCards({ metrics, loading = false, error = false 
         const formatted = card.duration ? formatSessionDuration(value) : value === null ? '—' : value.toLocaleString(locale);
         const task = card.key === 'taskSeconds';
         const estimated = task && value !== null && ['mixed', 'estimated'].includes(metrics?.taskTimingKind ?? '');
-        const taskNote = value === null ? t('usage.session.noRecord') : metrics?.taskTimingKind === 'recorded' ? t('usage.session.recordedTime') : metrics?.taskTimingKind === 'mixed' ? t('usage.session.includesEstimate') : estimated ? t('usage.session.estimate') : t('usage.session.noTaskRecord');
-        const note = !metrics && loading ? t('usage.activity.loading') : !metrics && error ? t('usage.activity.unavailable') : task ? value !== null && missingTaskSources ? t('usage.session.taskNotePartial', { note: taskNote }) : taskNote : partial ? t('usage.session.partialSources') : '\u00a0';
+        const recorded = task && value !== null && metrics?.taskTimingKind === 'recorded';
+        const taskNote = value === null ? t('usage.session.noRecord') : recorded ? '' : metrics?.taskTimingKind === 'mixed' ? t('usage.session.includesEstimate') : estimated ? t('usage.session.estimate') : t('usage.session.noTaskRecord');
+        const note = !metrics && loading ? '' : !metrics && error ? t('usage.activity.unavailable') : task
+          ? value !== null && missingTaskSources
+            ? taskNote ? t('usage.session.taskNotePartial', { note: taskNote }) : t('usage.session.partialSources')
+            : taskNote
+          : partial ? t('usage.session.partialSources') : '';
         return (
-          <Card key={card.key} className="h-[6.25rem] min-h-[6.25rem] min-w-0 overflow-hidden rounded-2xl p-3">
-            <Card.Content className="flex h-full flex-col justify-between p-0">
+          <Card key={card.key} className="min-h-[6.25rem] min-w-0 rounded-2xl p-3">
+            <Card.Content className="flex flex-col gap-1 p-0">
               <div className="flex items-center gap-0.5">
                 <p className="text-xs font-medium leading-5 text-muted">{label}</p>
                 <HelpPopover title={label} triggerClassName="size-4 min-h-4 min-w-4">
                       <p className="text-xs leading-relaxed">{t(card.helpKey)}</p>
+                      {recorded && <p>{t('usage.session.recordedTime')}</p>}
                       {task && estimatedSources ? <p className="mt-2 text-xs text-muted">{t('usage.session.estimatedSources', { sources: estimatedSources })}</p> : null}
                       {task && missingTaskSources ? <p className="mt-2 text-xs text-muted">{t('usage.session.missingTaskSources', { sources: missingTaskSources })}</p> : null}
                       {!task && partial ? <p className="mt-2 text-xs text-muted">{t('usage.session.missingSources', { sources: missing })}</p> : null}
@@ -50,7 +56,7 @@ export function DashboardSessionCards({ metrics, loading = false, error = false 
                 ) : (
                   <p aria-label={t(estimated ? 'usage.session.estimatedAria' : 'usage.session.valueAria', { label, value: formatted })} className="truncate text-xl font-semibold leading-7 tracking-tight text-foreground tabular-nums" title={formatted}>{formatted}</p>
                 )}
-                <p className="mt-0.5 h-4 truncate text-[10px] leading-4 text-muted">{note}</p>
+                {note && <p className="mt-0.5 text-xs text-muted">{note}</p>}
               </div>
             </Card.Content>
           </Card>

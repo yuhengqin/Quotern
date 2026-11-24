@@ -127,14 +127,7 @@ export function commonQuotaResetAt(windows: QuotaWindow[]): number | null {
 
 export function quotaPaceLabel(analysis: QuotaAnalysis): string | null {
   const pace = analysis.paceDifference;
-  return pace === null ? null : pace === 0 ? '节奏正常' : pace > 0 ? '使用较慢' : '使用偏快';
-}
-
-/** The bar shows remaining, whereas paceDifference is expected-used minus actual-used. */
-export function quotaPaceMarker(window: QuotaWindow, analysis: QuotaAnalysis | undefined, stale: boolean, now: number): number | null {
-  if (stale || window.analysisEligible === false || window.timeKind === 'expiry' || !window.resetsAt || window.resetsAt <= now
-    || analysis?.paceDifference == null || !Number.isFinite(analysis.paceDifference) || !Number.isFinite(window.usedPercent)) return null;
-  return Math.max(0, Math.min(100, 100 - window.usedPercent - analysis.paceDifference));
+  return pace === null ? null : pace === 0 ? '额度消耗正常' : pace > 0 ? '额度消耗较慢' : '额度消耗较快';
 }
 
 export function quotaPaceDescription(window: QuotaWindow, analysis: QuotaAnalysis): string | null {

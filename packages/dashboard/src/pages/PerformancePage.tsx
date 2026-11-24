@@ -60,13 +60,20 @@ export function PerformancePage() {
     {data && !data.sampleCount && <div className="rounded-2xl bg-surface p-10 text-center" role="status"><p className="font-medium">{t('insights.emptyPerformance')}</p><p className="mt-2 text-sm text-muted">{t('insights.emptyPerformanceHint')}</p></div>}
     {data && data.sampleCount > 0 && <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[[t('insights.ttft50'), latency(data.summary.ttftP50Ms), count(data.summary.ttftSampleCount)], [t('insights.ttft95'), latency(data.summary.ttftP95Ms), count(data.summary.ttftSampleCount)], [t('insights.speed'), speed(data.summary.tokensPerSecond), count(data.summary.speedSampleCount)], [t('insights.sessions'), number(data.summary.sessionCount), `${data.range.fromDate} – ${data.range.toDate}`]].map(([title, value, detail]) => <div key={title} className="rounded-2xl bg-surface p-5"><p className="text-sm text-muted">{title}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p><p className="mt-1 text-xs text-muted">{detail}</p></div>)}
+        <section className="rounded-2xl bg-surface p-5 sm:col-span-2">
+          <h2 className="text-sm text-muted">{t('insights.ttft')}</h2>
+          <dl className="mt-2 grid grid-cols-2 gap-3 divide-x divide-separator">
+            <div><dt className="text-xs text-muted">P50</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{latency(data.summary.ttftP50Ms)}</dd></div>
+            <div className="ps-3"><dt className="text-xs text-muted">P95</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{latency(data.summary.ttftP95Ms)}</dd></div>
+          </dl>
+          <p className="mt-1 text-xs text-muted">{count(data.summary.ttftSampleCount)}</p>
+        </section>
+        {[[t('insights.speed'), speed(data.summary.tokensPerSecond), count(data.summary.speedSampleCount)], [t('insights.sessions'), number(data.summary.sessionCount), `${data.range.fromDate} – ${data.range.toDate}`]].map(([title, value, detail]) => <div key={title} className="rounded-2xl bg-surface p-5"><p className="text-sm text-muted">{title}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p><p className="mt-1 text-xs text-muted">{detail}</p></div>)}
       </div>
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <PerformanceTrend report={data} kind="latency" /><PerformanceTrend report={data} kind="speed" />
       </div>
-      <section className="min-w-0 space-y-3"><div className="flex flex-wrap items-end justify-between gap-3"><h2 className="text-lg font-semibold">{t('insights.compare')}</h2><InsightSelect label={t('insights.group')} value={search.groupBy} options={(['model', 'source', 'project'] as const).map(id => ({ id, label: groupLabel(id) }))} onChange={groupBy => update({ groupBy: groupBy as PerformanceGroup })} /></div>
-        {search.groupBy === 'model' && <p className="text-xs text-muted">{t('insights.compareHint')}</p>}
+      <section className="min-w-0 space-y-3"><div className="flex flex-wrap items-end justify-between gap-3"><div className="flex items-center gap-1"><h2 className="text-lg font-semibold">{t('insights.compare')}</h2>{search.groupBy === 'model' && <HelpPopover title={t('insights.compare')}><p>{t('insights.compareHint')}</p></HelpPopover>}</div><InsightSelect label={t('insights.group')} value={search.groupBy} options={(['model', 'source', 'project'] as const).map(id => ({ id, label: groupLabel(id) }))} onChange={groupBy => update({ groupBy: groupBy as PerformanceGroup })} /></div>
         {search.compare.length > 0 && <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-muted">{t('insights.selectedModels', { count: search.compare.length })}</span><Button size="sm" variant="tertiary" onPress={() => update({ compare: [] })}>{t('insights.clearComparison')}</Button></div>}
         {search.compare.length > 0 && (data.comparison ? <div className="grid min-w-0 gap-4 lg:grid-cols-2"><PerformanceTrend report={data} kind="latency" compare /><PerformanceTrend report={data} kind="speed" compare /></div> : <p className="text-sm text-muted" role="status">{t('insights.comparisonUnavailable')}</p>)}
         <Table><Table.ScrollContainer><Table.Content aria-label={t('insights.compare')} sortDescriptor={{ column: search.sort, direction: search.direction }} onSortChange={sort => update({ sort: sort.column as PerformanceSort, direction: sort.direction })}>

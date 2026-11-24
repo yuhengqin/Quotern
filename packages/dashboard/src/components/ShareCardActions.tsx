@@ -11,7 +11,7 @@ import {
   downloadShareCardPng,
   renderShareCardPng,
 } from '../lib/share-card-image';
-import { shareDimensions, type SharePresentation, type ShareCostEvidence } from '../lib/share-presentation';
+import { shareDimensions, type ShareAspect, type ShareCostEvidence } from '../lib/share-presentation';
 import { ShareCardArtwork } from './ShareCardCarousel';
 import { AppToastRegion } from './AppToastRegion';
 import type { SharePosterDetails, ShareCardTheme } from './SharePosterArtwork';
@@ -35,7 +35,7 @@ async function withMinimumPendingTime<T>(operation: Promise<T>): Promise<T> {
 }
 
 interface ExportRequest {
-  presentation?: SharePresentation;
+  aspect?: ShareAspect;
   costEvidence?: ShareCostEvidence | null;
   backgroundImage?: string;
   theme: ShareCardTheme;
@@ -48,7 +48,6 @@ interface ExportRequest {
   reject: (reason?: unknown) => void;
   resolve: (blob: Blob) => void;
   summary: DashboardUsageSummary | null;
-  toolLabel?: string;
   userName?: string;
 }
 
@@ -68,7 +67,7 @@ const ACTION_LABEL_KEYS: Record<ShareAction, Record<ShareActionState, string>> =
 };
 
 export function ShareCardActions({
-  presentation,
+  aspect,
   costEvidence,
   onExportSuccess,
   backgroundImage,
@@ -79,11 +78,10 @@ export function ShareCardActions({
   color,
   rangeLabel,
   summary,
-  toolLabel,
   userName,
 }: {
   onExportSuccess?: () => void;
-  presentation?: SharePresentation;
+  aspect?: ShareAspect;
   costEvidence?: ShareCostEvidence | null;
   backgroundImage?: string;
   theme?: ShareCardTheme;
@@ -93,7 +91,6 @@ export function ShareCardActions({
   color: string;
   rangeLabel?: string;
   summary: DashboardUsageSummary | null;
-  toolLabel?: string;
   userName?: string;
 }) {
   const { t, i18n } = useTranslation();
@@ -125,7 +122,7 @@ export function ShareCardActions({
 
     const request = exportRequest;
     processingRequestIdRef.current = request.id;
-    void renderShareCardPng(exportNodeRef.current, request.presentation?.aspect)
+    void renderShareCardPng(exportNodeRef.current, request.aspect)
       .then(request.resolve, request.reject)
       .finally(() => {
         processingRequestIdRef.current = null;
@@ -159,7 +156,7 @@ export function ShareCardActions({
     nextRequestIdRef.current = id;
     return new Promise<Blob>((resolve, reject) => {
       setExportRequest({
-        presentation: presentation ? { ...presentation } : undefined,
+        aspect,
         costEvidence: costEvidence ? { ...costEvidence } : null,
         backgroundImage,
         theme,
@@ -172,7 +169,6 @@ export function ShareCardActions({
         reject,
         resolve,
         summary,
-        toolLabel,
         userName,
       });
     });
@@ -251,8 +247,8 @@ export function ShareCardActions({
               aria-hidden="true"
               className="pointer-events-none fixed left-[-10000px] top-0 z-[-1] overflow-hidden opacity-100"
               style={{
-                height: `${shareDimensions(exportRequest.presentation?.aspect).height}px`,
-                width: `${shareDimensions(exportRequest.presentation?.aspect).width}px`,
+                height: `${shareDimensions(exportRequest.aspect).height}px`,
+                width: `${shareDimensions(exportRequest.aspect).width}px`,
               }}
             >
               <div
@@ -261,12 +257,12 @@ export function ShareCardActions({
                 style={{
                   background: exportRequest.color,
                   borderRadius: '6px',
-                  height: `${shareDimensions(exportRequest.presentation?.aspect).height}px`,
-                  width: `${shareDimensions(exportRequest.presentation?.aspect).width}px`,
+                  height: `${shareDimensions(exportRequest.aspect).height}px`,
+                  width: `${shareDimensions(exportRequest.aspect).width}px`,
                 }}
               >
                 <ShareCardArtwork
-                  presentation={exportRequest.presentation}
+                  aspect={exportRequest.aspect}
                   costEvidence={exportRequest.costEvidence}
                   backgroundImage={exportRequest.backgroundImage}
                   theme={exportRequest.theme}
@@ -277,7 +273,6 @@ export function ShareCardActions({
                   locale={exportRequest.locale}
                   rangeLabel={exportRequest.rangeLabel}
                   summary={exportRequest.summary}
-                  toolLabel={exportRequest.toolLabel}
                   userName={exportRequest.userName}
                 />
               </div>

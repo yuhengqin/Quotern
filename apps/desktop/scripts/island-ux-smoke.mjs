@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { app, BrowserWindow, clipboard, ipcMain, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeImage } from 'electron';
 import { connectPage, unusedPort, wait } from './desktop-cdp.mjs';
 import { exerciseQuotaLayout } from './quota-layout-checks.mjs';
 import { registerAppearanceFixture } from './appearance-fixture.mjs';
@@ -26,6 +26,7 @@ const windows = [], clients = [], checks = [];
 const windowEvents = [];
 app.on('browser-window-created', (_event, window) => { for (const event of ['show', 'hide', 'focus', 'blur', 'ready-to-show']) window.on(event, () => windowEvents.push({ event, id: window.id, at: Date.now() })); });
 let server, trayController, mainWindow, downloadPath, downloaded = 0, failPreference = false, failShareReport = false, locale = 'zh-CN';
+let copiedImageSize;
 const until = async (predicate, label) => { for (let n = 0; n < 150; n++) { if (await predicate()) return; await wait(100); } throw Error('Timed out: ' + label); };
 const button = text => `[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===${JSON.stringify(text)})`;
 const select = label => `[...document.querySelectorAll('button[aria-haspopup="listbox"]')].find(el=>el.getAttribute('aria-label')===${JSON.stringify(label)} || el.parentElement?.textContent.includes(${JSON.stringify(label)}))`;
@@ -59,6 +60,8 @@ async function main() {
   applyRemotePricingOverlay({ exact: Object.fromEntries([0, 1, 2].map(n => [`island-priced-${n}`, { input: 1, output: 2 }])) });
   await writeFile(path.join(dataDir, `queue/${iso(now).slice(0, 7)}.jsonl`), rows.map(row => JSON.stringify(row)).join('\n'));
   const components = Array.from({ length: 25 }, (_, n) => ({ id: `service-${n}`, name: `Service ${n + 1}`, level: 'operational' }));
+  Object.assign(components[0], { id: '01JSM5RTJWHRWDTS6Q604VEW3B', name: 'Login' });
+  Object.assign(components[1], { id: '01JMXBNJXG1S2D9V65P1ZZTD94', name: 'Login' });
   const provider = { id: 'codex@work', providerId: 'codex', label: 'Codex · 工作', profileLabel: '工作', status: 'ready', fetchedAt: now, queriedAt: now, stale: false, planLabel: 'Pro', message: null, resetCredits: 2, refreshing: false, nextRefreshAt: null, details: [], analyses: {},
     provenance: { source: 'native', observer: 'Codex', observedAt: now, identityVerified: true, accountRef: 'synthetic-account-a' },
     windows: [{ id: 'five-hour', label: '5h', durationSeconds: 18000, resetsAt: now + 7200, usedPercent: 20 }, { id: 'weekly', label: '7d', durationSeconds: 604800, resetsAt: now + 86400, usedPercent: 92 }],
@@ -95,7 +98,11 @@ async function main() {
   ipcMain.handle('dsh-pet:navigation-get', () => null);
   ipcMain.handle('quota:get', runtime.getState); ipcMain.handle('quota:refresh', runtime.refresh); ipcMain.handle('quota:set', (_event, patch) => runtime.setPreferences(patch));
   ipcMain.handle('share-backgrounds:request', (_event, value) => { assert.equal(value.operation, 'legacy'); return []; });
-  ipcMain.handle('share-card:copy-image', (_event, data) => { clipboard.writeImage(nativeImage.createFromDataURL(data)); return true; });
+  ipcMain.handle('share-card:copy-image', (_event, data) => {
+    const image = nativeImage.createFromDataURL(data);
+    copiedImageSize = image.getSize();
+    return !image.isEmpty();
+  });
   trayController = await import('../out/main/island-tray-test.mjs');
   const trayOptions = { getLocale: () => locale, showMainWindow: () => mainWindow?.show(), getMainWindow: () => mainWindow, openSettings: () => {}, getAutostart: async () => false, setAutostart: async () => {} };
   await writeFile(path.join(output, 'profile/tray-panel.json'), JSON.stringify({ pinned: true, x: -800.3, y: 25.4, mode: 'full' }));
@@ -114,6 +121,12 @@ async function main() {
     assert.match(await body(client), /输出 Token/);
     assert.match(await body(client), /总消息数/);
     const cardButton = 'document.querySelector("[data-quota-card]")';
+    const cardText = await client.evaluate(`${cardButton}.innerText`);
+    assert.equal(cardText.match(/周限额/g)?.length, 1, mode + ' names the forecast window only once');
+    assert.equal(cardText.match(/剩余\s*8%/g)?.length, 1, mode + ' displays the forecast window balance only once');
+    const forecast = `${cardButton}.querySelector('[data-quota-summary]')`;
+    assert.match(await client.evaluate(`${forecast}.innerText`), /^按近期用量，预计.+后耗尽$/);
+    assert.match(await client.evaluate(`${forecast}.parentElement.querySelector('[role=progressbar]').getAttribute('aria-label')`), /周限额/);
     const cardReset = 'document.querySelector("[data-quota-card] button[data-quota-reset-time]")';
     assert.ok(await client.evaluate(`Boolean(${cardReset})`), mode + ' time itself is the display-mode control');
     const countdown = await client.evaluate(`${cardReset}.textContent`);
@@ -133,16 +146,36 @@ async function main() {
     await until(() => quota.preferences.resetTimeMode === 'date', mode + ' time save retries');
     await shot(client, mode + '-quota-reset-date');
     await client.click(cardButton);
-    await until(async () => (await body(client)).includes('查看 25 项正常服务'), mode + ' healthy collapsed');
+    await until(async () => (await body(client)).includes('25 项服务正常'), mode + ' healthy service summary');
+    assert.equal(await client.evaluate('document.querySelector("[data-quota-detail-credits]").getAttribute("aria-expanded")'), 'false');
     const detailReset = 'document.querySelector("[role=dialog] button[data-quota-reset-time]")';
     assert.equal(await client.evaluate(`Boolean(${button('显示重置日期')} || ${button('显示重置倒计时')})`), false, 'no separate display-mode button');
     await client.evaluate(`${detailReset}.focus()`); await client.key('Enter');
     await until(() => quota.preferences.resetTimeMode === 'countdown', mode + ' Enter switches time in details');
     assert.equal(await client.evaluate('document.activeElement?.hasAttribute("data-quota-reset-time")'), true, 'time keeps keyboard focus after saving');
-    assert.equal(await client.evaluate('[...document.querySelectorAll("[data-quota-service-details] details")].some(el=>el.open)'), false);
-    await client.click('document.querySelector("[data-quota-service-details] summary")');
-    assert.ok((await body(client)).includes('Service 25'));
-    await client.click('document.querySelector("[data-quota-service-details] summary")');
+    const quotaModal = 'document.querySelector("[data-slot=modal-dialog]")';
+    const serviceSummary = 'document.querySelector("[data-quota-service-summary]")';
+    const serviceDrawer = 'document.querySelector("[data-slot=drawer-dialog]")';
+    await client.click(serviceSummary);
+    await until(() => client.evaluate(`Boolean(${quotaModal} && ${serviceDrawer})`), mode + ' service drawer opens over quota details');
+    assert.ok(await client.evaluate(`${serviceDrawer}.innerText.includes('Service 25')`));
+    assert.ok(await client.evaluate(`Math.abs(${serviceDrawer}.getBoundingClientRect().right - innerWidth) <= 1`), mode + ' service drawer aligns with viewport right');
+    await client.click(select('关注的服务'));
+    assert.ok(await client.evaluate(`Boolean(${option('APIs · Login')} && ${option('ChatGPT · Login')})`), 'same-name service options show their products');
+    failPreference = true;
+    await client.click(option('APIs · Login'));
+    await until(() => client.evaluate(`${serviceDrawer}.querySelector('[role=alert]')?.textContent.includes('设置保存失败')`), mode + ' failed selection is reported inside the drawer');
+    assert.ok(await client.evaluate(`${select('关注的服务')}.textContent.includes('已选 25 项服务')`), mode + ' failed selection preserves followed services');
+    if (!await client.evaluate('Boolean(document.querySelector("[role=listbox]"))')) await client.click(select('关注的服务'));
+    await client.click(option('APIs · Login'));
+    await until(() => quota.preferences.serviceComponents?.codex?.length === 24, mode + ' saves service selection');
+    assert.ok(quota.preferences.serviceComponents.codex.includes(components[1].id) && !quota.preferences.serviceComponents.codex.includes(components[0].id));
+    await client.click(option('APIs · Login'));
+    await until(() => quota.preferences.serviceComponents?.codex?.length === 25, mode + ' service selection restored');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!document.querySelector('[role=listbox]') && Boolean(${serviceDrawer} && ${quotaModal})`), mode + ' Escape closes service selection only');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${serviceDrawer} && Boolean(${quotaModal}) && document.activeElement === ${serviceSummary}`), mode + ' Escape closes service drawer and restores summary focus');
     failPreference = true;
     await client.click(select('重点关注窗口')); await client.click(option('5 小时限额'));
     await until(async () => (await body(client)).includes('设置保存失败'), mode + ' preference save failure');
@@ -150,25 +183,47 @@ async function main() {
     await client.click(select('重点关注窗口')); await client.click(option('5 小时限额'));
     await until(() => quota.preferences.preferredWindows?.[provider.id] === 'five-hour', mode + ' focused window saved');
     await shot(client, mode + '-quota-focus'); await closeDetails(client);
+    const serviceButton = 'document.querySelector("[data-quota-service-trigger]")';
+    await client.click(serviceButton);
+    await until(() => client.evaluate(`Boolean(${serviceDrawer}) && !${quotaModal}`), mode + ' status dot opens an independent service drawer');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${serviceDrawer} && !${quotaModal} && document.activeElement === ${serviceButton}`), mode + ' Escape returns to the status dot');
+    const healthyService = provider.service;
+    provider.service = { ...healthyService, level: 'major',
+      components: components.map((component, index) => index === 0 ? { ...component, level: 'major' } : component),
+      incidents: [{ id: 'synthetic-login', name: '合成登录异常', phase: 'identified', level: 'major', componentIds: [components[0].id], body: '正在恢复登录', updatedAt: now, url: 'https://status.openai.com/incidents/synthetic-login' }] };
+    publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate(`${serviceButton}.getAttribute('aria-label').includes('严重异常')`), mode + ' outage changes the dot label');
+    await client.click(`document.querySelector('[data-quota-card] [data-quota-window-value]')`);
+    const serviceSection = 'document.querySelector("[data-quota-service-details]")';
+    await until(() => client.evaluate(`${serviceSection}?.innerText.includes('正在恢复登录')`), mode + ' active incident and latest update are visible without expanding');
+    provider.service = { ...healthyService, stale: true }; publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate(`${serviceSection}?.querySelector('[role=status]')?.innerText.includes('状态未确认') && ${serviceSection}.innerText.includes('已过期')`), mode + ' outdated service data stays visible in the live summary');
+    await closeDetails(client);
+    provider.service = healthyService; publish(); await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate(`${serviceButton}.getAttribute('aria-label').includes('服务正常')`), mode + ' service resumes normal state');
     assert.equal(await client.evaluate('document.querySelectorAll("[data-quota-card]").length'), 1);
     await shot(client, mode + '-full-analysis');
     failShareReport = true;
     await client.click('document.querySelector("button[aria-label=分享]")');
-    await until(() => client.evaluate(`Boolean(${select('主指标')})`), mode + ' share editor');
+    await until(() => client.evaluate(`Boolean(${select('画幅')})`), mode + ' share editor');
+    assert.equal(await client.evaluate(`Boolean(${select('主指标')})`), false, mode + ' share has no main metric selector');
+    assert.equal(await client.evaluate(`Boolean(${button('复制配文')})`), false, mode + ' share has no copy caption action');
+    assert.equal(await client.evaluate(`${select('画幅')}.textContent.trim()`), '2:3', mode + ' default aspect');
     await until(() => client.evaluate(`Boolean(${button('重试')})`), mode + ' share report error offers retry');
     assert.match(await body(client), /无法读取报表/);
     failShareReport = false;
     await client.click(button('重试'));
-    await client.click(select('主指标')); await client.click(option('Token 总量'));
     await client.fill('document.querySelector("[role=dialog] input[maxlength]")', '合成署名 · Test');
     const poster = 'document.querySelector("[role=dialog] article:not([aria-hidden=true])")';
     const assertPosterFits = async () => {
       const bounds = await client.evaluate(`(() => { const el = ${poster}, box = el.getBoundingClientRect(); return { height: el.clientHeight, scroll: el.scrollHeight, bottom: box.bottom, footer: el.querySelector('footer').getBoundingClientRect().bottom, children: [...el.children].map(c => ({ tag: c.tagName, top: c.offsetTop, height: c.offsetHeight, scroll: c.scrollHeight, margin: getComputedStyle(c).marginTop })) }; })()`);
       assert.ok(bounds.footer <= bounds.bottom + 1 && bounds.scroll <= bounds.height + 1, 'poster content fits its selected canvas: ' + JSON.stringify(bounds));
     };
-    for (const aspect of ['2:3', '1:1', '4:5', '9:16']) {
+    for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
       await client.click(select('画幅')); await client.click(option(aspect));
-      await until(async () => (await body(client)).includes('累计 Token'), 'real cumulative tokens');
+      const labels = await client.evaluate(`[...${poster}.querySelectorAll('dl dt')].map(label => label.textContent)`);
+      assert.deepEqual(labels, ['预估费用', '总 Token', '输入 Token', '输出 Token'], mode + ' detailed metrics at ' + aspect);
       await assertPosterFits();
       const previous = downloaded; downloadPath = path.join(output, `${mode}-${aspect.replace(':', '-')}.png`);
       await client.click(button('下载'));
@@ -182,32 +237,35 @@ async function main() {
     store.apply([{ ...rows[0], input_tokens: 900000, total_tokens: 900200 }]);
     await client.evaluate('window.dispatchEvent(new Event("focus")); true'); await wait(250);
     assert.equal(await client.evaluate(`${poster}.innerText`), frozen, 'share freezes tokens and costs together across a background refresh');
-    for (const label of ['详细卡片', '估算费用']) {
-      await client.click(select('主指标')); await client.click(option(label));
-      for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
-        await client.click(select('画幅')); await client.click(option(aspect));
-        await assertPosterFits();
-      }
-      await shot(client, mode + (label === '详细卡片' ? '-details-square' : '-cost-square'));
+    if (mode === 'browser') {
+      await client.evaluate(`Object.defineProperty(navigator.clipboard, 'write', { value: async ([item]) => {
+        const bitmap = await createImageBitmap(await item.getType('image/png'));
+        window.copiedImageSize = { width: bitmap.width, height: bitmap.height };
+        bitmap.close();
+      } }); true`);
     }
-    if (!process.argv.includes('--skip-system-clipboard')) {
-      await client.click(button('复制配文')); await until(async () => (await body(client)).includes('已复制'), 'caption copied');
-      assert.ok(clipboard.readText().includes('合成署名 · Test') && clipboard.readText().includes('Token'));
-    }
+    await client.click(button('复制'));
+    await until(() => client.evaluate(`Boolean(${button('已复制')})`), mode + ' image copied');
+    assert.deepEqual(mode === 'browser' ? await client.evaluate('window.copiedImageSize') : copiedImageSize,
+      { width: 2048, height: 2048 }, mode + ' copied PNG matches the selected square aspect');
     await client.call('Emulation.setDeviceMetricsOverride', { width: 390, height: 780, deviceScaleFactor: 1, mobile: false });
     await shot(client, mode + '-share-narrow');
     assert.equal(await client.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
+    const aspectTrigger = select('画幅');
+    await client.evaluate(`${aspectTrigger}.focus()`); await client.key('Enter');
+    await until(() => client.evaluate(`Boolean(${option('9:16')})`), mode + ' keyboard opens aspect menu');
+    await client.key('Escape');
+    await until(() => client.evaluate(`!document.querySelector('[role=listbox]') && document.activeElement === ${aspectTrigger}`), mode + ' Escape restores aspect focus');
     if (mode === 'desktop') {
       const longAuthor = '极长中文署名用于验证图片没有截断'.repeat(3).slice(0, 40);
       await client.fill('document.querySelector("[role=dialog] input[maxlength]")', longAuthor);
-      await client.click(select('主指标')); await client.click(option('详细卡片'));
       for (const aspect of ['2:3', '4:5', '9:16', '1:1']) {
         await client.click(select('画幅')); await client.click(option(aspect));
         assert.ok(await client.evaluate(`(() => { const author = [...${poster}.querySelectorAll('span')].find(el => el.textContent === ${JSON.stringify(longAuthor)}); return author && author.scrollWidth <= author.clientWidth + 1; })()`), `poster shows the entire signature at ${aspect}`);
         await assertPosterFits();
         if (aspect === '9:16') await shot(client, 'desktop-share-long-author');
       }
-      for (const [value, label] of [['en', 'Main metric'], ['ja', '主な指標'], ['ko', '주요 지표'], ['zh-CN', '主指标']]) {
+      for (const [value, label] of [['en', 'Aspect ratio'], ['ja', '縦横比'], ['ko', '화면 비율'], ['zh-CN', '画幅']]) {
         locale = value; window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'en' });
         await until(async () => (await body(client)).includes(label), 'share locale ' + value);
         await assertPosterFits(); assert.equal(await client.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
@@ -215,7 +273,7 @@ async function main() {
       }
     }
     await client.call('Emulation.clearDeviceMetricsOverride'); await closeDetails(client);
-    checks.push(mode + '-focus-save-failure-healthy-details-full-analysis-legacy-preference-and-four-PNG-formats');
+    checks.push(mode + '-quota-focus-service-selection-outage-stale-details-full-analysis-and-detailed-share-download-image-copy');
   }
   const browser = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { contextIsolation: true, backgroundThrottling: false } }); windows.push(browser);
   browser.webContents.session.on('will-download', (_event, item) => { item.setSavePath(downloadPath); item.once('done', (_event, state) => { if (state === 'completed') downloaded++; }); });
@@ -223,7 +281,11 @@ async function main() {
   const layoutOnly = process.argv.includes('--quota-layout-only');
   const runLayout = async (window, mode) => { await exerciseQuotaLayout({ client: await connect(window), window, mode, quota, publish, failNextSave: () => { failPreference = true; }, until, shot }); checks.push(mode + '-quota-layout-draft-cancel-failure-retry-pointer-touch-keyboard-and-details'); };
   if (layoutOnly) await runLayout(browser, 'browser');
-  else if (!process.argv.includes('--tray-only')) await exercise(browser, await connect(browser), 'browser'); browser.destroy();
+  else {
+    provider.analyses.weekly = { paceDifference: null, etaAt: now + 3600, trend: [] };
+    if (!process.argv.includes('--tray-only')) await exercise(browser, await connect(browser), 'browser');
+  }
+  browser.destroy();
   quota.preferences.preferredWindows = {};
   mainWindow = new BrowserWindow({ width: 1120, height: 1000, show: true, webPreferences: { preload: path.join(desktop, 'out/preload/index.js'), contextIsolation: true, sandbox: true, backgroundThrottling: false } }); windows.push(mainWindow);
   await mainWindow.loadFile(path.join(desktop, 'out/renderer/index.html'), { hash: '/dashboard' });
@@ -235,6 +297,7 @@ async function main() {
   if (!process.argv.includes('--tray-only')) await exercise(mainWindow, await connect(mainWindow), 'desktop');
 
   const target = { providerId: provider.id, providerType: 'codex', accountRef: provider.provenance.accountRef, windowId: 'weekly' };
+  quota.preferences.preferredWindows = { [provider.id]: 'five-hour' };
   trayController.showQuotaPopover(target);
   let panel;
   await until(() => { panel = BrowserWindow.getAllWindows().find(window => window.webContents.getURL().includes('view=tray-popover')); return Boolean(panel); }, 'native tray');
@@ -265,6 +328,9 @@ async function main() {
     assert.equal(await client.evaluate(`Boolean(${button('摘要')} || ${button('完整')})`), false, 'tray has no mode switch');
     assert.equal(await client.evaluate('document.querySelectorAll(".tray-popover__body [role=progressbar]").length'), 1, 'tray displays one quota window');
     assert.equal(await client.evaluate('Boolean(document.querySelector(".tray-popover [role=tablist], .tray-popover__usage"))'), false, 'usage analytics are in the main window');
+    const cardText = await client.evaluate('document.querySelector(".tray-popover__body [data-quota-card]").innerText');
+    assert.match(cardText, /周限额\s*·\s*剩余 8%\s*·\s*按近期用量/, 'identifies a forecast for a window outside the tray preview');
+    assert.equal(cardText.match(/剩余\s*8%/g)?.length, 1, 'merges the same secondary risk balance into its forecast');
     assert.match(await body(client), /另有 1 个窗口/);
   };
   await assertTraySummary();
@@ -296,6 +362,10 @@ async function main() {
   trayController.showQuotaPopover({ ...target, windowId: 'retired-window' });
   await until(async () => (await body(client)).includes('额度窗口已不可用'), 'missing window feedback');
   await closeDetails(client);
+  trayController.showQuotaPopover({ providerId: 'codex', providerType: 'codex' });
+  await until(() => client.evaluate('Boolean(document.querySelector("[data-slot=drawer-dialog]")) && !document.querySelector("[data-slot=modal-dialog]")'), 'service notification opens its drawer directly');
+  await closeDetails(client);
+  assert.ok(panel.isVisible(), 'closing a service notification drawer keeps the tray visible');
   checks.push('windows-native-tray-summary-only-legacy-preference-navigation-identity-deduplication-open-main-and-escape');
   for (const client of clients) assert.deepEqual(client.errors, []);
   await writeFile(path.join(output, 'results.json'), JSON.stringify({ ok: true, checks, output }, null, 2));

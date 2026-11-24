@@ -12,6 +12,10 @@ import {
 import { createPortal } from 'react-dom';
 import { ActivityHeatmapLegend } from '../../../../../packages/dashboard/src/components/ActivityHeatmapLegend';
 import { useTranslation } from 'quotern-i18n/react';
+import {
+  applyPlatformFilterChange,
+  PlatformFilterSelect,
+} from '@/components/PlatformFilterSelect';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import type { DailyUsageRow, ModelBreakdownRow } from '@/lib/api';
 import {
@@ -63,6 +67,8 @@ interface ActivityHeatmapProps {
   embedded?: boolean;
   /** Optional content aligned with the legend, such as the achievement entry. */
   footer?: ReactNode;
+  /** Show the local Agent filter when the parent does not control selection. */
+  showPlatformFilter?: boolean;
   /** Controlled platform filter; `null` = 全部. */
   selectedSources?: string[] | null;
   /** Currently selected YYYY-MM-DD (UTC). */
@@ -320,6 +326,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
   toolRows = [],
   embedded = false,
   footer,
+  showPlatformFilter = false,
   selectedSources: selectedSourcesProp,
   selectedDate = null,
   onSelectDate,
@@ -327,8 +334,10 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? 'zh-CN';
   /** Uncontrolled fallback when parent does not own the filter. */
-  const [internalSources] = useState<string[] | null>(null);
-  const selectedSources = selectedSourcesProp ?? internalSources;
+  const [internalSources, setInternalSources] = useState<string[] | null>(null);
+  const selectedSources = selectedSourcesProp === undefined
+    ? internalSources
+    : selectedSourcesProp;
 
   const modelSources = useMemo(() => buildModelSourceMap(models), [models]);
   const allSources = useMemo(
@@ -566,6 +575,17 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 
   const grid = (
     <div ref={containerRef} className="w-full min-w-0">
+      {showPlatformFilter && selectedSourcesProp === undefined && allSources.length > 0 ? (
+        <div className="mb-2 flex justify-end">
+          <PlatformFilterSelect
+            allSources={allSources}
+            value={activeSources}
+            onChange={(keys) =>
+              applyPlatformFilterChange(keys, allSources, setInternalSources)
+            }
+          />
+        </div>
+      ) : null}
       {selectedSources != null && activeSources.length === 0 ? (
         <div className="w-full py-8 text-center text-sm text-muted">
           {t('usage.heatmap.selectAgent')}
@@ -631,7 +651,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 
         </>
       )}
-      <ActivityHeatmapLegend colors={heatmapColors} thresholds={heatmap.thresholds} footer={footer} />
+      <ActivityHeatmapLegend colors={heatmapColors} footer={footer} />
       {tooltipNode}
     </div>
   );

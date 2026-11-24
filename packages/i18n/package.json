@@ -1,6 +1,6 @@
 {
   "name": "quotern-i18n",
-  "version": "0.1.13",
+  "version": "0.2.0",
   "description": "Quotern shared product translations and locale helpers",
   "type": "module",
   "license": "MIT",

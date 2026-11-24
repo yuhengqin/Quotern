@@ -42,7 +42,7 @@ import {
   localDateNow,
 } from 'quotern-core';
 import { evictCliAutostart } from './evict-cli-autostart';
-import { getQuotaRuntimeState, getQuotaRuntimeHistory, getQuotaBackupDirectory } from './quota-runtime';
+import { getQuotaRuntimeState, getQuotaBackupDirectory } from './quota-runtime';
 import { createRecoverableSync } from './sync-recovery';
 import { runSessionAnalysisRequest, stopSessionAnalysisWorker } from './session-analysis-host';
 import { isSessionAnalysisRequest } from './session-analysis-protocol';
@@ -272,7 +272,6 @@ function buildApp(state: {
     sessionActionsIpc: true,
     usageRecoveryEnabled: () => runtime?.role === 'owner',
     getQuotaState: getQuotaRuntimeState,
-    getQuotaHistory: getQuotaRuntimeHistory,
     desktopQuotaDirectory: getQuotaBackupDirectory(),
     onPricingChange: publishDataSynced,
     dataDir: state.dir,
@@ -765,19 +764,13 @@ export async function localApiRequest(
 
   if (isSessionAnalysisRequest(url, method)) {
     const current = runtime;
-    const parsed = new URL(url);
-    const provider = parsed.pathname === '/functions/tud-quota-history' ? parsed.searchParams.get('provider') : null;
-    const quotaHistory = provider && provider.length <= 100 ? getQuotaRuntimeHistory(provider) : null;
     try {
       const result = await runSessionAnalysisRequest(url, init, {
         dataDir: current.dir, config: current.config,
         bucketRevision: current.bucketStore.getRevision(), rows: current.bucketStore.getRows(),
         collectSince: current.bucketStore.reportSince(resolveLocalCollectSince(current.config)),
-        pricingFingerprint: getPricingFingerprint(), pricing: getPricingSnapshot(), quotaState: getQuotaRuntimeState(), quotaHistory, quotaHistoryKey: provider ?? undefined,
+        pricingFingerprint: getPricingFingerprint(), pricing: getPricingSnapshot(), quotaState: getQuotaRuntimeState(),
       });
-      if (result.status === 200 && quotaHistory && getQuotaRuntimeHistory(provider!)?.revision !== quotaHistory.revision) {
-        return { status: 409, body: { success: false, message: 'QUOTA_ACCOUNT_CHANGED', data: null } };
-      }
       return result;
     } catch (error) {
       console.warn('[tud-desktop] session analysis request failed:', error instanceof Error ? error.message : String(error));

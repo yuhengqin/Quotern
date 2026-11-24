@@ -221,7 +221,8 @@
    * dialog. Keep modals in the same layer so paint order follows mount order
    * (= open order): menus opened earlier stay behind the modal, menus opened
    * inside it still float above. Toasts stay on the very top layer. */
-  .modal__backdrop {
+  .modal__backdrop,
+  .drawer__backdrop {
     z-index: 100000;
   }
 

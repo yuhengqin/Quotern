@@ -11,7 +11,6 @@ export interface ActivityHeatmapData {
   from: string;
   to: string;
   weeks: (HeatmapCell | null)[][];
-  thresholds: { t1: number; t2: number; t3: number };
 }
 
 interface DailyInput {
@@ -136,7 +135,6 @@ export function buildActivityHeatmap(
     from: formatDateUTC(start),
     to: formatDateUTC(endDate),
     weeks: trimmed,
-    thresholds: { t1, t2, t3 },
   };
 }
 

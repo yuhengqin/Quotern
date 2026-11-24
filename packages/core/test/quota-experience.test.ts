@@ -44,6 +44,24 @@ test('verified duplicates share custom thresholds and produce one notification a
   now++; used = 99; await manager.refresh('manual'); now++; used = 100; await manager.refresh('manual'); assert.equal(notices.length, 1);
 });
 
+test('editing one account rule preserves a pending threshold crossing on another account', async t => {
+  let now = 1000, used = 89;
+  const refs = ['a'.repeat(64), 'b'.repeat(64)], notices: QuotaNotification[] = [];
+  const readers: QuotaReader[] = refs.map((accountRef, index) => ({
+    id: 'codex', key: `codex@profile-${index}`, label: 'Codex', interval: 180,
+    read: async () => markQuotaEvidence(markQuotaIdentity({ status: 'ready', fetchedAt: now,
+      fiveHour: { usedPercent: used, resetsAt: 2000, windowDurationMins: 300 } }, `private-${index}`),
+      { source: 'native', observer: 'fixture', observedAt: now, identityVerified: true, accountRef }),
+  }));
+  const manager = new QuotaManager({ readers, now: () => now, notify: value => notices.push(value),
+    store: { preferences: structuredClone(DEFAULT_QUOTA_PREFERENCES), history: {}, notice: null, async savePreferences() {}, async saveHistory() {} } });
+  t.after(() => manager.dispose());
+  await manager.refresh('manual');
+  await manager.setPreferences({ accountAlerts: { [`codex:${refs[0]}`]: { level: 'off' } } });
+  now++; used = 91; await manager.refresh('manual');
+  assert.deepEqual(notices.map(notice => [notice.accountRef, notice.kind]), [[refs[1], 'threshold-90']]);
+});
+
 test('reader account changes invalidate notifications without publishing private identity', async t => {
   let now = 1000, identity = 'private-account-a';
   const manager = new QuotaManager({ now: () => now,

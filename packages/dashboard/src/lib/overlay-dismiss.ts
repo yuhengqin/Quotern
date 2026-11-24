@@ -18,7 +18,7 @@ export function isTopmostPopover(element: HTMLElement | null): boolean {
  * dismiss that modal.
  */
 export function dismissTransientOverlays(): void {
-  if (typeof document === 'undefined' || document.querySelector('[data-slot="modal-backdrop"]')) return;
+  if (typeof document === 'undefined' || document.querySelector('[data-slot="modal-backdrop"], [data-slot="drawer-backdrop"]')) return;
   document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true, button: 0 }));
   document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, detail: 1 }));
 }

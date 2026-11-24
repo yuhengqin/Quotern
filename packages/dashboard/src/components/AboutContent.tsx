@@ -13,8 +13,7 @@ export function AboutContent() {
 
   return (
     <div className="space-y-5">
-      <section className="space-y-1.5">
-        <h3 className="text-sm font-medium text-foreground">{t('about.versionTitle')}</h3>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <p className="text-sm text-foreground/70">
           {APP_DISPLAY_NAME}{' '}
           <span className="font-mono text-foreground/90">v{version}</span>
@@ -28,10 +27,6 @@ export function AboutContent() {
           {t('shell.githubRepository')}
           <Link.Icon />
         </Link>
-      </section>
-
-      <section className="space-y-1.5">
-        <h3 className="text-sm font-medium text-foreground">{t('about.feedbackTitle')}</h3>
         <Link
           className="w-fit text-sm text-accent"
           href={FEEDBACK_URL}
@@ -41,13 +36,10 @@ export function AboutContent() {
           {t('about.submitFeedback')}
           <Link.Icon />
         </Link>
-      </section>
+      </div>
 
       <section className="space-y-2">
         <h3 className="text-sm font-medium text-foreground">{t('about.supportedAgents')}</h3>
-        <p className="text-xs text-foreground/55">
-          {t('about.multiPlatformHint')}
-        </p>
         <SupportedToolsGrid />
       </section>
     </div>

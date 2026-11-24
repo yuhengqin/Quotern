@@ -8,8 +8,6 @@ export class SessionAnalysisService {
   private dataDir = '';
   private config!: TudConfig;
   private quotaState: AnalysisRequest['snapshot']['quotaState'] = null;
-  private quotaHistory: AnalysisRequest['snapshot']['quotaHistory'] = null;
-  private quotaHistoryKey: string | undefined;
   private revision = -1;
   private collectSince = '';
   private pricingFingerprint: string | null = null;
@@ -29,12 +27,9 @@ export class SessionAnalysisService {
     }
     this.config = { ...snapshot.config, statsSince: snapshot.collectSince, localCollectSince: snapshot.collectSince };
     this.quotaState = snapshot.quotaState;
-    this.quotaHistory = snapshot.quotaHistory;
-    this.quotaHistoryKey = snapshot.quotaHistoryKey ?? snapshot.quotaHistory?.providerId;
     if (!this.app) {
       this.dataDir = snapshot.dataDir;
-      this.app = createLocalApiApp({ dataDir: this.dataDir, getConfig: () => this.config, bucketStore: this.buckets, getQuotaState: () => this.quotaState,
-        getQuotaHistory: id => this.quotaHistoryKey === id ? this.quotaHistory ?? null : null });
+      this.app = createLocalApiApp({ dataDir: this.dataDir, getConfig: () => this.config, bucketStore: this.buckets, getQuotaState: () => this.quotaState });
     }
     const response = await this.app.request(request.url, { method: 'GET', headers: request.init?.headers });
     const text = await response.text();

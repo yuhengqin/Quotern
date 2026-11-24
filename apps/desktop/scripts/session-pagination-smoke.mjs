@@ -19,7 +19,6 @@ const output = path.resolve(process.argv.slice(2).find(arg => !arg.startsWith('-
 const dashboardOnly = process.argv.includes('--dashboard-fixes-only');
 const heatmapOnly = process.argv.includes('--heatmap-legend-only');
 const helpOnly = process.argv.includes('--help-hover-only');
-const closeBands = process.argv.includes('--heatmap-close-bands');
 assert.ok(!existsSync(output), 'Use a fresh acceptance directory');
 await mkdir(path.join(output, 'profile'), { recursive: true });
 app.setPath('userData', path.join(output, 'profile'));
@@ -54,9 +53,7 @@ if (dashboardOnly || heatmapOnly || helpOnly) {
     reasoning_output_tokens: 0, total_tokens: tokens, conversation_count: 1,
     ...(reportedCost == null ? {} : { reported_cost_usd: reportedCost }),
   });
-  bucketStore.apply(closeBands ? [1_000_000, 1_001_000, 1_002_000, 1_003_000].map((tokens, index) => ({
-    ...bucket('cursor', 'model-a', longProject, tokens, 1), hour_start: `2026-10-${21 + index}T03:00:00Z`,
-  })) : [
+  bucketStore.apply([
     { ...bucket('cursor', 'model-a', longProject, 1_000_000, 715.06), input_tokens: 650_000, output_tokens: 100_000,
       cached_input_tokens: 200_000, cache_creation_input_tokens: 30_000, reasoning_output_tokens: 20_000 },
     bucket('cursor', 'tiny-reported-model', 'Tiny', 1_000, 0.004),
@@ -564,8 +561,8 @@ async function exerciseDashboardFixes(window, client, mode) {
   await exerciseModelTokenShare(window, client, mode);
   if (mode === 'browser') {
     await client.click(label('热力图来源：全部 Agent'));
-    await until(() => client.evaluate('document.querySelector("[role=dialog]")?.innerText.includes("仅影响热力图")'), 'heatmap scope');
-    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="取消全选")');
+    await until(() => client.evaluate('Boolean(document.querySelector("[role=dialog] [role=listbox]"))'), 'heatmap sources');
+    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="清空")');
     await shot('heatmap-none');
     await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="全部")');
     await close();
@@ -657,85 +654,88 @@ async function exerciseModelTokenShare(window, client, mode) {
   checks.push(mode + '-model-share-ranking-grouping-hide-restore-full-list-classifications-keyboard-units-responsive-themes-languages');
 }
 
-async function exerciseHeatmapHelpScrolling(window, client, mode, help, dialog) {
-  const page = mode === 'browser' ? 'document.querySelector("[data-dashboard-scroll-container]")' : 'document.scrollingElement';
+async function exerciseHeatmapSources(window, client, mode) {
+  const trigger = 'document.querySelector(\'button[aria-label^="热力图来源："]\')';
+  const dialog = 'document.querySelector("[role=dialog]")';
+  const options = selector => `[...${dialog}.querySelectorAll(${JSON.stringify(selector)})]`;
+  const action = label => `${options('button')}.find(el => el.textContent.trim() === ${JSON.stringify(label)})`;
+  const topFilter = 'document.querySelector(\'[aria-label="筛选条件"] .select__trigger\')';
+  const dayLabel = 'document.querySelector(\'[data-day="2026-10-25"]\')?.getAttribute("aria-label")';
   const open = async () => {
-    await client.evaluate(`(${help}).scrollIntoView({block:'center'}); (${help}).focus(); true`);
-    await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-open.png`));
+    await client.click(trigger);
+    await until(() => client.evaluate(`Boolean(${dialog}?.querySelector('[role=option]'))`), mode + ' heatmap source options are visible');
+  };
+  const close = async () => {
+    await client.key('Escape');
+    await until(() => client.evaluate(`!${dialog} && document.activeElement === ${trigger}`), mode + ' heatmap source menu restores focus');
+  };
+  const chooseAll = async () => {
+    await client.click(action('全部'));
+    await close();
+  };
+  const clear = async () => {
+    await client.evaluate(`(${action('清空')}).focus(); true`);
     await client.key('Enter');
-    await until(() => client.evaluate(`Boolean(${dialog}) && !document.querySelector('[data-entering]')`), mode + ' settled help for scrolling');
-    await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-scroll.png`));
+    await until(() => client.evaluate(`${dialog} && !${dialog}.querySelector('[role=option][aria-selected=true]')`), mode + ' clear deselects every source and keeps the menu open');
+    await close();
+    assert.equal(await client.evaluate(`document.body.innerText.includes('请至少选择一个 Agent')`), true, mode + ' empty source selection');
   };
-  const wheel = async (point, deltaY) => {
-    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
-    return client.call('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY });
-  };
-  const closedAfterPaint = () => client.evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(!${dialog}))))`);
 
-  // Native document scrollbars use the real content bounds, not an emulated viewport.
-  await client.call('Emulation.clearDeviceMetricsOverride');
-  window.setContentSize(1120, 900);
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 1120, height: 900, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await client.evaluate(`${trigger}?.innerText.trim()`), '全部 Agent', mode + ' heatmap trigger only shows the selection');
+  const allUsage = await client.evaluate(dayLabel);
+  const topSelection = await client.evaluate(`${topFilter}.textContent.trim()`);
   await open();
-  const wheelBefore = await client.evaluate(`${page}.scrollTop`);
-  await wheel({ x: 80, y: 300 }, 160);
-  await wait(250);
-  const wheelAfter = await client.evaluate(`${page}.scrollTop`);
-  const wheelState = await client.evaluate(`({rootOverflow:document.documentElement.style.overflow,pageHeight:${page}.clientHeight,scrollHeight:${page}.scrollHeight,help:!!${dialog}})`);
-  await captureSettled(window, path.join(output, `${mode}-heatmap-help-wheel.png`));
-  assert.ok(wheelAfter > wheelBefore + 20, mode + ' background wheel scrolls with help open: ' + JSON.stringify({ wheelBefore, wheelAfter, wheelState }));
-  assert.equal(await closedAfterPaint(), true, mode + ' page wheel closes help without a lingering overlay');
+  const heading = await client.evaluate(`(() => {
+    const el = ${dialog}.querySelector('h2');
+    return { text: el?.textContent, width: el?.getBoundingClientRect().width };
+  })()`);
+  assert.equal(heading.text, '热力图来源', 'heatmap source menu retains its accessible title');
+  assert.ok(heading.width <= 1, 'heatmap source heading is visually hidden');
+  assert.equal(await client.evaluate(`${dialog}.innerText.includes('仅影响热力图')`), false, 'heatmap source explanation is removed');
+  await captureSettled(window, path.join(output, `${mode}-heatmap-sources.png`));
+  await client.click(`${options('[role=option] button')}.find(el => el.textContent.trim() === 'Cursor')`);
+  await until(() => client.evaluate(`${trigger}.innerText.trim() === 'Claude' && (${dayLabel}) === '2026-10-25，10 Token'`), mode + ' single heatmap source updates the daily total');
+  await clear();
+  assert.equal(await client.evaluate(`${topFilter}.textContent.trim()`), topSelection, mode + ' local selection leaves the global filter intact');
+  assert.equal(await client.evaluate(`Boolean(document.querySelector('[data-heatmap-footer] a[href*=achievements]'))`), true, 'empty source selection preserves achievement navigation');
+  await open();
+  await chooseAll();
+  assert.equal(await client.evaluate(dayLabel), allUsage, mode + ' all heatmap sources restore the daily total');
 
-  await open();
-  const scrollBefore = await client.evaluate(`${page}.scrollTop`);
-  if (mode === 'browser') {
-    const thumb = await client.evaluate(`(()=>{const el=${page},r=el.getBoundingClientRect(),height=Math.max(20,el.clientHeight**2/el.scrollHeight);return {x:r.right-4,y:r.top+el.scrollTop/(el.scrollHeight-el.clientHeight)*(el.clientHeight-height)+height/2}})()`);
-    await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: thumb.x, y: thumb.y });
-    await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: thumb.x, y: thumb.y, button: 'left', clickCount: 1 });
-    for (const distance of [25, 50, 75, 100]) {
-      await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: thumb.x, y: thumb.y + distance, button: 'left', buttons: 1 });
-      await wait(25);
-    }
-    await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: thumb.x, y: thumb.y + 100, button: 'left', clickCount: 1 });
-  } else {
-    // The desktop shell scrolls the document. Exercise its native scroll event
-    // directly; the browser shell above additionally verifies a pointer drag.
-    await client.evaluate(`${page}.scrollTop += 160; true`);
+  if (mode === 'desktop') {
+    await client.click(topFilter);
+    await client.click(`[...document.querySelectorAll('[role=listbox] [role=option]')].find(el => el.textContent.trim() === 'Cursor')`);
+    await client.key('Escape');
+    await until(() => client.evaluate(`${topFilter}.textContent.trim() === 'Cursor' && Boolean(${dayLabel}) && (${dayLabel}) !== ${JSON.stringify(allUsage)}`), 'global Cursor selection narrows the heatmap data');
+    const cursorUsage = await client.evaluate(dayLabel);
+    await open();
+    assert.deepEqual(await client.evaluate(`${options('[role=option]')}.map(el => el.textContent.trim())`), ['Cursor'], 'heatmap options respect the current global Agent filter');
+    await clear();
+    assert.equal(await client.evaluate(`${topFilter}.textContent.trim()`), 'Cursor', 'local Clear preserves the global Cursor selection');
+    await open();
+    await chooseAll();
+    assert.equal(await client.evaluate(dayLabel), cursorUsage, 'local All restores the globally filtered total');
+    await client.click('document.querySelector(\'button[aria-label="清空 Agent 筛选"]\')');
+    await until(() => client.evaluate(`(${dayLabel}) === ${JSON.stringify(allUsage)}`), 'clearing the global filter restores both sources');
+
+    await client.call('Emulation.setDeviceMetricsOverride', { width: 320, height: 900, deviceScaleFactor: 1, mobile: false });
+    await open();
+    const bounds = await client.evaluate(`(() => { const {left, right} = ${dialog}.getBoundingClientRect(); return {left, right}; })()`);
+    assert.ok(bounds.left >= 0 && bounds.right <= 320, 'desktop heatmap source menu fits the narrow viewport');
+    await captureSettled(window, path.join(output, 'desktop-heatmap-sources-320.png'));
+    await close();
+    checks.push('desktop-heatmap-source-filter-composes-with-global-filter');
   }
-  await until(() => client.evaluate(`${page}.scrollTop > ${scrollBefore + 20}`), mode + ' page scroll moves the actual scroll container');
-  assert.equal(await closedAfterPaint(), true, mode + ' scrollbar drag leaves no detached help');
-
-  await open();
-  await client.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: 80, y: 300, button: 'left', clickCount: 1 });
-  await client.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 80, y: 300, button: 'left', clickCount: 1 });
-  await until(() => client.evaluate(`!${dialog}`), mode + ' help retains outside-click dismissal');
-
-  window.setContentSize(375, 360);
-  await open();
-  await client.evaluate(`${dialog}.querySelector('summary').focus(); true`);
-  await client.key('Enter');
-  await until(() => client.evaluate(`${dialog}.scrollHeight > ${dialog}.clientHeight + 10`), mode + ' expanded help has scrollable content');
-  await until(() => client.evaluate(`(()=>{const r=${dialog}.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth})()`), mode + ' scrollable help settles inside the short viewport');
-  const inner = await client.evaluate(`(()=>{const el=${dialog},r=el.getBoundingClientRect();el.scrollTop=0;return {point:{x:r.left+r.width/2,y:r.top+r.height/2},pageTop:${page}.scrollTop}})()`);
-  await captureSettled(window, path.join(output, `${mode}-heatmap-help-before-internal-scroll.png`));
-  await wheel(inner.point, 160);
-  await until(() => client.evaluate(`${dialog}?.scrollTop > 10`), mode + ' wheel scrolls expanded help content');
-  await wheel(inner.point, 1000);
-  await wait(200);
-  assert.equal(await client.evaluate(`Boolean(${dialog}) && ${page}.scrollTop===${inner.pageTop}`), true, mode + ' help scrolling does not move the background or dismiss itself');
-  await captureSettled(window, path.join(output, `${mode}-heatmap-help-internal-scroll.png`));
-  await client.key('Escape');
-  await until(() => client.evaluate(`!${dialog} && document.activeElement===(${help})`), mode + ' scrolled help restores focus');
-  window.setContentSize(1120, 900);
-  checks.push(mode + '-help-wheel-' + (mode === 'browser' ? 'scrollbar-drag' : 'document-scroll') + '-immediate-dismiss-outside-click-internal-scroll');
+  checks.push(mode + '-heatmap-source-labels-clear-all-keyboard-focus');
 }
 
 async function exerciseHeatmapLegend(window, client, mode) {
   const legend = 'document.querySelector("[data-heatmap-legend]")';
-  const help = `(${legend}).querySelector('button')`;
-  const dialog = 'document.querySelector("[role=dialog]")';
   await until(() => client.evaluate('Boolean(document.querySelector("button[aria-label=\\"查看 Cursor 模型明细\\"]"))'), mode + ' dashboard ready');
-  assert.equal(await client.evaluate(`(${legend})?.textContent.includes('每日 Token 用量')`), true, mode + ' legend names the daily Token metric');
-  assert.equal(await client.evaluate(`(${legend}).textContent.includes('少') && (${legend}).textContent.includes('多')`), true, 'legend has visible direction labels');
+  assert.equal(await client.evaluate(`(${legend})?.innerText.replace(/\\s+/g, '')`), '少多', mode + ' legend only shows the scale labels');
+  assert.equal(await client.evaluate(`Boolean((${legend}).querySelector('button'))`), false, mode + ' legend has no help trigger');
+  assert.equal(await client.evaluate(`(${legend}).querySelector('[aria-hidden="true"]').childElementCount`), 5, mode + ' legend retains five color swatches');
   await until(() => client.evaluate(`Boolean((${legend}).parentElement.querySelector('a[href*=achievements]'))`), mode + ' achievement snapshot ready');
   for (const width of [1120, 375, 320]) {
     await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -751,65 +751,18 @@ async function exerciseHeatmapLegend(window, client, mode) {
       const clip = await client.evaluate(`(()=>{const r=(${legend}).parentElement.parentElement.getBoundingClientRect();return {x:Math.floor(r.left),y:Math.floor(r.top),width:Math.ceil(r.width),height:Math.ceil(r.height)}})()`);
       await writeFile(path.join(output, `${mode}-heatmap-preview.png`), (await window.webContents.capturePage(clip)).toPNG());
     }
-    await client.evaluate(`(${help}).focus(); true`);
-    await client.key(width === 375 ? ' ' : 'Enter');
-    await until(() => client.evaluate(`${dialog}?.innerText.includes('无用量记录')`), mode + ' keyboard legend help ' + width);
-    const content = await client.evaluate(`${dialog}.innerText`);
-    assert.ok(content.includes('每日用量色阶 · Token') && content.includes('区间随所选 Agent'), 'help leads with daily Token ranges and a short scope note');
-    assert.ok(!content.includes('相对') && !content.includes('UTC+8'), 'long explanations start collapsed');
-    assert.ok(content.includes('万'), 'real thresholds use the saved localized Token units');
-    assert.equal(await client.evaluate(`${dialog}.querySelector('details').open`), false, 'statistics methodology starts collapsed');
-    assert.equal(await client.evaluate(`document.querySelectorAll('[data-heatmap-band]').length`), closeBands ? 4 : 2, 'only raw empty bands are omitted');
-    const bounds = await client.evaluate(`(()=>{const r=${dialog}.getBoundingClientRect();return {left:r.left,right:r.right,bottom:r.bottom,top:r.top,overflow:${dialog}.scrollWidth>${dialog}.clientWidth+1}})()`);
-    assert.ok(bounds.left >= 0 && bounds.right <= width && bounds.top >= 0 && bounds.bottom <= 900 && !bounds.overflow, 'help stays inside the viewport');
-    await captureSettled(window, path.join(output, `${mode}-heatmap-help-${width}.png`));
-    await client.evaluate(`${dialog}.querySelector('summary').focus(); true`);
-    await client.key('Enter');
-    await until(() => client.evaluate(`${dialog}.querySelector('details').open && ${dialog}.innerText.includes('相对') && ${dialog}.innerText.includes('UTC+8') && ${dialog}.innerText.includes('也可能尚未采集到记录')`), mode + ' preserved methodology expands by keyboard');
-    if (width === 1120) await captureSettled(window, path.join(output, `${mode}-heatmap-help-expanded.png`));
-    await client.key(' ');
-    await until(() => client.evaluate(`!${dialog}.querySelector('details').open`), 'methodology collapses by keyboard');
-    await client.evaluate(`localStorage.setItem('quotern-token-unit-mode','international'); window.dispatchEvent(new StorageEvent('storage',{key:'quotern-token-unit-mode'})); true`);
-    await until(() => client.evaluate(`${dialog}?.innerText.includes('1M') && !${dialog}.innerText.includes('万')`), mode + ' open help updates Token units');
-    if (closeBands) assert.equal(await client.evaluate(`${dialog}.innerText.includes('约 1M 附近') && !${dialog}.innerText.includes('1M < Token ≤ 1M')`), true, 'rounded boundaries use an approximate label instead of an impossible interval');
-    await client.evaluate(`localStorage.setItem('quotern-token-unit-mode','localized'); window.dispatchEvent(new StorageEvent('storage',{key:'quotern-token-unit-mode'})); true`);
-    await until(() => client.evaluate(`${dialog}?.innerText.includes('万')`), mode + ' localized units restored');
-    await client.key('Escape');
-    await until(() => client.evaluate(`!${dialog} && document.activeElement===(${help})`), mode + ' Escape restores legend help focus');
   }
-  if (mode === 'browser') {
-    await client.click('document.querySelector("button[aria-label=\\"热力图来源：全部 Agent\\"]")');
-    await until(() => client.evaluate(`${dialog}?.innerText.includes('仅影响热力图')`), 'heatmap source scope');
-    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="取消全选")');
-    await client.key('Escape');
-    await until(() => client.evaluate(`!${dialog} && document.body.innerText.includes('请至少选择一个 Agent')`), 'empty source selection');
-    assert.equal(await client.evaluate(`Boolean(document.querySelector('[data-heatmap-footer] a[href*=achievements]'))`), true, 'empty source selection preserves achievement navigation');
-    await client.click(help);
-    await until(() => client.evaluate(`${dialog}?.innerText.includes('当前没有活跃日')`), 'no activity explanation');
-    assert.equal(await client.evaluate('document.querySelectorAll("[data-heatmap-band]").length'), 0, 'no activity has no fabricated Token boundaries');
-    await client.key('Escape');
-    await client.click('document.querySelector("button[aria-label^=\\"热力图来源：\\"]")');
-    await until(() => client.evaluate(`${dialog}?.innerText.includes('仅影响热力图')`), 'restore heatmap sources');
-    await client.click('[...document.querySelectorAll("[role=dialog] button")].find(el=>el.textContent.trim()==="全部")');
-    await client.key('Escape');
-    await until(() => client.evaluate(`!${dialog} && !document.body.innerText.includes('请至少选择一个 Agent')`), 'all sources restored');
-  }
-  await exerciseHeatmapHelpScrolling(window, client, mode, help, dialog);
-  for (const [locale, title, noUsage] of [['en', 'Daily tokens', 'No recorded usage'], ['ja', '1日のトークン使用量', '使用量の記録なし'], ['ko', '일일 토큰 사용량', '기록된 사용량 없음'], ['zh-CN', '每日 Token 用量', '无用量记录']]) {
+  await exerciseHeatmapSources(window, client, mode);
+  for (const [locale, scale] of [['en', 'LessMore'], ['ja', '少多'], ['ko', '적음많음'], ['zh-CN', '少多']]) {
     if (mode === 'browser') await client.evaluate(`localStorage.setItem('quotern.locale.preference',${JSON.stringify(locale)}); window.dispatchEvent(new StorageEvent('storage',{key:'quotern.locale.preference'})); true`);
     else window.webContents.send('locale:changed', { preference: locale, resolved: locale, systemLocale: 'zh-CN' });
-    await until(() => client.evaluate(`(${legend})?.textContent.includes(${JSON.stringify(title)})`), mode + ' translated legend ' + locale);
-    await client.click(help);
-    await until(() => client.evaluate(`${dialog}?.innerText.includes(${JSON.stringify(noUsage)})`), mode + ' translated help ' + locale);
-    assert.equal(await client.evaluate(`${dialog}.innerText.includes('usage.heatmap.')`), false, 'no missing translation keys');
-    await client.key('Escape');
-    await until(() => client.evaluate(`!${dialog}`), 'close translated help');
+    await until(() => client.evaluate(`document.documentElement.lang === ${JSON.stringify(locale)} && (${legend}).innerText.replace(/\\s+/g, '') === ${JSON.stringify(scale)}`), mode + ' translated scale ' + locale);
   }
   await client.call('Emulation.clearDeviceMetricsOverride');
   await client.evaluate(`document.documentElement.classList.remove('light'); document.documentElement.classList.add('dark'); document.documentElement.dataset.theme='dark'; (${legend}).scrollIntoView({block:'center'}); true`);
   await captureSettled(window, path.join(output, `${mode}-heatmap-dark.png`));
   assert.equal(client.errors.length, 0, JSON.stringify(client.errors));
-  checks.push(mode + '-heatmap-legend-help-keyboard-focus-units-equal-thresholds-wide-narrow-themes');
+  checks.push(mode + '-heatmap-scale-swatches-achievements-wide-narrow-themes-locales');
 }
 
 async function exerciseHelpHover(window, client, mode) {

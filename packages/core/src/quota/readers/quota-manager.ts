@@ -2,8 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { analyzeQuota, evaluateQuotaAlerts, normalizeQuotaSnapshot, type QuotaAlertKind, type QuotaObservation } from '../shared/quota-analysis.js';
 import { quotaWindowPeriodSeconds, type QuotaPreferences, type QuotaPreferencePatch, type QuotaProfile, type QuotaProviderState, type QuotaServiceStatus, type QuotaState } from '../shared/quota.js';
 import type { SubscriptionChannelId } from '../shared/subscription-channels.js';
-import { quotaIdentity, quotaEvidence, privateQuotaEvidence } from './quota-identity.js';
-import type { QuotaHistorySource } from '../quota-history.js';
+import { quotaIdentity, quotaEvidence } from './quota-identity.js';
 import { captureQuotaRead, quotaReadAttempts, quotaReadRetryAfter } from './quota-fetch-state.js';
 import type { QuotaDiagnosticCode } from '../shared/quota-diagnostic.js';
 import { validQuotaPatch, pruneQuotaHistory, assertQuotaProfileDirectories, type QuotaStore } from './quota-store.js';
@@ -53,7 +52,6 @@ export class QuotaManager {
   private statusPending: Promise<void> | null = null;
   private settingsQueue = Promise.resolve();
   private lastMaintenance: number | null = null;
-  private historyRevision = 0;
   private readonly sentAlerts = new Set<string>();
   private readonly serviceBaselines = new Map<string, QuotaServiceStatus['level']>();
   constructor(private readonly deps: {
@@ -114,16 +112,6 @@ export class QuotaManager {
       }
       return state;
     }) };
-  }
-  getHistory(id: string): QuotaHistorySource | null {
-    const slot = this.slots.find(item => this.key(item.reader) === id && this.enabled(item));
-    if (!slot || !slot.identity || slot.reader.observationOnly) return null;
-    const prefix = `${slot.reader.id}:${slot.identity}:`;
-    return { providerId: slot.reader.id, label: slot.state.label, revision: this.historyRevision,
-      windows: Object.entries(this.deps.store.history).filter(([key]) => key.startsWith(prefix)).map(([key, rows]) => {
-        const id = key.slice(prefix.length), window = slot.state.windows.find(window => window.id === id);
-        return { id, label: window?.label ?? id, groupLabel: window?.groupLabel, samples: structuredClone(rows) };
-      }) };
   }
   private emit(): void { if (!this.disposed) this.deps.onChanged?.(this.getState()); }
   reportNotice(message: string): void { this.notice = message; this.emit(); }
@@ -188,7 +176,6 @@ export class QuotaManager {
       const normalized = this.project(slot.reader, raw);
       normalized.queriedAt = this.now();
       const identity = quotaIdentity(raw);
-      if (identity !== slot.identity) this.historyRevision++;
       if (normalized.stale && !identity) {
         // An old reader may retain data without proving its account. Never promote it
         // into the shared current-account view, notification baseline or history.
@@ -240,10 +227,7 @@ export class QuotaManager {
         if (window.analysisEligible === false) continue;
         present.add(window.id);
         const proof = normalized.provenance;
-        const service = raw && typeof raw === 'object' ? privateQuotaEvidence(raw)?.account.service : undefined;
-        const sample = { at: normalized.fetchedAt, usedPercent: window.usedPercent, resetsAt: window.timeKind === 'expiry' ? null : window.resetsAt,
-          ...(window.durationSeconds && window.durationSeconds > 0 ? { durationSeconds: window.durationSeconds } : {}),
-          ...(proof?.identityVerified && proof.accountRef && service ? { accountRef: proof.accountRef, service } : {}) };
+        const sample = { at: normalized.fetchedAt, usedPercent: window.usedPercent, resetsAt: window.timeKind === 'expiry' ? null : window.resetsAt };
         const key = `${slot.reader.id}:${identity}:${window.id}`;
         const history = this.deps.store.history[key] ??= [];
         if (!history.length || sample.at > history.at(-1)!.at) history.push(sample);
@@ -285,8 +269,8 @@ export class QuotaManager {
       if (patch.profiles) assertQuotaProfileDirectories(patch.profiles, this.preferences.profiles ?? []);
       try { await this.deps.store.savePreferences(next); }
       catch { this.notice = '额度设置保存失败，已保留原设置。'; this.emit(); throw new Error(this.notice); }
-      const changedAlerts = next.thresholdAlerts !== this.preferences.thresholdAlerts || next.resetAlerts !== this.preferences.resetAlerts || JSON.stringify(next.accountAlerts) !== JSON.stringify(this.preferences.accountAlerts);
       const previous = this.preferences; this.preferences = next;
+      const changedGlobalAlerts = next.thresholdAlerts !== previous.thresholdAlerts || next.resetAlerts !== previous.resetAlerts;
       if (next.serviceAlerts !== previous.serviceAlerts) this.serviceBaselines.clear();
       else for (const id of this.serviceBaselines.keys()) {
         const provider = id as SubscriptionChannelId;
@@ -298,7 +282,9 @@ export class QuotaManager {
       }
       this.syncReaders();
       for (const slot of this.slots) {
-        if (changedAlerts) slot.observations.clear();
+        const proof = slot.state.provenance;
+        const accountKey = proof?.identityVerified && proof.accountRef ? `${slot.reader.id}:${proof.accountRef}` : undefined;
+        if (changedGlobalAlerts || (accountKey && JSON.stringify(previous.accountAlerts?.[accountKey]) !== JSON.stringify(next.accountAlerts?.[accountKey]))) slot.observations.clear();
         if (previous.channels[slot.reader.id] !== next.channels[slot.reader.id]) {
           slot.generation++; slot.observations.clear();
           if (this.enabled(slot)) slot.attempted = null;

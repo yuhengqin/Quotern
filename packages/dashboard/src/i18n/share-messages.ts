@@ -18,7 +18,6 @@ const copy = {
   'share.range.last30': { 'zh-CN': '近 30 天', en: 'Last 30 days', ja: '過去30日間', ko: '최근 30일' },
   'share.range.last90': { 'zh-CN': '近 90 天', en: 'Last 90 days', ja: '過去90日間', ko: '최근 90일' },
   'share.range.allTime': { 'zh-CN': '全部时间', en: 'All time', ja: '全期間', ko: '전체 기간' },
-  'share.allAgents': { 'zh-CN': '全部 Agent', en: 'All agents', ja: 'すべての Agent', ko: '모든 Agent' },
   'share.variant.neon': { 'zh-CN': '霓虹', en: 'Neon', ja: 'ネオン', ko: '네온' },
   'share.variant.editorial': { 'zh-CN': '特刊', en: 'Editorial', ja: '特集', ko: '특집' },
   'share.cardSelection': { 'zh-CN': '分享卡片选择', en: 'Choose a share card', ja: '共有カードを選択', ko: '공유 카드 선택' },

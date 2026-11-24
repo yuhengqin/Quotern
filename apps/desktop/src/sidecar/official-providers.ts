@@ -91,7 +91,10 @@ export async function readOfficialProvider(provider: QuotaProviderId, secret?: s
     const cli = await import('quotern-core/quota/readers/claude-subscription');
     return directory ? cli.createDefaultClaudeSubscriptionReader(directory)() : cli.readClaudeSubscription();
   }
-  if (provider === 'muse') return (await import('quotern-core/quota/readers/muse-subscription')).createDefaultMuseSubscriptionReader()();
+  if (provider === 'muse') {
+    const result = await (await import('quotern-core/quota/readers/muse-subscription')).createDefaultMuseSubscriptionReader()();
+    return result.status === 'ok' ? { ...result, status: 'ready' } : result;
+  }
   if (provider === 'minimax') return readMiniMax();
   return unavailable('unsupported-account', '请查看官方用量页面');
 }

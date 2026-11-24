@@ -125,8 +125,8 @@ pub fn activate(app: &AppHandle, id: &str) {
         "settings" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                if super::show(&app, "main").is_ok() {
-                    host::desktop_event(&app, "main", "app:open-settings", json!([{}]));
+                if let Err(error) = host::open_settings(&app, json!({})) {
+                    eprintln!("Could not open settings: {error}");
                 }
             });
         }

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -35,10 +36,15 @@ export function useLocalStorage<T>(
   const [value, setValue] = useState<T>(() =>
     readStoredValue(key, defaultValue, isValid),
   );
+  const persisted = useRef({ key, value });
 
   useEffect(() => {
+    // A fallback rendered while legacy settings are unavailable is not a new
+    // preference. Leave a missing key available for the next migration attempt.
+    if (persisted.current.key === key && Object.is(persisted.current.value, value)) return;
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      persisted.current = { key, value };
     } catch {
       // ignore private mode / quota
     }

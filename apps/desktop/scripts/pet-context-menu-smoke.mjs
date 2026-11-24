@@ -86,6 +86,15 @@ try {
     }
     await main.screenshot(path.join(output, 'builtin-settings.png'));
   });
+  await check('builtin-settings-reopens-a-closed-main-window', async () => {
+    const oldMain = main.target.id;
+    await main.evaluate('window.tud.close(); true');
+    await until(async () => !(await probe.pages()).some(page => page.id === oldMain), 'main WebView closed');
+    await open(builtin, inspector, 'document.querySelector("#pet-root svg")');
+    await choose(inspector, 'settings');
+    main = await probe.connect(page => page.url.includes('tauri.localhost') && page.url.includes('#/dashboard'));
+    await until(() => selectedPreview('Clawd'), 'settings opened in the new main WebView');
+  });
   await check('builtin-hide-resumes-same-character', async () => {
     await open(builtin, inspector, 'document.querySelector("#pet-root svg")'); await choose(inspector, 'hide');
     await until(async () => !(await selection()).enabled, 'builtin hidden');

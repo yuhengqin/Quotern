@@ -16,6 +16,7 @@ import { QUOTA_CHANGED } from '../shared/quota';
 import { nativeText } from '../main/native-messages';
 import { quotaTrayTitle, quotaTraySummary } from '../main/tray-quota';
 import { formatTrayUsage, isTrayUsageMode } from '../shared/tray-usage';
+import { allowsLocalApiRequest } from './local-api-access';
 
 export interface DesktopService {
   request(window: string, channel: string, args: unknown[]): Promise<unknown>;
@@ -77,7 +78,7 @@ export async function createDesktopService(profile: string, emit: (channel: stri
         if (channel === 'runtime:theme' && typeof value === 'boolean') { prefs.systemTheme(value); return; }
       }
       const handler = prefs.channels.get(channel);
-      if (handler) return handler(...args);
+      if (handler) return channel === 'dashboard-range:set' ? handler(value, window) : handler(...args);
       if (channel.startsWith('notifications:') || channel.startsWith('dsh-pet:navigation') || channel==='quota:test-notification') {
         if(channel==='notifications:activate' && window!=='host')throw Error('Native activation required');
         return notices.request(channel==='quota:test-notification'?'notifications:test':channel,args);
@@ -104,12 +105,7 @@ export async function createDesktopService(profile: string, emit: (channel: stri
           const init = option as Parameters<typeof localApiRequest>[1];
           const method = init?.method?.toUpperCase() ?? 'GET';
           if (!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(method)) throw Error('Invalid local API method');
-          if (window !== 'main') {
-            const reference = window.startsWith('reference-') && /^\/functions\/tud-(pricing|usage-[a-z-]+|session-(list|detail|directory|activity|actions))$/.test(url.pathname);
-            const allowedRead=['/functions/tud-quota','/functions/tud-usage-summary','/functions/tud-pricing','/functions/tud-sync-status','/functions/tud-agent-activity','/functions/tud-session-detail'].includes(url.pathname);
-            const sessionAction=reference && url.pathname==='/functions/tud-session-actions' && method==='POST';
-            if (!sessionAction && (method !== 'GET' || !reference && !allowedRead)) throw Error('Main window required');
-          }
+          if (!allowsLocalApiRequest(window, url.pathname, method)) throw Error('Main window required');
           if (url.pathname === '/functions/tud-quota' && method === 'GET') return {status:200, body:{success:true,message:'ok',data:quota.getState()}};
           return localApiRequest(url.pathname + url.search, init);
         }

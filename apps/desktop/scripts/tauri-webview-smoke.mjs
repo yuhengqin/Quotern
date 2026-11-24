@@ -50,6 +50,21 @@ try {
   };
   const [timings]=await Promise.all([requests,interaction()]);
   assert.deepEqual(timings.status,Array(12).fill(200));assert.equal(timings.syncOk,true);assert.ok(timings.frames>0);
+
+  const costHelp = '[aria-label="预估费用说明"]';
+  const pricingLink = '.help-popup a[target="_blank"][href*="/pricing"]';
+  await client.evaluate('window.tud.setLocalePreference("zh-CN")');
+  await until(() => client.evaluate('Boolean(document.querySelector('+JSON.stringify(costHelp)+'))'), 'estimated cost help');
+  await client.click('document.querySelector('+JSON.stringify(costHelp)+')');
+  await until(() => client.evaluate('Boolean(document.querySelector('+JSON.stringify(pricingLink)+'))'), 'pricing link in cost help');
+  await client.click('document.querySelector('+JSON.stringify(pricingLink)+')');
+  const reference = await probe.connect(page => page.id !== client.target.id && page.url.includes('#/pricing'));
+  await until(() => reference.evaluate('Boolean(window.tud)'), 'pricing reference bridge');
+  assert.equal(await reference.evaluate('window.opener === null'), true);
+  assert.equal(await reference.evaluate('window.tud.api.request("/functions/tud-local-admin/pricing").then(r => r.status)'), 200);
+  await reference.evaluate('window.tud.close(); true');
+  await until(async () => !(await probe.pages()).some(page => page.id === reference.target.id), 'pricing reference closed');
+
   await client.evaluate("window.tud.pet.select({kind:'builtin',character:'doro'})");
   await client.evaluate('window.tud.pet.setEnabled(true)');
   const pet=await probe.connect(page=>page.url.includes('/pet.html'));

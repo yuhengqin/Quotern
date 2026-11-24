@@ -93,6 +93,7 @@ declare global {
       getDashboardRange: () => Promise<
         import('../shared/dashboard-range').DashboardRange
       >;
+      getLegacyDisplayPreferences?: () => Promise<Record<string, string>>;
       setDashboardRange: (
         range: import('../shared/dashboard-range').DashboardRange,
       ) => Promise<import('../shared/dashboard-range').DashboardRange>;

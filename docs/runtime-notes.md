@@ -88,6 +88,8 @@ Core 在一次洞察分析中共享派发索引；同范围在途构建与已完
 
 ## 窗口与桥接初始化
 
+关闭主窗口时释放 WebView，并关闭由它打开的参考窗口。托盘继续运行，待打开的设置目标由新窗口初始化后读取并确认。首次启动时，旧 Electron 的 Token 数量单位和日期显示偏好从本应用旧 profile 的只读快照恢复，当前 WebView 中的设置优先。
+
 Tauri 宿主 `apps/desktop/src-tauri/src/main.rs` 管理窗口；renderer 通过 `src/preload/index.ts` 和 `tauri-transport.ts` 与 Node sidecar 通信。验证启动、关闭与恢复时按实际宿主和进程分别记录，不以旧 Electron 窗口测试代替。
 
 ## 发版与更新
@@ -140,7 +142,7 @@ node scripts/migrate-state.mjs --from "/原状态目录" --to "/Quotern状态目
 
 按账号启动、Quotern 默认账号与自动 Claude 换号，以及独立的实际消费连接见 [账号启动与费用](account-launch-billing.md)。默认选择保存在 `account-launch/preferences.json`，运行端注册监控目录来源到同目录的 `sources.json`；账单私有凭据与缓存保存在 `billing-private/`，不参与普通数据备份。新本地动作接口为 `/functions/tud-account-launch` 与 `/functions/tud-claude-billing`，要求真实 loopback Host/来源和运行实例操作 token。
 
-Desktop 额度访问需用户明确同意，授权只属于当前应用会话；不导入其他应用的登录凭据。不支持授权读取的服务提供官方用量页。
+Desktop 额度访问需用户明确同意。官方 CLI 授权跨重启保留，密钥和令牌在会话内使用。其他服务提供官方用量入口。详见 [订阅额度管理](quota-management.md)。
 
 CLI 的 Node 额度及服务状态请求通过 `quotaNodeFetch` 显式使用 `HTTP_PROXY` / `HTTPS_PROXY`（也支持小写形式），遵守 `NO_PROXY`，无需设置 `NODE_USE_ENV_PROXY`；localhost 和回环 IP 始终直连，避免将本机 language server 请求交给代理。仅配置系统代理而没有环境代理变量时，Node 请求仍按原行为直连。Desktop 的额度和服务状态网络行为应按当前 sidecar 实现核对。
 

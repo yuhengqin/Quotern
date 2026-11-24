@@ -58,7 +58,7 @@ async function fixture(t, desktop) {
       await writeFile(join(petWeb, file), `fixture ${file}`);
     }
   }
-  for (const dependency of ['vite', '@vitejs/plugin-react', '@tanstack/router-plugin', '@tailwindcss/vite', '@fontsource-variable/jetbrains-mono']) {
+  for (const dependency of ['vite', '@vitejs/plugin-react', '@tanstack/router-plugin', '@tailwindcss/vite', 'tailwindcss', '@fontsource-variable/jetbrains-mono']) {
     const target = join(frontend, 'node_modules', dependency);
     await mkdir(dirname(target), { recursive: true });
     await symlink(await realpath(join(source, relative, 'node_modules', dependency)), target, process.platform === 'win32' ? 'junction' : 'dir');
@@ -123,11 +123,15 @@ async function loadGraph(server) {
 for (const [name, desktop] of [['Dashboard', false], ['Desktop renderer', true]]) {
   test(`${name} serves external font assets without exposing their package or env files`, { timeout: 30000 }, async t => {
     const app = await fixture(t, desktop);
-    await writeFile(join(app.page, 'font.css'), '@import "@fontsource-variable/jetbrains-mono";\n');
+    const stylesheet = desktop ? 'index.css' : 'font.css';
+    const imports = desktop
+      ? '@import "@fontsource-variable/jetbrains-mono";\n@import "tailwindcss";\n'
+      : '@import "@fontsource-variable/jetbrains-mono";\n';
+    await writeFile(join(app.page, stylesheet), imports);
     await writeFile(join(app.root, '.env.font-access-check'), 'PRIVATE_FONT_TEST_VALUE=do-not-serve\n');
     const server = await app.serve();
     const origin = server.resolvedUrls.local[0];
-    const response = await fetch(new URL('/font.css?direct', origin));
+    const response = await fetch(new URL('/' + stylesheet + (desktop ? '' : '?direct'), origin));
     assert.equal(response.status, 200);
     const css = await response.text();
     const fonts = [...css.matchAll(/url\(["']?([^\s)"']+\.woff2)["']?\)/g)].map(match => match[1]);

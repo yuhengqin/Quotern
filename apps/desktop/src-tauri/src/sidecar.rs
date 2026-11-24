@@ -90,6 +90,7 @@ fn private_profile(app: &AppHandle) -> Result<PathBuf, String> {
         ]
         .iter()
         .any(|file| p.join(file).exists())
+            || crate::legacy_preferences::directory(p).join("CURRENT").is_file()
     };
     Ok(if !has_preferences(&preferred) && has_preferences(&other) {
         other
@@ -100,6 +101,18 @@ fn private_profile(app: &AppHandle) -> Result<PathBuf, String> {
 
 pub fn profile(app: &AppHandle) -> Result<PathBuf, String> {
     private_profile(app)
+}
+
+pub fn legacy_renderer_storage(app: &AppHandle) -> Result<PathBuf, String> {
+    let profile = private_profile(app)?;
+    let storage = crate::legacy_preferences::directory(&profile);
+    if std::env::var_os("QUOTERN_DEV_ISOLATED").as_deref() == Some("1".as_ref())
+        || storage.join("CURRENT").exists()
+    {
+        return Ok(storage);
+    }
+    let alternative = if profile.ends_with("Quotern") { "quotern-desktop" } else { "Quotern" };
+    Ok(crate::legacy_preferences::directory(&profile.with_file_name(alternative)))
 }
 
 async fn read_frames(app: AppHandle, output: tokio::process::ChildStdout, session: Arc<Session>) {
@@ -171,6 +184,11 @@ async fn read_frames(app: AppHandle, output: tokio::process::ChildStdout, sessio
                 if let Some(label) = message.get("window").and_then(Value::as_str) {
                     let _ = app.emit_to(label, "desktop-event", &payload);
                 } else {
+                    let origin = if channel == "dashboard-range:changed" {
+                        args.get(1).and_then(Value::as_str)
+                    } else {
+                        None
+                    };
                     for label in app.webview_windows().keys() {
                         let receives = match label.as_str() {
                             "pet" => matches!(channel, "pet:state" | "pet:event"),
@@ -184,7 +202,7 @@ async fn read_frames(app: AppHandle, output: tokio::process::ChildStdout, sessio
                             ),
                             _ => true,
                         };
-                        if receives {
+                        if receives && origin != Some(label.as_str()) {
                             let _ = app.emit_to(label.as_str(), "desktop-event", &payload);
                         }
                     }

@@ -70,6 +70,10 @@ export async function connectPage(target, { waitForActionability = false } = {})
     pending.get(message.id)?.(message);
   });
   const call = (method, params = {}) => new Promise((resolve, reject) => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      reject(Error('CDP target closed: '+method));
+      return;
+    }
     const id = ++sequence;
     const timer = setTimeout(() => { pending.delete(id); reject(Error(`CDP timeout: ${method}`)); }, 15_000);
     pending.set(id, message => { clearTimeout(timer); pending.delete(id); message.error ? reject(Error(message.error.message)) : resolve(message.result); });

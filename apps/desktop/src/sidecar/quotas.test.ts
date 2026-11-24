@@ -47,6 +47,27 @@ test('providers start disconnected and failed authorization grants no access', a
   });
 });
 
+test('a confirmed official CLI authorization is restored on restart until disconnected', async () => {
+  await fixture(async ({ create }) => {
+    const read = async () => ready();
+    const first = await create(read);
+    await first.authorize('codex', undefined);
+    await first.authorize('deepseek', 'synthetic-session-only-secret');
+    await first.close();
+
+    const restarted = await create(read);
+    const access = (key: string) => restarted.getState().providers.find(provider => provider.id === key)?.access?.connected;
+    assert.equal(access('codex'), true);
+    assert.equal(access('deepseek'), false);
+    assert.equal((await restarted.refresh('codex')).providers.find(provider => provider.id === 'codex')?.status, 'ready');
+    await restarted.disconnect('codex');
+    await restarted.close();
+
+    const disconnected = await create(read);
+    assert.equal(disconnected.getState().providers.find(provider => provider.id === 'codex')?.access?.connected, false);
+  });
+});
+
 test('DeepSeek secret stays with the reader and disconnect hides its data immediately', async () => {
   await fixture(async ({ root, create }) => {
     const secret = 'synthetic-deepseek-key-1749';
@@ -120,5 +141,29 @@ test('Codex profiles require separate grants and read their own directories', as
     state = manager.getState();
     assert.equal(state.providers.find(row => row.id === 'codex@second')?.access?.connected, true);
     assert.equal(state.providers.find(row => row.id === 'codex')?.access?.connected, false);
+  });
+});
+
+test('restart retains CLI consent only for the same enabled account directory', async () => {
+  await fixture(async ({ root, create }) => {
+    const original = { id: 'first', provider: 'codex', label: 'First', directory: join(root, 'old'), enabled: true };
+    const read = async () => ready();
+    const before = await create(read);
+    await before.set({ profiles: [original] });
+    await before.authorize('codex@first', undefined);
+    await before.close();
+    const current = await create(read);
+    const authorized = () => current.getState().providers.find(row => row.id === 'codex@first')?.access?.connected;
+    assert.equal(authorized(), true);
+    await current.set({ profiles: [{ ...original, directory: join(root, 'new') }] });
+    assert.equal(authorized(), false);
+    await current.set({ profiles: [original] });
+    assert.equal(authorized(), false);
+    await current.authorize('codex@first', undefined);
+    await current.set({ profiles: [{ ...original, enabled: false }] });
+    await current.close();
+    const restarted = await create(read);
+    await restarted.set({ profiles: [original] });
+    assert.equal(restarted.getState().providers.find(row => row.id === 'codex@first')?.access?.connected, false);
   });
 });

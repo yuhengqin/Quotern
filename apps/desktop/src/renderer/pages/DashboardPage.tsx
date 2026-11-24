@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
 import { Button, Chip } from '@heroui/react';
 import { useTranslation } from 'quotern-i18n/react';
@@ -76,9 +76,10 @@ export function DashboardPage() {
     DEFAULT_DASHBOARD_RANGE,
     isDashboardRange,
   );
+  const initialRange = useRef(range);
   useEffect(() => {
-    void window.tud.setDashboardRange(range);
-  }, [range]);
+    void window.tud.setDashboardRange(initialRange.current);
+  }, []);
   const [selectedDate, setSelectedDate] = useState<string | null>(() => getDashboardReturnState()?.selectedDate ?? null);
   const [customRange, setCustomRange] = useLocalStorage<DashboardDateRange | null>(
     'tud.dashboardCustomRange', null,
@@ -89,11 +90,12 @@ export function DashboardPage() {
   useEffect(
     () =>
       window.tud.onDashboardRange((nextRange) => {
+        if (nextRange === range) return;
         setCustomRange(null);
         setSelectedDate(null);
         setRange(nextRange);
       }),
-    [setRange, setCustomRange],
+    [range, setRange, setCustomRange],
   );
   const { publishSnapshot } = useShareSnapshot();
   const dataRange = useDeferredDashboardRange(range);
@@ -148,6 +150,7 @@ export function DashboardPage() {
     setCustomRange(null);
     setSelectedDate(null);
     setRange(next);
+    void window.tud.setDashboardRange(next);
   };
 
   const visibleToolRows = useMemo(

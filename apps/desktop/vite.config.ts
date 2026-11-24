@@ -1,4 +1,4 @@
-import { defineConfig, searchForWorkspaceRoot, type Plugin } from 'vite';
+import { defineConfig, normalizePath, searchForWorkspaceRoot, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import tailwindcss from '@tailwindcss/vite';
@@ -18,10 +18,13 @@ const fontFiles = realpathSync(resolve(dirname(fontCss), 'files'));
 
 function fontAssetsPlugin(): Plugin {
   const assets = new Map<string, string>();
+  let serving = false;
   return {
     name: 'quotern-jetbrains-mono-assets',
-    apply: 'build',
     enforce: 'pre',
+    configResolved(config) {
+      serving = config.command === 'serve';
+    },
     buildStart() {
       assets.clear();
     },
@@ -30,9 +33,11 @@ function fontAssetsPlugin(): Plugin {
       if (resolve(id.split('?')[0]).toLowerCase() !== rendererCss.toLowerCase()) return;
       const fontImport = /@import\s+["']@fontsource-variable\/jetbrains-mono["'];/;
       if (!fontImport.test(code)) return;
-      // Inline only this import before PostCSS rebases its cross-drive URLs.
+      // Inline only this import before Tailwind rebases the cross-drive URLs.
       const css = readFileSync(fontCss, 'utf8').replace(/\.\/files\/([\w.-]+\.woff2)/g, (_, name: string) => {
-        const source = readFileSync(resolve(fontFiles, name));
+        const filename = resolve(fontFiles, name);
+        if (serving) return '/@fs/' + encodeURI(normalizePath(filename));
+        const source = readFileSync(filename);
         const digest = createHash('sha256').update(source).digest('hex');
         const placeholder = `data:application/x-quotern-font,${digest}`;
         const reference = this.emitFile({ type: 'asset', name: basename(name), source });

@@ -303,6 +303,9 @@ const tudApi = {
   getDashboardRange: (): Promise<DashboardRange> =>
     ipcRenderer.invoke(DASHBOARD_RANGE_GET_CHANNEL),
 
+  getLegacyDisplayPreferences: (): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('renderer-preferences:legacy'),
+
   setDashboardRange: (range: DashboardRange): Promise<DashboardRange> =>
     ipcRenderer.invoke(DASHBOARD_RANGE_SET_CHANNEL, range),
 
@@ -458,11 +461,22 @@ const tudApi = {
   onOpenSettings: (
     callback: (detail?: OpenSettingsDetail) => void,
   ) => {
-    const listener = (_event: unknown, detail: unknown) => {
-      callback(parseOpenSettingsDetail(detail));
+    let active = true;
+    let lastOpened = -1;
+    const listener = () => {
+      void ipcRenderer.invoke('settings:navigation-get').then((request: { requestId: number; detail: unknown } | null) => {
+        if (!active || !request || request.requestId <= lastOpened) return;
+        lastOpened = request.requestId;
+        callback(parseOpenSettingsDetail(request.detail));
+        return ipcRenderer.invoke('settings:navigation-ack', request.requestId);
+      }).catch(() => {});
     };
     ipcRenderer.on(OPEN_SETTINGS_CHANNEL, listener);
-    return () => ipcRenderer.removeListener(OPEN_SETTINGS_CHANNEL, listener);
+    listener();
+    return () => {
+      active = false;
+      ipcRenderer.removeListener(OPEN_SETTINGS_CHANNEL, listener);
+    };
   },
 
   onRuntimeNotice: (

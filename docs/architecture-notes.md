@@ -30,7 +30,7 @@ Agent 日志或数据库 / 需要登录状态的数据源
       └─ Desktop IPC → Renderer / 托盘
 ```
 
-订阅额度走另一条链路，`QuotaManager` 调度并保存有效额度采样。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作；Desktop 仅在用户同意后通过当前应用会话中的授权访问支持的官方接口，否则提供官方用量页，不导入其他应用的登录凭据。额度余额不能当作已采集 Token 总量。
+订阅额度走另一条链路，`QuotaManager` 调度并保存有效额度采样。CLI 经 `/functions/tud-quota` HTTP 提供查询、刷新及偏好操作。Desktop 经用户授权访问支持的官方接口，其余来源提供官方用量入口。CLI 授权与会话凭据的有效期见 [订阅额度管理](quota-management.md)。额度余额和已采集 Token 总量分别计算。
 
 ## Desktop 响应性约束
 

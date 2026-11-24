@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "security": {
       "capabilities": ["desktop"],
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://quotern-media.localhost; font-src 'self' data: http://quotern-media.localhost; connect-src 'self' ipc: http://ipc.localhost http://quotern-media.localhost; media-src 'self' blob: data: http://quotern-media.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http://quotern-media.localhost; font-src 'self' data: http://quotern-media.localhost; connect-src 'self' ipc: http://ipc.localhost http://quotern-media.localhost https://api.frankfurter.dev; media-src 'self' blob: data: http://quotern-media.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'"
     }
   },
   "bundle": {

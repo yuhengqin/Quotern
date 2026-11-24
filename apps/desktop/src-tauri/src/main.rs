@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod host;
+mod legacy_preferences;
 #[cfg(target_os = "macos")]
 mod macos_notices;
 mod media;
@@ -123,54 +124,66 @@ fn handle_new_window(
     url: tauri::Url,
 ) -> tauri::webview::NewWindowResponse<tauri::Wry> {
     if local_url(app, &url) {
-        if matches!(url.path(), "/" | "/index.html")
-            && url.fragment().is_some_and(|f| {
-                f == "/pricing" || f.starts_with("/pricing?") || f.starts_with("/sessions?")
-            })
-        {
+        let kind = match (url.path(), url.fragment()) {
+            ("/" | "/index.html", Some(f)) if f == "/pricing" || f.starts_with("/pricing?") => {
+                Some("pricing")
+            }
+            ("/" | "/index.html", Some(f)) if f.starts_with("/sessions?") => Some("session"),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            let state = app.state::<HostState>();
+            let name = format!("reference-{kind}-{}", state.seq.fetch_add(1, Ordering::Relaxed));
+            // Record ownership before the asynchronous build so closing the
+            // opener also cancels a reference that is still being created.
+            state.references.lock().unwrap().insert(name.clone(), owner.to_owned());
             let app = app.clone();
-            let owner = owner.to_owned();
             tauri::async_runtime::spawn(async move {
-                if app.get_webview_window(&owner).is_none() {
+                let state = app.state::<HostState>();
+                if !state.references.lock().unwrap().contains_key(&name) {
                     return;
                 }
-                let name = format!(
-                    "reference-{}",
-                    app.state::<HostState>().seq.fetch_add(1, Ordering::Relaxed)
-                );
-                let (handle, opener, parent) = (app.clone(), app.clone(), name.clone());
-                let Ok(profile) = sidecar::profile(&app) else {
-                    return;
-                };
-                let mut builder = WebviewWindowBuilder::new(&app, &name, WebviewUrl::External(url))
-                    .title("Quotern")
-                    .inner_size(980., 720.)
-                    .data_directory(profile.join("webview"))
-                    .initialization_script(platform_script())
-                    .on_navigation(move |url| local_url(&handle, url))
-                    .on_new_window(move |url, _| handle_new_window(&opener, &parent, url));
-                if let Some((color, theme)) = *app.state::<HostState>().chrome.lock().unwrap() {
-                    builder = builder.background_color(color).theme(theme);
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    builder = builder
-                        .title_bar_style(tauri::TitleBarStyle::Overlay)
-                        .hidden_title(true);
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    builder = builder.decorations(false);
-                }
-                if let Ok(window) = builder.build() {
-                    app.state::<HostState>()
-                        .references
-                        .lock()
-                        .unwrap()
-                        .insert(name, owner.clone());
-                    if app.get_webview_window(&owner).is_none() {
-                        let _ = window.destroy();
+                let result = (|| -> tauri::Result<_> {
+                    let profile = sidecar::profile(&app).map_err(std::io::Error::other)?;
+                    let (handle, opener, parent) = (app.clone(), app.clone(), name.clone());
+                    let mut builder = WebviewWindowBuilder::new(&app, &name, WebviewUrl::External(url))
+                        .title("Quotern")
+                        .inner_size(980., 720.)
+                        .visible(false)
+                        .data_directory(profile.join("webview"))
+                        .initialization_script(platform_script())
+                        .on_navigation(move |url| local_url(&handle, url))
+                        .on_new_window(move |url, _| handle_new_window(&opener, &parent, url));
+                    if let Some((color, theme)) = *state.chrome.lock().unwrap() {
+                        builder = builder.background_color(color).theme(theme);
                     }
+                    #[cfg(target_os = "macos")]
+                    {
+                        builder = builder
+                            .title_bar_style(tauri::TitleBarStyle::Overlay)
+                            .hidden_title(true);
+                    }
+                    #[cfg(target_os = "linux")]
+                    {
+                        builder = builder.decorations(false);
+                    }
+                    builder.build()
+                })();
+                let window = match result {
+                    Ok(window) => window,
+                    Err(error) => {
+                        state.references.lock().unwrap().remove(&name);
+                        eprintln!("[quotern-desktop] Could not create reference window: {error}");
+                        return;
+                    }
+                };
+                let still_owned = state.references.lock().unwrap().contains_key(&name);
+                if still_owned {
+                    if let Err(error) = window.show().and_then(|()| window.set_focus()) {
+                        eprintln!("[quotern-desktop] Could not show reference window: {error}");
+                    }
+                } else {
+                    let _ = window.destroy();
                 }
             });
         }
@@ -299,6 +312,23 @@ async fn desktop_request(
         return pet_menu(&app, &window, value).await;
     }
     let native = match ch {
+        "settings:navigation-get" if label == "main" => {
+            return Ok(state.settings.lock().unwrap().clone().unwrap_or(Value::Null));
+        }
+        "settings:navigation-ack" if label == "main" => {
+            let mut pending = state.settings.lock().unwrap();
+            if pending.as_ref().is_some_and(|request| request["requestId"] == *value) {
+                pending.take();
+            }
+            return Ok(Value::Null);
+        }
+        "renderer-preferences:legacy" if label == "main" => {
+            let directory = sidecar::legacy_renderer_storage(&app)?;
+            return tauri::async_runtime::spawn_blocking(move || legacy_preferences::read(&directory))
+                .await
+                .map_err(|e| e.to_string())?
+                .map(|values| json!(values));
+        }
         #[cfg(not(windows))]
         "dsh:context-menu-close" => {
             state.pet_menu.lock().unwrap().take();
@@ -691,7 +721,9 @@ fn main() {
             show_from_event(app, "main");
         }));
     }
-    let application = builder.plugin(tauri_plugin_opener::init())
+    // Windows renders local links on an HTTP origin. Let the WebView's
+    // new-window handler distinguish internal references from external links.
+    let application = builder.plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .plugin(tauri_plugin_updater::Builder::new().build()).manage(updates::Updates::default())
         .plugin(tauri_plugin_clipboard_manager::init()).plugin(tauri_plugin_dialog::init()).plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::Builder::new().arg("--autostart").build())
@@ -740,12 +772,32 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested{api,..}=event {
-                if matches!(window.label(),"main"|"tray") && !window.state::<Quitting>().0.load(Ordering::SeqCst){api.prevent_close();let _=window.hide();host::desktop_event(window.app_handle(),window.label(),"appearance:visibility",json!([false]));}
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "tray" && !window.state::<Quitting>().0.load(Ordering::SeqCst) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    host::desktop_event(window.app_handle(), "tray", "appearance:visibility", json!([false]));
+                }
             }
-            if matches!(event,WindowEvent::Destroyed){
-                let children={let state=window.state::<HostState>();let mut refs=state.references.lock().unwrap();refs.remove(window.label());refs.iter().filter(|(_,parent)|parent.as_str()==window.label()).map(|(child,_)|child.clone()).collect::<Vec<_>>()};
-                for child in children{if let Some(w)=window.get_webview_window(&child){let _=w.destroy();}}
+            if matches!(event, WindowEvent::Destroyed) {
+                let mut children = Vec::new();
+                {
+                    let state = window.state::<HostState>();
+                    let mut references = state.references.lock().unwrap();
+                    references.remove(window.label());
+                    references.retain(|child, parent| {
+                        let belongs_to_window = parent.as_str() == window.label();
+                        if belongs_to_window {
+                            children.push(child.clone());
+                        }
+                        !belongs_to_window
+                    });
+                }
+                for child in children {
+                    if let Some(reference) = window.get_webview_window(&child) {
+                        let _ = reference.destroy();
+                    }
+                }
             }
             if window.label() == "tray" && matches!(event,WindowEvent::Focused(false)) && !window.state::<HostState>().dialog.load(Ordering::SeqCst) {
                 let _ = window.hide();

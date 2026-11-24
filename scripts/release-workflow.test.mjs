@@ -110,3 +110,9 @@ test('the Windows portable wrapper includes the same runtime resources as the in
   assert.match(portable, /^\s*File "\$\{HOST_DIR\}\\quotern-node\.exe"/m);
   assert.match(portable, /^\s*File \/r "\$\{NODE_RESOURCES\}\\\*"/m);
 });
+
+test('the packaged renderer can connect to the pricing exchange rate service', async () => {
+  const config = JSON.parse(await read('apps/desktop/src-tauri/tauri.conf.json'));
+  const connect = config.app.security.csp.split(';').map(rule => rule.trim()).find(rule => rule.startsWith('connect-src '));
+  assert.ok(connect?.split(/\s+/).includes('https://api.frankfurter.dev'));
+});

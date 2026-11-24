@@ -23,13 +23,15 @@ export async function desktopPreferences(profile: string, emit: (channel: string
   let writing = Promise.resolve();
   const set = (key: string, value: unknown) => {
     const operation = writing.then(async () => {
+      if (values[key] === value) return false;
       const next = { ...values, [key]: value };
       const temporary = file + '.' + randomUUID() + '.tmp';
       await writeFile(temporary, JSON.stringify(next, null, 2), {mode:0o600});
       await rename(temporary, file);
       values = next;
+      return true;
     });
-    writing = operation.catch(() => {});
+    writing = operation.then(() => undefined, () => undefined);
     return operation;
   };
   const systemLocale = resolveLocale('system', [Intl.DateTimeFormat().resolvedOptions().locale]);
@@ -60,7 +62,13 @@ export async function desktopPreferences(profile: string, emit: (channel: string
       ['locale:get', locale],
       ['locale:set', async next => { if (!isLocalePreference(next)) throw Error('Invalid locale'); await set('localePreference', next); emit('locale:changed', locale()); return locale(); }],
       ['dashboard-range:get', () => isDashboardRange(values.dashboardRange) ? values.dashboardRange : DEFAULT_DASHBOARD_RANGE],
-      ['dashboard-range:set', async range => { if (!isDashboardRange(range)) throw Error('Invalid dashboard range'); await set('dashboardRange', range); emit('dashboard-range:changed', range); return range; }],
+      ['dashboard-range:set', async (range, origin) => {
+        if (!isDashboardRange(range)) throw Error('Invalid dashboard range');
+        if (await set('dashboardRange', range)) {
+          emit('dashboard-range:changed', range, origin);
+        }
+        return range;
+      }],
       ['tray-usage:get', () => values.showTrayUsage !== false],
       ['tray-usage:set', async value => { if (typeof value !== 'boolean') throw Error('Invalid tray setting'); await set('showTrayUsage', value); emit('tray-usage:changed', value); return value; }],
       ['tray-usage-mode:get', () => isTrayUsageMode(values.trayUsageMode) ? values.trayUsageMode : 'both'],

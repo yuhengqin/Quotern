@@ -32,7 +32,7 @@ const entries = {
   'quotaAccess.kimiToken': ['Kimi 本地服务令牌', 'Kimi local server token', 'Kimi ローカルサーバートークン', 'Kimi 로컬 서버 토큰'],
   'quotaAccess.kimiNote': ['启动 Kimi Code 本地服务后，输入其访问令牌。本次会话只查询本机 58627 端口的用量接口。', 'Start the Kimi Code local server and enter its access token. This session queries usage on local port 58627.', 'Kimi Code のローカルサーバーを起動してアクセス用トークンを入力します。このセッションはローカルの 58627 番ポートで使用量を取得します。', 'Kimi Code 로컬 서버를 시작한 후 액세스 토큰을 입력하세요. 이 세션은 로컬 포트 58627에서 사용량을 조회합니다.'],
   'quotaAccess.sessionNote': ['仅授权本次会话使用此密钥。', 'Authorize this key for this session only.', 'このセッションに限り、このキーの使用を許可します。', '이 세션에서만 이 키를 사용하도록 허용합니다.'],
-  'quotaAccess.cliNote': ['确认本次会话使用已登录的官方 CLI。', 'Allow this session to use the signed-in official CLI.', 'このセッションでログイン済みの公式 CLI を使用することを許可します。', '이 세션에서 로그인된 공식 CLI를 사용하도록 허용합니다.'],
+  'quotaAccess.cliNote': ['允许 Quotern 使用此官方 CLI 当前登录的账号查询额度。授权在重启后继续有效，可以随时断开。', 'Allow Quotern to check usage for the account signed into this official CLI. Authorization lasts across restarts and can be revoked by disconnecting.', 'この公式 CLI でログイン中のアカウントの利用枠を Quotern が確認できるようにします。再起動後も許可は有効で、いつでも切断できます。', 'Quotern이 이 공식 CLI에 로그인한 계정의 한도를 확인하도록 허용합니다. 재시작 후에도 권한이 유지되며 언제든 연결을 해제할 수 있습니다.'],
   'quotaAccess.save': ['保存并连接', 'Save and connect', '保存して接続', '저장하고 연결'],
   'quotaAccess.confirm': ['确认连接', 'Confirm connection', '接続を確認', '연결 확인'],
   'quotaAccess.connected': ['已连接', 'Connected', '接続済み', '연결됨'],

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolveDataDir } from 'quotern-core/paths';
 import { QuotaManager, type QuotaReader } from 'quotern-core/quota/readers/quota-manager';
 import { openQuotaStore, validQuotaPatch } from 'quotern-core/quota/readers/quota-store';
@@ -13,11 +14,64 @@ import type { QuotaProfile } from 'quotern-core/quota/shared/quota';
 import { officialProviders, readOfficialProvider } from './official-providers';
 
 type Emit = (channel: string, ...args: unknown[]) => void;
+
+function cliConsentTargets(profiles: readonly QuotaProfile[]): Map<string, string | null> {
+  const targets = new Map<string, string | null>();
+  for (const [id, provider] of Object.entries(officialProviders)) {
+    if (provider.method === 'official-cli') targets.set(id, null);
+  }
+  for (const profile of profiles) {
+    if (profile.enabled && officialProviders[profile.provider].method === 'official-cli') {
+      targets.set(profile.provider + '@' + profile.id, profile.directory);
+    }
+  }
+  return targets;
+}
+
+async function readCliConsents(file: string, targets: Map<string, string | null>) {
+  const consents = new Map<string, string | null>();
+  try {
+    const data: unknown = JSON.parse(await readFile(file, 'utf8'));
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return consents;
+    for (const [key, target] of targets) {
+      if (Object.hasOwn(data, key) && (data as Record<string, unknown>)[key] === target) consents.set(key, target);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('Saved CLI quota consent unavailable');
+  }
+  return consents;
+}
+
 export async function desktopQuotas(profile: string, emit: Emit, read = readOfficialProvider, dataDir = resolveDataDir()) {
-  // Consent and credentials belong to this running application session.
-  const grants = new Map<string, { secret?: string; first?: unknown }>();
-  const connecting = new Map<string,symbol>();
   const directory = join(profile, 'quota');
+  const store = await openQuotaStore(directory);
+  const consentFile = join(directory, 'cli-consents.json');
+  const consents = await readCliConsents(consentFile, cliConsentTargets(store.preferences.profiles ?? []));
+  // Only the grants for official CLI readers survive a restart. API keys and
+  // other secrets are never included in the consents file.
+  const grants = new Map<string, { secret?: string; first?: unknown }>(
+    [...consents.keys()].map(key => [key, {}]),
+  );
+  const connecting = new Map<string,symbol>();
+  let consentWrites = Promise.resolve();
+  let pendingRevocation = false;
+  function saveConsents() {
+    pendingRevocation = false;
+    const payload = JSON.stringify(Object.fromEntries(consents));
+    const write = consentWrites.then(async () => {
+      await mkdir(directory, { recursive: true });
+      const temp = consentFile + '.' + process.pid + '.tmp';
+      await writeFile(temp, payload, { mode: 0o600 });
+      await rename(temp, consentFile);
+    });
+    consentWrites = write.catch(() => { pendingRevocation = true; });
+    return write;
+  }
+  function revoke(key: string) {
+    connecting.delete(key);
+    grants.delete(key);
+    if (consents.delete(key)) pendingRevocation = true;
+  }
   const snapshot = createQuotaSnapshotPublisher(dataDir, 'desktop');
   const profiles = new Map<string,{profile:QuotaProfile;reader:QuotaReader}>();
   const readers: QuotaReader[] = [];
@@ -46,7 +100,6 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
     };
   }
   readers.push(...QUOTA_PROVIDER_DESCRIPTORS.map(provider => makeReader(provider)));
-  const store = await openQuotaStore(directory);
   let publication = Promise.resolve();
   let next:QuotaState|undefined, pending:NodeJS.Immediate|undefined;
   function flush() {
@@ -66,12 +119,15 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
         active.add(key);
         const previous=profiles.get(key);
         if(previous && previous.profile.label===profile.label && previous.profile.directory===profile.directory)return previous.reader;
-        if(previous?.profile.directory!==profile.directory){grants.delete(key);connecting.delete(key);}
+        if(previous && previous.profile.directory!==profile.directory) revoke(key);
         const reader=makeReader(QUOTA_PROVIDER_DESCRIPTORS.find(p=>p.id===profile.provider)!,profile);
         profiles.set(key,{profile,reader});
         return reader;
       });
-      for(const key of profiles.keys())if(!active.has(key)){profiles.delete(key);grants.delete(key);connecting.delete(key);}
+      for (const key of profiles.keys()) if (!active.has(key)) {
+        profiles.delete(key);
+        revoke(key);
+      }
       return output;
     },
     notify: value => emit('runtime:quota-notification', value),
@@ -109,14 +165,17 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
     },
     async set(patch: unknown) {
       if (!validQuotaPatch(patch)) throw Error('Invalid quota preferences');
-      return project(await manager.setPreferences(patch));
+      await manager.setPreferences(patch);
+      if (pendingRevocation) await saveConsents();
+      return project(manager.getState());
     },
     async authorize(value: unknown, input: unknown) {
       const {key,id,profile}=resolveKey(value);
-      if (officialProviders[id].method === 'official-page') throw Error('Open the official usage page');
+      const { method } = officialProviders[id];
+      if (method === 'official-page') throw Error('Open the official usage page');
       const secret = typeof input === 'string' ? input.trim() : undefined;
-      if (officialProviders[id].method === 'api-key' && (!secret || secret.length > 4096 || /[\s\x00-\x1f]/u.test(secret))) throw Error('Invalid API key');
-      if (officialProviders[id].method !== 'api-key' && secret) throw Error('Unexpected credential');
+      if (method === 'api-key' && (!secret || secret.length > 4096 || /[\s\x00-\x1f]/u.test(secret))) throw Error('Invalid API key');
+      if (method !== 'api-key' && secret) throw Error('Unexpected credential');
       const attempt=Symbol(id);
       connecting.set(key,attempt);
       try {
@@ -125,17 +184,34 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
         if (!first || typeof first!=='object' || !('status' in first) || first.status!=='ready') {
           throw Error('Official usage authorization failed');
         }
-        grants.set(key,{secret,first});
-        await replaceReader(key,id,profile);
+        if (method === 'official-cli' && !grants.has(key)) {
+          consents.set(key, profile?.directory ?? null);
+          try { await saveConsents(); }
+          catch (error) {
+            if (connecting.get(key) === attempt) consents.delete(key);
+            throw error;
+          }
+        }
+        if (connecting.get(key) !== attempt) throw Error('Authorization cancelled');
+        grants.set(key, { secret, first });
+        // Another settings request may have updated the profile label while the
+        // consent was being saved. Reuse the currently registered profile.
+        await replaceReader(key, id, resolveKey(key).profile);
       } finally { if(connecting.get(key)===attempt)connecting.delete(key); }
     },
     async disconnect(value: unknown) {
       const {key,id,profile}=resolveKey(value);
-      connecting.delete(key);
-      grants.delete(key);
-      await replaceReader(key,id,profile);
+      revoke(key);
+      const refresh = replaceReader(key, id, profile);
+      await Promise.all([refresh, pendingRevocation ? saveConsents() : undefined]);
     },
-    async close() { connecting.clear(); grants.clear(); manager.dispose(); flush(); await publication; },
+    async close() {
+      connecting.clear();
+      grants.clear();
+      manager.dispose();
+      flush();
+      await Promise.all([publication, consentWrites]);
+    },
     wake() { manager.resumed(); },
   };
 }

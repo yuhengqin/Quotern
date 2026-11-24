@@ -16,6 +16,7 @@ use tauri_plugin_opener::OpenerExt;
 pub struct HostState {
     pub chrome: Mutex<Option<(tauri::window::Color, Option<tauri::Theme>)>>,
     pub references: Mutex<HashMap<String, String>>,
+    pub settings: Mutex<Option<Value>>,
     pub quota: Mutex<Option<Value>>,
     pub dialog: std::sync::atomic::AtomicBool,
     pub shortcut: tokio::sync::Mutex<String>,
@@ -29,6 +30,15 @@ pub fn desktop_event(app: &AppHandle, label: &str, channel: &str, args: Value) {
         "desktop-event",
         json!({"channel":channel,"args":args}),
     );
+}
+
+pub fn open_settings(app: &AppHandle, detail: Value) -> Result<(), String> {
+    let state = app.state::<HostState>();
+    let request_id = state.seq.fetch_add(1, Ordering::Relaxed);
+    *state.settings.lock().unwrap() = Some(json!({"requestId": request_id, "detail": detail}));
+    super::show(app, "main").map_err(|e| e.to_string())?;
+    desktop_event(app, "main", "app:open-settings", json!([]));
+    Ok(())
 }
 pub fn notification_actions(app: &AppHandle) -> Result<(), String> {
     #[cfg(windows)]
@@ -128,13 +138,12 @@ pub async fn operation(app: &AppHandle, message: &Value) -> Result<Value, String
             desktop_event(app, "tray", "quota:navigation", json!([]));
         }
         "host:settings" => {
-            super::show(app, "main").map_err(|e| e.to_string())?;
             let detail = if a[0].is_object() {
                 json!({"tab":"pet","pet":{"requestId":state.seq.fetch_add(1,Ordering::Relaxed).to_string(),"target":a[0]}})
             } else {
                 json!({"tab":"pet"})
             };
-            desktop_event(app, "main", "app:open-settings", json!([detail]));
+            open_settings(app, detail)?;
         }
         "host:fish-directory" => {
             app.opener()

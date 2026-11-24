@@ -10,6 +10,7 @@ import { desktopRendererMessages } from './i18n/desktop-renderer-messages';
 import { desktopShellMessages } from './i18n/desktop-shell-messages';
 import { desktopSubscriptionMessages } from './i18n/desktop-subscription-messages';
 import { dispatchDataSynced } from './lib/shell-events';
+import { restoreLegacyDisplayPreferences } from './lib/legacy-display-preferences';
 import { router } from './router';
 import { TrayPopoverView } from './components/TrayPopoverView';
 import { TITLEBAR_HEIGHT } from '../shared/window-chrome';
@@ -38,6 +39,12 @@ async function startRenderer() {
     window.tud.getLocalePreference().catch((): DesktopLocaleState => ({ preference: 'system', resolved: 'zh-CN', systemLocale: 'zh-CN' })),
     window.tud.getAppearance?.().catch(() => null),
     window.tud.getTheme?.().catch(() => undefined),
+    !isTrayPopover && window.tud.getLegacyDisplayPreferences
+      ? restoreLegacyDisplayPreferences(
+        { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+        window.tud.getLegacyDisplayPreferences,
+        window.tud.getDashboardRange,
+      ) : undefined,
   ]);
   await setActiveLocale(initialState.resolved);
   createRoot(document.getElementById('root')!).render(

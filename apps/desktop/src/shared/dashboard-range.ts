@@ -24,5 +24,5 @@ export const DASHBOARD_RANGE_SET_CHANNEL = 'dashboard-range:set';
 export const DASHBOARD_RANGE_CHANGED_CHANNEL = 'dashboard-range:changed';
 
 export function isDashboardRange(value: unknown): value is DashboardRange {
-  return typeof value === 'string' && value in DASHBOARD_RANGE_DAYS;
+  return typeof value === 'string' && Object.hasOwn(DASHBOARD_RANGE_DAYS, value);
 }

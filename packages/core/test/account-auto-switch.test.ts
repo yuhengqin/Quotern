@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { normalizeQuotaSnapshot } from '../src/quota/shared/quota-analysis.js';
@@ -13,6 +13,9 @@ async function fixture(t: test.TestContext) {
   const dir = await mkdtemp(join(tmpdir(), 'quotern-auto-switch-')); t.after(() => rm(dir, { recursive: true, force: true }));
   const profiles = ['one', 'two'].map(id => ({ id, provider: 'claude' as const, label: id, directory: join(dir, id), enabled: true }));
   for (const p of profiles) await mkdir(p.directory);
+  const alias = join(dir, 'one-alias');
+  await symlink(await realpath(profiles[0]!.directory), alias, process.platform === 'win32' ? 'junction' : 'dir');
+  profiles[0]!.directory = alias;
   const providers = profiles.map((profile, i) => {
     const p = normalizeQuotaSnapshot('claude', profile.label, { status: 'ready', fetchedAt: now, windows: [{ id: 'five-hour', label: '5h', usedPercent: i ? 10 : 100, resetsAt: now + 3600 }, { id: 'weekly', label: '7d', usedPercent: 20, resetsAt: now + 86400 }] });
     p.id = `claude@${profile.id}`; p.providerId = 'claude'; p.provenance = { source: 'native', observer: 'fixture', observedAt: now, identityVerified: true, accountRef: String(i + 1).repeat(64) };

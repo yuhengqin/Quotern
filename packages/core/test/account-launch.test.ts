@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { sessionTerminalLaunch } from '../src/session-actions.js';
@@ -40,7 +40,7 @@ test('default selection pins the chosen profile and uses its config directory wi
   const saved = await setDefaultLaunchProfile(f.dir, f.quotaDirectory, f.state, 'claude', 'work', initial.revision);
   assert.equal(saved.defaults.claude?.profileId, 'work');
   const selected = await resolveLaunchProfile(f.dir, 'claude');
-  assert.equal(selected?.directory, f.profileDirectory);
+  assert.equal(selected?.directory, await realpath(f.profileDirectory));
   assert.equal(selected?.label, 'Work');
   assert.notEqual(saved.revision, initial.revision);
   await assert.rejects(setAutoSwitchClaude(f.dir, true, initial.revision), /LAUNCH_CONFLICT/);
@@ -69,7 +69,7 @@ test('enabling after initial identity loading binds the fresh selected account, 
 
 test('explicit profiles resolve through registered runtime sources, with no default required', async t => {
   const f = await fixture(t);
-  assert.equal((await resolveLaunchProfile(f.dir, 'claude', { profileId: 'work', runtime: 'cli' }))?.directory, f.profileDirectory);
+  assert.equal((await resolveLaunchProfile(f.dir, 'claude', { profileId: 'work', runtime: 'cli' }))?.directory, await realpath(f.profileDirectory));
   assert.equal(await resolveLaunchProfile(f.dir, 'codex'), null);
   await assert.rejects(resolveLaunchProfile(f.dir, 'codex', { profileId: 'work', runtime: 'cli' }), /LAUNCH_PROFILE_UNAVAILABLE/);
   await assert.rejects(setAutoSwitchClaude(f.dir, true, (await readLaunchPreferences(f.dir)).revision), /LAUNCH_DEFAULT_REQUIRED/);

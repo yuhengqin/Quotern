@@ -15,9 +15,13 @@ export async function desktopPreferences(profile: string, emit: (channel: string
   let values: Record<string, unknown>;
   try {
     values = JSON.parse(await readFile(file, 'utf8'));
-    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Invalid desktop preferences');
+    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new SyntaxError('Invalid desktop preferences');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (error instanceof SyntaxError) {
+      console.warn('Invalid desktop preferences. Using defaults until preferences are saved again.');
+    } else if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
     values = {};
   }
   let writing = Promise.resolve();

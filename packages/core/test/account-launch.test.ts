@@ -70,6 +70,13 @@ test('enabling after initial identity loading binds the fresh selected account, 
 test('explicit profiles resolve through registered runtime sources, with no default required', async t => {
   const f = await fixture(t);
   assert.equal((await resolveLaunchProfile(f.dir, 'claude', { profileId: 'work', runtime: 'cli' }))?.directory, await realpath(f.profileDirectory));
+  const desktop = { profileId: 'work', runtime: 'desktop' } as const;
+  await assert.rejects(resolveLaunchProfile(f.dir, 'claude', desktop), /LAUNCH_PROFILE_UNAVAILABLE/);
+  const desktopQuota = join(f.dir, 'desktop-quota'), desktopProfile = join(f.dir, 'desktop-account');
+  await mkdir(desktopQuota); await mkdir(desktopProfile);
+  await writeFile(join(desktopQuota, 'preferences.json'), JSON.stringify({ profiles: [{ ...f.profile, directory: desktopProfile }] }));
+  await registerLaunchSource(f.dir, 'desktop', desktopQuota);
+  assert.equal((await resolveLaunchProfile(f.dir, 'claude', desktop))?.directory, await realpath(desktopProfile));
   assert.equal(await resolveLaunchProfile(f.dir, 'codex'), null);
   await assert.rejects(resolveLaunchProfile(f.dir, 'codex', { profileId: 'work', runtime: 'cli' }), /LAUNCH_PROFILE_UNAVAILABLE/);
   await assert.rejects(setAutoSwitchClaude(f.dir, true, (await readLaunchPreferences(f.dir)).revision), /LAUNCH_DEFAULT_REQUIRED/);

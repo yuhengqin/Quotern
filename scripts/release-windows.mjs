@@ -13,10 +13,14 @@ const dir = join(desktop, 'release', version);
 const commit = execFileSync('git', ['rev-parse','HEAD'], {cwd: root, encoding: 'utf8'}).trim();
 const targets = { x64: 'x86_64-pc-windows-msvc', arm64: 'aarch64-pc-windows-msvc' };
 const layout = releaseLayout(version,'win');
+const windowsPublicKey = process.env.QUOTERN_UPDATER_PUBLIC_KEY?.trim();
+const hasPublicKey = Boolean(windowsPublicKey);
+const hasPrivateKey = Boolean(process.env.TAURI_SIGNING_PRIVATE_KEY?.trim());
+const signedUpdates = hasPublicKey && hasPrivateKey;
+const requireSignedWindows = process.env.QUOTERN_REQUIRE_SIGNED_UPDATES === 'true';
+if (hasPublicKey !== hasPrivateKey || requireSignedWindows && !signedUpdates) throw Error('Supply both updater signing keys');
 await mkdir(dir, {recursive:true});
 await rm(join(dir,'win-artifacts.json'), {force:true});
-const signedUpdates = Boolean(process.env.QUOTERN_UPDATER_PUBLIC_KEY && process.env.TAURI_SIGNING_PRIVATE_KEY);
-if (Boolean(process.env.QUOTERN_UPDATER_PUBLIC_KEY) !== Boolean(process.env.TAURI_SIGNING_PRIVATE_KEY)) throw Error('Supply both updater signing keys');
 for (const [arch, target] of Object.entries(targets)) {
   const config = JSON.stringify({bundle: {createUpdaterArtifacts:signedUpdates}});
   execFileSync(process.execPath,[join(desktop,'scripts/run-tauri.mjs'),'bundle','--target',target,'--bundles','nsis','--config',config],{cwd:desktop,stdio:'inherit'});
@@ -35,4 +39,4 @@ for (const [arch, target] of Object.entries(targets)) {
   execFileSync(makensis,['/V2','/DHOST_DIR='+release,'/DNODE_RESOURCES='+join(desktop,'out/sidecar'),'/DOUTPUT_EXE='+join(dir,portable),join(desktop,'scripts/portable.nsi')],{cwd:desktop,stdio:'inherit'});
 }
 await refreshMetadata({dir,platform:'win',version});
-await verifyPlatform({dir,platform:'win',version,commit,writeManifest:true});
+await verifyPlatform({dir,platform:'win',version,commit,writeManifest:true,requireSignedWindows,windowsPublicKey});

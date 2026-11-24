@@ -178,7 +178,11 @@ DMG 装订会修改文件；脚本在全部验收后重建四份 blockmap 和 `l
 
 ### Windows 与源码归档
 
-Windows 同时生成 x64 / ARM64 的 NSIS 安装版、便携版。校验四份 EXE、两份安装版 blockmap、更新清单及哈希，生成 `win-artifacts.json`；便携版不进入安装版自动更新清单。配置 `QUOTERN_UPDATER_PUBLIC_KEY` 和 `TAURI_SIGNING_PRIVATE_KEY` 后生成 Tauri 更新签名与各架构 JSON，两个密钥必须同时提供。Windows 代码签名凭据尚需发布者配置并验收，本次统一流程没有替代 Windows 签名和两种架构的实机安装、启动、升级测试。
+Windows 同时生成 x64 / ARM64 的 NSIS 安装版和便携版。发布脚本校验四份 EXE、两份安装版 blockmap、更新清单及哈希，再生成 `win-artifacts.json`。自动更新清单只包含安装版。
+
+发布草稿必须配置仓库变量 `QUOTERN_UPDATER_PUBLIC_KEY` 和 Secret `TAURI_SIGNING_PRIVATE_KEY`。私钥有密码时追加 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。Windows 构建和跨平台汇总都用同一公钥验证两个架构的最终安装包及签名中的版本。只构建 Actions artifacts 时可以同时省略公钥和私钥。Windows Authenticode 签名另行配置与验收。
+
+首个 Tauri 版本须高于已发布的 Electron 版本。Windows 实机验收从已安装的 Electron 客户端触发升级，核对原安装位置、应用重启、历史数据及偏好，再从该 Tauri 客户端安装带签名的下一版。全用户安装需要验证原安装范围及管理员权限提示。
 
 源码任务对精确 HEAD 执行 `git archive`，在仓库外解压、不带 `.git`，重新安装依赖、检查工作区链接、完整构建并执行 Desktop 类型检查，输出 `source-archive.json`。汇总要求报告中的版本和 commit 与两平台一致。本地 `--working-tree` 模式只做未提交源码验证，其报告不能用于发布汇总。用户构建说明见 [CONTRIBUTING](./CONTRIBUTING.md#从-source-code-归档构建)。GitHub 自动附加的 Source code zip / tar.gz 是 tag 快照，不包含安装包、依赖和 Git 历史；无须额外上传同名源码文件。
 

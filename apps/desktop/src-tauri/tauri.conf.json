@@ -24,6 +24,8 @@
     "resources": { "../out/sidecar/": "node/" },
     "windows": {
       "nsis": {
+        "template": "nsis/installer.nsi",
+        "installerHooks": "nsis/electron-migration.nsh",
         "installMode": "both",
         "displayLanguageSelector": true,
         "languages": ["English", "SimpChinese", "Japanese", "Korean"]

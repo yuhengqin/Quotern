@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -64,9 +64,35 @@ function isMacUpdaterFile(name) {
   return /-mac\.yml$/.test(name) || /^Quotern-.*-mac-.*(?:\.(zip|dmg)\.blockmap|\.app\.tar\.gz(?:\.sig)?)$/.test(name) || /^tauri-darwin-.*\.json$/.test(name);
 }
 
+async function verifyWindowsSignature(file, version, publicKey, encoded) {
+  const [, keyLine] = Buffer.from(publicKey, 'base64').toString('utf8').split(/\r?\n/);
+  const [, signatureLine, comment, globalLine] = Buffer.from(encoded, 'base64').toString('utf8').split(/\r?\n/);
+  const key = Buffer.from(keyLine ?? '', 'base64');
+  const signature = Buffer.from(signatureLine ?? '', 'base64');
+  const globalSignature = Buffer.from(globalLine ?? '', 'base64');
+  const prefix = 'trusted comment: ';
+  if (key.length !== 42 || !['Ed', 'ED'].includes(key.subarray(0, 2).toString()) ||
+      signature.length !== 74 || signature.subarray(0, 2).toString() !== 'ED' || globalSignature.length !== 64 ||
+      !key.subarray(2, 10).equals(signature.subarray(2, 10)) || !comment?.startsWith(prefix)) {
+    throw new Error('Invalid Tauri update signature or public key: ' + basename(file));
+  }
+  const verifier = createPublicKey({
+    key: { kty: 'OKP', crv: 'Ed25519', x: key.subarray(10).toString('base64url') },
+    format: 'jwk',
+  });
+  const signed = signature.subarray(10);
+  const trusted = comment.slice(prefix.length);
+  const digest = await hashFile(file, 'blake2b512', 'base64');
+  if (!verify(null, Buffer.from(digest, 'base64'), verifier, signed) ||
+      !verify(null, Buffer.concat([signed, Buffer.from(trusted)]), verifier, globalSignature) ||
+      !isDeepStrictEqual(trusted.split('\t').filter(field => field.startsWith('version:')), ['version:' + version])) {
+    throw new Error('Invalid Tauri update signature or version: ' + basename(file));
+  }
+}
+
 // A stock Tauri updater verifies this signature before exposing downloaded bytes.
 // Only include feeds for builds that carry the matching public key.
-async function nativeFeeds({dir,platform,version,macosMode}, write) {
+async function nativeFeeds({dir,platform,version,macosMode,requireSignedWindows,windowsPublicKey}, write) {
   const mac = platform === 'mac';
   if (mac && macosMode === 'adhoc') return [];
   const archs = [['x64','x86_64'],['arm64','aarch64']];
@@ -75,12 +101,17 @@ async function nativeFeeds({dir,platform,version,macosMode}, write) {
     return {asset, signature:asset+'.sig', feed:`tauri-${mac?'darwin':'windows'}-${cpu}.json`};
   });
   const existing = new Set(await readdir(dir));
-  if (!records.some(r=>existing.has(r.signature)||existing.has(r.feed)||mac&&existing.has(r.asset))) return [];
+  if (!records.some(r=>existing.has(r.signature)||existing.has(r.feed)||mac&&existing.has(r.asset))) {
+    if (!mac && requireSignedWindows) throw new Error('Signed Windows update artifacts are required for publication');
+    return [];
+  }
+  if (!mac && requireSignedWindows && !windowsPublicKey) throw new Error('Missing Windows updater public key');
   const result=[];
   for(const {asset,signature,feed} of records){
     await requiredFile(dir,asset);
     const encoded=(await readFile(join(dir,signature),'utf8')).trim();
     if(!/^[a-zA-Z0-9+/]+=*$/.test(encoded) || !Buffer.from(encoded,'base64').toString('utf8').startsWith('untrusted comment:')) throw Error('Invalid Tauri update signature: '+asset);
+    if (!mac && windowsPublicKey) await verifyWindowsSignature(join(dir, asset), version, windowsPublicKey, encoded);
     const expected={version,url:`https://github.com/yuhengqin/Quotern/releases/download/v${version}/${asset}`,signature:encoded};
     if(write) await writeFile(join(dir,feed),JSON.stringify(expected,null,2)+'\n');
     else if(!isDeepStrictEqual(await readJson(join(dir,feed)),expected)) throw Error('Signed updater feed does not match its archive: '+asset);
@@ -118,7 +149,7 @@ async function checkMacProof(dir, version, commit, downloads, mode) {
   }
 }
 
-export async function verifyPlatform({ dir, platform, version, commit, macosMode = 'signed', writeManifest = false }) {
+export async function verifyPlatform({ dir, platform, version, commit, macosMode = 'signed', writeManifest = false, requireSignedWindows = false, windowsPublicKey }) {
   if (!/^[0-9a-f]{40}$/i.test(commit ?? '')) throw new Error('Release commit must be a full Git commit ID');
   const layout = releaseLayout(version, platform, macosMode);
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -162,7 +193,8 @@ export async function verifyPlatform({ dir, platform, version, commit, macosMode
   }
   if (platform === 'mac') await checkMacProof(dir, version, commit, layout.downloads, macosMode);
   const names = [...layout.downloads, ...layout.updates.map(name => `${name}.blockmap`), ...layout.metadataFiles, ...(platform === 'mac' ? ['macos-verification.json'] : [])];
-  names.push(...await nativeFeeds({dir,platform,version,macosMode},false));
+  const updaterFiles = await nativeFeeds({dir,platform,version,macosMode,requireSignedWindows,windowsPublicKey},false);
+  names.push(...updaterFiles);
   const manifest = { schemaVersion: 1, platform, version, commit, ...(platform === 'mac' ? { macosMode, updatePolicy: macosReleasePolicy(macosMode).updatePolicy } : {}), files: await Promise.all(names.map(name => requiredFile(dir, name))) };
   if (writeManifest) await writeFile(join(dir, `${platform}-artifacts.json`), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
@@ -178,7 +210,7 @@ async function findInput(input, filename, folders) {
   return found[0];
 }
 
-export async function assembleRelease({ input, output, version, commit, macosMode = 'signed' }) {
+export async function assembleRelease({ input, output, version, commit, macosMode = 'signed', requireSignedWindows = false, windowsPublicKey }) {
   const policy = macosReleasePolicy(macosMode);
   const verified = [];
   for (const platform of ['win', 'mac']) {
@@ -186,7 +218,7 @@ export async function assembleRelease({ input, output, version, commit, macosMod
     const manifest = await readJson(manifestPath);
     if (manifest.schemaVersion !== 1 || manifest.platform !== platform || manifest.version !== version || manifest.commit !== commit) throw new Error(`${platform} version/commit mismatch`);
     if (platform === 'mac' && (manifest.macosMode !== macosMode || manifest.updatePolicy !== policy.updatePolicy)) throw new Error('macOS manifest release mode/policy mismatch');
-    const current = await verifyPlatform({ dir: dirname(manifestPath), platform, version, commit, macosMode });
+    const current = await verifyPlatform({ dir: dirname(manifestPath), platform, version, commit, macosMode, requireSignedWindows, windowsPublicKey });
     if (!Array.isArray(manifest.files) || JSON.stringify(manifest.files) !== JSON.stringify(current.files)) throw new Error(`${platform} manifest file size/hash mismatch`);
     verified.push({ dir: dirname(manifestPath), manifest });
   }
@@ -241,6 +273,8 @@ async function main() {
   const version = values.version ?? (await readJson(join(ROOT, 'apps/desktop/package.json'))).version;
   const commit = values.commit ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
   const macosMode = values['macos-mode'] ?? (positionals[0] === 'preflight' ? 'adhoc' : 'signed');
+  const requireSignedWindows = process.env.QUOTERN_REQUIRE_SIGNED_UPDATES === 'true';
+  const windowsPublicKey = process.env.QUOTERN_UPDATER_PUBLIC_KEY?.trim();
   macosReleasePolicy(macosMode);
   if (positionals[0] === 'preflight') {
     const ref = values.ref ?? process.env.GITHUB_REF ?? '';
@@ -257,10 +291,10 @@ async function main() {
     await refreshMetadata({ dir: resolve(values.dir ?? join(ROOT, 'apps/desktop/release', version)), platform: values.platform, version, macosMode });
   } else if (positionals[0] === 'verify') {
     const dir = resolve(values.dir ?? join(ROOT, 'apps/desktop/release', version));
-    const result = await verifyPlatform({ dir, platform: values.platform, version, commit, macosMode, writeManifest: true });
+    const result = await verifyPlatform({ dir, platform: values.platform, version, commit, macosMode, writeManifest: true, requireSignedWindows, windowsPublicKey });
     console.log(`Verified ${result.files.length} ${values.platform} release files at ${commit}`);
   } else if (positionals[0] === 'assemble') {
-    console.log(JSON.stringify(await assembleRelease({ input: resolve(values.input), output: resolve(values.output), version, commit, macosMode }), null, 2));
+    console.log(JSON.stringify(await assembleRelease({ input: resolve(values.input), output: resolve(values.output), version, commit, macosMode, requireSignedWindows, windowsPublicKey }), null, 2));
   } else {
     throw new Error('Usage: release-artifacts.mjs <preflight|refresh|verify|assemble> [--platform win|mac] [--dir path]');
   }

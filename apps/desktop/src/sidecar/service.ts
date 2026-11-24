@@ -1,7 +1,8 @@
 import { join } from 'node:path';
+import { MAX_LOCAL_ADMIN_BYTES } from 'quotern-core';
 import { bindRuntimeQuota } from '../main/runtime-quota';
 import { onLocalRuntimeSynced, localApiRequest, pokeSyncOnForeground, refreshLocalPricingIfStale,
-  setLocalRuntimeQuitting, startLocalRuntime, stopLocalRuntime } from '../main/local-runtime';
+  resumeLocalRuntimeWatchdog, setLocalRuntimeQuitting, startLocalRuntime, stopLocalRuntime } from '../main/local-runtime';
 import { readDesktopLegacyBackgrounds } from '../main/share-background-store';
 import { QUOTA_GET, QUOTA_REFRESH, QUOTA_SET } from '../shared/quota';
 import { SHARE_BACKGROUNDS_CHANNEL } from '../shared/share-backgrounds';
@@ -17,6 +18,8 @@ import { nativeText } from '../main/native-messages';
 import { quotaTrayTitle, quotaTraySummary } from '../main/tray-quota';
 import { formatTrayUsage, isTrayUsageMode } from '../shared/tray-usage';
 import { allowsLocalApiRequest } from './local-api-access';
+import { BACKUP_ROUTE, BACKUP_TRANSFER } from '../shared/backup-transfer';
+import { createBackupTransfer } from './backup-transfer';
 
 export interface DesktopService {
   request(window: string, channel: string, args: unknown[]): Promise<unknown>;
@@ -42,11 +45,21 @@ export async function createDesktopService(profile: string, emit: (channel: stri
   if(pets) await pets.request('pet:theme',[(await prefs.channels.get('theme:get')!() as {resolved:string}).resolved==='dark']);
   const unbind = bindRuntimeQuota({ directory: quota.directory, getState: quota.getState });
   const unsubscribe = onLocalRuntimeSynced(() => emit('tud:data-synced'));
-  const startup = startLocalRuntime().then(async () => { quota.start(); await Promise.all([notices.start(),pets?.start()]); }).catch(error => {
+  const backup = createBackupTransfer(MAX_LOCAL_ADMIN_BYTES, (body, headers) =>
+    localApiRequest(BACKUP_ROUTE, { method: 'POST', body, headers }));
+  let closed = false;
+  const runtimeStartup = startLocalRuntime().catch(error => {
     console.error('Desktop runtime startup:', error instanceof Error ? error.message : error);
     emit('app:runtime-notice', 'LOCAL_RUNTIME_NOT_READY');
   });
-  let closed = false;
+  resumeLocalRuntimeWatchdog();
+  const startup = runtimeStartup.then(async () => {
+    if (closed) return;
+    quota.start();
+    await Promise.all([notices.start(), pets?.start()]);
+  }).catch(error => {
+    console.error('Desktop background startup:', error instanceof Error ? error.message : error);
+  });
   return {
     async request(window, channel, args) {
       if (closed) throw Error('Desktop runtime is stopping');
@@ -88,6 +101,9 @@ export async function createDesktopService(profile: string, emit: (channel: stri
         return pets.request(channel,args);
       }
       switch (channel) {
+        case BACKUP_TRANSFER:
+          if (window !== 'main') throw new Error('Main window required');
+          return backup.request(value);
         case QUOTA_GET: return quota.getState();
         case QUOTA_REFRESH: return quota.refresh(value);
         case QUOTA_SET: return quota.set(value);
@@ -115,6 +131,7 @@ export async function createDesktopService(profile: string, emit: (channel: stri
     async close() {
       if (closed) return;
       closed = true;
+      backup.close();
       setLocalRuntimeQuitting(true);
       await startup;
       unsubscribe();

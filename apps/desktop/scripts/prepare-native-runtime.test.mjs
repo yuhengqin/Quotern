@@ -105,6 +105,8 @@ for (const [platform, arch, , selected] of targets.filter(([platform]) => platfo
     await writeFile(path.join(app, 'resources/icon.png'), 'fixture notification icon');
     await writeFile(path.join(app, 'resources/node-LICENSE.txt'), 'fixture Node license');
     await writeFile(path.join(app, 'THIRD_PARTY_NOTICES.md'), 'fixture notices');
+    await mkdir(path.join(app, 'src-tauri/nsis'), { recursive: true });
+    await cp(new URL('../src-tauri/nsis/License-MIT.md', import.meta.url), path.join(app, 'src-tauri/nsis/License-MIT.md'));
     await mkdir(esbuild, { recursive: true });
     await writeFile(path.join(esbuild, 'package.json'), '{"name":"esbuild","type":"module","exports":"./index.mjs"}');
     await writeFile(path.join(esbuild, 'index.mjs'), `import { writeFile } from 'node:fs/promises';

@@ -108,6 +108,7 @@ export async function resolveLaunchProfile(dataDir: string, provider: LaunchProv
   if (options.profileId) {
     const sources = await readAgentJson<Partial<Record<'cli' | 'desktop', { directory: string; at: number }>>>(join(dataDir, 'account-launch', 'sources.json'), {});
     const runtime = options.runtime ?? (await readRuntimeOwner(dataDir))?.kind;
+    if (runtime === 'desktop' && !sources.desktop) throw new Error('LAUNCH_PROFILE_UNAVAILABLE');
     quotaDirectory = (runtime ? sources[runtime] : Object.values(sources).sort((a, b) => b.at - a.at)[0])?.directory ?? join(dataDir, 'quota');
   }
   if (!quotaDirectory || !isAbsolute(quotaDirectory)) throw new Error('LAUNCH_PROFILE_UNAVAILABLE');

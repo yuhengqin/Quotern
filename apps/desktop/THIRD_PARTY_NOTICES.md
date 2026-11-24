@@ -1,4 +1,8 @@
-# Desktop pet source and asset notices
+# Desktop third-party notices
+
+## Windows installer template
+
+The NSIS installer adapts the upstream [tauri-bundler template](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.6/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi), version 2.10.6 from Tauri CLI 2.12.6, under the MIT license. The original license is retained in the source and bundled as tauri-bundler-LICENSE-MIT.md.
 
 ## Independent dsh-pet
 

@@ -11,6 +11,8 @@ mod resources;
 mod sidecar;
 mod tray_menu;
 mod updates;
+#[cfg(windows)]
+mod windows_startup;
 use base64::Engine;
 use host::{operation as native_operation, HostState};
 use serde_json::{json, Value};
@@ -457,29 +459,17 @@ fn apply_autostart(_app: &AppHandle, enabled: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
         // A portable's extracted host is deleted on exit. Register its stable launcher.
-        use std::io::ErrorKind;
         use winreg::{enums::HKEY_CURRENT_USER, RegKey};
         let key = RegKey::predef(HKEY_CURRENT_USER)
             .create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run")
             .map_err(|e| e.to_string())?
             .0;
-        if !enabled {
-            return match key.delete_value("Quotern") {
-                Err(e) if e.kind() != ErrorKind::NotFound => Err(e.to_string()),
-                _ => Ok(()),
-            };
-        }
         let launcher = std::env::var_os("PORTABLE_EXECUTABLE_FILE")
             .map(std::path::PathBuf::from)
             .filter(|p| p.is_absolute() && p.is_file())
             .map_or_else(std::env::current_exe, Ok)
             .map_err(|e| e.to_string())?;
-        let command = format!("\"{}\" --autostart", launcher.display());
-        if key.get_value::<String, _>("Quotern").ok().as_ref() != Some(&command) {
-            key.set_value("Quotern", &command)
-                .map_err(|e| e.to_string())?;
-        }
-        Ok(())
+        windows_startup::apply(&key, &launcher, enabled).map_err(|e| e.to_string())
     }
     #[cfg(not(windows))]
     {

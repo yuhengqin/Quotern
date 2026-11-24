@@ -67,6 +67,7 @@ jobs:
       - run: rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
       - name: Build and verify x64 and ARM64 Windows assets without uploading
         env:
+          QUOTERN_REQUIRE_SIGNED_UPDATES: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
           QUOTERN_UPDATER_PUBLIC_KEY: ${{ vars.QUOTERN_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -213,6 +214,8 @@ jobs:
       - name: Revalidate final bytes and assemble matching commits only
         env:
           MACOS_MODE: ${{ needs.preflight.outputs.macos-mode }}
+          QUOTERN_REQUIRE_SIGNED_UPDATES: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          QUOTERN_UPDATER_PUBLIC_KEY: ${{ vars.QUOTERN_UPDATER_PUBLIC_KEY }}
         run: corepack pnpm assemble:desktop --macos-mode "$MACOS_MODE" --input "$RUNNER_TEMP/release-input" --output "$RUNNER_TEMP/release-ready"
       - uses: actions/upload-artifact@v7
         with:

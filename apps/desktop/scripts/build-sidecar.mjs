@@ -11,6 +11,7 @@ await mkdir(path.join(out, 'resources'), { recursive:true });
 await copyFile(path.join(root,'resources/icon.png'),path.join(out,'resources/icon.png'));
 await copyFile(path.join(root,'resources/node-LICENSE.txt'),path.join(out,'node-LICENSE.txt'));
 await copyFile(path.join(root,'THIRD_PARTY_NOTICES.md'),path.join(out,'THIRD_PARTY_NOTICES.md'));
+await copyFile(path.join(root, 'src-tauri/nsis/License-MIT.md'), path.join(out, 'tauri-bundler-LICENSE-MIT.md'));
 const {version} = JSON.parse(await readFile(path.join(root,'package.json'),'utf8'));
 await writeFile(path.join(out,'release-mode.json'),JSON.stringify({version,mode:process.env.QUOTERN_MACOS_MODE || 'local'}));
 const platform = process.env.TAURI_ENV_PLATFORM || process.platform;
@@ -38,11 +39,6 @@ await build({
   plugins: [{
     name: 'standalone-node-runtime',
     setup(plugin) {
-      plugin.onResolve({filter:/^(?:\.\.\/|\.\/)parsers\/cursor\.js$/}, args => {
-        if (args.importer.replaceAll('\\','/').includes('/packages/core/dist/')) {
-          return {path:path.join(root, 'src/sidecar/cursor-usage.ts')};
-        }
-      });
       plugin.onResolve({ filter: /^electron(?:$|\/|-)/ }, args => ({
         errors: [{ text: 'Desktop sidecar imports ' + args.path + ' from ' + args.importer }],
       }));

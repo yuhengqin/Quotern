@@ -45,6 +45,7 @@ async function prepareWindowStart(provider: 'claude' | 'codex', accountRef: stri
 }
 export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop', dependencies: {
   now?: () => number; isOwner?: () => Promise<boolean>; execute?: (provider: 'claude' | 'codex') => Promise<void>; isolated?: boolean;
+  getState?: () => QuotaState | null;
 } = {}) {
   const now = dependencies.now ?? (() => Date.now() / 1000);
   const owner = dependencies.isOwner ?? (async () => { const value = await readRuntimeOwner(dataDir); return value?.pid === process.pid && value.kind === runtime; });
@@ -66,12 +67,19 @@ export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop',
           if (result.reason === 'waiting-reset' && result.key && result.reset !== undefined) memory.known[result.key] = { reset: result.reset, at: result.p!.fetchedAt! };
           if (result.reason !== 'eligible' || !result.p || !result.attempt) continue;
           const p = result.p, attempt = result.attempt;
+          const stillEligible = () => {
+            if (!dependencies.getState) return true;
+            const latest = windowCandidate(dependencies.getState(), provider, memory, now());
+            return latest.reason === 'eligible' && latest.attempt === attempt;
+          };
           if (!await owner() || !(await readAgentPreferences(dataDir))[`${provider}WindowStart`]) continue;
+          if (!stillEligible()) continue;
           const prepared = dependencies.execute ? { execute: () => dependencies.execute!(provider), dispose: async () => {} } : await prepareWindowStart(provider, p.provenance!.accountRef!);
           if (!prepared) { (memory.blocked ??= {})[provider] = stamp; continue; }
           if (memory.blocked) delete memory.blocked[provider];
           try {
             if (!await owner() || !(await readAgentPreferences(dataDir))[`${provider}WindowStart`]) continue;
+            if (!stillEligible()) continue;
             memory.attempted[attempt] = { at: stamp, outcome: 'attempted' };
             await writeAgentJson(file, memory); // Persist BEFORE any request; crashes never cause a retry.
             try { await prepared.execute(); memory.attempted[attempt]!.outcome = 'completed'; }

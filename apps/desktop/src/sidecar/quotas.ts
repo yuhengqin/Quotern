@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { createWindowStarter } from 'quotern-core';
 import { resolveDataDir } from 'quotern-core/paths';
+import { registerLaunchSource } from 'quotern-core/quota/account-launch';
+import { createAccountAutoSwitcher } from 'quotern-core/quota/account-auto-switch';
 import { QuotaManager, type QuotaReader } from 'quotern-core/quota/readers/quota-manager';
 import { openQuotaStore, validQuotaPatch } from 'quotern-core/quota/readers/quota-store';
 import { QUOTA_PROVIDER_DESCRIPTORS } from 'quotern-core/quota/shared/provider-descriptors';
@@ -45,6 +48,8 @@ async function readCliConsents(file: string, targets: Map<string, string | null>
 export async function desktopQuotas(profile: string, emit: Emit, read = readOfficialProvider, dataDir = resolveDataDir()) {
   const directory = join(profile, 'quota');
   const store = await openQuotaStore(directory);
+  try { await registerLaunchSource(dataDir, 'desktop', directory); }
+  catch { console.warn('Desktop account launch source unavailable'); }
   const consentFile = join(directory, 'cli-consents.json');
   const consents = await readCliConsents(consentFile, cliConsentTargets(store.preferences.profiles ?? []));
   // Only the grants for official CLI readers survive a restart. API keys and
@@ -109,6 +114,10 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
     const current=project(next);next=undefined;
     emit(QUOTA_CHANGED,current);
     if(current.providers.some(p=>p.queriedAt!==null)||current.providers.length) publication=snapshot.publish(projectQuotaReport(current,'desktop')).catch(()=>{console.warn('Quota snapshot unavailable');});
+    if (manager.canRunAutomation()) {
+      void autoSwitch().catch(() => console.warn('Desktop account rotation unavailable'));
+      void startWindow(current).catch(() => console.warn('Desktop quota window startup unavailable'));
+    }
   }
   const manager = new QuotaManager({
     store, readers,
@@ -143,6 +152,13 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
       next=state;
       pending??=setImmediate(flush);
     },
+  });
+  const autoSwitch = createAccountAutoSwitcher(dataDir, directory, 'desktop', {
+    getState: () => project(manager.getState()),
+    isActive: () => manager.canRunAutomation(),
+  });
+  const startWindow = createWindowStarter(dataDir, 'desktop', {
+    getState: () => manager.canRunAutomation() ? project(manager.getState()) : null,
   });
   function resolveKey(key:unknown) {
     if(typeof key!=='string')throw Error('Unknown quota provider');

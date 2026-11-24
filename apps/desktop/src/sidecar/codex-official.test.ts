@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
+import { markQuotaIdentity, quotaEvidence, quotaIdentity } from 'quotern-core/quota/readers/quota-identity';
 import { createCodexOfficialReader } from './codex-official';
 
 function fakeProcess() {
@@ -34,6 +35,7 @@ test('performs only the fixed handshake and maps multi-bucket usage', async () =
   fixture.reply({ id: 1, result: {} });
   assert.deepEqual(fixture.sent.slice(1), [{ method: 'initialized', params: {} }, { id: 2, method: 'account/rateLimits/read' }]);
   fixture.reply({ id: 2, result: {
+    accountId: 'synthetic-codex-workspace',
     rateLimitsByLimitId: {
       codex: { limitId: 'codex', planType: 'plus', primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1900000000 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1900100000 } },
       code_review: { limitName: 'Code review', primary: { usedPercent: 10, windowDurationMins: 300, resetsAt: 1900000100 } },
@@ -43,6 +45,10 @@ test('performs only the fixed handshake and maps multi-bucket usage', async () =
   const result = await resultPromise;
   assert.equal(fixture.child.killed, true);
   assert.equal(result.status, 'ready');
+  assert.equal(quotaIdentity(result), quotaIdentity(markQuotaIdentity({}, 'synthetic-codex-workspace')));
+  assert.equal(quotaEvidence(result)?.identityVerified, true);
+  assert.match(quotaEvidence(result)?.accountRef ?? '', /^[0-9a-f]{64}$/);
+  assert.doesNotMatch(JSON.stringify(result), /synthetic-codex-workspace/);
   assert.equal(result.planLabel, 'Plus');
   assert.equal(result.resetCredits, 1);
   assert.deepEqual(result.resetCreditExpirations, [1900200000]);
@@ -90,6 +96,7 @@ test('reads the legacy single bucket across UTF-8 chunk boundaries', async () =>
   assert.equal(result.status, 'ready');
   assert.equal(result.windows[0].id, 'account:18000');
   assert.equal(result.planType, 'team');
+  assert.equal(quotaIdentity(result), null, 'usage without an account identifier must not be attributed');
   assert.equal(result.resetCredits, null);
 });
 

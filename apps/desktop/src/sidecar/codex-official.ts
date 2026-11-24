@@ -7,7 +7,9 @@ import type { EventEmitter } from 'node:events';
 import type { Readable, Writable } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
 import { findSessionExecutable } from 'quotern-core/session-actions';
+import { profileLaunchBindings } from 'quotern-core/quota/account-launch';
 import { guiCliEnvironment } from 'quotern-core/quota/readers/cli-runtime';
+import { markQuotaEvidence, markQuotaIdentity } from 'quotern-core/quota/readers/quota-identity';
 import { codexPlanLabel, mapCodexRateLimitWindows } from 'quotern-core/quota/shared/codex-subscription';
 import { codexQuotaWindows } from 'quotern-core/quota/shared/quota-provider-windows';
 
@@ -55,9 +57,13 @@ function mapResponse(value: unknown) {
     const row = record(value);
     return row.status === 'available' && typeof row.expiresAt === 'number' && Number.isFinite(row.expiresAt) && row.expiresAt > 0 ? [row.expiresAt] : [];
   }).sort((a, b) => a - b) : resetCredits === 0 ? [] : null;
-  return { status: 'ready' as const, message: null, windows, planType: main.planType ?? null, rateLimitResetCredits: result.rateLimitResetCredits ?? null,
+  const snapshot = { status: 'ready' as const, message: null, windows, planType: main.planType ?? null, rateLimitResetCredits: result.rateLimitResetCredits ?? null,
     planLabel: codexPlanLabel(main.planType), resetCredits, resetCreditExpirations,
     ...mapCodexRateLimitWindows(main), hasAccount: true, fetchedAt: Math.floor(Date.now() / 1000), stale: false };
+  const accountId = typeof result.accountId === 'string' && result.accountId.length <= 256 ? result.accountId.trim() : '';
+  return markQuotaEvidence(markQuotaIdentity(snapshot, accountId), {
+    source: 'native', observer: 'Codex 官方查询', observedAt: snapshot.fetchedAt, identityVerified: Boolean(accountId),
+  }, { service: 'openai', accountId });
 }
 
 export function createCodexOfficialReader(deps: Dependencies) {
@@ -112,8 +118,17 @@ export function createCodexOfficialReader(deps: Dependencies) {
   };
 }
 
-export const readCodexOfficial = (directory?:string) => createCodexOfficialReader({
+export const readCodexOfficial = (directory?: string) => createCodexOfficialReader({
   find: findCodex,
-  spawn: executable => spawnProcess(executable, ['app-server', '--listen', 'stdio://'], { env: {...guiCliEnvironment(), ...(directory ? { CODEX_HOME:directory } : {})}, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }),
+  spawn: executable => {
+    const env = { ...guiCliEnvironment() };
+    if (directory) for (const [key, value] of Object.entries(profileLaunchBindings('codex', directory))) {
+      if (value === null) delete env[key];
+      else env[key] = value;
+    }
+    return spawnProcess(executable, [
+      '-c', 'chatgpt_base_url="https://chatgpt.com/backend-api/"', 'app-server', '--listen', 'stdio://',
+    ], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  },
   timeoutMs: 15_000,
 })();

@@ -56,7 +56,12 @@ try {
       await run(process.execPath,[cli,'dev','--config',JSON.stringify(config),...options],env);
     } else {
       await run(process.execPath,[pkgBin('vite','vite'),'build','--config','vite.config.ts'],env);
-      await run(process.execPath,[cli,'build',...(mode==='build'?['--no-bundle']:[]),...options],env);
+      const publicKey = env.QUOTERN_UPDATER_PUBLIC_KEY?.trim();
+      const updaterConfig = mode === 'bundle' && publicKey
+        ? ['--config', JSON.stringify({ plugins: { updater: { pubkey: publicKey } } })]
+        : [];
+      if (publicKey) env.QUOTERN_UPDATER_PUBLIC_KEY = publicKey;
+      await run(process.execPath,[cli,'build',...(mode==='build'?['--no-bundle']:[]),...options,...updaterConfig],env);
     }
   }
 } catch (error) { console.error(error.message); process.exitCode=1; }

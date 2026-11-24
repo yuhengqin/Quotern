@@ -72,14 +72,20 @@ test('window startup needs prior evidence, opt-in and ownership; two runtimes at
   const state = (reset: number | null, used: number): QuotaState => ({ preferences: { thresholdAlerts: true, resetAlerts: true, showSparkline: true, paceModel: 'uniform', channels: {} }, notice: null,
     providers: [{ id: 'claude', label: 'Claude', status: 'ready', planLabel: null, fetchedAt: now, queriedAt: now, stale: false, message: null, windows: [{ id: 'five-hour', label: '5h', usedPercent: used, resetsAt: reset }], details: [], resetCredits: null, refreshing: false, nextRefreshAt: null, analyses: {}, service: null, provenance: { source: 'native', observer: 'claude', identityVerified: true, accountRef: 'fixture-account', observedAt: now } }] });
   const deps = { now: () => now, isOwner: async () => owner, execute: async () => { count++; throw new Error('uncertain'); }, isolated: false };
-  const a = createWindowStarter(root, 'cli', deps), b = createWindowStarter(root, 'desktop', deps);
+  let latest: QuotaState | null = null;
+  const a = createWindowStarter(root, 'cli', deps);
+  const b = createWindowStarter(root, 'desktop', { ...deps, getState: () => latest });
   try {
     await a(state(1010, 50)); now = 1020; await a(state(1010, 0)); assert.equal(count, 0);
     await patchAgentPreferences(root, { claudeWindowStart: true });
     await a(state(null, 0)); assert.equal(count, 0);
     now = 2000; await a(state(2010, 50)); now = 2020;
     owner = false; await a(state(2010, 0)); assert.equal(count, 0);
-    owner = true; await Promise.all([a(state(2010, 0)), b(state(2010, 0))]); assert.equal(count, 1);
+    owner = true;
+    latest = state(2010, 10);
+    await b(state(2010, 0)); assert.equal(count, 0);
+    latest = state(2010, 0);
+    await Promise.all([a(state(2010, 0)), b(latest)]); assert.equal(count, 1);
     await createWindowStarter(root, 'cli', deps)(state(2010, 0)); assert.equal(count, 1);
     now = 3000; await a(state(3010, 20)); now = 3020;
     const stale = state(3010, 0); stale.providers[0]!.stale = true; await a(stale); assert.equal(count, 1);

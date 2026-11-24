@@ -47,6 +47,15 @@ test('providers start disconnected and failed authorization grants no access', a
   });
 });
 
+test('desktop registers its profile directory as the account launch source', async () => {
+  await fixture(async ({ root, create }) => {
+    const manager = await create(async () => ready());
+    const sources = JSON.parse(await readFile(join(root, 'data', 'account-launch', 'sources.json'), 'utf8'));
+    assert.equal(sources.desktop.directory, manager.directory);
+    assert.equal(sources.cli, undefined);
+  });
+});
+
 test('a confirmed official CLI authorization is restored on restart until disconnected', async () => {
   await fixture(async ({ create }) => {
     const read = async () => ready();

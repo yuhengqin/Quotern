@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import yaml from 'js-yaml';
-import { refreshMetadata, verifyPlatform, assembleRelease, assertReleaseRequest, requireReleaseNotes } from './release-artifacts.mjs';
+import { refreshMetadata, releaseLayout, verifyPlatform, assembleRelease, assertReleaseRequest, requireReleaseNotes } from './release-artifacts.mjs';
 
 const version = '0.1.13';
 const commit = 'a'.repeat(40);
@@ -38,6 +38,42 @@ test('writes one update channel containing both installers and excludes portable
   assert.equal(result.files.length, 7);
   assert.equal(result.commit, commit);
   assert.equal((await readFile(join(dir, 'win-artifacts.json'), 'utf8')).includes('portable.exe'), true);
+});
+
+test('publication rejects Windows installers that cannot receive signed updates', async t => {
+  const dir = await fixture(t, 'win');
+  await refreshMetadata({ dir, platform: 'win', version });
+  await assert.rejects(
+    verifyPlatform({ dir, platform: 'win', version, commit, requireSignedWindows: true }),
+    /Signed Windows update artifacts are required/,
+  );
+});
+
+test('Windows publication verifies the signed version and final installer bytes for both architectures', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'quotern signed release '));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const version = '2.0.0';
+  // Public Tauri updater 2.14.1 offline test vector, for the literal payload "test".
+  const publicKey = Buffer.from([
+    'untrusted comment: minisign public key: A49EF4746FA6E6D7',
+    'RWTX5qZvdPSepDGWg2bz8n6ArQnBMwgQK1geVosorcbLzcunD+KJ+cYe',
+  ].join('\n')).toString('base64');
+  const signature = Buffer.from([
+    'untrusted comment: signature from tauri secret key',
+    'RUTX5qZvdPSepPF2zsjvP/L/TQtBLRnWRvaq+4omK1UEugtQp/USrGiI1v762sDy3id3aor7bRC9ETyeot6lMHHrWoZ5hjUM1Qc=',
+    'trusted comment: timestamp:1791649051\tfile:payload\tversion:2.0.0',
+    'DDq2CLOEl5cQmC2eJRHlnZPVViOZsu1CjpPKQoei4A/XBfkDqGO0B+QMrcrHgEQ5qV3mne75tdFWhJpqUXh9AA==',
+  ].join('\n')).toString('base64');
+  const { downloads, updates } = releaseLayout(version, 'win');
+  for (const file of downloads) await writeFile(join(dir, file), 'test');
+  for (const file of updates) await writeFile(join(dir, file + '.sig'), signature);
+  const options = { dir, platform: 'win', version, commit, requireSignedWindows: true, windowsPublicKey: publicKey };
+  await refreshMetadata(options);
+  assert.equal((await verifyPlatform(options)).files.length, 11);
+  await assert.rejects(verifyPlatform({ ...options, windowsPublicKey: '' }), /Missing Windows updater public key/);
+  await writeFile(join(dir, updates[1]), 'modified');
+  await refreshMetadata(options);
+  await assert.rejects(verifyPlatform(options), /Invalid Tauri update signature/);
 });
 
 test('ad-hoc releases retain both DMG/ZIP pairs but never offer an automatic update feed', async t => {

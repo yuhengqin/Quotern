@@ -257,6 +257,7 @@ Desktop「订阅」设置中的服务故障/恢复提醒默认开启，已有明
 ### 额度、总览与分享
 
 - 双端额度卡继续共用 `packages/dashboard/src/components/QuotaUsageCard.tsx`；重点窗口选择只改变显示顺序，默认自动选择有效且最紧张的窗口。偏好以卡片 ID 隔离；缺失或过期选择回退当前读数，不屏蔽其他窗口及风险。正常服务状态默认紧凑。分别验证绿点直达抽屉和详情摘要打开抽屉，服务多选、抽屉、父弹窗逐级关闭并恢复焦点。异常保持可见。`QuotaRecoveryActions.tsx` 提供只读登录指引与复制命令；有自定义目录时显示目录和指引，不拼接未转义的终端命令。
+- Desktop 的官方 CLI 卡片自动读取，显示实际额度或安装、登录提示。详情保留刷新与官方用量入口。连接和断开操作只用于会话内密钥或令牌渠道。
 - Desktop 通知经 `shared/quota-navigation.ts` 保存待处理目标，renderer 订阅后读取、定位并确认。额度窗口目标必须校验匿名账号引用，同一 profile 换号不定位到新账号。服务状态通知只定位服务。托盘固定显示额度摘要，忽略 `tray-panel.json` 中旧版「摘要／完整」偏好。卡片详情打开时面板扩大高度，失焦时隐藏，Esc 先关闭详情。
 - 两端总览始终展示完整分析，不提供快速／完整模式切换，也不读取旧版 `tud.dashboardQuickView` 偏好。保留全部指标、会话统计、额度、热力图、洞察、会话预览、分析图表与原筛选；`DashboardOverviewCard` 的独立副本一起维护。
 - 分享入口共用 `ShareActivityModalContent`、`ShareCardCarousel`、`SharePosterArtwork` 与 `ShareCardActions`。两端固定使用详细卡片，画幅和署名并排，底部提供 PNG 下载与图片复制。画幅默认 2:3，另有 1:1、4:5、9:16。`lib/share-presentation.ts` 集中定义画幅尺寸与费用证据，预览与冻结的导出请求使用同一画幅。`hooks/useShareReport.ts` 按分享期间与 Agent 筛选在本次会话内缓存同份报表的费用、Token 和模型。费用缺失或全未知显示“—”，部分计价标注范围，已知零显示零；旧 runtime 无报表时使用原用量快照，费用显示未知。新共用组件样式登记 Desktop 的 `@source`。

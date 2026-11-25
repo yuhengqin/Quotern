@@ -1,8 +1,8 @@
 # 订阅数据获取与接口注意事项
 
-CLI 使用 Core 订阅读取器。Tauri Desktop 通过 Node 辅助进程的 `official-providers.ts` 提供用户主动授权的官方 CLI、API 和官方用量入口。网页及桌面 WebView 接收展示快照。本机 Token 统计与订阅余额分别计算。
+CLI 使用 Core 订阅读取器。Tauri Desktop 通过 Node 辅助进程的 `official-providers.ts` 自动查询已开启的官方 CLI 渠道，并提供手动密钥连接及官方用量入口。网页及桌面 WebView 接收展示快照。本机 Token 统计与订阅余额分别计算。
 
-以下来源实现与逐项协议描述记录 CLI 读取器。桌面卡片通过 `quota.getState`、`authorize`、`disconnect` 和 `refresh` 使用官方接入，实际可见信息以提供方授权返回的数据为准。动态窗口、通知、历史分析、刷新策略及偏好路径见 [订阅额度管理](quota-management.md)。
+以下来源实现与逐项协议描述记录 CLI 读取器。桌面卡片通过 `quota.getState` 和 `refresh` 使用官方接入，`authorize` 和 `disconnect` 用于当前会话的密钥连接。实际可见信息以接入渠道返回的数据为准。动态窗口、通知、历史分析、刷新策略及偏好路径见 [订阅额度管理](quota-management.md)。
 
 ## 数据流与职责
 

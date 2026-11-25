@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuotaProviderId } from 'quotern-core/quota/shared/provider-descriptors';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 
 type Provider = { method: 'api-key' | 'official-cli' | 'official-page'; url: string; destination: 'guide' | 'usage' };
 export const officialProviders = {
@@ -68,14 +68,15 @@ export function mapMiniMaxOfficialQuota(value: unknown) {
 
 async function readMiniMax(): Promise<unknown> {
   try {
-    const [{ guiCliEnvironment }, { runClaudeCommand }] = await Promise.all([
-      import('quotern-core/quota/readers/cli-runtime'), import('quotern-core/quota/readers/claude-subscription'),
+    const [{ guiCliEnvironment }, { runClaudeCommand }, { findSessionExecutable }] = await Promise.all([
+      import('quotern-core/quota/readers/cli-runtime'), import('quotern-core/quota/readers/claude-subscription'), import('quotern-core/session-actions'),
     ]);
     const env = guiCliEnvironment();
     delete env.MINIMAX_BASE_URL;
     delete env.MINIMAX_VERBOSE;
     const shim = join(env.APPDATA ?? '', 'npm', 'mmx.cmd');
-    const command = process.platform === 'win32' ? (existsSync(shim) ? shim : 'mmx.cmd') : 'mmx';
+    const command = process.platform === 'win32' && existsSync(shim) ? shim : await findSessionExecutable('mmx', tmpdir(), env);
+    if (!command) return unavailable('not-installed', '未检测到本机 MiniMax CLI');
     const result = await runClaudeCommand(command, ['quota', 'show', '--output', 'json', '--non-interactive'], homedir(), env, 10_000);
     if (result.code !== 0) return unavailable('temporarily-unavailable', 'MiniMax CLI 查询失败');
     return mapMiniMaxOfficialQuota(JSON.parse(result.stdout));

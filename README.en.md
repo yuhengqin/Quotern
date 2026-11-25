@@ -281,7 +281,7 @@ Queries only read local statistics already written to disk. They also work while
 
 Statistics are stored in `~/.quotern/` and include token counts, sources, models, and project attribution. Parsers read Agent logs or databases and save aggregated statistics buckets. Configuration also stores runtime information such as the local device identifier.
 
-Desktop quota cards let you connect an official client or API for the current session, or open the provider’s usage page. CLI readers use configuration on the machine serving the dashboard. Pricing and desktop updates contact their respective services. See the [architecture notes](./docs/architecture-notes.md).
+At startup, the desktop app automatically checks enabled quotas through the official CLIs already signed in on this machine. Manually entered API keys and local service tokens are used for the current session. Other sources link to their official usage page or guide. CLI readers use configuration on the machine serving the dashboard. Pricing and desktop updates contact their respective services. See the [architecture notes](./docs/architecture-notes.md).
 
 Usage is parsed, aggregated, and queried locally. The desktop app and CLI dashboard read the same set of local statistics. No Quotern account is required to get started; online readings such as provider quotas still require access to the corresponding services.
 

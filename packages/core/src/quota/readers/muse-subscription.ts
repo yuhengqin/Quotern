@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { guiCliEnvironment } from './cli-runtime.js';
-import { runClaudeCommand } from './claude-subscription.js';
+import { isCliNotInstalled, runClaudeCommand } from './claude-subscription.js';
 import { recordQuotaAttempt } from './quota-fetch-state.js';
 
 type Window = { usedPercent: number; resetsAt: number | null };
@@ -31,7 +31,14 @@ export function createMuseSubscriptionReader(deps: { execute(args: readonly stri
       recordQuotaAttempt({ stage: 'cli', outcome: 'success', code: null });
       return { status: 'ok', message: null, fetchedAt, stale: fetchedAt === null || now / 1000 - fetchedAt > 900,
         planLabel: typeof raw.tier === 'string' ? raw.tier.slice(0, 80) : null, fiveHour, weekly };
-    } catch { recordQuotaAttempt({ stage: 'cli', outcome: 'failure', code: 'COMMAND_FAILED' }); return unavailable(); }
+    } catch (error) {
+      if (isCliNotInstalled(error)) {
+        recordQuotaAttempt({ stage: 'cli', outcome: 'failure', code: 'NOT_INSTALLED' });
+        return { ...unavailable(), status: 'not-installed', message: '未检测到本机 Muse Code CLI' };
+      }
+      recordQuotaAttempt({ stage: 'cli', outcome: 'failure', code: 'COMMAND_FAILED' });
+      return unavailable();
+    }
   };
 }
 export function createDefaultMuseSubscriptionReader() {

@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { launchProbe, wait } from './desktop-cdp.mjs';
+import { prepareQuotaCliFixture } from './tauri-quota-fixture.mjs';
 
 const root=await mkdtemp(join(tmpdir(),'quotern-tauri-webview-'));
 const executable=resolve(process.argv[2] || 'apps/desktop/src-tauri/target/debug/Quotern.exe');
+let claudeSignedOut;
 const probe=await launchProbe(executable,root,{webview2:true,prepare:async env=>{
+  claudeSignedOut = await prepareQuotaCliFixture(root, env);
   const months=new Map();
   for(let day=1;day<=100;day++) for(let bucket=0;bucket<300;bucket++) {
     const timestamp=new Date(Date.now()-day*86400000); timestamp.setUTCHours(4,0,0,0);
@@ -21,6 +24,49 @@ const probe=await launchProbe(executable,root,{webview2:true,prepare:async env=>
   await writeFile(join(env.QUOTERN_DATA_DIR,'config.json'),JSON.stringify({deviceId:'c1fa9205-51a7-4b5c-90fc-93013f43c001',hostname:'Synthetic acceptance',dataDir:env.QUOTERN_DATA_DIR,statsSince:since,localCollectSince:since,serverPort:8252,lastSyncAt:null}));
 }});
 const until=async (check,label)=>{for(let i=0;i<300;i++){const value=await check();if(value)return value;await wait(100);}throw Error(`Timed out: ${label}`);};
+async function exerciseQuota(client) {
+  const quotaCard = id => `document.querySelector('[data-quota-card="${id}"]')`;
+  await client.evaluate('window.tud.setLocalePreference("en")');
+  await client.evaluate('window.tud.setThemeMode("light")');
+  await until(()=>client.evaluate(`${quotaCard('claude')}?.textContent.includes('63%')`), 'automatic Claude quota on the dashboard');
+  await until(()=>client.evaluate(`${quotaCard('codex')}?.textContent.includes('Install the CLI')`), 'missing CLI status');
+  await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 });
+  if (await client.evaluate('Boolean(document.querySelector(".help-popup"))')) await client.key('Escape');
+  await until(()=>client.evaluate('!document.querySelector(".help-popup")'), 'previous help popup closed');
+  await client.screenshot(join(root,'quota-light.png'));
+  const claudeDetails = `${quotaCard('claude')}?.querySelector('button[aria-haspopup="dialog"]')`;
+  await client.evaluate(`${claudeDetails}.focus()`);
+  await client.key('Enter');
+  await until(()=>client.evaluate('Boolean(document.querySelector("[role=dialog] [data-quota-access]"))'), 'Claude details from the keyboard');
+  assert.deepEqual(await client.evaluate('[...document.querySelectorAll("[role=dialog] [data-quota-access] button")].map(button=>button.textContent.trim())'), ['Official usage page ↗']);
+  await writeFile(claudeSignedOut, '');
+  await client.click('document.querySelector(\'[role=dialog] button[aria-label="Refresh quota for Claude"]\')');
+  await until(()=>client.evaluate('Boolean(document.querySelector("[role=dialog] [data-quota-recovery]"))'), 'sign-in guidance after refreshing');
+  assert.match(await client.evaluate('document.querySelector("[role=dialog]").textContent'), /Sign in to the CLI/);
+  await client.key('Escape');
+  await until(()=>client.evaluate('!document.querySelector("[role=dialog]")'), 'signed-out details closed');
+  await until(()=>client.evaluate(`document.activeElement === ${claudeDetails}`), 'quota details focus returned');
+  await client.call('Emulation.setDeviceMetricsOverride',{ width: 390, height: 760, deviceScaleFactor: 1, mobile: false });
+  await client.evaluate('window.tud.setThemeMode("dark")');
+  await until(()=>client.evaluate(`document.documentElement.classList.contains("dark") && ${quotaCard('claude')}?.textContent.includes('Sign in to the CLI')`), 'narrow dark quota cards');
+  await client.screenshot(join(root,'quota-dark-narrow.png'));
+  await client.call('Emulation.clearDeviceMetricsOverride');
+  await client.evaluate('window.tud.quota.refresh("claude")');
+  await until(()=>client.evaluate(`Boolean(${quotaCard('claude')}?.closest('[data-quota-status-group]'))`), 'signed-out Claude card regrouped');
+  await client.evaluate(`${claudeDetails}.focus()`);
+  await client.key('Enter');
+  await until(()=>client.evaluate('Boolean(document.querySelector("[role=dialog] [data-quota-recovery]"))'), 'signed-out details opened');
+  await unlink(claudeSignedOut);
+  await client.click('document.querySelector(\'[role=dialog] button[aria-label="Refresh quota for Claude"]\')');
+  await until(()=>client.evaluate('document.querySelector("[role=dialog] [data-quota-window]")?.textContent.includes("63%")'), 'quota returned without closing the details');
+  await client.key('Escape');
+  await until(()=>client.evaluate('!document.querySelector("[role=dialog]")'), 'recovered quota details closed');
+  await client.click(`${quotaCard('deepseek')}?.querySelector('button[data-quota-action]')`);
+  await until(()=>client.evaluate('Boolean(document.querySelector(\'[role=dialog] input[type="password"]\'))'), 'API key connection still available');
+  await client.key('Escape');
+  await until(()=>client.evaluate('!document.querySelector("[role=dialog]")'), 'API key details closed');
+}
+
 try {
   const client=await probe.connect(page=>page.url.includes('tauri.localhost'));
   for (let i=0;i<160;i++) {
@@ -32,8 +78,9 @@ try {
   assert.ok(state.rendered,JSON.stringify(client.errors));
   const cold=performance.now();
   assert.equal(await client.evaluate("(async()=>{const r=await window.tud.api.request('/health');return r.body.ok})()"),true);
-  const cards=await client.evaluate("(async()=>(await window.tud.quota.getState()).providers.map(p=>[p.id,p.access.method,p.access.connected]))()");
-  assert.equal(cards.length,14);assert.ok(cards.every(row=>row[2]===false));
+  const cards=await client.evaluate("(async()=>(await window.tud.quota.getState()).providers)()");
+  assert.equal(cards.length,14);
+  assert.ok(cards.filter(row=>row.access.method!=='official-cli').every(row=>!row.access.connected));
   const owner=JSON.parse(await readFile(join(root,'data','tud.pid'),'utf8'));
   assert.equal(owner.kind,'desktop');
   assert.notEqual(owner.pid,probe.child.pid);
@@ -81,6 +128,8 @@ try {
   await until(async()=>!(await probe.pages()).some(page=>page.url.includes('/dsh/index.html')),'old fish window closed');
   const capture=await client.call('Page.captureScreenshot',{format:'png'});
   await writeFile(join(root,'main.png'),Buffer.from(capture.data,'base64'));
+  const quotaClient = await probe.connect(page => page.id === client.target.id, { waitForActionability: true });
+  await exerciseQuota(quotaClient);
   console.log(JSON.stringify({profile:root,hostPid:probe.child.pid,sidecarPid:owner.pid,quotaAndHealthMs:Math.round(work-cold),totalTokens:summary.body.data.totalTokens,...timings,image,video,media}));
   assert.ok(summary.body.data.totalTokens>=300000000,JSON.stringify(summary));
 } finally { await probe.close(); }

@@ -158,7 +158,7 @@ const tudApi = {
     isShortcutRegistered: (): Promise<boolean> => ipcRenderer.invoke(QUOTA_SHORTCUT_GET),
     getState: (): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_GET),
     refresh: (provider?: string): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_REFRESH, provider),
-    authorize: (id: string, secret?: string): Promise<void> => ipcRenderer.invoke('quota:authorize', id, secret),
+    authorize: (id: string, secret: string): Promise<void> => ipcRenderer.invoke('quota:authorize', id, secret),
     disconnect: (id: string): Promise<void> => ipcRenderer.invoke('quota:disconnect', id),
     setPreferences: (patch: QuotaPreferencePatch): Promise<QuotaState> => ipcRenderer.invoke(QUOTA_SET, patch),
     onChanged: (callback: (state: QuotaState) => void) => {

@@ -4,7 +4,7 @@ Tauri 2 桌面客户端，与 CLI 共用默认 `~/.quotern` 数据目录。原�
 
 同一数据目录的 `tud.pid` 标识唯一采集 owner；Desktop 接管该目录后，CLI 以 observer 提供面板。隔离开发使用现有入口 `corepack pnpm dev:desktop`，数据与服务归属见[worktree 开发规范](../../docs/worktree-development.md)。
 
-桌面额度需要用户明确授权。官方 CLI 的授权可以跨重启继续使用，用户可在卡片中断开。手动输入的 API 密钥和本地服务令牌随当前应用会话结束而清除。其他来源提供官方用量入口。
+桌面版启动时自动通过已登录的官方 CLI 查询 Codex、Claude、Copilot、Muse Code 和 MiniMax 的额度。在「设置 → 订阅」关闭渠道可暂停查询。Kimi 本地服务令牌和 DeepSeek API 密钥通过卡片连接，随当前应用会话结束而清除。其余来源提供官方用量页或使用指南。
 
 ## 启动、构建与验收
 

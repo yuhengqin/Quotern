@@ -59,6 +59,9 @@ export interface ClaudeCommandResult { stdout: string; code: number | null }
 class CommandFailure extends Error {
   constructor(readonly kind: 'not-installed' | 'failed' | 'timeout' | 'output-limit') { super(kind); }
 }
+export function isCliNotInstalled(error: unknown): boolean {
+  return error instanceof CommandFailure && error.kind === 'not-installed';
+}
 function recordCommandFailure(error: unknown): void {
   const code = error instanceof CommandFailure ? ({ 'not-installed': 'NOT_INSTALLED', failed: 'COMMAND_FAILED', timeout: 'TIMEOUT', 'output-limit': 'OUTPUT_LIMIT' } as const)[error.kind] : error instanceof SyntaxError ? 'INVALID_RESPONSE' : 'COMMAND_FAILED';
   recordQuotaAttempt({ stage: 'cli', outcome: 'failure', code });
@@ -122,7 +125,7 @@ export function createClaudeSubscriptionReader(deps: {
       try { auth = asRecord(JSON.parse((await deps.auth()).stdout)); }
       catch (error) {
         recordCommandFailure(error);
-        if (error instanceof CommandFailure && error.kind === 'not-installed') {
+        if (isCliNotInstalled(error)) {
           hadAccount = false;
           return cache('missing', async () => unavailable('not-installed', '未检测到本机 Claude Code CLI'));
         }

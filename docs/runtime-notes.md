@@ -144,7 +144,7 @@ node scripts/migrate-state.mjs --from "/原状态目录" --to "/Quotern状态目
 
 按账号启动、Quotern 默认账号与自动 Claude 换号，以及独立的实际消费连接见 [账号启动与费用](account-launch-billing.md)。默认选择保存在 `account-launch/preferences.json`，运行端注册监控目录来源到同目录的 `sources.json`；账单私有凭据与缓存保存在 `billing-private/`，不参与普通数据备份。新本地动作接口为 `/functions/tud-account-launch` 与 `/functions/tud-claude-billing`，要求真实 loopback Host/来源和运行实例操作 token。
 
-Desktop 额度访问需用户明确同意。官方 CLI 授权跨重启保留，密钥和令牌在会话内使用。其他服务提供官方用量入口。详见 [订阅额度管理](quota-management.md)。
+Desktop 启动时查询已开启的官方 CLI 渠道，沿用对应 CLI 的登录状态。其他来源可使用会话内手动连接的密钥或令牌，或打开官方用量入口。详见 [订阅额度管理](quota-management.md)。
 
 CLI 的 Node 额度及服务状态请求通过 `quotaNodeFetch` 显式使用 `HTTP_PROXY` / `HTTPS_PROXY`（也支持小写形式），遵守 `NO_PROXY`，无需设置 `NODE_USE_ENV_PROXY`；localhost 和回环 IP 始终直连，避免将本机 language server 请求交给代理。仅配置系统代理而没有环境代理变量时，Node 请求仍按原行为直连。Desktop 的额度和服务状态网络行为应按当前 sidecar 实现核对。
 

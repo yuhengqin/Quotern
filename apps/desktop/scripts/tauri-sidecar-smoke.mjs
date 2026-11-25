@@ -10,6 +10,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { hostNodeTriple } from './prepare-tauri-node.mjs';
+import { prepareQuotaCliFixture } from './tauri-quota-fixture.mjs';
 
 const desktop = fileURLToPath(new URL('../', import.meta.url));
 const home = await mkdtemp(join(tmpdir(),'quotern-tauri-test-'));
@@ -40,10 +41,11 @@ const cursorEndpoint = createServer((request, response) => {
 });
 cursorEndpoint.listen(0, '127.0.0.1');
 await once(cursorEndpoint, 'listening');
-const env = {SystemRoot:process.env.SystemRoot,PATH:process.env.PATH,TEMP:home,TMP:home,TMPDIR:home,
+const env = {SystemRoot:process.env.SystemRoot,TEMP:home,TMP:home,TMPDIR:home,
   HOME:home,USERPROFILE:home,APPDATA:home,LOCALAPPDATA:home,XDG_CONFIG_HOME:config,XDG_DATA_HOME:data,
   CURSOR_STATE_DB_PATH:cursorDb,CURSOR_WEB_BASE_URL:'http://127.0.0.1:'+cursorEndpoint.address().port,
   QUOTERN_CONFIG_HOME:config,QUOTERN_DATA_DIR:data,QUOTERN_DESKTOP_USER_DATA:profile,QUOTERN_DEV_ISOLATED:'1'};
+await prepareQuotaCliFixture(home, env);
 const exe=join(desktop,'src-tauri','binaries','quotern-node-'+hostNodeTriple()+(process.platform==='win32'?'.exe':''));
 const script=join(desktop,'out','sidecar','quotern-desktop-runtime.cjs');
 const child=spawn(exe,[script],{cwd:dirname(script),env,windowsHide:true,stdio:['pipe','pipe','pipe']});
@@ -71,10 +73,25 @@ child.on('exit',()=>{for (const call of pending.values()) call.reject(Error('Sid
 const timeout=setTimeout(()=>child.kill(),90000);
 try {
   assert.equal((await send('locale:get')).preference,'system');
-  const quota=await send('quota:get');
+  let quota=await send('quota:get');
   assert.equal(quota.providers.length,14);
-  assert.ok(quota.providers.every(p=>p.access?.url.startsWith('https://')&&!p.access.connected&&p.fetchedAt===null));
+  assert.ok(quota.providers.every(p=>p.access?.url.startsWith('https://')));
+  assert.ok(quota.providers.filter(p=>p.access.method!=='official-cli').every(p=>!p.access.connected&&p.fetchedAt===null));
+  const quotaDeadline = Date.now() + 20_000;
+  while (quota.providers.some(p => p.access.method === 'official-cli' && p.queriedAt === null) && Date.now() < quotaDeadline) {
+    await wait(100);
+    quota = await send('quota:get');
+  }
+  const claude = quota.providers.find(p => p.id === 'claude');
+  assert.equal(claude?.status, 'ready', 'startup must read the signed-in CLI without a connection request');
+  assert.equal(claude.windows[0]?.usedPercent, 37);
+  if (process.platform === 'win32') {
+    for (const id of ['codex', 'copilot', 'minimax', 'muse']) {
+      assert.equal(quota.providers.find(p => p.id === id)?.status, 'not-installed', `${id} is absent from the fixture`);
+    }
+  }
   await assert.rejects(send('quota:authorize','deepseek',''));
+  await assert.rejects(send('quota:authorize','claude'));
   await assert.rejects(send('quota:authorize','cursor','test'));
   await assert.rejects(send('cursor-subscription:get'));
   await assert.rejects(send('tud:api-request','https://example.org/'));

@@ -36,11 +36,11 @@ export async function launchProbe(executable, output, { args = [], env: extraEnv
   const pages = async () => (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).filter(page => page.type === 'page');
   return {
     child, directory, pages,
-    async connect(predicate = () => true) {
+    async connect(predicate = () => true, options) {
       let target;
       for (let i = 0; i < 120; i++) { try { target = (await pages()).find(predicate); } catch {} if (target) break; await wait(100); }
       assert.ok(target, `No renderer: ${stderr}`);
-      const client = await connectPage(target);
+      const client = await connectPage(target, options);
       clients.push(client);
       return client;
     },

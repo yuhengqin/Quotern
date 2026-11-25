@@ -50,7 +50,8 @@ type QuotaLayoutControls = { handle: ReactNode; menu: ReactNode };
 
 export function QuotaLayoutCards({ editor, children }: { editor: QuotaLayoutEditor; children: (provider: QuotaProviderState, controls: QuotaLayoutControls | undefined, statusRow: boolean) => ReactNode }) {
   const { t } = useTranslation();
-  const openProvider = useRef<string | null>(null), previousGroups = useRef(new Map<string, string>());
+  const openProvider = useRef<string | null>(null);
+  const previousGroups = useRef(new Map<string, { key: string; statusOnly: boolean }>());
   useEffect(() => {
     const trackDialog = (event: Event) => {
       const detail = (event as CustomEvent<{ id: string; open: boolean }>).detail;
@@ -61,10 +62,13 @@ export function QuotaLayoutCards({ editor, children }: { editor: QuotaLayoutEdit
     window.addEventListener('quotern:quota-dialog', trackDialog);
     return () => window.removeEventListener('quotern:quota-dialog', trackDialog);
   }, []);
-  const groups = quotaLayoutGroups(editor.ordered, isQuotaStatusOnly);
-  // Keep an open detail's React parent when other subscriptions split or merge its group.
-  const activeGroup = groups.find(group => group.statusOnly && group.providers.some(provider => provider.id === openProvider.current));
-  const retainedKey = activeGroup && openProvider.current ? previousGroups.current.get(openProvider.current) : undefined;
+  const openId = openProvider.current;
+  const previousGroup = openId === null ? undefined : previousGroups.current.get(openId);
+  // Keep the same React parent while details are open, even if the read adds or removes quota windows.
+  const groups = quotaLayoutGroups(editor.ordered, provider =>
+    provider.id === openId && previousGroup ? previousGroup.statusOnly : isQuotaStatusOnly(provider));
+  const activeGroup = previousGroup?.statusOnly && groups.find(group => group.providers.some(provider => provider.id === openId));
+  const retainedKey = activeGroup ? previousGroup?.key : undefined;
   const usedKeys = new Set(retainedKey ? [retainedKey] : []);
   const stableGroups = groups.map(group => {
     if (!group.statusOnly) return group;
@@ -74,7 +78,10 @@ export function QuotaLayoutCards({ editor, children }: { editor: QuotaLayoutEdit
     usedKeys.add(key);
     return { ...group, key };
   });
-  useLayoutEffect(() => { previousGroups.current = new Map(stableGroups.filter(group => group.statusOnly).flatMap(group => group.providers.map(provider => [provider.id, group.key]))); });
+  useLayoutEffect(() => {
+    previousGroups.current = new Map(stableGroups.flatMap(group =>
+      group.providers.map(provider => [provider.id, { key: group.key, statusOnly: group.statusOnly }] as const)));
+  });
   const onlyStatuses = groups.every(group => group.statusOnly);
   const render = (provider: QuotaProviderState, statusRow: boolean) => <QuotaLayoutItem key={provider.id} provider={provider} editor={editor} statusRow={statusRow}>{controls => children(provider, controls, statusRow)}</QuotaLayoutItem>;
   return stableGroups.map(group => group.statusOnly

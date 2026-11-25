@@ -66,7 +66,7 @@ export interface QuotaUsageCardProps {
   statusRow?: boolean;
   onRefresh: (id: string) => Promise<unknown>;
   onOpenExternal?: (url: string) => unknown;
-  onAuthorize?: (id: string, secret?: string) => Promise<void>;
+  onAuthorize?: (id: string, secret: string) => Promise<void>;
   onDisconnect?: (id: string) => Promise<void>;
   onSave?: (patch: QuotaPreferencePatch) => Promise<unknown>;
   summaryOnly?: boolean;
@@ -230,14 +230,20 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
     </p>
   </div>;
   const commonReset = commonQuotaResetAt(provider.windows);
-  const message = provider.access && !hasReading && ['expired', 'not-signed-in'].includes(provider.status) && !provider.access.connected ? null
+  const access = provider.access;
+  const automaticCli = access?.method === 'official-cli';
+  const firstRead = automaticCli && provider.queriedAt === null && !hasReading;
+  const message = firstRead ? (provider.refreshing ? t('usage.quota.refreshing') : null)
+    : automaticCli && provider.status === 'not-installed' ? t('quotaAccess.cliMissing')
+    : automaticCli && provider.status === 'not-signed-in' ? t('quotaAccess.cliSignIn')
+    : access && !automaticCli && !hasReading && ['expired', 'not-signed-in'].includes(provider.status) && !access.connected ? null
     : provider.status === 'custom-provider' ? t('usage.quota.customProvider')
     : provider.status === 'expired' ? t('usage.quota.expired')
       : provider.stale ? t('usage.quota.stale')
         : provider.message ? locale === 'zh-CN' ? provider.message : t('usage.quota.noReading')
-          : compact && !provider.access ? t('usage.quota.noReading') : null;
+          : compact && (!access || automaticCli) ? t('usage.quota.noReading') : null;
   const errorMessage = error ? t(error === 'refreshFailed' ? 'usage.quota.refreshFailed' : 'usage.quota.saveFailed') : null;
-  const retryable = ['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready');
+  const retryable = !firstRead && (['unavailable', 'temporarily-unavailable'].includes(provider.status) || (provider.stale && provider.status === 'ready'));
   const busy = provider.refreshing || refreshing;
   const observedAt = proof?.observedAt ?? provider.fetchedAt;
   const refresh = async () => {
@@ -350,12 +356,12 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
       </div>}
       {showSecondaryRisk && <p className="text-xs text-warning">{localizeQuotaWindowLabel(locale, providerType, risk)} · {t('usage.quota.remaining', { percent: Math.round(100 - risk.usedPercent) })}</p>}
       {!summaryInWindow && summaryLine}
-      {!hasReading && provider.access && !layoutControls && (provider.access.method === 'official-page'
-        ? provider.access.url && <Button data-quota-action size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal(provider.access!.url!)}>{t(provider.access.destination === 'guide' ? 'quotaAccess.guide' : 'quotaAccess.usage')} ↗</Button>
-        : onAuthorize && <Button data-quota-action size="sm" variant="tertiary" className="w-fit" onPress={() => openDetails()}>{t(provider.access.connected ? 'quotaAccess.manage' : 'quotaAccess.connect')}</Button>)}
+      {!hasReading && access && !layoutControls && (access.method === 'official-page'
+        ? access.url && <Button data-quota-action size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal(access.url!)}>{t(access.destination === 'guide' ? 'quotaAccess.guide' : 'quotaAccess.usage')} ↗</Button>
+        : access.method === 'api-key' && onAuthorize && <Button data-quota-action size="sm" variant="tertiary" className="w-fit" onPress={() => openDetails()}>{t(access.connected ? 'quotaAccess.manage' : 'quotaAccess.connect')}</Button>)}
       {(message || error) && <div className={`flex items-center justify-between gap-2 ${grouped ? 'min-w-0 flex-1' : compact ? 'min-h-8' : ''}`}>
-        <p role="status" className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? errorMessage ?? message ?? undefined : undefined}>{errorMessage ?? message}</p>
-        {(retryable || error === 'refreshFailed') && <Button data-quota-action data-quota-retry aria-label={t('usage.quota.retryAria', { provider: provider.label })} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isDisabled={busy} onPress={() => void refresh()}>{busy ? t('usage.quota.retrying') : t('usage.quota.retry')}</Button>}
+        <p role={firstRead && !error ? undefined : 'status'} className={`text-xs text-muted ${grouped ? 'truncate' : ''}`} title={grouped ? errorMessage ?? message ?? undefined : undefined}>{errorMessage ?? message}</p>
+        {(retryable || error === 'refreshFailed') && <Button data-quota-action data-quota-retry aria-label={t('usage.quota.retryAria', { provider: provider.label })} className="h-auto min-h-7 shrink-0 px-2" size="sm" variant="tertiary" isPending={busy} onPress={() => void refresh()}>{busy ? t('usage.quota.retrying') : t('usage.quota.retry')}</Button>}
       </div>}
       {severeServiceWarning && <p role="status" className={`flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 ${grouped ? 'w-full' : ''}`}>
         {t('usage.quota.officialService', { status: severeServiceWarning.label })}
@@ -380,11 +386,11 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
             {!windows.length && showCredits && <div>{creditBadge}</div>}
             {providerType !== 'codex' && provider.resetCredits !== null && <p className="text-sm">{t('usage.quota.resetCredits', { count: provider.resetCredits })}</p>}
             {details.map(detail => { const localized = localizeQuotaDetail(locale, detail); return <div key={detail.id} className="flex justify-between gap-3 text-sm"><span className="text-muted">{localized.label}</span><span>{localized.text}</span></div>; })}
-            {(message || error) && <p role="status" className="text-sm text-muted">{errorMessage ?? message}</p>}
-            {compact && provider.status === 'expired' && !provider.access && <p className="text-xs text-muted">{t('usage.quota.signIn', { provider: provider.label })}</p>}
+            {(message || error) && <p role={firstRead && !error ? undefined : 'status'} className="text-sm text-muted">{errorMessage ?? message}</p>}
+            {compact && provider.status === 'expired' && !access && <p className="text-xs text-muted">{t('usage.quota.signIn', { provider: provider.label })}</p>}
             {compact && provider.status === 'custom-provider' && <p className="text-xs text-muted">{t('usage.quota.customModelNote')}</p>}
-            {(!provider.access || provider.access.connected) && <QuotaRecoveryActions provider={provider} preferences={preferences} />}
-            {detailsOpen && provider.access && <QuotaConnectionActions provider={provider} onAuthorize={onAuthorize} onDisconnect={onDisconnect} onOpenExternal={onOpenExternal} />}
+            {(!access || automaticCli || access.connected) && <QuotaRecoveryActions provider={provider} preferences={preferences} />}
+            {detailsOpen && access && <QuotaConnectionActions provider={provider} onAuthorize={onAuthorize} onDisconnect={onDisconnect} onOpenExternal={onOpenExternal} />}
             {onSave && windows.length > 1 && <Select aria-label={t('island.quota.preferredWindow')} value={windows.some(window => window.id === preferredWindow) ? `window:${preferredWindow}` : 'automatic'} aria-busy={saving}
               onChange={key => { if (key !== null) void apply({ preferredWindows: { [provider.id]: String(key).startsWith('window:') ? String(key).slice(7) : '' } }); }}>
               <Label>{t('island.quota.preferredWindow')}</Label><Select.Trigger aria-disabled={saving}><Select.Value /><Select.Indicator /></Select.Trigger>
@@ -392,12 +398,12 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
                 {sortQuotaWindows(provider.windows).map(window => <ListBox.Item key={window.id} id={`window:${window.id}`} textValue={localizeQuotaWindowLabel(locale, providerType, window)}><span className="whitespace-normal break-words">{localizeQuotaWindowLabel(locale, providerType, window)}</span><ListBox.ItemIndicator /></ListBox.Item>)}
               </ListBox></FilterSelectPopover>
             </Select>}
-            {providerType === 'claude' && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal('https://claude.ai/settings/usage')}>{t('usage.quota.claudeUsage')} ↗</Button>}
+            {providerType === 'claude' && !access && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal('https://claude.ai/settings/usage')}>{t('usage.quota.claudeUsage')} ↗</Button>}
             {detailsOpen && serviceDetails}
           </Modal.Body>
           <Modal.Footer className="flex-wrap items-center justify-between gap-2">
             {observedAt != null && <time dateTime={new Date(observedAt * 1000).toISOString()} title={new Date(observedAt * 1000).toLocaleString(locale)} className="text-xs text-muted tabular-nums">{t('usage.quota.updatedAt', { time: queryDate(observedAt, locale, now) })}</time>}
-            <Button aria-label={t('usage.quota.refreshAria', { provider: provider.label })} className="ml-auto w-fit" size="sm" variant="secondary" isDisabled={busy} onPress={() => void refresh()}>
+            <Button aria-label={t('usage.quota.refreshAria', { provider: provider.label })} className="ml-auto w-fit" size="sm" variant="secondary" isPending={busy} onPress={() => void refresh()}>
               <RefreshCw aria-hidden="true" className={`size-3.5 ${busy ? 'motion-safe:animate-spin' : ''}`} />{busy ? t('usage.quota.refreshing') : t('usage.quota.refresh')}
             </Button>
           </Modal.Footer>
@@ -410,7 +416,7 @@ export function QuotaUsageCard({ provider, preferences, statusRow = false, summa
 
 function QuotaConnectionActions({ provider, onAuthorize, onDisconnect, onOpenExternal }: {
   provider: QuotaProviderState;
-  onAuthorize?: (id: string, secret?: string) => Promise<void>;
+  onAuthorize?: (id: string, secret: string) => Promise<void>;
   onDisconnect?: (id: string) => Promise<void>;
   onOpenExternal: (url: string) => unknown;
 }) {
@@ -427,19 +433,20 @@ function QuotaConnectionActions({ provider, onAuthorize, onDisconnect, onOpenExt
     setBusy(true); setResult(null);
     try {
       if (disconnect) await onDisconnect!(provider.id);
-      else await onAuthorize!(provider.id, access.method === 'api-key' ? secret : undefined);
+      else await onAuthorize!(provider.id, secret);
       setSecret(''); setResult('done');
     } catch { setResult('failed'); }
     finally { busyRef.current = false; setBusy(false); }
   };
   return <div className="flex flex-col items-start gap-2" data-quota-access>
     {access.url && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal(access.url!)}>{t(access.destination === 'guide' ? 'quotaAccess.guide' : 'quotaAccess.usage')} ↗</Button>}
-    {access.method !== 'official-page' && (access.connected
+    {access.method === 'api-key' && (access.connected
       ? <><p className="text-sm">{t('quotaAccess.connected')}</p>{onDisconnect && <Button size="sm" variant="secondary" isDisabled={busy} onPress={() => void act(true)}>{busy ? t('quotaAccess.working') : t('quotaAccess.disconnect')}</Button>}</>
       : onAuthorize && <form className="flex w-full flex-col items-start gap-2" onSubmit={event => { event.preventDefault(); void act(); }}>
-        <p className="text-sm text-muted">{t(provider.id === 'kimi' ? 'quotaAccess.kimiNote' : access.method === 'api-key' ? 'quotaAccess.sessionNote' : 'quotaAccess.cliNote')}</p>
-        {access.method === 'api-key' && <><label htmlFor={inputId} className="text-sm">{t(provider.id === 'kimi' ? 'quotaAccess.kimiToken' : 'quotaAccess.apiKey')}</label><Input id={inputId} name="api-key" type="password" autoComplete="off" spellCheck={false} required value={secret} onChange={event => setSecret(event.target.value)} /></>}
-        <Button type="submit" size="sm" variant="secondary" isDisabled={busy}>{busy ? t('quotaAccess.working') : t(access.method === 'api-key' ? 'quotaAccess.save' : 'quotaAccess.confirm')}</Button>
+        <p className="text-sm text-muted">{t(provider.id === 'kimi' ? 'quotaAccess.kimiNote' : 'quotaAccess.sessionNote')}</p>
+        <label htmlFor={inputId} className="text-sm">{t(provider.id === 'kimi' ? 'quotaAccess.kimiToken' : 'quotaAccess.apiKey')}</label>
+        <Input id={inputId} name="api-key" type="password" autoComplete="off" spellCheck={false} required value={secret} onChange={event => setSecret(event.target.value)} />
+        <Button type="submit" size="sm" variant="secondary" isDisabled={busy}>{busy ? t('quotaAccess.working') : t('quotaAccess.save')}</Button>
       </form>)}
     {result && <p role="status" className="text-xs text-muted">{t(result === 'failed' ? 'quotaAccess.failed' : 'quotaAccess.done')}</p>}
   </div>;

@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { createWindowStarter } from 'quotern-core';
 import { resolveDataDir } from 'quotern-core/paths';
 import { registerLaunchSource } from 'quotern-core/quota/account-launch';
@@ -18,76 +17,25 @@ import { officialProviders, readOfficialProvider } from './official-providers';
 
 type Emit = (channel: string, ...args: unknown[]) => void;
 
-function cliConsentTargets(profiles: readonly QuotaProfile[]): Map<string, string | null> {
-  const targets = new Map<string, string | null>();
-  for (const [id, provider] of Object.entries(officialProviders)) {
-    if (provider.method === 'official-cli') targets.set(id, null);
-  }
-  for (const profile of profiles) {
-    if (profile.enabled && officialProviders[profile.provider].method === 'official-cli') {
-      targets.set(profile.provider + '@' + profile.id, profile.directory);
-    }
-  }
-  return targets;
-}
-
-async function readCliConsents(file: string, targets: Map<string, string | null>) {
-  const consents = new Map<string, string | null>();
-  try {
-    const data: unknown = JSON.parse(await readFile(file, 'utf8'));
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return consents;
-    for (const [key, target] of targets) {
-      if (Object.hasOwn(data, key) && (data as Record<string, unknown>)[key] === target) consents.set(key, target);
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.warn('Saved CLI quota consent unavailable');
-  }
-  return consents;
-}
-
 export async function desktopQuotas(profile: string, emit: Emit, checkSessionUnlocked: () => Promise<boolean>, read = readOfficialProvider, dataDir = resolveDataDir()) {
   const directory = join(profile, 'quota');
   const store = await openQuotaStore(directory);
   try { await registerLaunchSource(dataDir, 'desktop', directory); }
   catch { console.warn('Desktop account launch source unavailable'); }
-  const consentFile = join(directory, 'cli-consents.json');
-  const consents = await readCliConsents(consentFile, cliConsentTargets(store.preferences.profiles ?? []));
-  // Only the grants for official CLI readers survive a restart. API keys and
-  // other secrets are never included in the consents file.
-  const grants = new Map<string, { secret?: string; first?: unknown }>(
-    [...consents.keys()].map(key => [key, {}]),
-  );
-  const connecting = new Map<string,symbol>();
-  let consentWrites = Promise.resolve();
-  let pendingRevocation = false;
-  function saveConsents() {
-    pendingRevocation = false;
-    const payload = JSON.stringify(Object.fromEntries(consents));
-    const write = consentWrites.then(async () => {
-      await mkdir(directory, { recursive: true });
-      const temp = consentFile + '.' + process.pid + '.tmp';
-      await writeFile(temp, payload, { mode: 0o600 });
-      await rename(temp, consentFile);
-    });
-    consentWrites = write.catch(() => { pendingRevocation = true; });
-    return write;
-  }
-  function revoke(key: string) {
-    connecting.delete(key);
-    grants.delete(key);
-    if (consents.delete(key)) pendingRevocation = true;
-  }
+  const connections = new Map<SubscriptionChannelId, { secret: string; first?: unknown }>();
+  const connecting = new Map<SubscriptionChannelId, symbol>();
   const snapshot = createQuotaSnapshotPublisher(dataDir, 'desktop');
   const profiles = new Map<string,{profile:QuotaProfile;reader:QuotaReader}>();
   const readers: QuotaReader[] = [];
-  const describe = (id: SubscriptionChannelId, key: string) => ({
-    ...officialProviders[id], connected: grants.has(key),
-  });
   function project(state: QuotaState): QuotaState {
     return { ...state, providers: state.providers.map(provider => {
       const id = provider.providerId ?? provider.id;
       if (!isSubscriptionChannelId(id)) return provider;
-      const access = describe(id, provider.id);
+      const source = officialProviders[id];
+      if (source.method === 'official-cli') {
+        return { ...provider, access: { ...source, connected: provider.status === 'ready' } };
+      }
+      const access = { ...source, connected: connections.has(id) };
       if (access.connected) return { ...provider, access };
       const empty = normalizeQuotaSnapshot(id, provider.label, {status:'not-signed-in'});
       return { ...empty, id: provider.id, providerId: id, profileLabel: provider.profileLabel, service: provider.service, access };
@@ -97,10 +45,15 @@ export async function desktopQuotas(profile: string, emit: Emit, checkSessionUnl
     const key=profile ? provider.id+'@'+profile.id : provider.id;
     return { id: provider.id, key, profileId:profile?.id, profileLabel:profile?.label, label: provider.label, interval: provider.refreshIntervalSeconds, statusUrl: provider.statusPage?.url,
       async read() {
-        const grant = grants.get(key);
-        if (!grant) return {status:'not-signed-in'};
-        if (grant.first !== undefined) { const first=grant.first; delete grant.first; return first; }
-        return read(provider.id, grant.secret, profile?.directory);
+        if (officialProviders[provider.id].method === 'official-cli') return read(provider.id, undefined, profile?.directory);
+        const connection = connections.get(provider.id);
+        if (!connection) return { status: 'not-signed-in' };
+        if (connection.first !== undefined) {
+          const first = connection.first;
+          delete connection.first;
+          return first;
+        }
+        return read(provider.id, connection.secret);
       },
     };
   }
@@ -128,15 +81,11 @@ export async function desktopQuotas(profile: string, emit: Emit, checkSessionUnl
         active.add(key);
         const previous=profiles.get(key);
         if(previous && previous.profile.label===profile.label && previous.profile.directory===profile.directory)return previous.reader;
-        if(previous && previous.profile.directory!==profile.directory) revoke(key);
         const reader=makeReader(QUOTA_PROVIDER_DESCRIPTORS.find(p=>p.id===profile.provider)!,profile);
         profiles.set(key,{profile,reader});
         return reader;
       });
-      for (const key of profiles.keys()) if (!active.has(key)) {
-        profiles.delete(key);
-        revoke(key);
-      }
+      for (const key of profiles.keys()) if (!active.has(key)) profiles.delete(key);
       return output;
     },
     notify: value => emit('runtime:quota-notification', value),
@@ -164,73 +113,56 @@ export async function desktopQuotas(profile: string, emit: Emit, checkSessionUnl
     getState: () => manager.canRunAutomation() ? project(manager.getState()) : null,
     isSessionUnlocked,
   });
-  function resolveKey(key:unknown) {
-    if(typeof key!=='string')throw Error('Unknown quota provider');
-    const profile=profiles.get(key)?.profile;
-    const id=profile?.provider??key;
-    if(!isSubscriptionChannelId(id))throw Error('Unknown quota provider');
-    return {key,id,profile};
+  function resolveKey(key: unknown) {
+    if (typeof key !== 'string' || (!isSubscriptionChannelId(key) && !profiles.has(key))) throw Error('Unknown quota provider');
+    return key;
   }
-  function replaceReader(key:string,id: SubscriptionChannelId,profile?:QuotaProfile) {
-    // Changing the reader invalidates pending requests, histories and account identity in the manager.
-    const reader=makeReader(QUOTA_PROVIDER_DESCRIPTORS.find(p=>p.id===id)!,profile);
-    if(profile)profiles.set(key,{profile,reader});
-    else readers[readers.findIndex(row=>row.id===id)]=reader;
-    return manager.refresh('manual', key);
+  function apiKeyProvider(value: unknown) {
+    if (!isSubscriptionChannelId(value) || officialProviders[value].method !== 'api-key') throw Error('This provider does not accept an API key connection');
+    return value;
+  }
+  function refreshConnection(id: SubscriptionChannelId) {
+    // A new reader prevents pending results from the previous connection from resurfacing.
+    readers[readers.findIndex(row => row.id === id)] = makeReader(QUOTA_PROVIDER_DESCRIPTORS.find(provider => provider.id === id)!);
+    return manager.refresh('manual', id);
   }
   return {
     directory, start: () => manager.start(), getState: () => project(manager.getState()),
     async refresh(id: unknown) {
-      return project(await manager.refresh('manual', id==null?undefined:resolveKey(id).key));
+      return project(await manager.refresh('manual', id==null?undefined:resolveKey(id)));
     },
     async set(patch: unknown) {
       if (!validQuotaPatch(patch)) throw Error('Invalid quota preferences');
-      await manager.setPreferences(patch);
-      if (pendingRevocation) await saveConsents();
-      return project(manager.getState());
+      return project(await manager.setPreferences(patch));
     },
     async authorize(value: unknown, input: unknown) {
-      const {key,id,profile}=resolveKey(value);
-      const { method } = officialProviders[id];
-      if (method === 'official-page') throw Error('Open the official usage page');
-      const secret = typeof input === 'string' ? input.trim() : undefined;
-      if (method === 'api-key' && (!secret || secret.length > 4096 || /[\s\x00-\x1f]/u.test(secret))) throw Error('Invalid API key');
-      if (method !== 'api-key' && secret) throw Error('Unexpected credential');
-      const attempt=Symbol(id);
-      connecting.set(key,attempt);
+      const id = apiKeyProvider(value);
+      const secret = typeof input === 'string' ? input.trim() : '';
+      if (!secret || secret.length > 4096 || /[\s\x00-\x1f]/u.test(secret)) throw Error('Invalid API key');
+      const attempt = Symbol(id);
+      connecting.set(id, attempt);
       try {
-        const first=await read(id,secret,profile?.directory);
-        if (connecting.get(key)!==attempt) throw Error('Authorization cancelled');
+        const first = await read(id, secret, undefined);
+        if (connecting.get(id) !== attempt) throw Error('Authorization cancelled');
         if (!first || typeof first!=='object' || !('status' in first) || first.status!=='ready') {
           throw Error('Official usage authorization failed');
         }
-        if (method === 'official-cli' && !grants.has(key)) {
-          consents.set(key, profile?.directory ?? null);
-          try { await saveConsents(); }
-          catch (error) {
-            if (connecting.get(key) === attempt) consents.delete(key);
-            throw error;
-          }
-        }
-        if (connecting.get(key) !== attempt) throw Error('Authorization cancelled');
-        grants.set(key, { secret, first });
-        // Another settings request may have updated the profile label while the
-        // consent was being saved. Reuse the currently registered profile.
-        await replaceReader(key, id, resolveKey(key).profile);
-      } finally { if(connecting.get(key)===attempt)connecting.delete(key); }
+        connections.set(id, { secret, first });
+        await refreshConnection(id);
+      } finally { if (connecting.get(id) === attempt) connecting.delete(id); }
     },
     async disconnect(value: unknown) {
-      const {key,id,profile}=resolveKey(value);
-      revoke(key);
-      const refresh = replaceReader(key, id, profile);
-      await Promise.all([refresh, pendingRevocation ? saveConsents() : undefined]);
+      const id = apiKeyProvider(value);
+      connecting.delete(id);
+      connections.delete(id);
+      await refreshConnection(id);
     },
     async close() {
       connecting.clear();
-      grants.clear();
+      connections.clear();
       manager.dispose();
       flush();
-      await Promise.all([publication, consentWrites]);
+      await publication;
     },
     wake() { manager.resumed(); },
   };

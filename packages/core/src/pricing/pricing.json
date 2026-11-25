@@ -1,19 +1,19 @@
 {
   "_meta": {
     "units": "usd_per_million_tokens",
-    "generated_at": "2026-11-24T11:08:16.572Z",
-    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev. Incremental models.dev sync on 2026-10-17: kept=448 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-18: kept=448 (added=0, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-19: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-20: kept=450 (added=2, changed=34, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-21: kept=451 (added=1, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-22: kept=451 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-23: kept=451 (added=0, changed=14, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-24: kept=455 (added=4, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-27: kept=456 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-30: kept=457 (added=1, changed=1, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-05: kept=457 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-10: kept=459 (added=2, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-11: kept=460 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-14: kept=583 (added=123, changed=9, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-14: kept=583 (added=0, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-15: kept=583 (added=0, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-18: kept=586 (added=3, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-19: kept=587 (added=1, changed=1, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-20: kept=588 (added=1, changed=1, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-23: kept=588 (added=0, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-24: kept=588 (added=0, changed=2, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill.",
+    "generated_at": "2026-11-25T09:55:44.060Z",
+    "note": "Official-channel-only pricing bundle from models.dev. Scoped to anthropic/openai/google/google-vertex(/anthropic)/xai/deepseek/alibaba(/-cn)/moonshotai(/-cn)/minimax(/-cn)/xiaomi/mistral(/-cn)/zai/zhipuai/volcengine. Excludes audio/video/image/embedding/tts/stt/realtime/transcription/moderation models. All third-party / community / AWS ARN / region variants were removed 2026-08-27 — any (source, model) emitted by the parsers resolves to the official price via matcher prefix-strip. Build stats: kept=426. Manually supplemented 118 entries on 2026-08-27 from an external price feed (claude-3.x, claude-mythos-5, opus-4/-4-1/-4-8-fast/-5-fast, sonnet-4, gpt-5, gpt-5.x-codex, gpt-5.5-fast/flex, gpt-5.6-*-batch/fast/flex, o1-mini/preview, gemini-1.5/2.0/3.x, deepseek-coder/r1/v3.x/v4, qwen-coder/qwen3.7-flash/qwen3.8, glm-4.5-airx/x/glm-5-code, kimi-k2/k2.7-code/k3/kimi-for-coding/moonshot-v1, mistral-medium-3-5/ministral/codestral-2508, grok-3/4/4.20/code-fast, cursor, hy3, doubao-seed-2.x, step, ling/ring, longcat, agnes). Incremental models.dev sync on 2026-08-28: kept=416 (added=73, changed=13, removed=54). Gemini-only sync on 2026-09-03: kept=417 (added=google/gemini-3.8-flash, changed=0, removed=0). GPT-6 Astra sync on 2026-09-05: kept=418 (added=openai/gpt-6-astra, changed=0, removed=0). GPT-6 Astra cache rates supplemented on 2026-09-07 from the OpenAI model page: cache_read=1, cache_write=12.5 (changed=1). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-17: kept=423 (added=4, changed=8, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=429 (added=5, changed=2, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-22: kept=432 (added=3, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-23: kept=435 (added=3, changed=3, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-09-29: kept=442 (added=7, changed=9, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-09: kept=446 (added=4, changed=10, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Release dates synchronized on 2026-10-14; current flagship selection curated for pricing discovery. Existing rates retained; added google/gemini-4-argon from models.dev. Incremental models.dev sync on 2026-10-17: kept=448 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-17: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-18: kept=448 (added=0, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-19: kept=448 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-20: kept=450 (added=2, changed=34, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-21: kept=451 (added=1, changed=4, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-22: kept=451 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-23: kept=451 (added=0, changed=14, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-24: kept=455 (added=4, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-27: kept=456 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-10-30: kept=457 (added=1, changed=1, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-05: kept=457 (added=0, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-10: kept=459 (added=2, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-11: kept=460 (added=1, changed=0, removed=0). Official-only: cross-vendor hosting and cloud-partnership channels dropped. Incremental models.dev sync on 2026-11-14: kept=583 (added=123, changed=9, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-14: kept=583 (added=0, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-15: kept=583 (added=0, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-18: kept=586 (added=3, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-19: kept=587 (added=1, changed=1, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-20: kept=588 (added=1, changed=1, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-23: kept=588 (added=0, changed=0, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-24: kept=588 (added=0, changed=2, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill. Incremental models.dev sync on 2026-11-25: kept=602 (added=14, changed=3, removed=0). Official-only: models.dev primary, LiteLLM direct-channel gap fill.",
     "source": "https://models.dev/catalog.json",
-    "checked_at": "2026-11-24T11:08:16.572Z",
+    "checked_at": "2026-11-25T09:55:44.060Z",
     "sources": [
       "models.dev",
       "litellm"
     ],
     "sync_report": {
-      "added": 0,
-      "changed": 2,
-      "carried": 24,
-      "missing_fields": 625,
+      "added": 14,
+      "changed": 3,
+      "carried": 73,
+      "missing_fields": 637,
       "conflicts": 11,
       "large_changes": 0,
       "failed_sources": [],
@@ -173,29 +173,42 @@
           }
         },
         {
-          "model": "mistral/magistral-medium-latest",
+          "model": "alibaba/qwen-max",
           "kind": "changed",
           "previous": {
-            "input": 2,
-            "output": 5
+            "input": 1.6,
+            "output": 6.4
           },
           "current": {
-            "input": 1.5,
-            "output": 7.5,
-            "cache_read": 0.15
+            "input": 1.6,
+            "output": 6.4,
+            "cache_read": 0.32
           }
         },
         {
-          "model": "mistral/mistral-embed",
+          "model": "alibaba/qwen-plus-character-ja",
           "kind": "changed",
           "previous": {
-            "input": 0.1,
-            "output": 0
+            "input": 0.5,
+            "output": 1.4
           },
           "current": {
-            "input": 0.1,
-            "output": 0,
-            "cache_read": 0.01
+            "input": 0.5,
+            "output": 1.4,
+            "cache_read": 0.1
+          }
+        },
+        {
+          "model": "alibaba/qwen3.5-plus",
+          "kind": "changed",
+          "previous": {
+            "input": 0.4,
+            "output": 2.4
+          },
+          "current": {
+            "input": 0.4,
+            "output": 2.4,
+            "cache_write": 0.5
           }
         }
       ]
@@ -214,7 +227,8 @@
     },
     "alibaba/qwen-max": {
       "input": 1.6,
-      "output": 6.4
+      "output": 6.4,
+      "cache_read": 0.32
     },
     "alibaba/qwen-mt-plus": {
       "input": 2.46,
@@ -230,7 +244,8 @@
     },
     "alibaba/qwen-plus-character-ja": {
       "input": 0.5,
-      "output": 1.4
+      "output": 1.4,
+      "cache_read": 0.1
     },
     "alibaba/qwen-plus": {
       "input": 0.4,
@@ -368,7 +383,8 @@
     },
     "alibaba/qwen3.5-plus": {
       "input": 0.4,
-      "output": 2.4
+      "output": 2.4,
+      "cache_write": 0.5
     },
     "alibaba/qwen3.6-27b": {
       "input": 0.6,
@@ -3070,6 +3086,65 @@
       "input": 1.5,
       "output": 9
     },
+    "alibaba/qwen4-max": {
+      "input": 1.5,
+      "output": 4.5,
+      "cache_read": 0.075,
+      "cache_write": 1.875
+    },
+    "volcengine/doubao-seed-2-1-lite-260915": {
+      "input": 0.11977,
+      "output": 0.40423,
+      "cache_read": 0.02395
+    },
+    "volcengine/doubao-seed-2-1-pro-260915": {
+      "input": 0.8983,
+      "output": 4.49149,
+      "cache_read": 0.17966
+    },
+    "zhipuai/glm-5.3-flashx-legal": {
+      "input": 0.29943,
+      "output": 1.04801,
+      "cache_read": 0.08534,
+      "cache_write": 0
+    },
+    "alibaba-cn/qwen3.5-35b-a3b": {
+      "input": 0.059887,
+      "output": 0.479092
+    },
+    "alibaba-cn/qwen3.6-27b": {
+      "input": 0.449149,
+      "output": 2.694894
+    },
+    "alibaba-cn/qwen3.6-35b-a3b": {
+      "input": 0.269489,
+      "output": 1.616936
+    },
+    "alibaba-cn/qwen3.5-27b": {
+      "input": 0.08983,
+      "output": 0.718638
+    },
+    "alibaba-cn/qwen3.5-122b-a10b": {
+      "input": 0.119773,
+      "output": 0.958184
+    },
+    "alibaba-cn/qwen4-max": {
+      "input": 1.497163,
+      "output": 4.491489,
+      "cache_read": 0.074858,
+      "cache_write": 1.871454
+    },
+    "zai/glm-5.3-flashx-legal": {
+      "input": 0.37,
+      "output": 1.25,
+      "cache_read": 0.075,
+      "cache_write": 0
+    },
+    "stepfun/step-1o-turbo-vision": {
+      "input": 0.37429,
+      "output": 1.1977,
+      "cache_read": 0.074858
+    },
     "mistral/deepseek-v4-1-flash-1017": {
       "input": 0.3,
       "output": 1.2,
@@ -3104,6 +3179,16 @@
       "input": 1.4,
       "output": 4.4,
       "cache_read": 0.14
+    },
+    "xai/grok-4.6-latest": {
+      "input": 2,
+      "output": 6,
+      "cache_read": 0.5
+    },
+    "xai/grok-4.7-latest": {
+      "input": 2,
+      "output": 6,
+      "cache_read": 0.5
     }
   },
   "alias": {
@@ -5173,7 +5258,7 @@
       "canonical_model_id": "mistral/mistral-large-2512"
     },
     "mistral/mistral-large-latest": {
-      "release_date": "2026-10-06",
+      "release_date": "2026-10-05",
       "release_date_source": "models.dev",
       "context_window": 1048576,
       "context_window_source": "models.dev",
@@ -5195,7 +5280,7 @@
       "display_name": "Mistral Medium 3.1"
     },
     "mistral/mistral-medium-2604": {
-      "release_date": "2026-04-29",
+      "release_date": "2026-04-28",
       "release_date_source": "models.dev",
       "context_window": 262144,
       "context_window_source": "models.dev",
@@ -5683,7 +5768,7 @@
       "canonical_model_id": "xiaomi/mimo-v2.6-pro"
     },
     "xiaomi/mimo-v2.6-pro-ultraspeed": {
-      "release_date": "2026-09-21",
+      "release_date": "2026-09-22",
       "release_date_source": "models.dev",
       "context_window": 1048576,
       "context_window_source": "models.dev",
@@ -6050,7 +6135,7 @@
     "volcengine/doubao-seed-2-1-pro-260628": {
       "release_date": "2026-06-23",
       "release_date_source": "models.dev",
-      "context_window": 1024000,
+      "context_window": 256000,
       "context_window_source": "models.dev",
       "display_name": "Seed 2.1 Pro",
       "canonical_model_id": "bytedance-seed/seed-2.1-pro"
@@ -6106,7 +6191,7 @@
     "volcengine/doubao-seed-character-260628": {
       "release_date": "2026-06-23",
       "release_date_source": "models.dev",
-      "context_window": 256000,
+      "context_window": 128000,
       "context_window_source": "models.dev",
       "display_name": "Seed Character",
       "canonical_model_id": "bytedance-seed/seed-character"
@@ -6150,7 +6235,7 @@
       "display_name": "Voxtral Small (latest)"
     },
     "mistral/mistral-medium-latest": {
-      "release_date": "2026-04-29",
+      "release_date": "2026-04-28",
       "release_date_source": "models.dev",
       "context_window": 262144,
       "context_window_source": "models.dev",
@@ -6351,7 +6436,7 @@
       "canonical_model_id": "anthropic/claude-haiku-5-5"
     },
     "mistral/mistral-large-4": {
-      "release_date": "2026-10-06",
+      "release_date": "2026-10-05",
       "release_date_source": "models.dev",
       "context_window": 1048576,
       "context_window_source": "models.dev",
@@ -6512,7 +6597,7 @@
     "google/lyria-3-clip-preview": {
       "release_date": "2026-03-25",
       "release_date_source": "models.dev",
-      "context_window": 1048576,
+      "context_window": 131072,
       "context_window_source": "models.dev",
       "display_name": "Lyria 3 Clip Preview",
       "canonical_model_id": "google/lyria-3-clip-preview"
@@ -6520,18 +6605,18 @@
     "google/lyria-3-pro-preview": {
       "release_date": "2026-03-25",
       "release_date_source": "models.dev",
-      "context_window": 1048576,
+      "context_window": 131072,
       "context_window_source": "models.dev",
       "display_name": "Lyria 3 Pro Preview",
       "canonical_model_id": "google/lyria-3-pro-preview"
     },
     "mistral/ministral-14b-latest": {
-      "display_name": "Ministral 3 14B",
-      "canonical_model_id": "mistral/ministral-3-14b-instruct-2512",
       "release_date": "2025-12-02",
       "release_date_source": "models.dev",
       "context_window": 262144,
-      "context_window_source": "models.dev"
+      "context_window_source": "models.dev",
+      "display_name": "Ministral 3 14B",
+      "canonical_model_id": "mistral/ministral-3-14b-instruct-2512"
     },
     "mistral/voxtral-small-2507": {
       "release_date": "2025-07-15",
@@ -6563,6 +6648,102 @@
       "context_window_source": "models.dev",
       "display_name": "Gemini 4 Neon",
       "canonical_model_id": "google/gemini-4-neon"
+    },
+    "alibaba/qwen4-max": {
+      "display_name": "Qwen4 Max",
+      "canonical_model_id": "alibaba/qwen4-max",
+      "release_date": "2026-11-16",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "volcengine/doubao-seed-2-1-lite-260915": {
+      "display_name": "Seed 2.1 Lite",
+      "canonical_model_id": "bytedance-seed/seed-2.1-lite",
+      "release_date": "2026-09-15",
+      "release_date_source": "models.dev",
+      "context_window": 1024000,
+      "context_window_source": "models.dev"
+    },
+    "volcengine/doubao-seed-2-1-pro-260915": {
+      "display_name": "Seed 2.1 Pro",
+      "canonical_model_id": "bytedance-seed/seed-2.1-pro",
+      "release_date": "2026-06-23",
+      "release_date_source": "models.dev",
+      "context_window": 1024000,
+      "context_window_source": "models.dev"
+    },
+    "zhipuai/glm-5.3-flashx-legal": {
+      "display_name": "GLM-5.3-FlashX-Legal",
+      "canonical_model_id": "zhipuai/glm-5.3-flashx-legal",
+      "release_date": "2026-11-02",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-cn/qwen3.5-35b-a3b": {
+      "display_name": "Qwen3.5 35B-A3B",
+      "canonical_model_id": "alibaba/qwen3.5-35b-a3b",
+      "release_date": "2026-02-23",
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-cn/qwen3.6-27b": {
+      "display_name": "Qwen3.6 27B",
+      "canonical_model_id": "alibaba/qwen3.6-27b",
+      "release_date": "2026-04-22",
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-cn/qwen3.6-35b-a3b": {
+      "display_name": "Qwen3.6 35B-A3B",
+      "canonical_model_id": "alibaba/qwen3.6-35b-a3b",
+      "release_date": "2026-04-17",
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-cn/qwen3.5-27b": {
+      "display_name": "Qwen3.5 27B",
+      "canonical_model_id": "alibaba/qwen3.5-27b",
+      "release_date": "2026-02-23",
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-cn/qwen3.5-122b-a10b": {
+      "display_name": "Qwen3.5 122B-A10B",
+      "canonical_model_id": "alibaba/qwen3.5-122b-a10b",
+      "release_date": "2026-02-23",
+      "release_date_source": "models.dev",
+      "context_window": 262144,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-cn/qwen4-max": {
+      "display_name": "Qwen4 Max",
+      "canonical_model_id": "alibaba/qwen4-max",
+      "release_date": "2026-11-16",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "zai/glm-5.3-flashx-legal": {
+      "display_name": "GLM-5.3-FlashX-Legal",
+      "canonical_model_id": "zhipuai/glm-5.3-flashx-legal",
+      "release_date": "2026-11-02",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "stepfun/step-1o-turbo-vision": {
+      "display_name": "Step-1o Turbo Vision",
+      "canonical_model_id": "stepfun/step-1o-turbo-vision",
+      "release_date": "2025-01-21",
+      "release_date_source": "models.dev",
+      "context_window": 32768,
+      "context_window_source": "models.dev"
     }
   },
   "subscription_models": {
@@ -6802,7 +6983,7 @@
     "tencent-token-plan/hy4-preview": {
       "release_date": "2026-08-28",
       "release_date_source": "models.dev",
-      "context_window": 1024000,
+      "context_window": 1048576,
       "context_window_source": "models.dev",
       "display_name": "Hy4 preview",
       "canonical_model_id": "tencent/hy4-preview"
@@ -6872,12 +7053,12 @@
       "canonical_model_id": "moonshotai/kimi-k2.7-code"
     },
     "volcengine-coding-plan/deepseek-v4-flash": {
-      "release_date": "2026-04-24",
+      "release_date": "2026-07-31",
       "release_date_source": "models.dev",
       "context_window": 1000000,
       "context_window_source": "models.dev",
-      "display_name": "DeepSeek V4 Flash",
-      "canonical_model_id": "deepseek/deepseek-v4-flash"
+      "display_name": "DeepSeek V4 Flash 0731",
+      "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
     },
     "volcengine-coding-plan/doubao-seed-evolving": {
       "release_date": "2026-06-23",
@@ -6920,12 +7101,12 @@
       "canonical_model_id": "minimax/MiniMax-M3"
     },
     "volcengine-coding-plan/deepseek-v4-pro": {
-      "release_date": "2026-04-24",
+      "release_date": "2026-08-13",
       "release_date_source": "models.dev",
       "context_window": 1000000,
       "context_window_source": "models.dev",
-      "display_name": "DeepSeek V4 Pro",
-      "canonical_model_id": "deepseek/deepseek-v4-pro"
+      "display_name": "DeepSeek V4 Pro 0813",
+      "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
     },
     "xiaomi-token-plan-sgp/mimo-v2.6-flash": {
       "release_date": "2026-09-22",
@@ -7893,6 +8074,54 @@
       "context_window_source": "models.dev",
       "display_name": "GLM-5.4",
       "canonical_model_id": "zhipuai/glm-5.4"
+    },
+    "alibaba-token-plan/qwen4-max": {
+      "display_name": "Qwen4 Max",
+      "canonical_model_id": "alibaba/qwen4-max",
+      "release_date": "2026-11-16",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "tencent-token-plan/deepseek-v4.1-flash-1017": {
+      "display_name": "DeepSeek V4.1 Flash 1017",
+      "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+      "release_date": "2026-10-17",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "tencent-token-plan/deepseek-v4-pro-0813": {
+      "display_name": "DeepSeek V4 Pro 0813",
+      "canonical_model_id": "deepseek/deepseek-v4-pro-0813",
+      "release_date": "2026-08-13",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
+    },
+    "tencent-token-plan/hy4-flash": {
+      "display_name": "Hy4 flash",
+      "canonical_model_id": "tencent/hy4-flash",
+      "release_date": "2026-11-16",
+      "release_date_source": "models.dev",
+      "context_window": 1048576,
+      "context_window_source": "models.dev"
+    },
+    "tencent-token-plan/hy3-202608": {
+      "display_name": "Hy3",
+      "canonical_model_id": "tencent/hy3",
+      "release_date": "2026-07-06",
+      "release_date_source": "models.dev",
+      "context_window": 256000,
+      "context_window_source": "models.dev"
+    },
+    "alibaba-token-plan-cn/qwen4-max": {
+      "display_name": "Qwen4 Max",
+      "canonical_model_id": "alibaba/qwen4-max",
+      "release_date": "2026-11-16",
+      "release_date_source": "models.dev",
+      "context_window": 1000000,
+      "context_window_source": "models.dev"
     }
   },
   "request_rules": [
@@ -10685,552 +10914,552 @@
     "volcengine/doubao-seed-2-0-lite-260428": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "volcengine/doubao-seed-2-0-code-preview-260215": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "volcengine/doubao-seed-1-6-vision-250815": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "volcengine/doubao-seed-1-6-flash-250828": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "volcengine/doubao-seed-1-8-251228": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "volcengine/doubao-seed-evolving": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "volcengine/doubao-seed-character-260628": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "volcengine/doubao-seed-2-1-turbo-260628": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "volcengine/doubao-seed-2-0-mini-260428": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "volcengine/doubao-seed-1-6-251015": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "volcengine/doubao-seed-2-1-pro-260628": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "volcengine/doubao-seed-2-0-pro-260215": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-14b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen-vl-max": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3-vl-30b-a3b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-vl-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.6-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3.5-397b-a17b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-next-80b-a3b-thinking": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3-coder-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-max": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3-vl-235b-a22b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwq-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.6-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-plus-character-ja": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-vl-ocr": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-8b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.7-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-max": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-coder-30b-a3b-instruct": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.6-35b-a3b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3.8-max": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3.6-27b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3.5-27b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-32b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.5-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-mt-turbo": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.8-omni-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-omni-turbo": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.7-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-coder-480b-a35b-instruct": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen2-5-omni-7b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.5-122b-a10b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-vl-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qvq-max": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3-235b-a22b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.8-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-turbo": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.6-max-preview": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3-omni-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen-mt-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3-coder-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3-next-80b-a3b-instruct": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba/qwen3.5-35b-a3b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba/qwen3.7-max": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.7": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.5-air": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5.3-flashx": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.7-flashx": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.6v-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.6v": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5v-turbo": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.5v": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5.3-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5.2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5.3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-4.7-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zai/glm-5-turbo": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai/kimi-k2.7-code": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai/kimi-k2.7-code-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai/kimi-k3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai/kimi-k3.1-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai/kimi-k3.1-pro-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai/kimi-k2.6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xiaomi/mimo-v2.6-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xiaomi/mimo-v2.5-pro-ultraspeed": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "xiaomi/mimo-v2.5": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "xiaomi/mimo-v2.6-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xiaomi/mimo-v2.6-pro-ultraspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xiaomi/mimo-v2.5-pro": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "minimax/MiniMax-M2.5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M2.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M2.7": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M2.5-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M3.1-Flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax/MiniMax-M2.7-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-v4-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-v4-flash-vision-exp": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-v4-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M2.5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M2.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M2.7": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M2.5-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M3.1-Flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "minimax-cn/MiniMax-M2.7-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6-sol": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.6-terra": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4": {
       "source": "models.dev",
@@ -11240,62 +11469,62 @@
     "openai/gpt-5.4-nano": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.4-mini": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-daybreak-blue-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.4-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6-astra": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.6-luna": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-daybreak-red-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6-luna": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4.1-nano": {
       "source": "models.dev",
@@ -11310,7 +11539,7 @@
     "openai/gpt-4o-2024-08-06": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o4-mini": {
       "source": "models.dev",
@@ -11320,12 +11549,12 @@
     "openai/gpt-6.1-terra": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.4": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o3-mini": {
       "source": "models.dev",
@@ -11335,37 +11564,37 @@
     "openai/gpt-5.5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.5-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.3-codex": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-mini": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-2024-11-20": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-3.5-turbo": {
       "source": "models.dev",
@@ -11385,17 +11614,17 @@
     "openai/gpt-5.2-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o3-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4.1-mini": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-2024-05-13": {
       "source": "models.dev",
@@ -11410,262 +11639,262 @@
     "openai/gpt-5-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-mini": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-nano": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6.1-sol": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.6-sol": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.7": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.5-air": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5.3-flashx": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.7-flashx": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.6v-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.6v": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5v-turbo": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.5v": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5.3-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5.2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-5.3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "zhipuai/glm-4.7-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "stepfun/step-5-preview": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "stepfun/step-3.5-flash-2603": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "stepfun/step-3.7-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "stepfun/step-3.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-spark-1.2-contributor": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-spark-1.3-contributor": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-ember-1.0": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-spark-1.3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-spark-1.1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-wonder-1.0": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "meta/muse-spark-1.2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-fable-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-fable-5-1": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-sonnet-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-5-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-sonnet-4-5-20250929": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-fable-5-2": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-sonnet-4-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-7": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-8": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-haiku-4-5-20251001": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-sonnet-5-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-5-20251101": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-haiku-4-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-haiku-5-5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-sonnet-4-6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-2.5-computer-use-preview-10-2025": {
       "source": "models.dev",
@@ -11675,27 +11904,27 @@
     "google/gemini-3.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.5-flash-lite": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.1-flash-lite": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/deep-research-max-preview-04-2026": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-2.5-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.1-flash-lite-preview": {
       "source": "models.dev",
@@ -11705,107 +11934,107 @@
     "google/gemini-4-argon": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-flash-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-flash-lite-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.7-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/deep-research-preview-04-2026": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.1-pro-preview-customtools": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-2.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.1-pro-preview": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-4-hydrogen": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemma-4-31b-it": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-4-carbon": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3-flash-preview": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.6-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-3.8-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-2.5-flash-lite": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-pro-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemma-4-26b-a4b-it": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-multi-agent-0309": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.7": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-build-0.1": {
       "source": "models.dev",
@@ -11815,52 +12044,52 @@
     "xai/grok-4.5": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-0309-non-reasoning": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-0309-reasoning": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai-cn/kimi-k2.7-code": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai-cn/kimi-k2.7-code-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai-cn/kimi-k3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai-cn/kimi-k3.1-pro": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai-cn/kimi-k3.1-pro-highspeed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "moonshotai-cn/kimi-k2.6": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-medium-2604": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/devstral-2512": {
       "source": "models.dev",
@@ -11875,12 +12104,12 @@
     "mistral/mistral-small-2603": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/codestral-2508": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-medium-2508": {
       "source": "models.dev",
@@ -11890,7 +12119,7 @@
     "mistral/mistral-medium-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/labs-devstral-small-2512": {
       "source": "models.dev",
@@ -11905,22 +12134,22 @@
     "mistral/magistral-medium-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-embed": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-large-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-large-4": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-small-2506": {
       "source": "models.dev",
@@ -11930,17 +12159,17 @@
     "mistral/ministral-8b-2512": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/ministral-3b-2512": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/ministral-8b-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/devstral-medium-latest": {
       "source": "models.dev",
@@ -11954,7 +12183,7 @@
     "mistral/ministral-3b-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/open-mistral-nemo": {
       "source": "models.dev",
@@ -11964,7 +12193,7 @@
     "mistral/ministral-14b-2512": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/pixtral-12b": {
       "source": "models.dev",
@@ -11974,7 +12203,7 @@
     "mistral/mistral-large-2512": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/devstral-latest": {
       "source": "models.dev",
@@ -11993,932 +12222,1002 @@
     "mistral/codestral-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-small-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-14b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen-vl-max": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-vl-30b-a3b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3.5-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-vl-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.6-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3.5-397b-a17b": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-deep-research": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-math-turbo": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-next-80b-a3b-thinking": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen-plus-character": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-coder-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-max": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-vl-235b-a22b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwq-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.6-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-vl-ocr": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-8b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.7-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-max": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-coder-30b-a3b-instruct": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.8-max": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-math-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-32b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen-doc-turbo": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3.5-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-mt-turbo": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/tongyi-intent-detect-v3": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3.8-omni-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-omni-turbo": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.7-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-coder-480b-a35b-instruct": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen2-5-omni-7b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-vl-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qvq-max": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-235b-a22b": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.8-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-turbo": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3.6-max-preview": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-omni-flash": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen-mt-plus": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3-coder-plus": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen3-next-80b-a3b-instruct": {
       "source": "models.dev",
-      "status": "current",
+      "status": "carried",
       "last_verified_at": "2026-11-24T11:08:16.572Z"
     },
     "alibaba-cn/qwen-long": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "alibaba-cn/qwen3.7-max": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/chat-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-mythos-5": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-mythos-5-1": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-mythos-5-2": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-mythos-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-6-20260205": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "anthropic/claude-opus-4-7-20260416": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "cohere/command-nightly": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/computer-use-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/computer-use-preview-2025-03-11": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/daybreak-blue-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/daybreak-red-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-exp-1206": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-3.5-turbo-0125": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-3.5-turbo-1106": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-3.5-turbo-16k": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4-0613": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4-1106-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4-turbo-2024-04-09": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4.1-2025-04-14": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4.1-mini-2025-04-14": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4.1-nano-2025-04-14": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-mini-2024-07-18": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-mini-search-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-mini-search-preview-2025-03-11": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-search-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-4o-search-preview-2025-03-11": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-2025-08-07": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-chat": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-chat-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-mini-2025-08-07": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-nano-2025-08-07": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-search-api": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5-search-api-2025-10-14": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.1-2025-11-13": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.1-chat-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.2-2025-12-11": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.2-chat-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.3-chat-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.4-2026-03-05": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.4-mini-2026-03-17": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.4-nano-2026-03-17": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.5-2026-04-23": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.5-cyber": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.5-cyber-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-5.6-cyber": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6-astra-law": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6-cyber": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6-rosalind": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-rosalind-discovery": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-rosalind-research": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o1-2024-12-17": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o3-2025-04-16": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o3-mini-2025-01-31": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/o4-mini-2025-04-16": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-coder": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-r1": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "deepseek/deepseek-v3": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/deep-research-pro-preview-12-2025": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-exp-1114": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-gemma-2-27b-it": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-gemma-2-9b-it": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-omni-1.1-flash": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-omni-1.2-flash": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-robotics-er-2-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-robotics-er-2-streaming-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemma-3-27b-it": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/learnlm-1.5-pro-experimental": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/lyria-3-clip-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/lyria-3-pro-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/lyria-3.5": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/lyria-3.5-clip-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/lyria-3.5-pro-preview": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/codestral-mamba-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/deepseek-v4-1-flash-1017": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/devstral-small-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/glm-5-2": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/labs-leanstral-1-5": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/magistral-small-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/ministral-14b-latest": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/ministral-3-14b-2512": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/ministral-3-3b-2512": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/ministral-3-8b-2512": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-code-agent-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-code-fim-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-code-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-large-3": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-large-4-0": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-medium": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-medium-3": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-medium-3-5": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-medium-3.5": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-small": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-tiny": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-vibe-cli-fast": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-vibe-cli-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/mistral-vibe-cli-with-tools": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/pixtral-large-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/voxtral-small-2507": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/zai-glm-5": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/zai-glm-5-2": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/zai-glm-5-3": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/zai-glm-5-3-flash": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "mistral/zai-glm-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-0309": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-0309": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-0309-non-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-0309-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-latest-non-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-latest-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-non-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-beta-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-experimental-beta-0304": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-experimental-beta-0304-non-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-experimental-beta-0304-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-experimental-beta-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-experimental-beta-non-reasoning-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-experimental-beta-reasoning-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-non-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-non-reasoning-gv2": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-non-reasoning-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-reasoning": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-reasoning-gv2": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.20-reasoning-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.3-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-4.5-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-build-latest": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-code-fast": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "xai/grok-code-fast-1-0825": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6.2-astra": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6.2-sol": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "openai/gpt-6.2-astra-law": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/gemini-4-neon": {
       "source": "models.dev",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     },
     "google/genie-4": {
       "source": "litellm",
       "status": "current",
-      "last_verified_at": "2026-11-24T11:08:16.572Z"
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba/qwen4-max": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "volcengine/doubao-seed-2-1-lite-260915": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "volcengine/doubao-seed-2-1-pro-260915": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "zhipuai/glm-5.3-flashx-legal": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba-cn/qwen3.5-35b-a3b": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba-cn/qwen3.6-27b": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba-cn/qwen3.6-35b-a3b": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba-cn/qwen3.5-27b": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba-cn/qwen3.5-122b-a10b": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "alibaba-cn/qwen4-max": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "zai/glm-5.3-flashx-legal": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "stepfun/step-1o-turbo-vision": {
+      "source": "models.dev",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "xai/grok-4.6-latest": {
+      "source": "litellm",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
+    },
+    "xai/grok-4.7-latest": {
+      "source": "litellm",
+      "status": "current",
+      "last_verified_at": "2026-11-25T09:55:44.060Z"
     }
   },
   "automatic_rule_sources": [

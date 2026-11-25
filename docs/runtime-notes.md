@@ -120,6 +120,8 @@ Tauri 宿主 `apps/desktop/src-tauri/src/main.rs` 管理窗口；renderer 通过
 
 本机面板的校验预览显示文件类别、有限的来源列表及实际用量桶首末时间（UTC），不代表期间每一天都有数据。保护恢复使用 `restore-protected` 动作，在当前统计目录 `backups/before-restore-*.json` 原子发布保护快照后才创建恢复目标。保护失败不会开始恢复；保护成功、恢复失败的响应仍返回保护路径。保护文件不自动清理，也不嵌套进入后续备份。旧 `restore` 动作保持原语义；同一运行端拒绝并行备份操作（409/BACKUP_BUSY）。新目录仅有所选备份内容，不与当前数据合并，不自动切换实例。
 
+Desktop 退出或安装更新时，停止接受新的备份操作，等待已接纳的备份请求完成后才关闭 Node。关闭主窗口仍会让已开始的恢复在后台完成。强制结束进程或系统中断后，仍由 `.backup-restore-incomplete` 标记不完整的目标。可用 `node apps/desktop/scripts/tauri-backup-quit-smoke.mjs <Windows release host>` 在隔离副本中验证退出跨过常规关闭时限，追加 `--raw` 验证直传入口，追加 `--close-main` 验证等待期间关闭最后一个窗口。
+
 ## 升级前迁移状态
 
 运行时只读取 Quotern 的设备身份和 Desktop 配置目录，识别 Quotern 进程及自启服务。已有安装在升级前需完成一次显式迁移。

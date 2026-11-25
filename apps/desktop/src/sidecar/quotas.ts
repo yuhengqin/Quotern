@@ -45,7 +45,7 @@ async function readCliConsents(file: string, targets: Map<string, string | null>
   return consents;
 }
 
-export async function desktopQuotas(profile: string, emit: Emit, read = readOfficialProvider, dataDir = resolveDataDir()) {
+export async function desktopQuotas(profile: string, emit: Emit, checkSessionUnlocked: () => Promise<boolean>, read = readOfficialProvider, dataDir = resolveDataDir()) {
   const directory = join(profile, 'quota');
   const store = await openQuotaStore(directory);
   try { await registerLaunchSource(dataDir, 'desktop', directory); }
@@ -153,12 +153,16 @@ export async function desktopQuotas(profile: string, emit: Emit, read = readOffi
       pending??=setImmediate(flush);
     },
   });
+  const isSessionUnlocked = async () =>
+    manager.canRunAutomation() && await checkSessionUnlocked() && manager.canRunAutomation();
   const autoSwitch = createAccountAutoSwitcher(dataDir, directory, 'desktop', {
     getState: () => project(manager.getState()),
     isActive: () => manager.canRunAutomation(),
+    isSessionUnlocked,
   });
   const startWindow = createWindowStarter(dataDir, 'desktop', {
     getState: () => manager.canRunAutomation() ? project(manager.getState()) : null,
+    isSessionUnlocked,
   });
   function resolveKey(key:unknown) {
     if(typeof key!=='string')throw Error('Unknown quota provider');

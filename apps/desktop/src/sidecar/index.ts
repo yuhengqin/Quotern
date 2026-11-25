@@ -42,10 +42,33 @@ async function native(channel:string, ...args:unknown[]): Promise<unknown> {
   try { await publish({type:'native',id,channel,args}); return await reply; }
   finally { clearTimeout(timer!); nativeRequests.delete(id); }
 }
+
+let activeBackup: Promise<unknown> | undefined;
+async function runBackup<T>(operation: () => Promise<T>): Promise<T> {
+  if (closing) throw Error('Desktop runtime is stopping');
+  if (activeBackup) throw Error('BACKUP_BUSY');
+  const pending = (async () => {
+    try {
+      // The host must reserve this operation before it can modify the filesystem.
+      await native('host:backup-begin');
+      return await operation();
+    }
+    finally {
+      await publish({ type: 'backup-finished' }).catch(error => {
+        console.error('Could not report backup completion:', error);
+        void stop();
+      });
+    }
+  })();
+  activeBackup = pending;
+  try { return await pending; }
+  finally { activeBackup = undefined; }
+}
+
 const service: Promise<DesktopService> = import('./service').then(({ createDesktopService }) =>
   createDesktopService(profile, (channel, ...args) => {
     if (!closing) void publish({ type: 'event', channel, args }).catch(() => { void stop(); });
-  },native));
+  }, native, runBackup));
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const active = new Set<number>();
 async function handle(line: string): Promise<void> {
@@ -81,7 +104,12 @@ async function stop() {
   for (const operation of nativeRequests.values()) operation.reject(Error('Native host disconnected'));
   nativeRequests.clear();
   input.close();
-  try { await (await service).close(); await writes; }
+  try {
+    // A lost renderer or shutdown request does not cancel an admitted restore.
+    await activeBackup?.catch(() => {}); // The request handler owns its result.
+    await (await service).close();
+    await writes;
+  }
   catch (error) { console.error('Failed to stop Quotern runtime:', error instanceof Error ? error.message : error); process.exitCode = 1; }
   process.exit(process.exitCode ?? 0);
 }

@@ -67,3 +67,30 @@ test('owner loss, pause, isolated development and manual selection during verifi
     await run(); assert.equal((await readLaunchPreferences(f.dir)).defaults.claude?.profileId, 'one');
   }
 });
+
+test('a desktop lock blocks account rotation, including a lock during identity verification', async t => {
+  const f = await fixture(t);
+  let unlocked = false;
+  let lockDuringVerification = true;
+  let verifications = 0;
+  const deps = {
+    now: () => now, isOwner: async () => true, isActive: () => true, getState: () => f.state, isolated: false,
+    isSessionUnlocked: async () => unlocked,
+    verify: async () => {
+      verifications++;
+      if (lockDuringVerification) unlocked = false;
+      return true;
+    },
+  };
+  const run = createAccountAutoSwitcher(f.dir, f.quotaDirectory, 'desktop', deps);
+  await run();
+  assert.equal(verifications, 0);
+  unlocked = true;
+  await run();
+  assert.equal(verifications, 1);
+  assert.equal((await readLaunchPreferences(f.dir)).defaults.claude?.profileId, 'one');
+  lockDuringVerification = false;
+  unlocked = true;
+  await run();
+  assert.equal((await readLaunchPreferences(f.dir)).defaults.claude?.profileId, 'two');
+});

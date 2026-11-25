@@ -46,6 +46,7 @@ async function prepareWindowStart(provider: 'claude' | 'codex', accountRef: stri
 export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop', dependencies: {
   now?: () => number; isOwner?: () => Promise<boolean>; execute?: (provider: 'claude' | 'codex') => Promise<void>; isolated?: boolean;
   getState?: () => QuotaState | null;
+  isSessionUnlocked?: () => Promise<boolean>;
 } = {}) {
   const now = dependencies.now ?? (() => Date.now() / 1000);
   const owner = dependencies.isOwner ?? (async () => { const value = await readRuntimeOwner(dataDir); return value?.pid === process.pid && value.kind === runtime; });
@@ -74,6 +75,7 @@ export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop',
           };
           if (!await owner() || !(await readAgentPreferences(dataDir))[`${provider}WindowStart`]) continue;
           if (!stillEligible()) continue;
+          if (dependencies.isSessionUnlocked && !await dependencies.isSessionUnlocked()) continue;
           const prepared = dependencies.execute ? { execute: () => dependencies.execute!(provider), dispose: async () => {} } : await prepareWindowStart(provider, p.provenance!.accountRef!);
           if (!prepared) { (memory.blocked ??= {})[provider] = stamp; continue; }
           if (memory.blocked) delete memory.blocked[provider];
@@ -82,6 +84,11 @@ export function createWindowStarter(dataDir: string, runtime: 'cli' | 'desktop',
             if (!stillEligible()) continue;
             memory.attempted[attempt] = { at: stamp, outcome: 'attempted' };
             await writeAgentJson(file, memory); // Persist BEFORE any request; crashes never cause a retry.
+            if (dependencies.isSessionUnlocked && !await dependencies.isSessionUnlocked()) {
+              delete memory.attempted[attempt];
+              await writeAgentJson(file, memory);
+              continue;
+            }
             try { await prepared.execute(); memory.attempted[attempt]!.outcome = 'completed'; }
             catch { memory.attempted[attempt]!.outcome = 'uncertain'; }
           } finally { await prepared.dispose(); }

@@ -104,6 +104,12 @@ pub async fn operation(app: &AppHandle, message: &Value) -> Result<Value, String
         .ok_or("Missing native operation")?;
     let state = app.state::<HostState>();
     match channel {
+        "host:quota-session-unlocked" => {
+            let unlocked = tauri::async_runtime::spawn_blocking(crate::session_state::is_unlocked)
+                .await
+                .map_err(|error| error.to_string())?;
+            return Ok(json!(unlocked));
+        }
         "host:chrome" => {
             let hex = a[0]["background"]
                 .as_str()

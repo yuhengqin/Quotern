@@ -89,5 +89,20 @@ test('window startup needs prior evidence, opt-in and ownership; two runtimes at
     await createWindowStarter(root, 'cli', deps)(state(2010, 0)); assert.equal(count, 1);
     now = 3000; await a(state(3010, 20)); now = 3020;
     const stale = state(3010, 0); stale.providers[0]!.stale = true; await a(stale); assert.equal(count, 1);
+
+    let unlocked = false, lockAfterFirstCheck = false;
+    const guarded = { ...deps, getState: () => latest, isSessionUnlocked: async () => {
+      const allowed = unlocked;
+      if (lockAfterFirstCheck) unlocked = false;
+      return allowed;
+    } };
+    const desktop = createWindowStarter(root, 'desktop', guarded);
+    now = 4000; await desktop(state(4010, 30)); now = 4020;
+    latest = state(4010, 0);
+    await desktop(latest); assert.equal(count, 1, 'a locked session cannot start a quota window');
+    unlocked = true; lockAfterFirstCheck = true;
+    await desktop(latest); assert.equal(count, 1, 'check again immediately before the paid request');
+    unlocked = true; lockAfterFirstCheck = false;
+    await desktop(latest); assert.equal(count, 2, 'a cancelled run does not consume the window');
   } finally { await rm(root, { recursive: true, force: true }); }
 });

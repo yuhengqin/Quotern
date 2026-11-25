@@ -12,7 +12,7 @@ const ready = () => ({
 
 async function fixture(run: (context: {
   root: string;
-  create: (read: Parameters<typeof desktopQuotas>[2]) => ReturnType<typeof desktopQuotas>;
+  create: (read: Parameters<typeof desktopQuotas>[3]) => ReturnType<typeof desktopQuotas>;
 }) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), 'quotern-consent-'));
   const originalFetch = globalThis.fetch;
@@ -20,7 +20,7 @@ async function fixture(run: (context: {
   let manager: Awaited<ReturnType<typeof desktopQuotas>> | undefined;
   try {
     await run({ root, create: async read => {
-      manager = await desktopQuotas(join(root, 'profile'), () => {}, read, join(root, 'data'));
+      manager = await desktopQuotas(join(root, 'profile'), () => {}, async () => false, read, join(root, 'data'));
       return manager;
     } });
   } finally {

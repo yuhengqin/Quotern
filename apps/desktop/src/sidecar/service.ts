@@ -26,7 +26,9 @@ export interface DesktopService {
   close(): Promise<void>;
 }
 export type NativeCall = (channel:string,...args:unknown[])=>Promise<unknown>;
-export async function createDesktopService(profile: string, emit: (channel: string, ...args: unknown[]) => void, native:NativeCall): Promise<DesktopService> {
+type RunBackup = <T>(operation: () => Promise<T>) => Promise<T>;
+export async function createDesktopService(profile: string, emit: (channel: string, ...args: unknown[]) => void,
+  native: NativeCall, runBackup: RunBackup): Promise<DesktopService> {
   let pets: Awaited<ReturnType<typeof desktopPets>> | null = null;
   const prefs = await desktopPreferences(profile,(channel,...args)=>{
     emit(channel,...args);
@@ -39,6 +41,9 @@ export async function createDesktopService(profile: string, emit: (channel: stri
     if(channel==='runtime:service-notification') { void notices.send(serviceNotice(args[0] as QuotaServiceNotification,prefs.locale())).catch(console.error); return; }
     if(channel===QUOTA_CHANGED)notices.reconcileQuota(args[0] as QuotaState);
     emit(channel,...args);
+  }, async () => {
+    try { return await native('host:quota-session-unlocked') === true; }
+    catch { console.warn('Unable to verify the desktop session for quota automation'); return false; }
   });
   pets = process.platform==='win32' ? await desktopPets(profile,native,emit,quota.getState,()=>quota.refresh(undefined),prefs.locale,notices.activity) : null;
   void prefs.chrome().then(colors=>native('host:chrome',colors)).catch(console.error);
@@ -46,7 +51,7 @@ export async function createDesktopService(profile: string, emit: (channel: stri
   const unbind = bindRuntimeQuota({ directory: quota.directory, getState: quota.getState });
   const unsubscribe = onLocalRuntimeSynced(() => emit('tud:data-synced'));
   const backup = createBackupTransfer(MAX_LOCAL_ADMIN_BYTES, (body, headers) =>
-    localApiRequest(BACKUP_ROUTE, { method: 'POST', body, headers }));
+    runBackup(() => localApiRequest(BACKUP_ROUTE, { method: 'POST', body, headers })));
   let closed = false;
   const runtimeStartup = startLocalRuntime().catch(error => {
     console.error('Desktop runtime startup:', error instanceof Error ? error.message : error);
@@ -123,6 +128,9 @@ export async function createDesktopService(profile: string, emit: (channel: stri
           if (!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(method)) throw Error('Invalid local API method');
           if (!allowsLocalApiRequest(window, url.pathname, method)) throw Error('Main window required');
           if (url.pathname === '/functions/tud-quota' && method === 'GET') return {status:200, body:{success:true,message:'ok',data:quota.getState()}};
+          if (url.pathname === BACKUP_ROUTE && method === 'POST') {
+            return runBackup(() => localApiRequest(url.pathname + url.search, init));
+          }
           return localApiRequest(url.pathname + url.search, init);
         }
         default: throw Error('Unsupported desktop operation: ' + channel);

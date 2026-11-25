@@ -20,15 +20,36 @@ use tokio::{
 const MAX_FRAME: usize = 64 * 1024 * 1024;
 type Reply = Result<Value, String>;
 
+#[derive(Clone, Copy, Default)]
+struct BackupWork {
+    active: bool,
+    stopping: bool,
+}
+
 struct Session {
     input: AsyncMutex<ChildStdin>,
     pending: Mutex<HashMap<u64, oneshot::Sender<Reply>>>,
     closed: AtomicBool,
     exit: watch::Receiver<bool>,
     stop: watch::Sender<bool>,
+    backup: watch::Sender<BackupWork>,
 }
 
 impl Session {
+    fn begin_backup(&self) -> Reply {
+        if self.backup.send_if_modified(|work| {
+            if work.stopping || work.active {
+                return false;
+            }
+            work.active = true;
+            true
+        }) {
+            Ok(Value::Null)
+        } else {
+            Err("Backup unavailable while quitting or another backup is active".into())
+        }
+    }
+
     fn disconnect(&self) {
         self.closed.store(true, Ordering::SeqCst);
         for (_, caller) in self.pending.lock().unwrap().drain() {
@@ -147,10 +168,16 @@ async fn read_frames(app: AppHandle, output: tokio::process::ChildStdout, sessio
                 let Some(id) = message["id"].as_u64() else {
                     break;
                 };
+                // Admit and release backup work in pipe order, independently of the renderer.
+                let admission = (message["channel"] == "host:backup-begin")
+                    .then(|| session.begin_backup());
                 let app = app.clone();
                 let session = session.clone();
                 tauri::async_runtime::spawn(async move {
-                    let result = crate::native_operation(&app, &message).await;
+                    let result = match admission {
+                        Some(result) => result,
+                        None => crate::native_operation(&app, &message).await,
+                    };
                     let reply = match result {
                         Ok(value) => json!({"type":"native-reply","id":id,"value":value}),
                         Err(error) => json!({"type":"native-reply","id":id,"error":error}),
@@ -161,6 +188,7 @@ async fn read_frames(app: AppHandle, output: tokio::process::ChildStdout, sessio
                     }
                 });
             }
+            Some("backup-finished") => session.backup.send_modify(|work| work.active = false),
             Some("event") => {
                 let Some(channel) = message.get("channel").and_then(Value::as_str) else {
                     break;
@@ -273,6 +301,7 @@ fn spawn(app: &AppHandle) -> Result<Arc<Session>, String> {
         closed: AtomicBool::new(false),
         exit,
         stop,
+        backup: watch::Sender::new(BackupWork::default()),
     });
     tauri::async_runtime::spawn(read_frames(app.clone(), output, session.clone()));
     let running = session.clone();
@@ -345,13 +374,15 @@ impl Sidecar {
             pending.insert(id, send);
         }
         let operation = async {
-            running
-                .input
-                .lock()
-                .await
+            let mut input = running.input.lock().await;
+            if self.stopping.load(Ordering::SeqCst) {
+                return Err("Quotern is quitting".into());
+            }
+            input
                 .write_all(&frame)
                 .await
                 .map_err(|e| e.to_string())?;
+            drop(input);
             response
                 .await
                 .map_err(|_| "Quotern runtime disconnected".to_owned())?
@@ -363,19 +394,41 @@ impl Sidecar {
 
     pub async fn shutdown(&self) {
         self.stopping.store(true, Ordering::SeqCst);
-        let Some(running) = self.current.lock().await.take() else {
+        let Some(running) = self.current.lock().await.clone() else {
             return;
         };
-        // Windows anonymous pipes may remain open after AsyncWrite::shutdown.
-        // Tell the child to release its PID lease before the host exits.
-        let _ = running.stop.send(true);
-        let _ = timeout(Duration::from_secs(2), async {
-            let mut input = running.input.lock().await;
-            let _ = input.write_all(b"{\"type\":\"shutdown\"}\n").await;
-            let _ = input.shutdown().await;
-        })
-        .await;
+        if running.backup.send_if_modified(|work| {
+            if work.stopping {
+                return false;
+            }
+            work.stopping = true;
+            true
+        }) {
+            // Quit and update installation can join this task independently of their callers.
+            tauri::async_runtime::spawn(shutdown_session(running.clone()));
+        }
         let mut exit = running.exit.clone();
-        let _ = timeout(Duration::from_secs(12), exit.wait_for(|v| *v)).await;
+        let _ = exit.wait_for(|exited| *exited).await;
+        let mut current = self.current.lock().await;
+        if current.as_ref().is_some_and(|session| Arc::ptr_eq(session, &running)) {
+            *current = None;
+        }
     }
+}
+
+async fn shutdown_session(session: Arc<Session>) {
+    let mut backup = session.backup.subscribe();
+    let mut exit = session.exit.clone();
+    tokio::select! {
+        _ = backup.wait_for(|work| !work.active) => {},
+        _ = exit.wait_for(|exited| *exited) => return,
+    }
+    // Start the ordinary stop deadline only after the local backup request has settled.
+    let _ = session.stop.send(true);
+    let _ = timeout(Duration::from_secs(2), async {
+        let mut input = session.input.lock().await;
+        let _ = input.write_all(b"{\"type\":\"shutdown\"}\n").await;
+        let _ = input.shutdown().await;
+    })
+    .await;
 }

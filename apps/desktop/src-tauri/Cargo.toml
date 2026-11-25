@@ -31,4 +31,4 @@ rusty-leveldb = { version = "4.0.2", default-features = false }
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"
 webview2-com = "0.39.1"
-windows = { version = "0.62.2", features = ["Data_Xml_Dom", "UI_Notifications", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", features = ["Data_Xml_Dom", "UI_Notifications", "Win32_System_RemoteDesktop", "Win32_UI_WindowsAndMessaging"] }

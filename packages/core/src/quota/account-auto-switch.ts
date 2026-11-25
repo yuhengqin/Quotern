@@ -52,6 +52,7 @@ async function candidate(state: QuotaState, preferences: LaunchPreferences, quot
 export function createAccountAutoSwitcher(dataDir: string, quotaDirectory: string, runtime: 'cli' | 'desktop', deps: {
   getState(): QuotaState; isActive(): boolean; now?: () => number; isOwner?: () => Promise<boolean>;
   verify?: (profile: QuotaProfile, accountRef: string) => Promise<boolean>; isolated?: boolean;
+  isSessionUnlocked?: () => Promise<boolean>;
 }) {
   let pending = false;
   const now = deps.now ?? (() => Date.now() / 1000);
@@ -62,12 +63,14 @@ export function createAccountAutoSwitcher(dataDir: string, quotaDirectory: strin
     try {
       if (!await owner()) return;
       const preferences = await readLaunchPreferences(dataDir), target = await candidate(deps.getState(), preferences, quotaDirectory, runtime, now());
-      if (!target || !await (deps.verify ?? verify)(target.profile, target.accountRef)) return;
+      if (!target || (deps.isSessionUnlocked && !await deps.isSessionUnlocked())) return;
+      if (!await (deps.verify ?? verify)(target.profile, target.accountRef)) return;
       await updateLaunchPreferences(dataDir, preferences.revision, async current => {
         const state = deps.getState(), latest = await candidate(state, current, quotaDirectory, runtime, now());
         if (!deps.isActive() || !await owner() || !latest || latest.profile.id !== target.profile.id || latest.accountRef !== target.accountRef || latest.profile.directory !== target.profile.directory) throw new Error('LAUNCH_CANCELLED');
         const selected = await profileSelection(quotaDirectory, state, 'claude', target.profile.id);
         if (!deps.isActive() || !await owner()) throw new Error('LAUNCH_CANCELLED');
+        if (deps.isSessionUnlocked && !await deps.isSessionUnlocked()) throw new Error('LAUNCH_CANCELLED');
         current.lastSwitch = { from: current.defaults.claude?.label ?? null, to: selected.label, at: now(), reason: 'exhausted' };
         current.defaults.claude = selected;
         return current;

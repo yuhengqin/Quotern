@@ -4,10 +4,13 @@ mod host;
 mod legacy_preferences;
 #[cfg(target_os = "macos")]
 mod macos_notices;
+#[cfg(target_os = "macos")]
+mod macos_quit;
 mod media;
 mod pet_window;
 mod popover;
 mod resources;
+mod session_state;
 mod sidecar;
 mod tray_menu;
 mod updates;
@@ -30,7 +33,11 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
-struct Quitting(AtomicBool);
+#[derive(Default)]
+struct Quitting {
+    requested: AtomicBool,
+    ready: AtomicBool,
+}
 fn platform_script() -> String {
     let platform = if cfg!(windows) {
         "win32"
@@ -199,12 +206,17 @@ fn handle_new_window(
 }
 
 fn quit(app: &AppHandle) {
-    if app.state::<Quitting>().0.swap(true, Ordering::SeqCst) {
+    if app.state::<Quitting>().requested.swap(true, Ordering::SeqCst) {
         return;
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         app.state::<Sidecar>().shutdown().await;
+        app.state::<Quitting>().ready.store(true, Ordering::SeqCst);
+        #[cfg(target_os = "macos")]
+        if macos_quit::reply() {
+            return;
+        }
         app.exit(0);
     });
 }
@@ -722,7 +734,7 @@ fn main() {
             let app=ctx.app_handle().clone();let label=ctx.webview_label().to_owned();
             tauri::async_runtime::spawn(async move{responder.respond(resources::respond(app,label,request).await);});
         })
-        .manage(Sidecar::default()).manage(Quitting(AtomicBool::new(false))).manage(HostState::default()).manage(pet_window::Pets::default())
+        .manage(Sidecar::default()).manage(Quitting::default()).manage(HostState::default()).manage(pet_window::Pets::default())
         .invoke_handler(tauri::generate_handler![desktop_request])
         .on_menu_event(|app,event|{
             let state=app.state::<HostState>();let mut slot=state.pet_menu.lock().unwrap();
@@ -748,6 +760,8 @@ fn main() {
             updates::schedule(app.handle().clone());
             host::notification_actions(app.handle()).map_err(std::io::Error::other)?;
             let handle = app.handle().clone();
+            #[cfg(target_os = "macos")]
+            macos_quit::attach(&handle);
             tauri::async_runtime::spawn(async move {
                 let node=handle.state::<Sidecar>();
                 if let Err(e) = node.start(&handle).await { eprintln!("Quotern startup: {e}"); }
@@ -763,7 +777,7 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "tray" && !window.state::<Quitting>().0.load(Ordering::SeqCst) {
+                if window.label() == "tray" && !window.state::<Quitting>().ready.load(Ordering::SeqCst) {
                     api.prevent_close();
                     let _ = window.hide();
                     host::desktop_event(window.app_handle(), "tray", "appearance:visibility", json!([false]));
@@ -804,6 +818,12 @@ fn main() {
         })
         .build(tauri::generate_context!()).expect("Could not initialize Quotern");
     application.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if matches!(event, RunEvent::Exit) && !app.state::<Quitting>().ready.load(Ordering::SeqCst) {
+            // If the native delegate handles termination itself, drain before
+            // AppKit completes the termination callback.
+            tauri::async_runtime::block_on(app.state::<Sidecar>().shutdown());
+        }
         if matches!(event, RunEvent::Resumed) {
             let handle = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -814,7 +834,7 @@ fn main() {
             });
         }
         if let RunEvent::ExitRequested { api, code, .. } = event {
-            if !app.state::<Quitting>().0.load(Ordering::SeqCst) {
+            if code != Some(tauri::RESTART_EXIT_CODE) && !app.state::<Quitting>().ready.load(Ordering::SeqCst) {
                 api.prevent_exit();
                 if code.is_some() {
                     quit(app);

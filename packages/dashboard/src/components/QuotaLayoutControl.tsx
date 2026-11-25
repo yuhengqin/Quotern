@@ -85,7 +85,7 @@ export function QuotaLayoutCards({ editor, children }: { editor: QuotaLayoutEdit
   const onlyStatuses = groups.every(group => group.statusOnly);
   const render = (provider: QuotaProviderState, statusRow: boolean) => <QuotaLayoutItem key={provider.id} provider={provider} editor={editor} statusRow={statusRow}>{controls => children(provider, controls, statusRow)}</QuotaLayoutItem>;
   return stableGroups.map(group => group.statusOnly
-    ? <Card key={group.key} data-quota-status-group={group.key} role="group" aria-label={t('usage.quota.statusGroup')} variant="secondary" className={`grid min-w-0 self-start gap-1 overflow-visible p-1 ${onlyStatuses ? 'col-span-full grid-cols-subgrid' : ''}`.trim()}>{group.providers.map(provider => render(provider, true))}</Card>
+    ? <Card key={group.key} data-quota-status-group={group.key} role="group" aria-label={t('usage.quota.statusGroup')} variant="secondary" className={`grid min-w-0 self-start gap-1 overflow-visible p-1 ${onlyStatuses || group.providers.length > 4 ? 'col-span-full grid-cols-subgrid' : ''}`.trim()}>{group.providers.map(provider => render(provider, true))}</Card>
     : render(group.providers[0], false));
 }
 

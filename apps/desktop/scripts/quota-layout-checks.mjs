@@ -28,7 +28,36 @@ export async function exerciseQuotaLayout({ client, window, mode, quota, publish
   };
   const menuMove = async (id, label) => { await client.click(`${item(id)}.querySelector('button[aria-label^="移动"]')`); await client.click(textButton(label)); await until(() => client.evaluate('!document.querySelector("[role=dialog]")'), 'move menu closes'); };
   const reload = async () => { await window.loadURL(window.webContents.getURL()); await until(() => client.evaluate(`document.querySelectorAll("[data-quota-layout-item]").length === ${initial.length}`), mode + ' layout loaded'); };
+  const statusGrid = () => client.evaluate(`(() => {
+    const group = document.querySelector('[data-quota-status-group]');
+    const bounds = group.getBoundingClientRect();
+    const grid = group.parentElement.getBoundingClientRect();
+    const items = Array.from(group.children, child => child.getBoundingClientRect());
+    return {
+      fullWidth: Math.abs(bounds.width - grid.width) < 1,
+      columns: new Set(items.map(item => item.left)).size,
+      rows: new Set(items.map(item => item.top)).size,
+      overflow: document.documentElement.scrollWidth > innerWidth + 1,
+    };
+  })()`);
   try {
+    publish(); await reload(); await expectOrder(initial);
+    assert.deepEqual(await statusGrid(), { fullWidth: false, columns: 1, rows: 4, overflow: false }, mode + ' short status group remains in one column');
+    const shortLayout = quota.providers;
+    const extraStatuses = Array.from({ length: 9 }, (_, index) => ({
+      ...structuredClone(shortLayout.at(-1)), id: `layout-extra-${index}`,
+    }));
+    quota.providers = [shortLayout[0], ...shortLayout.slice(3), ...extraStatuses];
+    publish();
+    await client.evaluate('window.dispatchEvent(new Event("focus")); true');
+    await until(() => client.evaluate('document.querySelectorAll("[data-status-row]").length === 13'), mode + ' long status group loaded');
+    for (const [width, columns] of [[1120, 4], [800, 2], [390, 1]]) {
+      await client.call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+      assert.deepEqual(await statusGrid(), { fullWidth: true, columns, rows: Math.ceil(13 / columns), overflow: false }, mode + ' long status group at ' + width + 'px');
+      await shot(client, `${mode}-quota-status-${width}`);
+    }
+    await client.call('Emulation.clearDeviceMetricsOverride');
+    quota.providers = shortLayout;
     publish(); await reload(); await expectOrder(initial);
     const fiveHour = await client.evaluate(`(() => {
       const card = ${item(a)};

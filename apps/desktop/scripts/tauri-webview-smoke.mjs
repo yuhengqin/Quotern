@@ -30,6 +30,14 @@ async function exerciseQuota(client) {
   await client.evaluate('window.tud.setThemeMode("light")');
   await until(()=>client.evaluate(`${quotaCard('claude')}?.textContent.includes('63%')`), 'automatic Claude quota on the dashboard');
   await until(()=>client.evaluate(`${quotaCard('codex')}?.textContent.includes('Install the CLI')`), 'missing CLI status');
+  const statusGroup = `${quotaCard('opencode')}.closest('[data-quota-status-group]')`;
+  await client.call('Emulation.setDeviceMetricsOverride', { width: 1120, height: 900, deviceScaleFactor: 1, mobile: false });
+  await until(()=>client.evaluate(`(() => {
+    const group = ${statusGroup};
+    return group.children.length === 13
+      && new Set(Array.from(group.children, child => child.getBoundingClientRect().left)).size === 4
+      && Math.abs(group.clientWidth - group.parentElement.clientWidth) < 2;
+  })()`), 'long desktop status group uses all four columns');
   await client.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 });
   if (await client.evaluate('Boolean(document.querySelector(".help-popup"))')) await client.key('Escape');
   await until(()=>client.evaluate('!document.querySelector(".help-popup")'), 'previous help popup closed');
@@ -49,6 +57,8 @@ async function exerciseQuota(client) {
   await client.call('Emulation.setDeviceMetricsOverride',{ width: 390, height: 760, deviceScaleFactor: 1, mobile: false });
   await client.evaluate('window.tud.setThemeMode("dark")');
   await until(()=>client.evaluate(`document.documentElement.classList.contains("dark") && ${quotaCard('claude')}?.textContent.includes('Sign in to the CLI')`), 'narrow dark quota cards');
+  await until(()=>client.evaluate(`new Set(Array.from(${statusGroup}.children, child => child.getBoundingClientRect().left)).size === 1`), 'long desktop status group wraps to one column');
+  await client.evaluate(`${statusGroup}.scrollIntoView({ block: 'start' }); true`);
   await client.screenshot(join(root,'quota-dark-narrow.png'));
   await client.call('Emulation.clearDeviceMetricsOverride');
   await client.evaluate('window.tud.quota.refresh("claude")');
@@ -65,6 +75,11 @@ async function exerciseQuota(client) {
   await until(()=>client.evaluate('Boolean(document.querySelector(\'[role=dialog] input[type="password"]\'))'), 'API key connection still available');
   await client.key('Escape');
   await until(()=>client.evaluate('!document.querySelector("[role=dialog]")'), 'API key details closed');
+  await client.click(`${quotaCard('opencode')}?.querySelector('button[data-quota-action]')`);
+  await until(()=>client.evaluate(`Boolean(document.querySelector('[role=dialog] input[type="password"]'))
+    && document.querySelector('[role=dialog] [data-quota-access]').textContent.includes('API key with OpenCode Go access')`), 'OpenCode Go session connection');
+  await client.key('Escape');
+  await until(()=>client.evaluate('!document.querySelector("[role=dialog]")'), 'OpenCode Go details closed');
 }
 
 try {

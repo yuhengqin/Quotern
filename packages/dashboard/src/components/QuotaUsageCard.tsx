@@ -438,12 +438,15 @@ function QuotaConnectionActions({ provider, onAuthorize, onDisconnect, onOpenExt
     } catch { setResult('failed'); }
     finally { busyRef.current = false; setBusy(false); }
   };
+  const providerId = provider.providerId ?? provider.id;
+  const connectionNote = providerId === 'kimi' ? 'quotaAccess.kimiNote'
+    : providerId === 'opencode' ? 'quotaAccess.opencodeNote' : 'quotaAccess.sessionNote';
   return <div className="flex flex-col items-start gap-2" data-quota-access>
     {access.url && <Button size="sm" variant="tertiary" className="w-fit" onPress={() => void onOpenExternal(access.url!)}>{t(access.destination === 'guide' ? 'quotaAccess.guide' : 'quotaAccess.usage')} ↗</Button>}
     {access.method === 'api-key' && (access.connected
       ? <><p className="text-sm">{t('quotaAccess.connected')}</p>{onDisconnect && <Button size="sm" variant="secondary" isDisabled={busy} onPress={() => void act(true)}>{busy ? t('quotaAccess.working') : t('quotaAccess.disconnect')}</Button>}</>
       : onAuthorize && <form className="flex w-full flex-col items-start gap-2" onSubmit={event => { event.preventDefault(); void act(); }}>
-        <p className="text-sm text-muted">{t(provider.id === 'kimi' ? 'quotaAccess.kimiNote' : 'quotaAccess.sessionNote')}</p>
+        <p className="text-sm text-muted">{t(connectionNote)}</p>
         <label htmlFor={inputId} className="text-sm">{t(provider.id === 'kimi' ? 'quotaAccess.kimiToken' : 'quotaAccess.apiKey')}</label>
         <Input id={inputId} name="api-key" type="password" autoComplete="off" spellCheck={false} required value={secret} onChange={event => setSecret(event.target.value)} />
         <Button type="submit" size="sm" variant="secondary" isDisabled={busy}>{busy ? t('quotaAccess.working') : t('quotaAccess.save')}</Button>

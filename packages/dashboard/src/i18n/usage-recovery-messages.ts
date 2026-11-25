@@ -32,6 +32,7 @@ const entries = {
   'quotaAccess.kimiToken': ['Kimi 本地服务令牌', 'Kimi local server token', 'Kimi ローカルサーバートークン', 'Kimi 로컬 서버 토큰'],
   'quotaAccess.kimiNote': ['启动 Kimi Code 本地服务后，输入其访问令牌。本次会话只查询本机 58627 端口的用量接口。', 'Start the Kimi Code local server and enter its access token. This session queries usage on local port 58627.', 'Kimi Code のローカルサーバーを起動してアクセス用トークンを入力します。このセッションはローカルの 58627 番ポートで使用量を取得します。', 'Kimi Code 로컬 서버를 시작한 후 액세스 토큰을 입력하세요. 이 세션은 로컬 포트 58627에서 사용량을 조회합니다.'],
   'quotaAccess.sessionNote': ['仅授权本次会话使用此密钥。', 'Authorize this key for this session only.', 'このセッションに限り、このキーの使用を許可します。', '이 세션에서만 이 키를 사용하도록 허용합니다.'],
+  'quotaAccess.opencodeNote': ['输入支持 OpenCode Go 的 API 密钥。本次会话只用它查询额度。', 'Enter an API key with OpenCode Go access. It is used only to check quota during this session.', 'OpenCode Go を利用できる API キーを入力してください。このセッション中の利用枠の確認にのみ使用します。', 'OpenCode Go를 사용할 수 있는 API 키를 입력하세요. 이 세션에서 할당량을 확인할 때만 사용합니다.'],
   'quotaAccess.cliMissing': ['请先安装官方 CLI', 'Install the CLI', 'CLI をインストール', 'CLI를 설치하세요'],
   'quotaAccess.cliSignIn': ['请先在官方 CLI 登录', 'Sign in to the CLI', 'CLI にログイン', 'CLI에 로그인하세요'],
   'quotaAccess.save': ['保存并连接', 'Save and connect', '保存して接続', '저장하고 연결'],

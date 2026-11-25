@@ -1,6 +1,6 @@
 # 订阅额度管理
 
-主窗口、托盘和 Windows 桌宠共用额度状态。桌面版启动时默认查询已开启的 Codex、Claude、Copilot、Muse Code 和 MiniMax 渠道，沿用本机官方 CLI 的登录状态。已启用的 Codex 和 Claude 监控目录分别读取各自的账号。渠道开关控制显示与轮询。Kimi 本地服务令牌和 DeepSeek API 密钥通过卡片手动连接，仅用于当前桌面会话。其余来源提供官方用量页或使用指南。Token 与费用由 Core 的本地统计链路计算。
+主窗口、托盘和 Windows 桌宠共用额度状态。桌面版启动时默认查询已开启的 Codex、Claude、Copilot、Muse Code 和 MiniMax 渠道，沿用本机官方 CLI 的登录状态。已启用的 Codex 和 Claude 监控目录分别读取各自的账号。渠道开关控制显示与轮询。Kimi 本地服务令牌、DeepSeek 和 OpenCode Go API 密钥通过卡片手动连接，仅用于当前桌面会话。其余来源提供官方用量页或使用指南。Token 与费用由 Core 的本地统计链路计算。
 
 CLI 浏览器面板也提供同一套卡片、详情、趋势和手动刷新。CLI 可独立读取现有 13 个订阅通道（含 Gemini CLI），无需运行 Quotern Desktop；仍需各 Agent 自身的有效登录状态，依赖 Agent 客户端/CLI 的来源保留原要求。网页显示的是提供 HTTP 服务的那台机器的额度。网页在可见时每 15 秒读取本地快照，回到页面时更新；上游读取仍受管理器间隔和退避约束。
 

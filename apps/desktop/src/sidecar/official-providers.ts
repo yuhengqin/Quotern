@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuotaProviderId } from 'quotern-core/quota/shared/provider-descriptors';
+import { mapOpenCodeUsage } from 'quotern-core/quota/shared/opencode-subscription';
+import { quotaNodeFetch, recordQuotaAttempt } from 'quotern-core/quota/readers/quota-fetch-state';
+import { markQuotaIdentity } from 'quotern-core/quota/readers/quota-identity';
 import { homedir, tmpdir } from 'node:os';
 
 type Provider = { method: 'api-key' | 'official-cli' | 'official-page'; url: string; destination: 'guide' | 'usage' };
@@ -17,13 +20,45 @@ export const officialProviders = {
   antigravity: {method:'official-page',url:'https://antigravity.google/docs/cli/commands/usage',destination:'guide'},
   qoder: {method:'official-page',url:'https://qoder.com/account/usage',destination:'usage'},
   minimax: {method:'official-cli',url:'https://github.com/MiniMax-AI/cli#mmx-config--mmx-quota',destination:'guide'},
-  opencode: {method:'official-page',url:'https://opencode.ai/console',destination:'usage'},
+  opencode: {method:'api-key',url:'https://opencode.ai/console',destination:'usage'},
   deepseek: {method:'api-key',url:'https://api-docs.deepseek.com/api/get-user-balance/',destination:'guide'},
 } as const satisfies Record<QuotaProviderId, Provider>;
 
 const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const unavailable = (status: string, message: string) => ({ status, message, limits: [], planLabel: null, fetchedAt: null, stale: false });
 const number = (value: unknown): number | null => typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value) && Number.isFinite(Number(value)) ? Number(value) : null;
+
+async function readOpenCodeGo(secret?: string) {
+  const token = secret?.trim();
+  if (!token) return unavailable('not-signed-in', '请连接 OpenCode Go');
+  const failed = () => markQuotaIdentity(unavailable('temporarily-unavailable', '暂时无法读取 OpenCode Go 额度'), token);
+  let response: Response;
+  try {
+    response = await quotaNodeFetch('https://opencode.ai/inference/go/v1/usage', {
+      method: 'GET', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      redirect: 'error', signal: AbortSignal.timeout(10_000),
+    });
+  } catch { return failed(); }
+  if (response.status === 401) return unavailable('expired', 'OpenCode Go 密钥已失效，请重新连接');
+  if (response.status === 403) return unavailable('access-denied', '此密钥无法查询 OpenCode Go 订阅额度');
+  if (!response.ok) return failed();
+
+  try {
+    const usage = record(record(await response.json())?.usage);
+    const meters = Object.fromEntries(Object.entries(usage ?? {}).filter(([, value]) => {
+      const meter = record(value);
+      const percent = meter?.percent;
+      return (meter?.status === 'ok' || meter?.status === 'rate-limited')
+        && typeof percent === 'number' && Number.isInteger(percent) && percent >= 0 && percent <= 100;
+    }));
+    const { limits } = mapOpenCodeUsage({ usage: meters });
+    if (limits.length) return markQuotaIdentity({
+      status: 'ready', limits, planLabel: null, fetchedAt: Math.floor(Date.now() / 1000), stale: false, message: null,
+    }, token);
+  } catch { /* An unreadable response has no usable quota. */ }
+  recordQuotaAttempt({ stage: 'parse', outcome: 'failure', code: 'INVALID_RESPONSE' });
+  return failed();
+}
 
 async function readDeepSeek(secret?: string): Promise<unknown> {
   if (!secret?.trim()) return unavailable('not-signed-in', '请先授权 DeepSeek API key');
@@ -86,6 +121,7 @@ async function readMiniMax(): Promise<unknown> {
 export async function readOfficialProvider(provider: QuotaProviderId, secret?: string, directory?:string): Promise<unknown> {
   if (provider === 'codex') return (await import('./codex-official.js')).readCodexOfficial(directory);
   if (provider === 'deepseek') return readDeepSeek(secret);
+  if (provider === 'opencode') return readOpenCodeGo(secret);
   if (provider === 'kimi') return (await import('./kimi-official.js')).readKimiOfficial(secret);
   if (provider === 'copilot') return (await import('./copilot-official.js')).readCopilotOfficial();
   if (provider === 'claude') {

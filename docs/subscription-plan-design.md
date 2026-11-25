@@ -75,7 +75,7 @@ GUI 进程的 PATH 可能与终端不同。需要 CLI 的读取器应使用已�
 
 各 mapper 按自身协议识别秒、毫秒或 ISO 时间；不要把某个订阅来源的转换规则推广为所有入口都接受同样格式。套餐名使用上游名称与有限归一化映射，不能据名称推断限额或刷新周期。
 
-OpenCode Go 的官方百分比已经是 0–100，`1` 不能当作比例值转成 100%；月重置也不等于固定 30 天。协议依据为 [v1.19.0 usage 路由](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/console/app/src/routes/zen/go/v1/usage.ts)及[早期响应实现](https://github.com/anomalyco/opencode/blob/2b8a596/packages/console/app/src/routes/zen/go/v1/usage.ts)。这些源码证明兼容结构，不代表已对所有版本和付费账号完成实测。
+Tauri Desktop 通过卡片接收本次会话授权的 OpenCode Go API 密钥，调用 [OpenCode Go 官方用量 API](https://opencode.ai/docs/console/go/#usage) 查询五小时、周、月额度。官方响应给出 0–100 的已用百分比和重置时间，`1` 表示已用 1%。月周期时长与套餐档位在响应缺失时保留未知。CLI 仍兼容 [v1.19.0 usage 路由](https://github.com/anomalyco/opencode/blob/v1.19.0/packages/console/app/src/routes/zen/go/v1/usage.ts)和[早期响应结构](https://github.com/anomalyco/opencode/blob/2b8a596/packages/console/app/src/routes/zen/go/v1/usage.ts)。
 
 Kimi 桌面版与 Code 是独立来源，卡片选择有效读数，不拼接不同来源的套餐和额度、不把共享池相加。Code 只登录时无需启动桌面版。路径与账号要求见 [Desktop README](../apps/desktop/README.md#kimi-桌面版与-kimi-code)。
 

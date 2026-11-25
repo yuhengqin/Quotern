@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { desktopQuotas } from './quotas';
+import { readOfficialProvider } from './official-providers';
 
 const ready = () => ({
   status: 'ready', fetchedAt: Math.floor(Date.now() / 1000), stale: false,
@@ -73,6 +74,59 @@ test('a failed API key check leaves the source disconnected', async () => {
     const provider = manager.getState().providers.find(row => row.id === 'deepseek');
     assert.equal(provider?.access?.connected, false);
     assert.deepEqual(provider?.windows, []);
+  });
+});
+
+test('OpenCode Go uses the official read-only usage API only after session authorization', async () => {
+  await fixture(async ({ create }) => {
+    const key = 'synthetic-opencode-go-key';
+    const usageUrl = 'https://opencode.ai/inference/go/v1/usage';
+    const requests: Array<{ url: string; method?: string; redirect?: RequestRedirect; auth: string | null }> = [];
+    let response = () => new Response(null, { status: 401 });
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url !== usageUrl) return new Response(null, { status: 503 });
+      requests.push({ url, method: init?.method, redirect: init?.redirect, auth: new Headers(init?.headers).get('Authorization') });
+      return response();
+    };
+    const manager = await create(readOfficialProvider);
+    const provider = () => manager.getState().providers.find(row => row.id === 'opencode')!;
+    assert.equal(provider().access?.method, 'api-key');
+    await manager.refresh('opencode');
+    assert.deepEqual(requests, []);
+    await assert.rejects(manager.authorize('opencode', key), /authorization failed/);
+    assert.equal(provider().access?.connected, false);
+
+    response = () => new Response(null, { status: 403 });
+    await assert.rejects(manager.authorize('opencode', key), /authorization failed/);
+    response = () => Response.json({ usage: { weekly: { status: 'ok', percent: -1 } } });
+    await assert.rejects(manager.authorize('opencode', key), /authorization failed/);
+    assert.deepEqual(provider().windows, []);
+    response = () => Response.json({ usage: {
+      rolling: { status: 'ok', percent: 1, resetsAt: '2027-01-04T15:00:00.000Z' },
+      weekly: { status: 'rate-limited', percent: 100, resetsAt: '2027-01-11T00:00:00.000Z' },
+      monthly: { status: 'ok', percent: 50, resetsAt: '2027-02-01T00:00:00.000Z' },
+    } });
+    await manager.authorize('opencode', key);
+    assert.deepEqual(requests, Array(4).fill({ url: usageUrl, method: 'GET', redirect: 'error', auth: `Bearer ${key}` }));
+    assert.equal(provider().access?.connected, true);
+    assert.equal(provider().planLabel, null, 'the usage endpoint does not identify the plan tier');
+    assert.deepEqual(provider().windows.map(({ id, usedPercent, resetsAt }) => [id, usedPercent, resetsAt]), [
+      ['five-hour', 1, Date.parse('2027-01-04T15:00:00.000Z') / 1000],
+      ['weekly', 100, Date.parse('2027-01-11T00:00:00.000Z') / 1000],
+      ['monthly', 50, Date.parse('2027-02-01T00:00:00.000Z') / 1000],
+    ]);
+    assert.ok(!JSON.stringify(manager.getState()).includes(key));
+
+    response = () => new Response(null, { status: 429, headers: { 'Retry-After': '600' } });
+    await manager.refresh('opencode');
+    assert.ok(provider().stale);
+    assert.equal(provider().diagnostic?.code, 'RATE_LIMITED');
+    await manager.disconnect('opencode');
+    assert.equal(provider().access?.connected, false);
+    assert.deepEqual(provider().windows, []);
+    await manager.refresh('opencode');
+    assert.equal(requests.length, 5);
   });
 });
 
